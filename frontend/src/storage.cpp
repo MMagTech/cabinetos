@@ -4,35 +4,30 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <sys/sysmacros.h>
-#include <climits>
 #include <unistd.h>
 
-#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <map>
-#include <mutex>
 
-#include <json-c/json.h>
-
-#include "romm.h"
-#include "steam.h"
+#include "storage_internal.h"
 
 namespace storage {
 namespace {
 
 std::string gRoot;
-User gUser;
 
 // Read once, on the first call that needs it, and remembered. Resolving this
 // repeatedly would mean a console that changed its mind about where it lives
 // halfway through a launch.
 bool gRootResolved = false;
 
+}  // namespace
+
+// isDir and writable are locations.cpp's and users.cpp's too
+// (storage_internal.h).
 bool isDir(const std::string& p) {
     struct stat st;
     return ::stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
@@ -49,6 +44,8 @@ bool writable(const std::string& dir) {
     ::unlink(probe.c_str());
     return true;
 }
+
+namespace {
 
 void resolveRoot() {
     if (gRootResolved) return;
@@ -69,8 +66,6 @@ void resolveRoot() {
     }
     gRoot = ".";
 }
-
-std::string userCachePath() { return configDir() + "/user.json"; }
 
 // The files a core needs that SHIP INSIDE THE IMAGE — PPSSPP's fonts and lookup
 // tables, 13 MB of them, which came out of a core build rather than off the
@@ -156,81 +151,6 @@ bool removeTree(const std::string& path) {
     return ::rmdir(path.c_str()) == 0;
 }
 
-// The filesystem a path is on. Two paths on the same one are the same disk,
-// whatever their names say, and a "drive" that is really a folder on the
-// internal disk is not a drive.
-dev_t deviceOf(const std::string& path) {
-    struct stat st;
-    return ::stat(path.c_str(), &st) == 0 ? st.st_dev : 0;
-}
-
-// Where a plugged-in drive turns up. Nothing here is a CabinetOS invention:
-// `/run/media/<user>/` is where udisks mounts a USB stick on Fedora and
-// therefore on Bazzite, and `/var/mnt/` is where an fstab-mounted second
-// internal disk conventionally goes on an image-based system.
-//
-// $CABINETOS_DRIVES overrides the search with an explicit colon-separated list,
-// which is how this gets tested on a machine where nobody can plug anything in.
-std::vector<std::string> driveSearchPaths() {
-    std::vector<std::string> out;
-    if (const char* env = std::getenv("CABINETOS_DRIVES"); env && *env) {
-        std::string s = env;
-        size_t start = 0;
-        while (start <= s.size()) {
-            const size_t colon = s.find(':', start);
-            const std::string one =
-                s.substr(start, colon == std::string::npos ? std::string::npos : colon - start);
-            if (!one.empty()) out.push_back(one);
-            if (colon == std::string::npos) break;
-            start = colon + 1;
-        }
-        return out;
-    }
-    const char* user = std::getenv("USER");
-    out.push_back(std::string("/run/media/") + (user ? user : "cabinet"));
-    out.push_back("/var/mnt");
-    return out;
-}
-
-// The one folder this console claims on somebody else's drive.
-const char* kDriveFolder = "CabinetOS";
-
-std::string drivesMemoPath() { return configDir() + "/drives.json"; }
-
-std::vector<std::string> readRememberedDrives() {
-    std::vector<std::string> out;
-    FILE* f = std::fopen(drivesMemoPath().c_str(), "rb");
-    if (!f) return out;
-    std::string body;
-    char buf[1024];
-    size_t n;
-    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) body.append(buf, n);
-    std::fclose(f);
-    json_object* o = json_tokener_parse(body.c_str());
-    if (o && json_object_get_type(o) == json_type_array) {
-        for (size_t i = 0; i < json_object_array_length(o); ++i)
-            if (const char* v = json_object_get_string(json_object_array_get_idx(o, i)))
-                out.push_back(v);
-    }
-    if (o) json_object_put(o);
-    return out;
-}
-
-void writeRememberedDrives(const std::vector<std::string>& drives) {
-    makeDirs(configDir());
-    json_object* a = json_object_new_array();
-    for (const std::string& d : drives)
-        json_object_array_add(a, json_object_new_string(d.c_str()));
-    const std::string tmp = drivesMemoPath() + ".part";
-    if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
-        std::fputs(json_object_to_json_string_ext(a, JSON_C_TO_STRING_PRETTY), f);
-        std::fputc('\n', f);
-        std::fclose(f);
-        ::rename(tmp.c_str(), drivesMemoPath().c_str());
-    }
-    json_object_put(a);
-}
-
 }  // namespace
 
 void setRoot(const std::string& path) {
@@ -297,118 +217,6 @@ bool ensureTree(std::string* err) {
     return true;
 }
 
-std::vector<std::string> locations() {
-    std::vector<std::string> out{root()};
-    const dev_t here = deviceOf(root());
-    for (const std::string& where : driveSearchPaths()) {
-        DIR* d = ::opendir(where.c_str());
-        if (!d) continue;   // nothing mounted there. The ordinary case.
-        std::vector<std::string> mounts;
-        while (struct dirent* e = ::readdir(d)) {
-            if (e->d_name[0] == '.') continue;
-            mounts.push_back(where + "/" + e->d_name);
-        }
-        ::closedir(d);
-        std::sort(mounts.begin(), mounts.end());
-        for (const std::string& mount : mounts) {
-            if (!isDir(mount)) continue;
-            // A folder on the internal disk is not a second drive, whatever it
-            // is called. This is the check that stops the console treating its
-            // own storage as removable and then "losing" it.
-            if (deviceOf(mount) == here) continue;
-            const std::string claim = mount + "/" + kDriveFolder;
-            // PLUG IT IN AND IT IS USED: the folder is made without asking,
-            // because a drive plugged into a games console is a games drive and
-            // a confirmation dialogue is the thing this is trying not to have.
-            // Nothing outside this folder is ever touched.
-            if (!isDir(claim) && !makeDirs(claim)) continue;
-            if (!writable(claim)) continue;
-            out.push_back(claim);
-        }
-    }
-    return out;
-}
-
-const std::string& primaryLocation() { return root(); }
-
-std::string missingDriveToReport() {
-    const std::vector<std::string> now = locations();
-    std::vector<std::string> present(now.begin() + 1, now.end());
-    const std::vector<std::string> before = readRememberedDrives();
-
-    std::string gone;
-    for (const std::string& d : before) {
-        if (std::find(present.begin(), present.end(), d) == present.end()) {
-            gone = d;
-            break;
-        }
-    }
-    // Whatever is here now is what gets remembered, so a drive that has just
-    // been reported missing is forgotten in the same breath and is not
-    // mentioned again.
-    if (before != present) writeRememberedDrives(present);
-    return gone;
-}
-
-Space spaceOf(const std::string& location) {
-    Space out;
-    struct statvfs v;
-    if (::statvfs(location.c_str(), &v) != 0) return out;
-    out.ok = true;
-    // f_bavail, not f_bfree: what an ordinary user may still write, which is
-    // what a download is. The difference is the root reserve on ext4.
-    out.freeBytes = static_cast<int64_t>(v.f_bavail) * static_cast<int64_t>(v.f_frsize);
-    out.totalBytes = static_cast<int64_t>(v.f_blocks) * static_cast<int64_t>(v.f_frsize);
-    // STEAM'S SLICE IS NOT THE CONSOLE'S (#223, MMagTech 2026-10-03). It is a
-    // fixed-size file on the main drive, so its blocks are already out of
-    // the free space; taking it out of the size as well makes the console's
-    // part of the drive the drive minus the slice. Then the 80% keep share,
-    // "Storage almost full" and Settings, Storage all work on that part, and
-    // kept games overflow to another drive exactly as before, by the same
-    // rule. Without it, the slice would read as console data.
-    if (steam::sliceOn(location))
-        out.totalBytes = std::max<int64_t>(0, out.totalBytes - steam::sliceBytes());
-    return out;
-}
-
-bool isExternalDevice(dev_t d) {
-    // A partition's sysfs link resolves to a path under its disk, and the
-    // disk's under whatever carries it: .../usb2/2-1/.../block/sdb/sdb1.
-    // Anything on USB can be unplugged. So can a disk the kernel marks
-    // removable (an SD card: `removable` is 1 on the disk), and anything
-    // behind a port the kernel knows faces outwards (`removable` reads
-    // "removable" on the device, which is how a Thunderbolt enclosure shows,
-    // since its NVMe drive sits on PCIe like an internal one). Walked from the
-    // partition up to /sys/devices.
-    //
-    // A filesystem with no single block device behind it (btrfs reports an
-    // anonymous one) resolves nowhere and is reported as internal, which is
-    // the safe answer: it only changes a label and hides Eject.
-    if (d == 0) return false;
-    char link[64];
-    std::snprintf(link, sizeof link, "/sys/dev/block/%u:%u", major(d), minor(d));
-    char resolved[PATH_MAX];
-    if (!::realpath(link, resolved)) return false;
-    std::string at = resolved;
-    if (at.find("/usb") != std::string::npos) return true;
-    while (at.size() > std::strlen("/sys/devices")) {
-        if (FILE* f = std::fopen((at + "/removable").c_str(), "rb")) {
-            char buf[32] = {};
-            const size_t n = std::fread(buf, 1, sizeof buf - 1, f);
-            std::fclose(f);
-            std::string v(buf, n);
-            while (!v.empty() && std::isspace(static_cast<unsigned char>(v.back()))) v.pop_back();
-            if (v == "1" || v == "removable") return true;
-        }
-        const size_t slash = at.rfind('/');
-        if (slash == std::string::npos) break;
-        at.erase(slash);
-    }
-    return false;
-}
-
-bool isExternal(const std::string& location) { return isExternalDevice(deviceOf(location)); }
-
 std::string romsDir(const std::string& location) { return location + "/roms"; }
 std::string cacheDir(const std::string& location) { return location + "/cache"; }
 std::string biosDir() { return root() + "/bios"; }
@@ -470,111 +278,6 @@ int romIdFromEntry(const std::string& entry) {
     return static_cast<int>(id);
 }
 
-// FOUND BY THE ROMM ID, NAMED ONCE (#194). The id is the key; the name is for
-// a person reading the folder. A person renamed on RomM kept getting a new,
-// empty folder, and anything owed to RomM stayed stranded in the old one. The
-// folder is not renamed to follow: what is owed is recorded with its full path
-// (cache::Owed::localPath), so a rename would strand it all the same. An
-// existing `<id> - <any name>` folder is used as it is, and only a person with
-// none gets one under their current name. Looked up once per id.
-std::string User::dirName() const {
-    const std::string fresh = std::to_string(id) + " - " + safeSegment(name);
-    if (id <= 0) return fresh;
-    static std::mutex m;
-    static std::map<int, std::string> chosen;
-    std::lock_guard<std::mutex> lock(m);
-    if (auto it = chosen.find(id); it != chosen.end()) return it->second;
-    std::string pick = fresh;
-    const std::string dir = root() + "/users";
-    if (!isDir(dir + "/" + fresh)) {
-        const std::string prefix = std::to_string(id) + " - ";
-        if (DIR* d = ::opendir(dir.c_str())) {
-            while (struct dirent* e = ::readdir(d)) {
-                const std::string n = e->d_name;
-                if (n.compare(0, prefix.size(), prefix) == 0 && isDir(dir + "/" + n)) {
-                    pick = n;
-                    std::fprintf(stderr, "[storage] %s is %s on RomM now; keeping the folder\n",
-                                 n.c_str(), name.c_str());
-                    break;
-                }
-            }
-            ::closedir(d);
-        }
-    }
-    chosen[id] = pick;
-    return pick;
-}
-
-const User& currentUser() { return gUser; }
-
-void setCurrentUser(const User& u) {
-    gUser = u;
-    if (!u.valid()) return;
-    makeDirs(configDir());
-    // Cached so a console with no network still knows whose saves it holds.
-    // "We could not reach the server" is not a reason to start writing into
-    // somebody else's directory.
-    json_object* o = json_object_new_object();
-    json_object_object_add(o, "id", json_object_new_int(u.id));
-    json_object_object_add(o, "username", json_object_new_string(u.name.c_str()));
-    // Cached with the rest of them, so a console that cannot reach its server
-    // still draws the right face rather than falling back to a letter.
-    if (!u.avatar.empty())
-        json_object_object_add(o, "avatar", json_object_new_string(u.avatar.c_str()));
-    const char* text = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
-    const std::string tmp = userCachePath() + ".part";
-    if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
-        std::fputs(text, f);
-        std::fputc('\n', f);
-        std::fclose(f);
-        ::rename(tmp.c_str(), userCachePath().c_str());
-    }
-    json_object_put(o);
-    makeDirs(userDir(u));
-}
-
-bool resolveCurrentUser(romm::Client& client, std::string* err) {
-    romm::User me;
-    std::string e;
-    if (client.haveToken() && client.fetchCurrentUser(&me, &e) && me.id > 0) {
-        User u;
-        u.id = me.id;
-        u.name = me.username;
-        u.avatar = me.avatarPath;
-        setCurrentUser(u);
-        return true;
-    }
-    // The cached answer. A console that cannot reach its server still has to
-    // put a save somewhere, and the right somewhere is where the last one went.
-    if (FILE* f = std::fopen(userCachePath().c_str(), "rb")) {
-        std::string body;
-        char buf[512];
-        size_t n;
-        while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) body.append(buf, n);
-        std::fclose(f);
-        json_object* o = json_tokener_parse(body.c_str());
-        if (o) {
-            json_object* v = nullptr;
-            User u;
-            if (json_object_object_get_ex(o, "id", &v) && v)
-                u.id = json_object_get_int(v);
-            if (json_object_object_get_ex(o, "username", &v) && v)
-                u.name = json_object_get_string(v);
-            if (json_object_object_get_ex(o, "avatar", &v) && v)
-                u.avatar = json_object_get_string(v);
-            json_object_put(o);
-            if (u.valid()) {
-                gUser = u;
-                std::fprintf(stderr, "[storage] server did not answer; using the "
-                                     "last known user %s\n", u.dirName().c_str());
-                return true;
-            }
-        }
-    }
-    if (err) *err = e.empty() ? "no RomM user, and none cached" : e;
-    return false;
-}
-
 std::string userDir(const User& u) { return root() + "/users/" + u.dirName(); }
 
 std::string savesDir(const User& u, const std::string& platform, int romId,
@@ -590,7 +293,6 @@ std::string statesDir(const User& u, const std::string& platform, int romId,
 }
 
 std::string screenshotsDir(const User& u) { return userDir(u) + "/screenshots"; }
-std::string userConfigDir(const User& u) { return userDir(u) + "/config"; }
 std::string keepsDir(const User& u) { return userDir(u) + "/keeps"; }
 std::string pendingDir(const User& u) { return userDir(u) + "/pending"; }
 
@@ -602,53 +304,6 @@ std::string scratchSavesDir(const std::string& core) {
         slash == std::string::npos ? core : core.substr(slash + 1);
     return root() + "/users/0 - local/saves/local/0/" +
            safeSegment(name.empty() ? "core" : name);
-}
-
-std::vector<User> knownUsers() {
-    std::vector<User> out;
-    const std::string dir = root() + "/users";
-    DIR* d = ::opendir(dir.c_str());
-    if (!d) return out;
-    while (struct dirent* e = ::readdir(d)) {
-        if (e->d_name[0] == '.') continue;
-        if (!isDir(dir + "/" + e->d_name)) continue;
-        const std::string name = e->d_name;
-        const int id = romIdFromEntry(name);   // the same convention, both times
-        if (id <= 0) continue;
-        User u;
-        u.id = id;
-        const size_t dash = name.find(" - ");
-        u.name = dash == std::string::npos ? std::string() : name.substr(dash + 3);
-        out.push_back(std::move(u));
-    }
-    ::closedir(d);
-    std::sort(out.begin(), out.end(), [](const User& a, const User& b) { return a.id < b.id; });
-    return out;
-}
-
-std::string locationFor(int romId) {
-    for (const std::string& loc : locations()) {
-        for (const std::string& half : {romsDir(loc), cacheDir(loc)}) {
-            DIR* d = ::opendir(half.c_str());
-            if (!d) continue;
-            bool found = false;
-            while (struct dirent* plat = ::readdir(d)) {
-                if (plat->d_name[0] == '.') continue;
-                const std::string pdir = half + "/" + plat->d_name;
-                DIR* pd = ::opendir(pdir.c_str());
-                if (!pd) continue;
-                while (struct dirent* entry = ::readdir(pd)) {
-                    if (entry->d_name[0] == '.') continue;
-                    if (romIdFromEntry(entry->d_name) == romId) { found = true; break; }
-                }
-                ::closedir(pd);
-                if (found) break;
-            }
-            ::closedir(d);
-            if (found) return loc;
-        }
-    }
-    return locations().front();
 }
 
 MoveResult moveEntry(const std::string& from, const std::string& to) {

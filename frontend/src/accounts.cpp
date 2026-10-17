@@ -19,10 +19,15 @@ std::string homeDir() {
     return std::string(h && *h ? h : ".");
 }
 
-// 0700 the whole way down, because what goes in it is a credential. The same
-// trap `romm::Client::saveToken` records is live here: `~/.config/cabinetos/`
-// does not exist on a machine nobody has configured, which is exactly the
-// machine that is pairing.
+// 0700 the whole way down, because what goes in it is a credential. THE
+// DIRECTORY HAS TO BE MADE, AND NOT MAKING IT COST A PAIRING ON THE FIRST
+// CONSOLE EVER INSTALLED: `~/.config/cabinetos/` does not exist on a machine
+// nobody has configured, which is exactly the machine that is pairing. The
+// token writer before accounts opened the file without making the directory,
+// the pairing the person had just approved in a browser was thrown away, and
+// the console went on showing the stand-in library (found 2026-09-19, on the
+// A9 Pro, ten minutes after it first booted; the test VM never showed it
+// because that directory had been created there by hand weeks earlier).
 void makeDirs0700(const std::string& dir) {
     std::string built;
     size_t at = 0;
@@ -289,16 +294,6 @@ bool setActive(int id, std::string* err) {
     return save(b, err);
 }
 
-bool update(int id, const std::string& name, const std::string& avatar) {
-    Book b = load();
-    Account* target = nullptr;
-    for (Account& a : b.list) if (a.id == id) { target = &a; break; }
-    if (!target) return false;
-    if (!name.empty()) target->name = name;
-    target->avatar = avatar;
-    return save(b, nullptr);
-}
-
 bool setColour(int id, const std::string& colour) {
     Book b = load();
     for (Account& a : b.list) {
@@ -433,3 +428,38 @@ bool forgetEveryone() {
 }
 
 }  // namespace accounts
+
+// Who this console is acting as, settled before anything writes a save.
+//
+// Saves, states and the decision to keep a game all live under a person now, so
+// this is not a nicety: without an answer there is no directory to write into.
+// The answer comes from RomM's `/api/users/me` and is cached on disk, because a
+// console with no network still has to know whose saves it is holding.
+bool adoptUser(romm::Client& client) {
+    std::string err;
+    if (storage::resolveCurrentUser(client, &err)) {
+        std::fprintf(stderr, "[storage] user %s\n",
+                     storage::currentUser().dirName().c_str());
+        return true;
+    }
+    std::fprintf(stderr,
+                 "[storage] no RomM user (%s) — saves and keeps have nobody to "
+                 "belong to until this console is paired\n", err.c_str());
+    return false;
+}
+
+// WHO THE CONSOLE IS, WITH NO SERVER TO ASK (#88): the account's own id,
+// name and picture, from accounts.json. Switching people works offline
+// (MMagTech, 2026-10-05); /api/users/me is only how an online console checks.
+bool adoptAccountOffline(int id) {
+    const std::vector<accounts::Account> known = accounts::all();
+    const accounts::Account* a = accounts::find(known, id);
+    if (!a) return false;
+    storage::User u;
+    u.id = a->id;
+    u.name = a->name;
+    u.avatar = a->avatar;
+    storage::setCurrentUser(u);
+    std::fprintf(stderr, "[storage] user %s (offline)\n", u.dirName().c_str());
+    return true;
+}

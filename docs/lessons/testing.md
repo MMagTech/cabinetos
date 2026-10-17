@@ -153,6 +153,16 @@ the repository alone.
   to take longer than a second. **Use `--launch-after 0`.** Twenty minutes went
   on this, chasing a difference between two binaries that did not exist.
 
+- **A `--frames` CAPTURE OF A LAUNCH IS TAKEN BEFORE THE GAME HAS LOADED.**
+  `--frames` counts the UI's frames, thousands a second headless, and the
+  capture ends the run, so `--launch <id> --launch-after 0 --frames 600
+  --screenshot` photographs the curtain and kills the game before `[core]
+  loaded` (2026-10-15, move 2: a whole first run of launch tests proved
+  nothing). Take the game's frame with the disc rig and a time limit:
+  `--disc-script "wait 600; shot X; ui X"` under `timeout -s KILL 60`; `wait`
+  counts the game's own frames. A PS1 game is still black at 600 game frames
+  (the console's start); 3,000 shows its opening.
+
 - **The same capture command is worth running ON THE A9**, with
   `SDL_VIDEODRIVER=offscreen` and `--render-size 3840x2160`. It uses the real
   Radeon, needs no compositor, and does not disturb the running session — so a
@@ -233,6 +243,13 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   screenshot` with `XDG_RUNTIME_DIR=/run/user/1000` and
   `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
   session restart leaves the old socket behind and gamescopectl fails on it.
+
+- **CONNECTING MOONLIGHT CAN PRESS PLAY (#411).** 2026-10-15, 5:38 PM: two
+  seconds after the stream connected, as Sunshine set up its virtual pad
+  again ("ControllerNumber already allocated"), two presses reached Home 0.2 s
+  apart and started the focused game twice; the stream then dropped and the
+  game ran with nobody there. Before testing over Moonlight, know what Home
+  has focused, and read the journal for a `[launch]` nobody asked for.
 
 - **NEVER SEND A "WAKE" PRESS WITHOUT A CAPTURE FIRST.** Right after a restart
   the screen is already awake, so a Return meant to wake it pressed Resume on
@@ -398,9 +415,31 @@ minute and guessing at it for twenty.
   to the real games drive). #310 was tested this way, 2026-10-10: a launch
   tried to upload Paperboy's NVRAM and the relay refused it.
 
+- **The folder route is tested through the same relay's `folder:<id>`**,
+  which shows a one-file game as a folder on the server, with a made-up
+  `update/` file beside it. Almost nothing on the reference server takes that
+  route with a core (only Star Ocean, 7.8 GB), so move 2 used
+  `folder:34 folder:584` (Super Mario Land fetched file by file; Teleroboxer's
+  one-file entry moved into a folder).
+
 - **Reading a game with `GET /api/roms/<id>` makes RomM create that person's
   empty `rom_user` row**, which moves its `updated_at`. Harmless, but do not
   read it as something the console sent.
+
+- **`--sync-test` WRITES TO RomM AS THE ACTIVE ACCOUNT, scratch root or
+  not.** 2026-10-15, move 1 of #398: a headless `--sync-test` of Cannon
+  Spike (Dreamcast) uploaded its state to RomM as MMagTech under
+  flycast-native. Flycast has a state tag (GameSession's comment saying it
+  has none is stale), and the upload did two things nobody wanted: RomM set
+  the game's last played, so Cannon Spike jumped to the front of Recent on
+  every device, and the state counts toward the three kept per game, so his
+  own older state goes one save sooner. A scratch `--storage-root` keeps the
+  console's disk clean, not the server. **Run `--sync-test`, and any launch
+  test that may save, through `tools/romm-readonly-relay.py`**: the relay's
+  `REFUSED POST /api/states?rom_id=550&emulator=flycast-native` line is the
+  proof the upload was tried, and nothing reaches RomM. A test killed with
+  SIGKILL sends no file saves, and a play session under a minute is not
+  recorded, so those were already safe.
 
 - **THE DISC RIG (`tools/disc-rig/`, #162) DRIVES A GAME BY SCRIPT**:
   `--disc-script "wait 600; insert 2; wait 300; shot a; state; startover 1;
@@ -434,6 +473,38 @@ minute and guessing at it for twenty.
   SESSION,** including a word only further along the same command line
   (`grep "[r]elay2.py 1600[78]"` matched `relay2.py 16008` later in the same
   `bash -c`). Start and stop helpers from a script file with a pid file.
+
+- **A PAD LEFT ON CHANGES A SUITE'S OUTPUT.** 2026-10-15, move 3 of #398:
+  an Xbox pad still awake from a TV test was seated by the base binary's
+  first runs and switched itself off at 7:20 PM (battery 1 of 4), so a dozen
+  outputs differed by pad lines and a Dreamcast state taken during the pause
+  it caused. Read the console's journal for `[players]` lines across a suite
+  run before comparing two binaries, and rerun the same binary on the tests
+  that differ to show what timing alone changes.
+
+- **A RESTART NEVER REACHES THE END OF main().** On Power > Restart, Power
+  off or an update's restart, gamescope's reaper kills the frontend right
+  after `[power] released` (measured 2026-10-15 on 2026.10.15.2 and
+  2026.10.16), so nothing that runs when main() returns (the App's
+  destructors, #406's abort) runs then. The exits that do return are the
+  Steam handover and a quit by SIGTERM: test an exit headless with `timeout
+  --preserve-status -s TERM` (SDL makes it a quit, `[shutdown] asked to
+  stop`), and on the TV with Steam and back.
+
+- **A TEST GAME ON THE CONSOLE ENDS INSIDE A MINUTE, BY `--restore`, NEVER
+  BY A KILL.** 2026-10-15, move 4 of #398: a loop launch (`tools/ui-loop.sh
+  --game 305`) kept running because the next step's idle check read the test
+  game's own `[pace]` lines and stopped the script. A `kill -9` of the
+  frontend then left its play session open; the session started the loop's
+  build again, which launches the game again, and that start recovered the
+  open session ("a session left open, 60 s, is owed now") and sent it to
+  RomM as MMagTech. Tetris & Dr. Mario went to the front of his Recent
+  shelf. Under a minute a session is not recorded, but a kill does not stop
+  the next start from recovering one. End a loop game with `--restore`
+  straight after its capture, and let an idle check after it wait for the
+  `[pace]` lines to age rather than stop. And a `grep` for the frontend's
+  arguments also matches gamescope, whose command line carries them: that
+  kill took gamescope with it.
 
 - **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `drives.json` `[]` keeps
   downloads off it, but the frontend found `/run/media/cabinet/Games` and its
@@ -473,6 +544,44 @@ opened once and reused needs a test of two different games in one run.**
   other.** `:Z` relabels the whole mounted tree for one container's SELinux
   category. Cost one PPSSPP build. **Do not start a second container over a
   parent of a running one.**
+
+- **A COMMAND THAT FALLS THROUGH CAN HAND PODMAN THE HOME FOLDER.**
+  2026-10-16, move 5 of #398: a check over SSH ran `bash idle.sh && cd
+  ~/fb/m5/fe && ...; podman run -v "$PWD":/src:Z ...`. idle.sh said busy,
+  the `&&` chain stopped before the `cd`, the `;` ran podman anyway, and
+  `$PWD` was the home folder: `:Z` relabelled 30,276 files (`.config`,
+  `.cache`, part of `.local/share`) to the container's SELinux label before
+  it failed at Steam's folder. Nothing was refused only because the
+  console's processes run unconfined. Put back as `cabinet` with `find ~
+  -xdev -context '*c323,c693*' -print0 | xargs -0 restorecon -F` (the
+  categories podman chose). **Give podman an absolute folder, never `$PWD`,
+  and run a chain under `set -e` so nothing runs after a failed step.**
+
+- **THE LOOP'S RSYNC KEEPS FILES IT DOES NOT KNOW.** `tools/ui-loop.sh`
+  copies a tree's `frontend/src` onto the A9 without deleting, so after a
+  tree with new files, an older tree's build fails on the files it does not
+  have (move 4 and move 5 both). `rsync --delete` the older tree's sources
+  onto the A9 first.
+
+- **TWO SUITE RUNS SIDE BY SIDE NEED THEIR OWN PORTS, AND ONE PATH IS
+  SHARED.** 2026-10-16, move 6 of #398: the binary under test and the base
+  binary's second run went at the same time to save 25 minutes, each with
+  its own relay ports (`suite6p.sh`, `P` the port base), roots, outputs and
+  pid files. The frontend writes one fixed file, `/tmp/cabinetos-manual.pdf`
+  (a game's manual), so the second run starts three minutes after the
+  first. The relay's port is part of any address the console shows, so a
+  QR of the pairing link differs by port alone: compare it on the same
+  port, rerun alone. The two runs under the same load are the
+  like-for-like pair; the first run, alone, shows what the load changes.
+
+- **A CAPTURE TIMED BY `--frames` SHOWS A DIFFERENT FADE WHEN THE MACHINE IS
+  BUSY.** The same move: the 4K Home capture (120 frames) took 6.6 s in one
+  run against 0.8 s in every other, because the run beside it was busy, and
+  caught Home fully faded in where the others caught it half dim: eight
+  million pixels different, from timing alone. Alone, three runs on each
+  binary gave the same picture. The fades follow the clock, not the frame
+  count; rerun a large capture difference alone, and swap the roots, before
+  reading anything into it.
 
 - **A loop deploy restarts gamescope, and every `gamescopectl` setting goes
   with it.** 2026-10-07: `composite_force` was on for a Remote Play stream;

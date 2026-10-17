@@ -117,8 +117,8 @@ public:
     // core skips the case entirely rather than falling back. So the host
     // captures the table a core declares and answers every key in it.
     //
-    // See core.cpp for the three generations of the declaration API and why we
-    // report version 2.
+    // See core_options.cpp for the three generations of the declaration API
+    // and why we report version 2.
     struct OptionReport {
         std::string key;
         std::string desc;
@@ -137,8 +137,8 @@ public:
 
     // The control for the OTHER half of what a core needs from this host: with
     // this set, SET_HW_RENDER is refused however serveable the ask was. See
-    // core.cpp. It tells "this core cannot get a picture out of this host"
-    // apart from "this core cannot run in this host at all".
+    // core_hwrender.cpp. It tells "this core cannot get a picture out of this
+    // host" apart from "this core cannot run in this host at all".
     static void setRefuseHWRender(bool on);
 
     // Deliberate choices, keyed by option. Set BEFORE load(): a core may read
@@ -177,7 +177,6 @@ public:
     bool loadGame(const std::string& romPath, const std::string& systemDir,
                   const std::string& saveDir);
     void unloadGame();
-    bool gameLoaded() const { return gameLoaded_; }
 
     // Advances emulation by however many frames are due, given the wall clock.
     //
@@ -306,13 +305,6 @@ public:
     // the draw path asks frameUV and does not need to know.
     bool hardwareRendered() const;
 
-    // What the loaded core asked for, named: "OpenGL ES 3.0", "OpenGL 3.3 core
-    // (refused)". Empty when the core never asked, which is most of them.
-    // This is the whole audit for hardware rendering: a core that asks for
-    // something this context cannot serve says so here rather than failing
-    // later in a way that looks like a broken game.
-    const std::string& hardwareContext() const;
-
     // Drains audio produced since the last call, as interleaved 16-bit stereo
     // at the core's own rate.
     const std::vector<int16_t>& drainAudio();
@@ -397,18 +389,16 @@ public:
     bool writeSaveRam(const std::vector<uint8_t>& data);
     size_t saveRamSize() const;
 
-    // --- In-game saves -------------------------------------------------------
+    // --- In-game saves, read by --state-test ---------------------------------
     //
     // A different mechanism from save states, and the one people assume is
     // safe once the game says it saved. Most cores expose the cartridge
     // battery here; some write their own files into the save directory
     // instead and this returns nothing for them.
     bool saveRAM(std::vector<uint8_t>& out) const;
-    bool loadSaveRAM(const std::vector<uint8_t>& data);
-    // Game Boy keeps its real-time clock in a region of its own. Saving only
-    // the save RAM loses the clock that Pokemon Gold and Silver depend on.
+    // Any region the core exposes, by its RETRO_MEMORY_* id. Game Boy keeps
+    // its real-time clock in a region of its own.
     bool memoryRegion(unsigned id, std::vector<uint8_t>& out) const;
-    bool loadMemoryRegion(unsigned id, const std::vector<uint8_t>& data);
 
     // --- Discs (#162) ----------------------------------------------------------
     //
@@ -455,7 +445,6 @@ public:
     // the same platform can differ. See romfile.h.
     const std::string& validExtensions() const { return validExtensions_; }
     bool blockExtract() const { return blockExtract_; }
-    bool needFullpath() const { return needFullpath_; }
     const std::string& coreVersion() const { return coreVersion_; }
     const std::string& error() const { return error_; }
 
@@ -485,6 +474,11 @@ public:
 private:
     Core() = default;
     void* symbol(const char* name);
+    // uploadFrame's software path (core_picture.cpp).
+    bool uploadSoftwareFrame();
+    // loadGame's PlayStation 2 start (core_ps2.cpp).
+    bool startPs2Game(const std::string& romPath, const std::string& systemDir,
+                      const std::string& saveDir);
 
     void* handle_ = nullptr;
     bool gameLoaded_ = false;

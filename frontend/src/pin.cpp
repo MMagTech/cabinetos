@@ -1,5 +1,6 @@
 #include "pin.h"
 
+#include "panels.h"
 #include "sound.h"
 
 #include <algorithm>
@@ -30,7 +31,6 @@ bool isDelete(int r, int c) { return r == 3 && c == 2; }
 // screen ui for a pin pad"*. A scrim and the pause menu's panel and buttons
 // (design::menuPanel), shared with the question panel.
 constexpr float kPanelPad = 40.0f;       // the keyboard's
-constexpr float kPanelRadius = 32.0f;    // the keyboard's, the pause panel's
 constexpr float kPanelMaxW = 1200.0f;
 constexpr float kDotSize = 26.0f;
 constexpr float kDotSpacing = 56.0f;

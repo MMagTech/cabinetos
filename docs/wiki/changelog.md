@@ -4,6 +4,20 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.17.3 {#v2026-10-17-3}
+
+*17 October 2026*
+
+- **Changed:** nothing you should see. The console's code has been
+  reorganised into smaller files named for what they do, so others can find
+  their way around it and help. Every screen, game and setting works as
+  before.
+  ([#398](https://github.com/MMagTech/cabinetos/issues/398))
+- **Fixed:** a rare fault where, while the console reconnected to your RomM
+  server or changed accounts, a cover, a save upload or another request
+  could go out with a half-changed server address or sign-in and fail. The
+  console now changes them in one step.
+
 ## 2026.10.14.5 {#v2026-10-14-5}
 
 *14 October 2026*

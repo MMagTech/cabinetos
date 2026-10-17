@@ -29,25 +29,12 @@
 
 #pragma once
 
-#include <atomic>
 #include <string>
 #include <vector>
 
+#include "wiipair.h"
+
 namespace wiiremote {
-
-// --- Pairing (slow: call from a worker thread, never the frame thread) ------
-
-// The Wii's own search, through the root helper. Fills `found` with the
-// address of each Wii Remote that answered (may be none). False, with `err`,
-// only when the search itself could not run.
-bool search(std::vector<std::string>* found, std::string* err,
-            const std::atomic<bool>* cancel = nullptr);
-
-// Pairs, trusts and connects the Remote at `address`. False, with `err`.
-bool pair(const std::string& address, std::string* err);
-
-// Forgets a paired Remote.
-bool remove(const std::string& address, std::string* err);
 
 struct Paired {
     std::string address;
@@ -74,9 +61,6 @@ void refresh();
 // and turns their buttons into the console's own controller presses (SDL
 // gamepad events from a pad id no real pad has). Idempotent.
 void start();
-
-// How many Remotes are connected now.
-int connected();
 
 // While a game runs Dolphin drives the Remotes: the console stops sending
 // them anything and reads only HOME, held, for its own menu. When the game

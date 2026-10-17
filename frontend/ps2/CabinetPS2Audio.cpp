@@ -116,8 +116,6 @@ namespace
 			}
 		}
 
-		u32 SampleRate() const { return m_sample_rate; }
-
 	private:
 		std::vector<SampleType> m_scratch;
 	};

@@ -6,9 +6,9 @@
 //
 // WHERE THE MOTORS COME FROM. A libretro core asks for the rumble interface
 // and calls it with a port, a motor (strong or weak) and a strength; that is
-// how RetroArch drives rumble for every core, and core.cpp answers the same
-// way. PlayStation 2 is not a libretro core: its bridge reports what PCSX2
-// asked of each DualShock 2 (ps2.h). Both land in `set`.
+// how RetroArch drives rumble for every core, and core_input.cpp answers the
+// same way. PlayStation 2 is not a libretro core: its bridge reports what
+// PCSX2 asked of each DualShock 2 (ps2.h). Both land in `set`.
 //
 // WHERE THEY GO. SDL's gamepad rumble, strong motor as SDL's low-frequency
 // one and weak as its high-frequency one, as RetroArch's SDL driver does.

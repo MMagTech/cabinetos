@@ -24,8 +24,8 @@
 //
 // A Wi-Fi scan is seconds, a Bluetooth scan is ten, and waiting for somebody to
 // pick up a phone and approve a pairing is minutes. Every one of those runs on
-// a worker and is polled once a frame, the same shape `LaunchJob` and
-// `StateLoad` already use in main.cpp. A setup screen that freezes while it
+// a worker and is polled once a frame, the same shape `LaunchJob` (launch.h)
+// and `StateLoad` (states.h) already use. A setup screen that freezes while it
 // looks for networks is indistinguishable from a console that has crashed —
 // and it would be the FIRST thing anybody ever saw it do.
 
@@ -33,20 +33,10 @@
 
 #include <string>
 
-struct SDL_Window;
-
-namespace ui {
-class Renderer;
-class TextRenderer;
-}
+#include "keyboard.h"
+#include "startscreen.h"
 
 namespace setup {
-
-struct Deps {
-    SDL_Window* window = nullptr;
-    ui::Renderer* renderer = nullptr;
-    ui::TextRenderer* text = nullptr;
-};
 
 struct Options {
     // Open at a named step — network, wifi, server, pair, controller, done.
@@ -80,40 +70,6 @@ struct Options {
     bool signedOut = false;
 };
 
-// One frame saying the console is busy, drawn in the same language as the setup
-// screens and presented immediately.
-//
-// WHY THIS EXISTS. Pressing "Start playing" is followed by several seconds of
-// blocking work — reaching the server, adopting the user, and pulling a library
-// that is sixteen hundred games on the reference machine — and until this
-// existed the screen simply stopped changing. MMagTech, 2026-09-20: *"after
-// hitting start playing there's a bit of a delay. It sort of seems like maybe
-// it's stalled since nothing indicates the delay."*
-//
-// AND IT IS NOT ONLY AFTER SETUP. The same blocking work runs on EVERY boot, so
-// a console has always shown a blank screen for those seconds — and for up to
-// ninety of them when it is waiting for a server that is not up yet. Nobody had
-// noticed because nobody watches a console boot with a stopwatch; it took
-// somebody pressing a button and expecting something to happen.
-//
-// It is one frame, not a loop: the work it covers is synchronous, so there is
-// nothing to animate against. A still sentence that says what is happening
-// beats a picture that has stopped changing for no stated reason.
-void showWaiting(const Deps& d, const char* title, const char* detail);
-
-// The same startup screen, drawn into a frame somebody else is building, at
-// `alpha`. For the main loop's curtain when the app is about to start again
-// (Sign out, a new server address), so the screen it leaves on is the screen
-// it comes back on.
-// `hint`, if given, is a second line under it, brighter: something a person
-// can do ("Press (A) to change the server address").
-// The CabinetOS cabinet, the startup screen's icon, with its top-left at x,y
-// and `h` tall (its width is h * 527 / 720). How to's wiki code carries it.
-void drawCabinetIcon(ui::Renderer& r, float x, float y, float h, float a);
-
-void drawStartup(ui::Renderer& r, ui::TextRenderer& t, const char* detail, float alpha,
-                 const char* hint = nullptr);
-
 enum class Outcome {
     Completed,   // setup finished; the console is configured
     Quit,        // the person quit, or a capture run ended
@@ -125,3 +81,9 @@ enum class Outcome {
 Outcome run(const Deps& d, const Options& o);
 
 }  // namespace setup
+
+// The keyboard for a server address in Settings and on the startup screen's
+// server wait, and its trim: first run's own keyboard (Flow, Act::Edit)
+// without its hint. Moved out of main.cpp in the restructure (#398).
+ui::Keyboard::Config serverKeyboardConfig(const std::string& initial);
+std::string trimmedAddress(std::string a);

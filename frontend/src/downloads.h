@@ -75,7 +75,6 @@ public:
 
     Outcome key(Nav n);
     void tick(float dt);
-    void settle() { appear_.settle(1.0f); focus_.settle(1.0f); }
     void draw(Ctx& c);
 
 private:

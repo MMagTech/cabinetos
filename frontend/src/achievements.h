@@ -12,11 +12,12 @@
 // as they always do.
 //
 // THE LIBRARY IS rcheevos' rc_client, vendored in third_party/rcheevos, which
-// is what RetroArch, Dolphin and PCSX2 use. This file gives it the three
-// things it asks a frontend for: the network (libcurl, on a worker), the
-// emulated machine's memory (the core's map through rc_libretro, or PCSX2's
-// memory through the bridge), and somewhere to say what happened (the pop-up
-// queue and the log).
+// is what RetroArch, Dolphin and PCSX2 use. achievements.cpp gives it the
+// three things it asks a frontend for: the network (libcurl, on a worker, in
+// ra_net.cpp), the emulated machine's memory (the core's map through
+// rc_libretro, or PCSX2's memory through the bridge), and somewhere to say
+// what happened (the pop-up queue and the log). The game's page's list is in
+// ra_list.cpp, and what the files share in ra_state.h.
 //
 // THE GAME IS IDENTIFIED BY RomM's `ra_hash`, which RomM works out when it
 // scans: the fingerprint RetroAchievements knows the game by. The console never

@@ -1,43 +1,23 @@
 #include "wiiu.h"
 
-#include "storage.h"
+#include "codecache.h"
+#include "gametdb.h"
 
 #include <archive.h>
 #include <archive_entry.h>
 
 #include <cctype>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include <fstream>
-#include <map>
-#include <mutex>
-#include <set>
 
 namespace wiiu {
 namespace {
 
-std::map<std::string, std::string> gControls;
-std::once_flag gLoaded;
-
-void load() {
-    const char* env = std::getenv("CABINETOS_WIIU_CONTROLS");
-    const std::string path = env && *env ? env : "/usr/share/cabinetos/wiiu-controls.txt";
-    std::ifstream in(path);
-    if (!in) {
-        std::fprintf(stderr, "[wiiu] no controller list at %s; every Wii U game needs a GamePad\n",
-                     path.c_str());
-        return;
-    }
-    std::string line;
-    while (std::getline(in, line)) {
-        if (line.empty() || line[0] == '#') continue;
-        const size_t sp = line.find(' ');
-        if (sp == std::string::npos) continue;
-        gControls[line.substr(0, sp)] = line.substr(sp + 1);
-    }
-    std::fprintf(stderr, "[wiiu] %zu games in the controller list\n", gControls.size());
-}
+// Wii U's controller list and the codes read off its files (gametdb.h,
+// codecache.h; wii.cpp has its own of each).
+cab::GameTdb gControls("CABINETOS_WIIU_CONTROLS", "/usr/share/cabinetos/wiiu-controls.txt", "wiiu",
+                       "every Wii U game needs a GamePad");
+cab::CodeCache gCodes("wiiu-codes.txt");
 
 uint64_t be(const uint8_t* p, int n) {
     uint64_t v = 0;
@@ -96,21 +76,6 @@ std::vector<uint8_t> unzstd(const std::vector<uint8_t>& in) {
     }
     archive_read_free(a);
     return out;
-}
-
-std::mutex gCodesLock;
-std::map<int, std::string> gCodes;
-bool gCodesRead = false;
-
-std::string codesPath() { return storage::configDir() + "/wiiu-codes.txt"; }
-
-void readCodes() {
-    if (gCodesRead) return;
-    gCodesRead = true;
-    std::ifstream in(codesPath());
-    int id;
-    std::string code;
-    while (in >> id >> code) gCodes[id] = code == "-" ? std::string() : code;
 }
 
 }  // namespace
@@ -202,31 +167,11 @@ std::string codeFromWua(uint64_t size, const ReadFn& read) {
     return codeFromMeta(std::string(reinterpret_cast<const char*>(plain.data() + start), len));
 }
 
-std::string rememberedCode(int romId, bool* known) {
-    std::lock_guard<std::mutex> lock(gCodesLock);
-    readCodes();
-    auto it = gCodes.find(romId);
-    *known = it != gCodes.end();
-    return *known ? it->second : std::string();
-}
+std::string rememberedCode(int romId, bool* known) { return gCodes.remembered(romId, known); }
 
-void rememberCode(int romId, const std::string& code) {
-    std::lock_guard<std::mutex> lock(gCodesLock);
-    readCodes();
-    gCodes[romId] = code;
-    std::ofstream out(codesPath(), std::ios::app);
-    out << romId << ' ' << (code.empty() ? "-" : code) << '\n';
-}
+void rememberCode(int romId, const std::string& code) { gCodes.remember(romId, code); }
 
-std::string controls(const std::string& code) {
-    if (code.empty()) return {};
-    std::call_once(gLoaded, load);
-    std::set<char> letters;
-    for (auto it = gControls.lower_bound(code);
-         it != gControls.end() && it->first.compare(0, code.size(), code) == 0; ++it)
-        letters.insert(it->second.begin(), it->second.end());
-    return std::string(letters.begin(), letters.end());
-}
+std::string controls(const std::string& code) { return gControls.controls(code); }
 
 Needs needs(const std::string& code) {
     const std::string c = controls(code);

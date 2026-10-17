@@ -176,7 +176,7 @@ public:
     struct Key {
         std::string label;   // what is drawn
         std::string insert;  // what is typed; empty for an action key
-        enum Action { None, Backspace, Shift, Space, Done, Cancel, Conceal } action = None;
+        enum Action { None, Backspace, Shift, Space, Done, Conceal } action = None;
         float width = 1.0f;  // in key units
     };
 

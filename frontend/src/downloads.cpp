@@ -1,5 +1,6 @@
 #include "downloads.h"
 
+#include "panels.h"
 #include "sound.h"
 
 #include <algorithm>

@@ -40,9 +40,6 @@ std::string gamertag(const std::string& name);
 // Writes the profile, signed in as `gamertag`, to `path` (its folders made).
 bool writeAccount(const std::string& path, const std::string& gamertag, std::string* err);
 
-// The gamertag in a profile file, or empty if it does not decrypt. For checks.
-std::string readAccount(const std::string& path);
-
 // Where the profile goes under a content folder.
 std::string accountPath(const std::string& contentRoot);
 

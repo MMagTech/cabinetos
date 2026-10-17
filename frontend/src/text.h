@@ -41,19 +41,16 @@ struct Color;
 // not on a monitor.
 enum class TextStyle {
     LargeTitle,  // 76 bold  — game detail title, settings page titles
-    Title1,      // 57
     Title2,      // 48 bold  — shelf headers
     Title3,      // 38 semibold — settings rows, tile titles, pills
-    Headline,    // 38 semibold — hero card title
     Callout,     // 31       — cover captions
     Body,        // 29
     Footnote,    // 29       — game counts
     Caption1,    // 25       — hero platform label
-    Caption2,    // 23
     ScreenTitle, // 40 bold  — the one hardcoded size in the reference app
 };
 
-enum class Weight { Regular, Medium, SemiBold, Bold };
+enum class Weight { Regular, SemiBold, Bold };
 
 float styleSize(TextStyle s);
 Weight styleWeight(TextStyle s);
@@ -119,5 +116,15 @@ private:
 // Decodes one UTF-8 code point, advancing i. Invalid bytes yield U+FFFD and
 // advance by one, so a malformed name from a server cannot hang the loop.
 uint32_t nextCodepoint(std::string_view s, size_t& i);
+
+// Words that fit a column, for prose longer than one line: `wrap` breaks on
+// spaces and hands a word wider than the whole column to `hardWrap`, which
+// breaks between any two characters. Defined in text.cpp; moved out of
+// setup.cpp in the restructure (#398), when first run's screens were the only
+// prose that needed it.
+std::vector<std::string> wrap(TextRenderer& text, const std::string& s, TextStyle style,
+                              float scale, float maxWidth);
+std::vector<std::string> hardWrap(TextRenderer& text, const std::string& s, TextStyle style,
+                                  float scale, float maxWidth);
 
 }  // namespace ui

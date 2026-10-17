@@ -67,6 +67,29 @@ this repo for builds that need podman). `ydotoold` is not started at boot.
 the session's `/var/lib/cabinetos`. Two 8 GB test disks: `vdc` (exFAT
 "Games"), `vdd` (a Windows layout).
 
+## Going back to an earlier version
+
+Every release image stays on GHCR under its version tag, signed by digest,
+so any of them can be put back (#398, Part 6 section 26). The last image
+before the restructure is 2026.10.14.5, tagged in git on 72c0c4b.
+
+- **The normal way, no token:** revert the merge on main. main then differs
+  from the testing image, build.yml builds the next version, and consoles
+  take it as an ordinary update. During the restructure a batch is reverted
+  on the `restructure` branch instead, which ships nothing.
+- **Fast, with a token that can write packages:** point `latest` back at a
+  version. Consoles take it as an update, because the check compares
+  digests, not "newer", and the signature is on the digest:
+  ```
+  skopeo copy --preserve-digests --dest-creds "USER:TOKEN" \
+    docker://ghcr.io/mmagtech/cabinetos:2026.10.14.5 docker://ghcr.io/mmagtech/cabinetos:latest
+  ```
+  The Mac has no skopeo; the A9 has it but no token.
+- **One console:** `sudo bootc rollback && sudo systemctl reboot` boots the
+  deployment before the current one; `sudo bootc switch
+  ghcr.io/mmagtech/cabinetos:<version>` pins it to a version until it is
+  switched back to `:testing` or `:latest`.
+
 ## How MMagTech wants this done
 
 Plain answers. **Lead with what a change does and why it exists, in terms of

@@ -1,7 +1,6 @@
 #include "server.h"
 
 #include <dirent.h>
-#include <unistd.h>
 
 #include <cstdio>
 #include <cstdlib>

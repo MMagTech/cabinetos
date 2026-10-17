@@ -212,7 +212,6 @@ void probe() {
     if (gCaps.vendorId == 0x1002)
         gCaps.topClockMhz = amdTopClockMhz(pciAddress, chosenProps.vendorID, chosenProps.deviceID);
     gCaps.apiVersion = chosenProps.apiVersion;
-    gCaps.driverVersion = chosenProps.driverVersion;
     gCaps.discrete = chosenProps.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
     gCaps.externalMemoryFd = has(exts, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
     gCaps.externalMemoryDmaBuf = has(exts, VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);

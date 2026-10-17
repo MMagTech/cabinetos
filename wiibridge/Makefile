@@ -3,8 +3,8 @@
 CXXFLAGS ?= -O2
 CXXFLAGS += -std=c++20 -Wall -Wextra
 
-cabinetos-wii-bridge: bridge.cpp encryption.cpp encryption.h
-	$(CXX) $(CXXFLAGS) -o $@ bridge.cpp encryption.cpp
+cabinetos-wii-bridge: bridge.cpp mii.cpp bridge.h encryption.cpp encryption.h
+	$(CXX) $(CXXFLAGS) -o $@ bridge.cpp mii.cpp encryption.cpp
 
 clean:
 	rm -f cabinetos-wii-bridge

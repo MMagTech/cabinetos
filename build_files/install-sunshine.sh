@@ -28,7 +28,7 @@
 #      "libvirtualhid" (players.cpp, isRemote): the handover finds the
 #      phone's controllers by it;
 #   2. its log says "CLIENT CONNECTED" and "CLIENT DISCONNECTED"
-#      (remoteplay.cpp, readLog): how a dropped phone is known;
+#      (sunshinelog.cpp, readLog): how a dropped phone is known;
 #   3. an app's prep-cmd "do" runs before the stream's capture starts and
 #      "undo" when the app is quit (cabinetos-remoteplay started/ended);
 #   4. GET and POST /api/pin with pairing_id, /api/clients/list and

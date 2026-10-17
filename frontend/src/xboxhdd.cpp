@@ -600,7 +600,7 @@ bool copyIn(Fatx& fs, uint32_t dir, const std::string& host, int* files, std::st
 
 // Brings `host` into line with the drive's `dir`, rewriting only what
 // differs, so a file the game did not touch keeps its time and the save sync
-// (main.cpp, syncDirSave) sees no change in it.
+// (saves.cpp, syncDirSave) sees no change in it.
 bool copyOut(Fatx& fs, uint32_t dir, const std::string& host, int* changed, std::string* err) {
     ::mkdir(host.c_str(), 0755);
     std::vector<Entry> list;

@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "romm.h"
+#include "romm_types.h"
 #include "storage.h"
 
 namespace disc {
