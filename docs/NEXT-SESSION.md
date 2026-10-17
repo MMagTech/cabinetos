@@ -28,26 +28,29 @@ before the restructure is 2026.10.14.5 (git tag on 72c0c4b).
 
 ## Next
 
-Part 5 of the audit (report only; change no code): the newcomer docs
-measured against the code, and the refutation of the RomM map. Its prompt is
-`~/Documents/Development/cabinetos-audit/part5-prompt.md`. Four of its agents
-already ran in the Part 4 session and are saved in that folder (the docs
-reader, every stale reference, the two RomM map checks); never rerun them.
-Quote the cost before any agent and wait for MMagTech's go. Then the
-contributor guide, then the faults the moves left as they were and those
-Part 4 recorded (#398, Part 4 section 38), each in its own pull request; then
+The contributor guide for #398 (docs only; one pull request, "Changelog:
+none"). Its prompt is `~/Documents/Development/cabinetos-audit/guide-prompt.md`:
+what the guide must hold is Part 5 section 46, and it asks MMagTech once, up
+front, which parts of his post-refactor cleanup plan the step includes (a
+map of the code, an architecture page, a CLAUDE.md, session rules, automatic
+checks) and what to do with the machine details Part 5 found. Quote the cost
+before any agent and wait for his go. Then the faults the moves left as they
+were and those Parts 3 and 4 recorded, each in its own pull request; then
 features and bug fixes resume.
 
-Part 4 is posted on #398 (three comments, 2026-10-17): the scripts, services,
-image build, cores, CI, workflows and tools. Its record is `part4-log.md`,
-`readers/area-6-system.json` to `area-10-tools.json` and the same names in
-`verifiers/`.
+Part 5 is posted on #398 (three comments, 2026-10-17): the newcomer docs
+measured against the code, every stale reference, the RomM map as it stands
+today, every doc sorted, and the machine details in tracked files. Its
+record is `part5-log.md`, `verifiers/area-11-docs.json`,
+`verifiers/romm-residue.json`, `part5-docs-inventory.md` and
+`part5-address-scan.md`.
 
-**Owed by MMagTech:** Part 4 section 40 (which faults get issues, whether the
-flatpak retry waits, which splits happen, a workflow to re-point latest, his
-post-refactor cleanup plan); Part 6 section 29 decisions 2 to 6; #408 ("Next
-session: Part 6 of the #398 audit is posted; the moves begin with batch (a)")
-is still open against main and out of date.
+**Owed by MMagTech:** Part 5 section 54; the wording of #401 and #402 (Part 5
+section 51); Part 4 section 40 (which faults get issues, whether the flatpak
+retry waits, which splits happen, a workflow to re-point latest); Part 6
+section 29 decisions 2 to 6; #408 ("Next session: Part 6 of the #398 audit
+is posted; the moves begin with batch (a)") is still open against main and
+out of date.
 
 The record of every move, its checks and its scripts is in
 `~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
