@@ -7,7 +7,6 @@
 #include "ra_state.h"
 #include "storage.h"
 
-#include <curl/curl.h>
 #include <strings.h>
 #include <sys/stat.h>
 #include <json-c/json.h>
@@ -23,14 +22,12 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
-#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <deque>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 namespace ra {
 
@@ -44,131 +41,6 @@ bool gLoginBusy = false;      // a sign-in is in flight
 bool gLoggedIn = false;       // rc_client accepted it
 
 namespace {
-
-// --- The network ----------------------------------------------------------
-//
-// ONE WORKER, IN ORDER. rc_client sends little (a sign-in, a game's data, a
-// session, an unlock now and then), and RetroAchievements asks clients not to
-// fire requests in parallel. Answers come back to the frame thread through
-// gDone, so rc_client only ever hears from the network there.
-
-std::mutex gUaMutex;
-std::string gUaBase;   // "CabinetOS/2026.10.06 (Linux)"
-std::string gUaCore;   // " mGBA/0.10.5", the game's core, or empty
-std::string gUaRc;     // " rcheevos/12.5.0"
-
-std::string userAgent() {
-    std::lock_guard<std::mutex> lk(gUaMutex);
-    return gUaBase + gUaCore + gUaRc;
-}
-
-std::atomic<bool> gStopping{false};
-
-// Shutting down: a request in flight stops at once rather than waiting out
-// curl's timeouts, and comes back as "no answer" (shutdown queues it).
-int abortTransfer(void*, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
-    return gStopping ? 1 : 0;
-}
-
-size_t appendBody(char* p, size_t size, size_t n, void* out) {
-    static_cast<std::string*>(out)->append(p, size * n);
-    return size * n;
-}
-
-// The HTTP status, or RetroAchievements' "could not reach it, try again" code
-// when nothing came back at all: rc_client keeps an unlock and retries it on
-// that one, which is what makes a dropped connection mid-game lose nothing.
-int request(const std::string& url, const char* post, const char* contentType,
-            std::string* body, long timeoutSeconds) {
-    // CABINETOS_RA_OFFLINE=1: every request fails as with no network, for
-    // trying the offline path without taking the console off its network.
-    static const bool offline = std::getenv("CABINETOS_RA_OFFLINE") != nullptr;
-    if (offline) return RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
-    CURL* c = curl_easy_init();
-    if (!c) return RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
-    const std::string ua = userAgent();
-    curl_slist* headers = nullptr;
-    curl_easy_setopt(c, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(c, CURLOPT_USERAGENT, ua.c_str());
-    curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(c, CURLOPT_TIMEOUT, timeoutSeconds);
-    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, appendBody);
-    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
-    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, abortTransfer);
-    curl_easy_setopt(c, CURLOPT_WRITEDATA, body);
-    if (post) {
-        curl_easy_setopt(c, CURLOPT_POSTFIELDS, post);
-        if (contentType) {
-            headers = curl_slist_append(headers,
-                                        (std::string("Content-Type: ") + contentType).c_str());
-            curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
-        }
-    }
-    const CURLcode rc = curl_easy_perform(c);
-    long status = 0;
-    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
-    if (headers) curl_slist_free_all(headers);
-    curl_easy_cleanup(c);
-    if (rc != CURLE_OK || status == 0) {
-        std::fprintf(stderr, "[ra] no answer from %s: %s\n",
-                     url.substr(0, url.find('?')).c_str(), curl_easy_strerror(rc));
-        return RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR;
-    }
-    return static_cast<int>(status);
-}
-
-struct Job {
-    std::string url;
-    std::string post;
-    bool isPost = false;
-    std::string contentType;
-    // Runs on the frame thread with the status and the body.
-    std::function<void(int, const std::string&)> done;
-};
-
-std::mutex gJobMutex;
-std::condition_variable gJobCv;
-std::deque<Job> gJobs;
-std::thread gWorker;
-
-std::mutex gDoneMutex;
-std::deque<std::function<void()>> gDone;
-
-void workerLoop() {
-    for (;;) {
-        Job job;
-        {
-            std::unique_lock<std::mutex> lk(gJobMutex);
-            gJobCv.wait(lk, [] { return gStopping || !gJobs.empty(); });
-            if (gStopping) return;
-            job = std::move(gJobs.front());
-            gJobs.pop_front();
-        }
-        auto body = std::make_shared<std::string>();
-        const int status = request(job.url, job.isPost ? job.post.c_str() : nullptr,
-                                   job.contentType.empty() ? nullptr : job.contentType.c_str(),
-                                   body.get(), 30L);
-        std::lock_guard<std::mutex> lk(gDoneMutex);
-        auto done = std::move(job.done);
-        gDone.push_back([done, status, body] { done(status, *body); });
-    }
-}
-
-void send(const rc_api_request_t& r, std::function<void(int, const std::string&)> done) {
-    Job job;
-    job.url = r.url ? r.url : "";
-    job.isPost = r.post_data != nullptr;
-    if (r.post_data) job.post = r.post_data;
-    if (r.content_type) job.contentType = r.content_type;
-    job.done = std::move(done);
-    {
-        std::lock_guard<std::mutex> lk(gJobMutex);
-        gJobs.push_back(std::move(job));
-    }
-    gJobCv.notify_one();
-}
 
 // --- Offline (#74) ------------------------------------------------------------
 //
@@ -827,14 +699,8 @@ void init(const std::string& consoleVersion) {
 
     char clause[64] = {0};
     rc_client_get_user_agent_clause(gClient, clause, sizeof clause);
-    {
-        std::lock_guard<std::mutex> lk(gUaMutex);
-        gUaBase = "CabinetOS/" + (consoleVersion.empty() ? std::string("dev") : consoleVersion) +
-                  " (Linux)";
-        gUaRc = std::string(" ") + clause;
-    }
-    gStopping = false;
-    gWorker = std::thread(workerLoop);
+    setUserAgent(consoleVersion, clause);
+    startWorker();
 }
 
 void shutdown() {
@@ -843,35 +709,20 @@ void shutdown() {
     // NOTHING EARNED IS LOST TO A POWER-OFF. An unlock still waiting to go
     // out is written to the queue on disk, and the one on the wire is cut
     // short (abortTransfer) and comes back as a failure, which queues it too.
-    std::deque<Job> left;
-    {
-        std::lock_guard<std::mutex> lk(gJobMutex);
-        gStopping = true;
-        left.swap(gJobs);
-    }
-    gJobCv.notify_all();
-    if (gWorker.joinable()) gWorker.join();
+    std::deque<Job> left = stopWorker();
     for (const Job& j : left) {
         std::string ignored;
         if (param(j.post, "r") == "awardachievement")
             offlineAnswer("awardachievement", j.post, &ignored);
     }
     pump();
-    {
-        std::lock_guard<std::mutex> lk(gDoneMutex);
-        gDone.clear();
-    }
+    dropAnswers();
     rc_client_destroy(gClient);
     gClient = nullptr;
 }
 
 void pump() {
-    std::deque<std::function<void()>> ready;
-    {
-        std::lock_guard<std::mutex> lk(gDoneMutex);
-        ready.swap(gDone);
-    }
-    for (auto& f : ready) f();
+    runAnswers();
 
     // Unlocks earned offline: tried again every half a minute until sent.
     if (gLoggedIn && !gSending &&
@@ -1031,12 +882,8 @@ void beginGame(const std::string& raHash, const std::string& platformSlug, bool 
                      core.coreName().c_str());
         return;
     }
-    {
-        std::lock_guard<std::mutex> lk(gUaMutex);
-        gUaCore = " " + (ps2 ? std::string("PCSX2/") + ps2::version()
-                             : core.coreName() + "/" + core.coreVersion());
-        std::replace(gUaCore.begin() + 1, gUaCore.end(), ' ', '_');
-    }
+    setUserAgentCore(ps2 ? std::string("PCSX2/") + ps2::version()
+                         : core.coreName() + "/" + core.coreVersion());
     gConsole = console;
     gPs2 = ps2;
     gHash = raHash;
@@ -1073,8 +920,7 @@ void endGame() {
     // The page asks again next time: this session may have unlocked some.
     gLists.erase(listKey(gHash));
     gHash.clear();
-    std::lock_guard<std::mutex> lk(gUaMutex);
-    gUaCore.clear();
+    clearUserAgentCore();
 }
 
 void stateLoaded() {
@@ -1276,13 +1122,6 @@ void fetchList(const std::string& raHash, std::function<void(const GameList&)> d
 bool isBadgeUrl(const std::string& key) {
     return key.rfind("https://media.retroachievements.org/", 0) == 0 ||
            key.rfind("https://retroachievements.org/", 0) == 0;
-}
-
-std::vector<uint8_t> fetchBytes(const std::string& url) {
-    std::string body;
-    const int status = request(url, nullptr, nullptr, &body, 20L);
-    if (status != 200) return {};
-    return std::vector<uint8_t>(body.begin(), body.end());
 }
 
 }  // namespace ra
