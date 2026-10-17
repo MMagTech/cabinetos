@@ -399,8 +399,10 @@ struct App {
     // URL with a query string is already the shape this expects.
     // The client outlives the cache deliberately: ImageCache calls the loader
     // from its worker threads, so whatever it captures must still be alive when
-    // a cover arrives. romm::Client is safe to call concurrently — each request
-    // builds its own CURL handle, and nothing else mutates after setup.
+    // a cover arrives. romm::Client is safe to call concurrently: each request
+    // builds its own CURL handle and takes the address and the token under the
+    // client's lock, which an account switch, a pairing and the server coming
+    // back write under (romm.h).
     romm::Client liveClient;
 
     // 192 MB of covers resident. A shelf holds a handful; a library grid holds

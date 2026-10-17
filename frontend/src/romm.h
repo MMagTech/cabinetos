@@ -20,7 +20,18 @@
 // blocking, which is deliberate: this class does not own a thread. Callers run
 // it on workers, exactly as ImageCache does with its loader. Making it async
 // internally would hide the cost and duplicate a threading model that already
-// exists. Each call uses its own CURL handle, so concurrent calls are safe.
+// exists.
+//
+// ONE CLIENT IS CALLED FROM MANY THREADS AT ONCE, AND WRITTEN WHILE THEY RUN.
+// The app's own client is read by the image loaders, the cover and grid
+// workers, the game page's workers, the uploader and the launch and state
+// workers while the frame thread changes its token (an account switch, a
+// pairing) or its address (the server coming back). Each call uses its own
+// CURL handle; the address, the token and the server's version are read and
+// written only under `mu_`, and a request takes the address and the token
+// together (`where`), so each goes out whole, to one server as one person. A
+// request already on its way finishes as what it started as. Until the
+// restructure (#398, batch i) the three had no lock.
 //
 // THE DATA IT HANDS BACK IS IN romm_types.h (a platform, a game and the
 // rest), so a header that needs only the types does not take the client. The
@@ -31,6 +42,7 @@
 #pragma once
 
 #include <functional>
+#include <mutex>
 
 #include "romm_types.h"
 
@@ -46,15 +58,29 @@ public:
     // http for an address that is obviously local. Returns false and fills
     // `err` if neither answers.
     bool setAddress(const std::string& address, std::string* err);
-    const std::string& baseUrl() const { return base_; }
+    // A copy, as are the two below: the address can change while somebody
+    // holds what this returned (see the head of this file).
+    std::string baseUrl() const {
+        std::lock_guard<std::mutex> lock(mu_);
+        return base_;
+    }
 
     // The server's version, filled in by setAddress from /api/heartbeat.
-    const std::string& serverVersion() const { return serverVersion_; }
+    std::string serverVersion() const {
+        std::lock_guard<std::mutex> lock(mu_);
+        return serverVersion_;
+    }
 
-    bool haveToken() const { return !token_.empty(); }
+    bool haveToken() const {
+        std::lock_guard<std::mutex> lock(mu_);
+        return !token_.empty();
+    }
     // For `accounts::recordPairing`, which files this under the id the server
     // says it belongs to. A credential: it is never printed and never logged.
-    const std::string& token() const { return token_; }
+    std::string token() const {
+        std::lock_guard<std::mutex> lock(mu_);
+        return token_;
+    }
 
     // A token read back from a file an account keeps (accounts.h). It is a
     // credential, so it does not belong anywhere near the repository.
@@ -258,6 +284,21 @@ private:
                   std::string* body, long* status, std::string* err) const;
     bool probe(const std::string& candidate);
 
+    // What a request is sent with, the address and the token, copied
+    // together under the lock (romm_http.cpp).
+    struct Where {
+        std::string base;
+        std::string token;
+    };
+    Where where() const;
+    // get, sent to whatever `at` names. probe asks a candidate this way
+    // without making it the address until it has answered.
+    bool getAt(const Where& at, const std::string& path, std::string* body,
+               std::string* err) const;
+
+    // GUARDS THE THREE BELOW. Nothing is done while holding it but a copy or
+    // an assignment, never a request (see the head of this file).
+    mutable std::mutex mu_;
     std::string base_;
     std::string token_;
     std::string serverVersion_;

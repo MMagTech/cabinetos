@@ -11,6 +11,7 @@
 #include <json-c/json.h>
 
 #include <cstdio>
+#include <mutex>
 
 namespace romm {
 
@@ -65,18 +66,24 @@ bool looksLocal(const std::string& host) {
     return false;
 }
 
+// THE CANDIDATE IS ASKED WITHOUT BECOMING THE ADDRESS, and is made the
+// address only once it has answered, so a request on another thread never
+// goes to a candidate that is about to be put back (#398, batch i).
 bool Client::probe(const std::string& candidate) {
-    const std::string saved = base_;
-    base_ = candidate;
+    Where at = where();
+    at.base = candidate;
     std::string body;
-    if (!get("/api/heartbeat", &body, nullptr)) { base_ = saved; return false; }
+    if (!getAt(at, "/api/heartbeat", &body, nullptr)) return false;
 
     json_object* root = json_tokener_parse(body.c_str());
-    if (!root) { base_ = saved; return false; }
+    if (!root) return false;
     json_object* sys = nullptr;
-    if (json_object_object_get_ex(root, "SYSTEM", &sys))
-        serverVersion_ = jstr(sys, "VERSION");
+    const bool hasSystem = json_object_object_get_ex(root, "SYSTEM", &sys);
+    const std::string version = hasSystem ? jstr(sys, "VERSION") : std::string();
     json_object_put(root);
+    std::lock_guard<std::mutex> lock(mu_);
+    base_ = candidate;
+    if (hasSystem) serverVersion_ = version;
     return true;
 }
 
@@ -119,6 +126,7 @@ bool Client::loadToken(const std::string& path) {
     std::string t = jstr(root, "access_token");
     json_object_put(root);
     if (t.empty()) return false;
+    std::lock_guard<std::mutex> lock(mu_);
     token_ = std::move(t);
     return true;
 }
@@ -151,7 +159,7 @@ bool Client::beginPairing(Pairing* out, std::string* err) {
     out->expiresIn = static_cast<int>(jint(root, "expires_in"));
     out->intervalSeconds = static_cast<int>(jint(root, "interval"));
     if (out->intervalSeconds <= 0) out->intervalSeconds = 5;
-    out->verificationUrl = base_ + jstr(root, "verification_path_complete");
+    out->verificationUrl = baseUrl() + jstr(root, "verification_path_complete");
     json_object_put(root);
 
     if (out->userCode.empty() || out->deviceCode.empty()) {
@@ -188,6 +196,7 @@ int Client::pollPairing(const Pairing& p, std::string* err) {
     std::string t = jstr(root, "access_token");
     json_object_put(root);
     if (t.empty()) return 0;   // approved-but-empty should not happen; treat as pending
+    std::lock_guard<std::mutex> lock(mu_);
     token_ = std::move(t);
     return 1;
 }

@@ -180,10 +180,11 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
         if (!c) { if (err) *err = "curl init failed"; return false; }
         curl_slist* hdrs = curl_slist_append(
             nullptr, ("Content-Type: multipart/form-data; boundary=" + boundary).c_str());
-        if (!token_.empty())
-            hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+        const Where at = where();
+        if (!at.token.empty())
+            hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
         std::string reply;
-        const std::string url = base_ + "/api/collections?is_favorite=true";
+        const std::string url = at.base + "/api/collections?is_favorite=true";
         curl_easy_setopt(c, CURLOPT_URL, url.c_str());
         curl_easy_setopt(c, CURLOPT_POSTFIELDS, form.data());
         curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE, static_cast<long>(form.size()));

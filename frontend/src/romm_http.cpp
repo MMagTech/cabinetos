@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <mutex>
 
 namespace romm {
 
@@ -108,13 +109,23 @@ void noteTransport(void* handle, int code) {
 Client::Client() { curl_global_init(CURL_GLOBAL_DEFAULT); }
 Client::~Client() = default;
 
+Client::Where Client::where() const {
+    std::lock_guard<std::mutex> lock(mu_);
+    return {base_, token_};
+}
+
 bool Client::get(const std::string& path, std::string* body, std::string* err) const {
+    return getAt(where(), path, body, err);
+}
+
+bool Client::getAt(const Where& at, const std::string& path, std::string* body,
+                   std::string* err) const {
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
-    const std::string url = base_ + path;
+    const std::string url = at.base + path;
     curl_slist* hdrs = nullptr;
-    if (!token_.empty())
-        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    if (!at.token.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
 
     body->clear();
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
@@ -153,10 +164,11 @@ bool Client::sendJson(const char* method, const std::string& path, const std::st
                       std::string* body, long* status, std::string* err) const {
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
-    const std::string url = base_ + path;
+    const Where at = where();
+    const std::string url = at.base + path;
     curl_slist* hdrs = curl_slist_append(nullptr, "Content-Type: application/json");
-    if (!token_.empty())
-        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    if (!at.token.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
 
     body->clear();
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
@@ -223,11 +235,12 @@ bool Client::postMultipart(const std::string& path, const char* partName,
 
     curl_slist* hdrs = curl_slist_append(
         nullptr, ("Content-Type: multipart/form-data; boundary=" + boundary).c_str());
-    if (!token_.empty())
-        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    const Where at = where();
+    if (!at.token.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
 
     std::string reply;
-    const std::string url = encodeUrl(base_ + path);
+    const std::string url = encodeUrl(at.base + path);
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
     curl_easy_setopt(c, CURLOPT_POST, 1L);
     curl_easy_setopt(c, CURLOPT_POSTFIELDS, body.data());
@@ -301,10 +314,11 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     }
     sink.progress = &onProgress;
 
-    const std::string url = encodeUrl(base_ + path);
+    const Where at = where();
+    const std::string url = encodeUrl(at.base + path);
     curl_slist* hdrs = nullptr;
-    if (!token_.empty())
-        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    if (!at.token.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
 
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, writeToFile);
@@ -355,11 +369,12 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     CURL* c = curl_easy_init();
     if (!c) return data;
     // The path comes from the server and may carry anything; see encodeUrl.
-    const std::string raw = (path.compare(0, 4, "http") == 0) ? path : base_ + path;
+    const Where at = where();
+    const std::string raw = (path.compare(0, 4, "http") == 0) ? path : at.base + path;
     const std::string url = encodeUrl(raw);
     curl_slist* hdrs = nullptr;
-    if (!token_.empty())
-        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    if (!at.token.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
 
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, byteSink);
@@ -429,11 +444,12 @@ std::vector<uint8_t> Client::fetchRange(const Game& g, uint64_t offset, size_t b
     }
     CURL* c = curl_easy_init();
     if (!c) return data;
-    const std::string url = base_ + "/api/roms/" + std::to_string(g.id) + "/content/" + name;
+    const Where at = where();
+    const std::string url = at.base + "/api/roms/" + std::to_string(g.id) + "/content/" + name;
     const std::string range = std::to_string(offset) + "-" + std::to_string(offset + bytes - 1);
     curl_slist* hdrs = nullptr;
-    if (!token_.empty())
-        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + token_).c_str());
+    if (!at.token.empty())
+        hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
     curl_easy_setopt(c, CURLOPT_URL, url.c_str());
     curl_easy_setopt(c, CURLOPT_RANGE, range.c_str());
     CappedSink sink{&data, bytes};
