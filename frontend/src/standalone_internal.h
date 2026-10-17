@@ -1,7 +1,8 @@
 // What the standalone emulators' files share: the helpers, defined in
 // standalone.cpp, and each emulator's own entry points, defined in its file.
-// Internal: only standalone.cpp and standalone_eden.cpp include it. Moved out
-// of standalone.cpp's anonymous namespace in the restructure (#398).
+// Internal: only standalone.cpp, standalone_eden.cpp and standalone_rpcs3.cpp
+// include it. Moved out of standalone.cpp's anonymous namespace in the
+// restructure (#398).
 
 #pragma once
 
@@ -19,6 +20,9 @@ constexpr const char* kInstalledNote = ".cabinetos-installed";
 // (beforeStart): a game's folder for xemu, a person's for the others.
 // cache.cpp spells it out as well, to leave a game's folder holding one alone.
 constexpr const char* kPlayingNote = ".cabinetos-playing";
+// RPCS3's one user, as it names the folder. The console's people are told
+// apart by whose save folder `hdd0` is, not by PS3 users.
+constexpr const char* kPs3User = "00000001";
 
 // Defined in standalone.cpp, each with what it does and why.
 std::string binaryOf(const Emulator& e);
@@ -44,5 +48,12 @@ std::string yamlQuote(const std::string& v);
 bool prepareEden(const Emulator& e, const std::string& saveDir, const std::string& player,
                  int players, quality::Level level, bool* missingKeys, std::string* err);
 std::string edenSaveRoot(const Emulator& e, const std::string& saveDir);
+
+// PlayStation 3 (standalone_rpcs3.cpp).
+bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+                  const std::string& player, int players, quality::Level level, bool* missing,
+                  std::string* err);
+bool installRpcs3(const Emulator& e, const std::string& entryPath,
+                  const std::atomic<bool>& cancel, std::string* romPath, std::string* message);
 
 }  // namespace cab::standalone::detail
