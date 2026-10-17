@@ -117,8 +117,8 @@ public:
     // core skips the case entirely rather than falling back. So the host
     // captures the table a core declares and answers every key in it.
     //
-    // See core.cpp for the three generations of the declaration API and why we
-    // report version 2.
+    // See core_options.cpp for the three generations of the declaration API
+    // and why we report version 2.
     struct OptionReport {
         std::string key;
         std::string desc;

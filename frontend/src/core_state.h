@@ -69,8 +69,6 @@ extern bool gFrameDirty;
 extern uint64_t gAudioFrames;
 extern uint64_t gFramesRun;
 extern bool gRefuseHWRender;
-void resetOptions();
-void checkOverrides(const std::string& core);
 extern retro_hw_render_callback gHW;
 extern bool gHWWanted;
 extern bool gHWVulkan;
@@ -90,5 +88,10 @@ extern std::string gPs2ResourcesDir;
 extern float gPs2Upscale;
 extern int gPs2Anisotropy;
 extern bool gPs2Widescreen;
+
+// Defined in core_options.cpp.
+void resetOptions();
+void checkOverrides(const std::string& core);
+std::optional<bool> environmentOptions(unsigned cmd, void* data);
 
 }  // namespace cab::corestate
