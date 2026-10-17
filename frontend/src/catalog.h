@@ -17,13 +17,16 @@
 // servers whereas `id` does not — the opposite of identity WITHIN one server,
 // where `id` is the only unique field. "Arcade" is the case that needs both:
 // two platforms, one slug, different cores.
+//
+// The core options this console sets on purpose are in coreoptions.h,
+// included below; moved out of this file in the restructure (#398).
 
 #pragma once
 
-#include <map>
 #include <string>
 #include <vector>
 
+#include "coreoptions.h"
 #include "romm.h"
 
 namespace catalog {
@@ -168,21 +171,6 @@ const char* shortReason(Support s);
 // The same, for a platform: an emulator that is its own application is not a
 // core, so it is never "not built"; it is waiting for first boot to install it.
 const char* shortReason(const Coverage& c);
-
-// Deliberate core-option choices, keyed by the core's file or manifest name.
-//
-// EMPTY IS THE CORRECT STARTING POINT AND IT IS NOT THE OLD BEHAVIOUR. With no
-// overrides at all, every option a core declares is still answered — with the
-// core's own stated default. That alone fixes the thing that was actually
-// broken: an unanswered option is not the default, it is the zero the C global
-// was initialised to. See core.h.
-//
-// This is where a choice goes when CabinetOS wants something OTHER than what a
-// core ships with. Cabinet hand-picks a subset per platform rather than dumping
-// everything a core reports — see docs/CABINET.md, `NativeCoreOptions.swift` —
-// and that list is the obvious thing to bring across, one platform at a time,
-// with a reason recorded for each.
-std::map<std::string, std::string> optionOverrides(const std::string& coreName);
 
 // For the one platform whose save is a DIRECTORY rather than a file: where that
 // directory sits under the save directory, or nullptr for everything else.
