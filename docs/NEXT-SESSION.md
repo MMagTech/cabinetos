@@ -8,79 +8,59 @@ ask them to test, and never claim a fix nobody reproduced.
 
 ## Where things stand
 
-**2026-10-16:** `latest` is **2026.10.14.5** (built from 72c0c4b, tagged in
-git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale cabinetos,
-100.67.82.30) is on the testing channel and runs **2026.10.16.5**, acting as
-claire after move 5's Restart test (switch back from the chip). RomM's
-documentation together with RomM's behaviour is the source of truth for
-anything on RomM's data. RomM was asked to send its `version` tag
-(rommapp/romm#5243); nothing to do until it does.
+**2026-10-16, late:** `latest` is **2026.10.14.5** (built from 72c0c4b,
+tagged in git). The A9 (Wi-Fi, **192.168.1.109**; Tailscale cabinetos,
+100.67.82.30) is on the testing channel; check `/usr/lib/os-release` for
+what it runs. RomM's documentation together with RomM's behaviour is the
+source of truth for anything on RomM's data.
 
-**Features and bug fixes are paused for the restructure (#398, "Audit the
-code and restructure it for contributors (main.cpp is 20,000 lines)").**
-Every batch is a pull request into the long-lived `restructure` branch;
-`latest` stays at 2026.10.14.5 until one final pull request to main, judged
-with the full checklist on its testing image (Part 6 section 26).
+**The restructure (#398, "Audit the code and restructure it for
+contributors (main.cpp is 20,000 lines)") runs unattended to the end**
+(MMagTech, 2026-10-16, 8:48 PM: "Unattended to the end, your calls; push to
+testing and merge into restructure yourself"). Moves 1 to 6 are merged into
+the long-lived `restructure` branch; move 6, batch (h1), is #418 ("Restructure
+move 6: batch (h1), screens.cpp into a file per screen and the toolkit's
+pieces into their own files (#398)"). Move 6's session (a side session of
+local_9923e863) goes on to batch (h2), applying the generators four parallel
+prep sessions wrote (`~/Documents/Development/cabinetos-audit/scripts/move7/`
+core, standalone, rest), then batch (i) (`scripts/move7/romm`, the RomM
+client split and the thread rule; it does not wait for Part 5). Each batch
+gets the machine checks (builds, line checks, the headless suite, the loop
+with its sound line) and its own testing image, kept for bisecting, and is
+merged into `restructure` without a TV round of its own.
 
-**Moves 1 to 5 are done: main.cpp is 192 lines**, main() and run() (the
-command line, the start-up, the frame loop, the teardown, as a list of
-calls). Move 1, batch (a): #409. Move 2, batch (b): #410. Move 3, batch (c):
-#413. Move 4, batches (d) and (e): #414. Move 5, batches (f) and (g): #415
-("Restructure move 5: batches (f) and (g), the game in play, the menus, input
-and the frame loop out of main.cpp (#398)"), testing images **2026.10.16.4**
-(b7a58d3, the (f) half) and **2026.10.16.5** (20edb58, both halves). The
-frame loop is frame.cpp, input is input.cpp, the game in play is play.cpp,
-pace.cpp and launch.cpp (pumpLaunch's stages over a LaunchContext). The
-record, the check results and the scripts are in
-`~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
-to `scripts/move5/`.
+**MMagTech gets one checklist at the end**, on the final image: the install
+(Settings > System update asks for his PIN; the assistant never types a PIN
+or a password), the TV items of (h1), (h2) and (i) with Part 6 section 27's
+full list, the PIN back on, then his "merge" of `restructure` into main, the
+only step that reaches players.
 
 ## Next
 
-**Batches (h1) and (h2), in 2 or 3 sessions, then (i) alone** (decided
-2026-10-15). (h1): screens.cpp into seven files, screens.h into the protocol
-and six headers, the shaders out of ui.cpp, qrtexture.h, motion.h, overlay.h
-and card.h out of design.h, imagecodec out of image.cpp. (h2): core.cpp,
-vkhost.cpp, standalone.cpp, setup.cpp, achievements.cpp, storage, drives,
-catalog and the small splits, one big file per pull request. The lists, the
-must-keep items and the checks are in
-`~/Documents/Development/cabinetos-audit/verifiers/batch-h1.json` and
-`batch-h2.json`, and in `scripts/part6-batches.md`. No prompt is written for
-them yet. They touch no line of main.cpp's moves; the method (every cut
-found by its text, both ends asserted, a generator that reproduces each
-commit) carries over from `scripts/move5/gen5.py`.
+- If move 6's session is still at work: nothing; it reports. If it stopped,
+  pick up from `~/Documents/Development/cabinetos-audit/moves-log.md` (the
+  last entry says where), the hand-overs in `scripts/move7/*/HANDOVER.md`,
+  and `move7-prompt.md`.
+- After the merge to main: Parts 4 and 5 of the audit (report only; quote
+  the cost before any agent wave), then the contributor guide, then the
+  faults the moves left as they were, each in its own pull request.
 
-**What the moves have taught** (testing.md has them in full):
-- Run every headless test through `tools/romm-readonly-relay.py`; a game
-  test that may save or play over a minute goes in a scratch storage root
-  with the relay, on the TV too (`tools/ui-loop.sh --env
-  CABINETOS_ROMM=127.0.0.1:16007 --args "--storage-root ..."`).
-- Run the base binary twice to show what timing alone changes, and when a
-  difference looks systematic, swap the scratch roots: in move 5 it followed
-  the root (an owed state with a picture), not the binary.
-- A test game on the console ends inside a minute, by `--restore`, never by
-  a kill.
-- The loop's rsync keeps files it does not know: before deploying an older
-  tree after a newer one, `rsync --delete` its sources onto the A9.
-- Never chain a podman `:Z` run after a check with `;`, and give it an
-  absolute folder, never `$PWD`: move 5 relabelled part of the A9's home that
-  way (repaired with restorecon).
+**What the moves have taught** (testing.md has them in full): run every
+headless test through `tools/romm-readonly-relay.py`; run the base binary
+twice to show what timing alone changes, and swap the scratch roots before
+blaming a binary; a test game on the console ends inside a minute by
+`--restore`; `rsync --delete` a tree's sources onto the A9 before its loop
+deploy; give podman an absolute folder, never `$PWD`, under `set -e`. New in
+move 6: two suite runs side by side need their own relay ports, and one
+fixed path is shared (`/tmp/cabinetos-manual.pdf`), so start them minutes
+apart; a capture timed by `--frames` shows a different fade when the machine
+is busy, so rerun a large difference alone before reading anything into it.
 
-**Owed by MMagTech:**
-- Whether to remove the one-minute Tetris & Dr. Mario play session move 4's
-  loop put on RomM (2026-10-15, 11:28 PM); it is harmless and goes down the
-  Recent shelf with his next game.
-- Part 6 section 29 decisions 2 to 6: which faults get issues, protectRomId
-  0, folders for the files, the test instruments, the names.
-- #408 ("Next session: Part 6 of the #398 audit is posted; the moves begin
-  with batch (a)") is still open against main; this file supersedes it on
-  the `restructure` branch.
-
-**Settled and not to be reopened:** the client's thread rule is fixed in
-batch (i), after Part 5 (MMagTech, 2026-10-14); the two PIN gates (decided
-2026-10-07); #402 corrected; #404, #405 and #406 opened, fixed as their
-files move or sooner on his call; Parts 4 and 5 come after the moves, then
-the contributor guide.
+**Owed by MMagTech, at the checklist or after:** Part 6 section 29 decisions
+2 to 6 (which faults get issues, protectRomId 0, folders for the files, the
+test instruments, the names); #408 ("Next session: Part 6 of the #398 audit
+is posted; the moves begin with batch (a)") is still open against main; the
+merged move branches to delete (listed in the checklist).
 
 ## Waiting, not for the next session unless MMagTech raises them
 
@@ -105,11 +85,9 @@ the contributor guide.
 - #181, "Updates and DLC as separate files in RomM (Switch, PS3, Xbox 360)".
 - #411, "Connecting Moonlight can start the game Home has focused" and
   #412, "The log names the previous emulator when a PS2 game starts
-  ("running Beetle Saturn")": both found in move 2's checks, both older than
-  the moves, in the Later milestone.
+  ("running Beetle Saturn")".
 - #417, "The diagnostic report stops downloading at about 2.5 MB (its ten
-  seconds are counted as 250 ms per wait)": found in move 5's TV round,
-  older than the moves, in the Later milestone.
+  seconds are counted as 250 ms per wait)".
 - deletableman (#341, #376): nothing new from him.
 
 **After a console is installed fresh** it has no key: About, press Version
