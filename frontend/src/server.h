@@ -32,7 +32,7 @@ Check check(const std::string& address, std::string* detail);
 
 // Whether the address is this console's to change. False when root set it
 // (/etc/cabinetos/session.env, or CABINETOS_ROMM), which outranks anything
-// this program writes; firstrun.h says why.
+// this program writes; serveraddress.h says why.
 bool addressIsOurs();
 
 // Saves `to` as the server's address, and moves the covers filed under `from`
