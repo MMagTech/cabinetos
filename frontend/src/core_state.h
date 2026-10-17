@@ -49,11 +49,6 @@ struct EntryPoints {
 // Defined in core.cpp.
 extern EntryPoints g;
 void keepMemoryMap(const retro_memory_map* mm);
-extern int gPlayers;
-extern unsigned gPortsPlugged;
-extern unsigned gPadDevice;
-extern int gRealRemotesFrom;
-extern unsigned gCorePorts;
 extern retro_disk_control_ext_callback gDisk;
 extern bool gDiskSet;
 extern int gInitialDisc;
@@ -61,7 +56,6 @@ extern std::string gInitialDiscPath;
 extern unsigned gPixelFormat;
 extern unsigned gRotation;
 extern bool gRotationAnnounced;
-extern bool gInputDescriptorsLogged;
 extern std::vector<uint8_t> gFrame;
 extern unsigned gFrameW, gFrameH;
 extern size_t gFramePitch;
@@ -81,8 +75,6 @@ void destroyHWTarget();
 bool ensureHWTarget(unsigned w, unsigned h);
 void restoreGLState();
 void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitch);
-void inputPoll(void);
-int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id);
 extern bool gIsPs2;
 extern std::string gPs2ResourcesDir;
 extern float gPs2Upscale;
@@ -93,5 +85,16 @@ extern bool gPs2Widescreen;
 void resetOptions();
 void checkOverrides(const std::string& core);
 std::optional<bool> environmentOptions(unsigned cmd, void* data);
+
+// Defined in core_input.cpp.
+extern int gPlayers;
+extern unsigned gPortsPlugged;
+extern unsigned gPadDevice;
+extern int gRealRemotesFrom;
+extern unsigned gCorePorts;
+extern bool gInputDescriptorsLogged;
+void inputPoll(void);
+int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id);
+std::optional<bool> environmentInput(unsigned cmd, void* data);
 
 }  // namespace cab::corestate
