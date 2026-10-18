@@ -26,6 +26,9 @@
 #   tools/check-applied.sh            both halves
 #   tools/check-applied.sh --lists    only the Dolphin and FBNeo lists
 #
+# `test && ok ... || bad ...` is an if-then-else here: ok, bad and note only
+# print, so they always succeed.
+# shellcheck disable=SC2015
 set -uo pipefail
 
 HOST="${CABINETOS_HOST:-192.168.1.212}"
@@ -135,11 +138,11 @@ elif (( xl < 1000 )); then bad "Xenia: its log is ${xl} bytes: a flag it does no
 else ok "Xenia: log ${xl} bytes, started"; fi
 
 # Cemu drops unknown keys when it rewrites settings.xml on exit; ours must
-# still be there.
+# still be there, with the values standalone_cemu.cpp writes.
 cx=$("${SSH[@]}" "cat $E/cemu/Cemu/settings.xml 2>/dev/null")
 if [[ -z "$cx" ]]; then note "Cemu: no settings"
 else
-    for k in '<api>1</api>' '<VSync>0</VSync>' '<AsyncCompile>true</AsyncCompile>'; do
+    for k in '<api>1</api>' '<VSync>1</VSync>' '<AsyncCompile>true</AsyncCompile>'; do
         grep -qF "$k" <<<"$cx" && ok "Cemu: $k" || bad "Cemu: $k gone after its rewrite: renamed?"
     done
 fi
