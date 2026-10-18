@@ -1,0 +1,41 @@
+name: Checks
+
+# THE CHECKS THAT KEEP THE CODE WHERE docs/ARCHITECTURE.md PUTS IT (#398,
+# step 4, MMagTech 2026-10-17), so it does not drift back into one 20,000-line
+# file. Each job runs one script in ci/, named for its job, which says at its
+# top what it looks for; CONTRIBUTING.md, "What CI checks on your pull
+# request", lists them.
+#
+# ON EVERY PULL REQUEST, whatever it is aimed at and whatever it changes: no
+# `branches:` and no `paths:`. build-frontend.yml's header says why ("A guard
+# with a condition on it is a guard that is absent exactly when somebody is
+# doing something unusual"), and each of these takes seconds.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # REPORT ONLY FOR A CHECK'S FIRST WEEK. Until the end of this day (UTC), a
+  # check that can fail marks what it finds as warnings and passes; from the
+  # next day it fails. A new check that can fail starts the same way: set this
+  # a week ahead in its pull request. A date in the past changes nothing.
+  REPORT_ONLY_UNTIL: '2026-10-25'
+
+jobs:
+  romm-paths:
+    name: RomM paths
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 0
+
+      - name: No RomM path outside the RomM client
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ci/check-romm-paths.sh "${BASE}" "${HEAD}"
