@@ -87,7 +87,7 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
 - **THE POLKIT ANSWER DEPENDS ON WHO IS ASKING, AND BOTH ANSWERS ARE RIGHT.**
   Over SSH the verdict for saving a network is `auth_admin_keep`; from the
   console's own session it is `yes`. The rule requires `subject.local`, on
-  purpose — developer mode hands out SSH deliberately and a shell over the
+  purpose: Developer access hands out SSH deliberately, and a shell over the
   network should not inherit the console's privileges. **`--network` says which
   question it put**, because a probe that printed one number without saying
   would be the third lying instrument this project has fixed.
@@ -168,12 +168,18 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
   modules of the timing line — a two-module difference in a 33x33 symbol that no
   scanner will accept.
 
-- **`--romm-pair` DOES NOTHING IF A TOKEN ALREADY EXISTS.** It loads
-  `$HOME/.config/cabinetos/romm.json` and, finding one, skips straight to
-  reporting the library — so on either machine here it never pairs. To get a
-  real pairing code without disturbing anything, point HOME somewhere empty:
-  `HOME=/tmp/pairhome ./build/cabinetos-frontend --romm <addr> --romm-pair`.
-  The token lands in the throwaway directory and nothing else changes.
+- **`--romm-pair` ALWAYS PAIRS, AND WHOEVER APPROVES IS ADDED TO THE
+  CONSOLE.** It records the person who approves the code as an account (or
+  refreshes their token if they are already one): the token goes in
+  `$HOME/.config/cabinetos/accounts/<id>.json` and the account list in the
+  storage root's `config/accounts.json` (`accounts::recordPairing`,
+  `probes.cpp`). To get a real pairing code without adding anyone to a
+  console, point HOME somewhere empty and use a scratch root:
+  ```
+  HOME=/tmp/pairhome ./build/cabinetos-frontend --storage-root /tmp/pairroot \
+    --romm <addr> --romm-pair
+  ```
+  Both land in the throwaway folders and nothing else on the console changes.
 
 - **THE PAIRING URL IS THE SERVER'S, NOT A SHAPE YOU CAN GUESS.** It is
   `base + verification_path_complete` from `/api/auth/device/init`, and on RomM
@@ -205,9 +211,9 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
   same job is what let one of them go unwired.
 
 - **WALK EVERY COMBINATION RATHER THAN RE-READING THE RULES.** The state
-  machine's exhaustive check is 96 cases, needs nothing, and found a deadlock
-  the code read as correct. Assert the REFUSALS — the happy path is the part
-  that already works.
+  machine's exhaustive check (`--first-run-rules`) is 144 cases, needs
+  nothing, and found a deadlock the code read as correct. Assert the
+  REFUSALS: the happy path is the part that already works.
 
 - **Every scripted edit must assert its anchor.** A patch that matches nothing
   leaves a green build with the fix absent.
@@ -216,6 +222,7 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
   smart collections are counted separately, all from 1, and the Library
   matched tiles by id alone: a collection's "4 of 12" could land on platform
   2, and a grid's later pages fill the wrong tile (found 2026-10-12, #352,
+  "RomM Smart Collections don't show up (only regular collections do)",
   when smart collection 2 joined collection 2). A tile is its query now
   (`Tile::query`).
 
@@ -226,7 +233,8 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
   game's rectangle was a fraction of a pixel wider than the screen effect
   drawn into it, so one column was drawn twice (x=1924 on a 4K TV) and a CRT
   mask shifted a pixel from there on. Invisible on the TV; Remote Play's
-  shrink turned it into a green half and a purple half (#286). Found by
+  shrink turned it into a green half and a purple half (#286, "Remote Play:
+  stream the console to Moonlight (Sunshine), off by default"). Found by
   reading the mask's phase column by column in a 4K capture, after two wrong
   explanations; when a fault splits a picture down a line, look for the
   column where the pattern breaks.

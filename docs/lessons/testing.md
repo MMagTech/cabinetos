@@ -4,7 +4,8 @@ Read before judging anything, testing on the A9, or driving the TV.
 
 ## THE SILENT DAY, 2026-10-12: check what a person notices, not what you changed
 
-The volume keys (#351) were tested in every kind of game by pressing a key
+The volume keys (#351, "Steam Deck: the volume rocker does nothing, and
+there's no way to change the volume") were tested in every kind of game by pressing a key
 and reading the volume back, and every reading was right. The console made
 **no sound at all** from the first test build onward, menus and games, and it
 was released that way. MMagTech found it at the TV: "I don't hear anything,
@@ -14,7 +15,8 @@ period."
   sound. The app's stream stayed connected at full volume and was never fed
   (pw-top: about 47 missed deliveries a second; the app's sound thread had
   no CPU time). Starting the volume work after the sound is open fixed it
-  (#367). The exact mechanism was not pinned down.
+  (#367, "Sound works again: the volume keys start after the sound is
+  open"). The exact mechanism was not pinned down.
 - **The console said so, and nobody read it.** The `[pace]` line in the very
   first test game read `sound +0.00%, sound per game frame +0.00%` (silent),
   in the same log the volume lines were being read from.
@@ -36,7 +38,8 @@ seconds apart; ERR must not climb. A beep straight to the TV
 
 ## A GAME OLDER THAN THE LOG WINDOW, 2026-10-12: ask "is a game running", not "was one started"
 
-Before a stretch of A9 builds, headless runs and a loop deploy (#364), the
+Before a stretch of A9 builds, headless runs and a loop deploy (#364, "Game
+manuals: pull them from RomM and read them from the Home menu in a game"), the
 journal's last 30 minutes were searched for `[launch]` lines, none were
 found, and the console was called idle. MMagTech had started Burnout 3 41
 minutes earlier and was playing it. The builds made his sound stutter, and
@@ -96,9 +99,10 @@ image.** Cores in `/usr/lib/cabinetos/cores`, systemd units, `tmpfiles.d`, the
 session script, base-image changes, first run on a virgin machine and the
 installer only exist in an image. Everything in `frontend/src` does not.
 
-A new core is a file copy: the loop launches with
-`--core-dir /var/home/cabinet/cores-dev`, so building a `.so` and dropping it
-there makes it playable on the television without an image.
+A new core is a file copy: the loop launches with `--core-dir` pointed at a
+scratch folder of cores on the reference console (`tools/ui-loop.sh` names
+it), so building a `.so` and dropping it there makes it playable on the
+television without an image.
 
 ### AND THE RULE THAT MAKES THE FAST PATH SAFE
 
@@ -136,7 +140,7 @@ the repository alone.
 - **Every screen photographs itself, headless.** `SDL_VIDEODRIVER=offscreen`
   needs no compositor, no session and no controller:
   ```
-  SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --romm 192.168.1.10:6005 \
+  SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --romm <server address> \
     --screen library --screenshot /tmp/x.bmp --render-size 1920x1080 --frames 60
   ```
   `--screen` opens by walking the route a person walks, so a capture cannot show
@@ -226,9 +230,9 @@ the repository alone.
   always said most sets are 4K; the first one plugged in was.
 
 
-**SSH TO THE A9 IS PORT 2222 SINCE THE FILE ACCESS IMAGE, and sudo's
-password is in `/var/lib/cabinetos-files/password`**, not `cabinet`. Every
-`ssh ... cabinet@192.168.1.212` below needs `-p 2222`.
+**SSH TO THE A9 IS PORT 2222 (Developer access; port 22 is File access,
+SFTP only), and sudo's password is in `/var/lib/cabinetos-files/password`**,
+not `cabinet`: `ssh -p 2222 cabinet@<console address>`.
 
 **The A9 can be pressed from the Mac, so MMagTech can watch while the
 assistant drives.** `cabinet` can write `/dev/uinput` and the image ships
@@ -236,7 +240,7 @@ assistant drives.** `cabinet` can write `/dev/uinput` and the image ships
 `nohup ydotoold --socket-path=/tmp/ydotool.sock --socket-own=1000:1000 &`,
 then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 103, Left 105, Right 106, Return 28, Escape 1, Backspace 14) or
-`ydotool type '192.168.1.10:6005'`. The frontend takes a keyboard everywhere.
+`ydotool type '<server address>'`. The frontend takes a keyboard everywhere.
 
 - **The frontend's SIGUSR1 capture only works in the main loop.** First run
   and the startup screen have loops of their own: use `gamescopectl
@@ -244,7 +248,8 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
   session restart leaves the old socket behind and gamescopectl fails on it.
 
-- **CONNECTING MOONLIGHT CAN PRESS PLAY (#411).** 2026-10-15, 5:38 PM: two
+- **CONNECTING MOONLIGHT CAN PRESS PLAY (#411, "Connecting Moonlight can
+  start the game Home has focused").** 2026-10-15, 5:38 PM: two
   seconds after the stream connected, as Sunshine set up its virtual pad
   again ("ControllerNumber already allocated"), two presses reached Home 0.2 s
   apart and started the focused game twice; the stream then dropped and the
@@ -296,7 +301,9 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   the sound devices away. WirePlumber logs `Permission denied` on `hw:0` at
   every retry, never takes the cards back, and the next frontend freezes
   opening sound: a black screen that looks like the change under test
-  (#268, #331, 2026-10-10). Use a `/run` drop-in with
+  (#268, "Booting with no display answering leaves the console at a guessed
+  1080p"; #331, "After a session start loop, the sound manager loses the
+  cards and the app freezes opening sound"; 2026-10-10). Use a `/run` drop-in with
   `ExecStart=/usr/bin/bash /var/home/cabinet/<copy>`, and check `wpctl
   status` shows the HDMI sink before and after. If it is already broken,
   `systemctl --user restart wireplumber` brings the sink back.
@@ -313,7 +320,8 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   restart before trusting a log line that says it was set.
 
 - **RESTARTING WIREPLUMBER UNDER A RUNNING APP LEAVES THE APP SILENT.**
-  2026-10-14, trying #341's settings as a user copy: `systemctl --user
+  2026-10-14, trying the settings for #341 ("No audio [Expected on this
+  machine]") as a user copy: `systemctl --user
   restart wireplumber` came back with the TV as the output and the app
   linked to it, and pw-top's ERR for `cabinetos-frontend` climbed about 47 a
   second (the silent day's sign) until the console was restarted. Try
@@ -328,10 +336,13 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 - **ydotool's virtual keyboard has no key repeat**, so a held key sends one
   press. A held volume or arrow key cannot be tested with it.
 
-- **frames.py CANNOT SEE A REPEATED GAME FRAME.** The console presents at
+- **frames.py CANNOT SEE A REPEATED GAME FRAME.** (frames.py is a frame-time
+  script kept on the reference console, not in this repository; it reads
+  gamescope's frame times.) The console presents at
   every refresh whether the game made a new picture or not, so gamescope's
   frame times read a clean 16.67 ms over a game that repeats and skips
-  frames every second. Read the console's own `[pace]` line (#221).
+  frames every second. Read the console's own `[pace]` line (#221, "Built-in
+  cores: no audio rate control, a frame repeats or drops every 10 to 17 s").
 
 - **`--env` REACHES THE FRONTEND, NOT THE SESSION SCRIPT.** It goes on the
   frontend's command line, so `CABINETOS_OUTPUT` given that way changes
@@ -372,9 +383,10 @@ minute and guessing at it for twenty.
   leaves is the rig until the TV says otherwise (Virtual Boy did this and
   was fine on the TV).
 
-- **`~/fb/sweep.sh` launches the smallest game of every system** from
-  `~/fb/sweep.txt` (`~/fb/sweep-all.txt` is the full list) with dummy audio
-  and writes `~/fb/sweep/summary.txt`. About 25 minutes for 30 systems. **It
+- **The sweep (`sweep.sh`, in a scratch folder on the reference console, not
+  in this repository) launches the smallest game of every system** from its
+  list, `sweep.txt` (`sweep-all.txt` is the full list), with dummy audio and
+  writes `sweep/summary.txt` beside it. About 25 minutes for 30 systems. **It
   hammers the GPU: never run it while MMagTech is testing on the TV.** It
   made Mario Kart look "really bad" once.
 
@@ -383,7 +395,8 @@ minute and guessing at it for twenty.
 
 - **A headless `--launch` on the A9 is a real play as far as the drive is
   concerned.** It touches the game's entry, so the game jumps to the front
-  of the drive's last-used order: the offline Recent shelf (#88) and the
+  of the drive's last-used order: the offline Recent shelf (#88, "Offline:
+  kept games play with no server") and the
   order the cache is cleared in. 2026-10-05: eight test launches reordered
   the console's offline Home and the dates had to be put back by hand with
   `touch -h -d`. Note an entry's time (`stat -c %Y`) before a launch test and
@@ -398,13 +411,15 @@ minute and guessing at it for twenty.
   while he is at the TV**; use `tools/ui-loop.sh` and let him watch instead.
 
 - **Offline is tested with a wrong address, never by stopping RomM.**
-  `CABINETOS_ROMM=192.168.1.10:6099` (headless, or `tools/ui-loop.sh --env`)
-  is offline from boot. For the server COMING BACK, point the console at a
+  `CABINETOS_ROMM=<server host>:6099`, the server with a port nothing
+  answers on (headless, or `tools/ui-loop.sh --env`), is offline from boot.
+  For the server COMING BACK, point the console at a
   relay on the A9 itself, `CABINETOS_ROMM=127.0.0.1:16005` with
-  `tools/offline-relay.py` copied to the A9 (it forwards to RomM): relay off is no server, relay
+  `tools/offline-relay.py` copied to the A9 (it forwards to the RomM server
+  named at its top): relay off is no server, relay
   on is the server back. Covers are filed by address, so link
-  `covers/<that address>` to `covers/192.168.1.10_6005` for the test and
-  remove the link after.
+  `covers/<that address>` to the real server's folder
+  (`covers/<server host>_<port>`) for the test and remove the link after.
 
 - **A server layout nobody has is tested through `tools/romm-readonly-relay.py`,
   never by changing RomM.** It forwards reads only (any write gets 403 and is
@@ -412,7 +427,9 @@ minute and guessing at it for twenty.
   `romm-readonly-relay.py 16006 45=arcade:Arcade`, then
   `CABINETOS_ROMM=127.0.0.1:16006` headless with a scratch `--storage-root`
   (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
-  to the real games drive). #310 was tested this way, 2026-10-10: a launch
+  to the real games drive). #310 ("Arcade games in any RomM arcade folder
+  show up, not only in folders named exactly FBNEO or MAME2003") was tested
+  this way, 2026-10-10: a launch
   tried to upload Paperboy's NVRAM and the relay refused it.
 
 - **The folder route is tested through the same relay's `folder:<id>`**,
@@ -427,7 +444,8 @@ minute and guessing at it for twenty.
   read it as something the console sent.
 
 - **`--sync-test` WRITES TO RomM AS THE ACTIVE ACCOUNT, scratch root or
-  not.** 2026-10-15, move 1 of #398: a headless `--sync-test` of Cannon
+  not.** 2026-10-15, move 1 of #398 ("Audit the code and restructure it for
+  contributors (main.cpp is 20,000 lines)"): a headless `--sync-test` of Cannon
   Spike (Dreamcast) uploaded its state to RomM as MMagTech under
   flycast-native. Flycast has a state tag (GameSession's comment saying it
   has none is stale), and the upload did two things nobody wanted: RomM set
@@ -441,7 +459,9 @@ minute and guessing at it for twenty.
   SIGKILL sends no file saves, and a play session under a minute is not
   recorded, so those were already safe.
 
-- **THE DISC RIG (`tools/disc-rig/`, #162) DRIVES A GAME BY SCRIPT**:
+- **THE DISC RIG (`tools/disc-rig/`, #162, "Multi-disc games: Change disc
+  in the pause menu, one save per game (Saturn first)") DRIVES A GAME BY
+  SCRIPT**:
   `--disc-script "wait 600; insert 2; wait 300; shot a; state; startover 1;
   load; resume; check; quit"`, through the same calls the pause menu makes,
   headless, through the read-only relay. It found two core bugs in a night
@@ -453,7 +473,9 @@ minute and guessing at it for twenty.
   `sleep` there.
 
 - **A SAVE PUT ON THE CONSOLE BY HAND IS IGNORED IF RomM HAS ONE.** At
-  launch RomM's newest save wins over the console's file (#259), and a first
+  launch RomM's newest save wins over the console's file (#259, "Cartridge
+  saves: the local save is never loaded, so an unsent or offline save can be
+  lost"), and a first
   launch uploads even an empty, just-formatted PS1 card. 2026-10-11: a
   10-save Resident Evil 2 card copied into the save folder never reached the
   game ("no files" on both discs) because RomM held the empty card from the
@@ -486,7 +508,9 @@ minute and guessing at it for twenty.
   off or an update's restart, gamescope's reaper kills the frontend right
   after `[power] released` (measured 2026-10-15 on 2026.10.15.2 and
   2026.10.16), so nothing that runs when main() returns (the App's
-  destructors, #406's abort) runs then. The exits that do return are the
+  destructors, the abort in #406, "Four background threads are never
+  stopped at exit (pairing, remove and sign out, reconnect, drive
+  backfill)") runs then. The exits that do return are the
   Steam handover and a quit by SIGTERM: test an exit headless with `timeout
   --preserve-status -s TERM` (SDL makes it a quit, `[shutdown] asked to
   stop`), and on the TV with Steam and back.
@@ -547,7 +571,7 @@ opened once and reused needs a test of two different games in one run.**
 
 - **A COMMAND THAT FALLS THROUGH CAN HAND PODMAN THE HOME FOLDER.**
   2026-10-16, move 5 of #398: a check over SSH ran `bash idle.sh && cd
-  ~/fb/m5/fe && ...; podman run -v "$PWD":/src:Z ...`. idle.sh said busy,
+  <a scratch build folder> && ...; podman run -v "$PWD":/src:Z ...`. idle.sh said busy,
   the `&&` chain stopped before the `cd`, the `;` ran podman anyway, and
   `$PWD` was the home folder: `:Z` relabelled 30,276 files (`.config`,
   `.cache`, part of `.local/share`) to the container's SELinux label before
@@ -600,7 +624,8 @@ opened once and reused needs a test of two different games in one run.**
   the TV shows too: one black TV that evening was a second, separate fault.
 
 - **Sunshine picks its plane only at certain moments, so time those against
-  gamescope, not just the end state.** #304, 2026-10-09: back from Steam the
+  gamescope, not just the end state.** #304 ("Stream into Steam: leaving
+  Steam back to Home turns the phone's picture black"), 2026-10-09: back from Steam the
   stream went black although the console composed every frame. Sunshine had
   picked 0.35 s after the new gamescope came up, 0.7 s before it composed,
   while Home was still on two planes. The proof took a 5 ms plane sampler
@@ -611,7 +636,8 @@ opened once and reused needs a test of two different games in one run.**
 
 - **Read a person's one-word answer against the question, not the hope.**
   "nope" to "is the seam still there?" was read as "gone", a fix was
-  declared, and a comment saying so went on #286 before "no the issue is
+  declared, and a comment saying so went on #286 ("Remote Play: stream the
+  console to Moonlight (Sunshine), off by default") before "no the issue is
   still there" corrected it. When a yes/no question can be read both ways,
   ask it as "yes or no: is X still there?", and verify on the machine before
   writing it down.

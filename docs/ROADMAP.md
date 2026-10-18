@@ -1,14 +1,17 @@
+# Roadmap
+
 **Released: CabinetOS 2026.10.10**, the first public release, on GitHub with
 the installer. Since then work comes from what MMagTech raises and what
 people report; `docs/NEXT-SESSION.md` holds what is being worked on now.
 
 Anything with no date is in the **Later** milestone, kept so it is not lost
 and worked on only when MMagTech raises it (named "After first release" until
-2026-10-12). The release-gate tests still owed at the TV are in **8. Testing at
-the TV**. A new issue goes into one of those when it is filed.
+2026-10-12). A new issue with no date goes into it when it is filed. The
+release-gate tests, **8. Testing at the TV**, are done.
 
 **How the release was reached**, below: the order set with MMagTech on
-2026-09-28, one numbered milestone per step (closed 2026-10-12, all done).
+2026-09-28, one numbered milestone per step (all closed by 2026-10-12, all
+done).
 
 Milestones: https://github.com/MMagTech/cabinetos/milestones
 
@@ -68,23 +71,46 @@ session picks up is `docs/NEXT-SESSION.md`.
    stream started while the screen is asleep (#294), built on
    `asleep-stream`. The Bazzite base 44.20261006.1 with base-update pull
    requests listing their own checks (#301, #302) and the controller list
-   (#266). Next, in this order (MMagTech, 2026-10-09): the stream into Steam
-   going black on the way back to Home (#304); then signed images (#135), first because a mistake there breaks every console's
-   updates and it needs several image updates to prove itself; the
-   diagnostic report (#195), a feature everyone installing can use to
-   report bugs; licences checked and shipped (#120).
+   (#266). Then, in the order MMagTech set on 2026-10-09, all done by
+   2026-10-10: the stream into Steam going black on the way back to Home
+   (#304, "Stream into Steam: leaving Steam back to Home turns the phone's
+   picture black"); signed images (#135, "Sign the images"), first because a
+   mistake there breaks every console's updates and it needs several image
+   updates to prove itself (`build_files/require-signed-updates.sh`); the
+   diagnostic report (#195, "Settings: create a diagnostic report, with a QR
+   code"), a feature everyone installing can use to report bugs; licences
+   checked and shipped (#120, "Licences: check every line against its
+   source, and ship the full texts").
 8. **Testing at the TV.** The release gate: covers and art on the TV (#112), a
    PS2 save reaching the server (#113), Cabinet on Apple TV loading our states
    (#114), players 3 and 4 (#115), the owed hardware tests (#140), and last,
    the first-hour walk-through as a new user on the real installer (#111):
    **the last step, on the release stick, after Remote Play** (MMagTech,
    2026-10-07: the release image may need things added), wiping the A9.
+   Done; the milestone closed on 2026-10-12. #114 ("Cabinet on Apple TV
+   loads save states made on CabinetOS") was closed by decision instead:
+   since 2026-10-11 Cabinet on Apple platforms is no longer a constraint.
 
-**Later** (was After first release): everything in that milestone on GitHub, including
-the Dreamcast crash (#151), the performance profile (#150), rewind's cost
-(#168), multi-disc swapping (#162), PCSX2's per-game fixes (#154), the RomM
-5.2/5.3 features (#158 to #161), the system tuning ideas (#163 to #167),
-Wii U Remotes in Cemu (#231) and controller batteries (#230).
+**Later** (was After first release): everything in that milestone on
+GitHub. The items this page once named there are all closed. Shipped:
+#150 ("Use Bazzite's performance profile during a game, balanced on Home"),
+#163 ("Keep the emulators on the fast CPU cores") and #154 ("PS2: ship
+PCSX2's per-game fixes (patches.zip)"). Built in a milestone of its own:
+#162 ("Multi-disc games: Change disc in the pause menu, one save per game
+(Saturn first)"). Closed by MMagTech's decision, most of them to be reopened
+on a report: #151 ("Dreamcast crashed on load after an arcade game with a
+143 MB save state"), #168 ("Rewind: measure the snapshot cost per system,
+and a setting to turn rewind off"), the system tuning ideas #164 ("Explore:
+hold background system jobs while a game runs"), #165 ("Consider turning
+off the kernel's lockup watchdog (nmi_watchdog)"), #166 ("Consider
+real-time priority for gamescope") and #167 ("Check audio latency: what the
+console asks PipeWire for"), #230 ("Controller batteries: the Wii HOME menu
+shows an empty battery, and the console shows none") and #231 ("Wii U: real
+Wii Remotes in Cemu"). Declined or superseded, the RomM 5.2 and 5.3
+features: #158 ("Surprise me: play a random game (RomM 5.2)"), #159
+("Similar games and recommendations from RomM (5.3)"), #160 ("Use RomM's
+title_id and save_target for save matching (5.3)") and #161 ("Ask RomM only
+for BIOS files it still has (5.3)"). Each issue says which.
 
 Done: Settings (#57 to #72, except #63), the emulator block (#82 to #90), the
 in-game features (#76 to #80).

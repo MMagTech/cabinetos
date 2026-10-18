@@ -10,6 +10,16 @@
 > has to be corrected. Reading the shipped implementation first is faster and
 > the answers are better, because they have been through real hardware.
 >
+> **A reference, not a constraint, since 2026-10-11** (MMagTech;
+> docs/PROJECT.md, open question 12b, the GameCube save decision, #344
+> "GameCube: a save restored from RomM never reaches Dolphin (card.raw vs
+> card.USA.raw)"): read this for how a problem was solved before, not as a
+> shape CabinetOS must match, and Cabinet's own source is not required
+> reading. One thing stays:
+> the save and state tags already on RomM, many in Cabinet's spelling
+> (`savetable.cpp`), are what existing saves are filed under, so changing one
+> hides those saves from the console.
+>
 > **The source is not checked out on the development Mac.** Clone it, and skip
 > the committed `.a` archives while doing so:
 >
@@ -202,11 +212,15 @@ builds of snes9x, fceumm, beetle_pce_fast, beetle_saturn and mame2003_plus are
 older, and Saturn's tvOS revision is recorded as unrecoverable. CabinetOS
 matches the pin, so an Apple TV Saturn state is REFUSED here (Daytona USA,
 measured). **Rebuild Cabinet's Apple TV cores at the pinned commits** and
-Saturn and MAME 2003-Plus states can be shared (`catalog.cpp`, emulatorTag).
+Saturn and MAME 2003-Plus states made on one device can load on the other.
+The tags are shared already: since 2026-09-23 every core with states uses
+Cabinet's tag, whether or not the other device can load a particular state
+(`emulatorTag` in `savetable.cpp`).
 
 1. **Flycast carries unscripted edits in its working tree**, so its pinned
-   commit does not reproduce what ships, and **that is the only reason Flycast
-   cannot share its emulator tag.** Capture the diff before anything touches
+   commit does not reproduce what ships, and **that is the only reason a
+   Flycast state is not known to load on the other device** (its tag is
+   shared anyway, as above). Capture the diff before anything touches
    that tree:
    `git -C spikes/cores/flycast/src diff > tools/patches/flycast-unscripted.patch`
 2. **The manifest does not describe how a core is built.** PPSSPP's entry says
@@ -238,10 +252,12 @@ Saturn and MAME 2003-Plus states can be shared (`catalog.cpp`, emulatorTag).
    `neverUploaded` clause exists for a good reason (a card adopted from PCSX2's
    shared `Mcd001` arrives already containing a save and never looks "changed")
    but it opens this hole. **Same fault the Dreamcast path has**, which
-   `catalog.h` already records; worse ratio. CabinetOS's two rules are in
+   `savetable.h` records; worse ratio. CabinetOS's two rules are in
    `filesave.cpp` and are cheap to port: a PS2 card without the
    `Sony PS2 Memory Card Format` magic is untouched, and a GameCube card with
-   no directory entry in blocks 1 or 2 is untouched.
+   no directory entry in blocks 1 or 2 is untouched. (Since #344 GameCube
+   saves here are a folder of `.gci` files, so the GameCube rule now judges
+   only a whole card from before that, arriving from RomM: `saves.cpp`.)
 
 8. **`MAIN_MEMORY_CARD_SIZE` IS NOT PINNED, AND THE CARD'S SIZE IS IN ITS
    FILENAME.** `CabinetDolphinHost.cpp` sets `MAIN_SLOT_A` and
@@ -251,7 +267,10 @@ Saturn and MAME 2003-Plus states can be shared (`catalog.cpp`, emulatorTag).
    day Dolphin changes its mind about a game's card size the save lands under a
    new name, gets a new row, and the old one is orphaned. **Not observed**, and
    the same shape as the `.USA.` suffix the existing comment describes finding
-   by accident. CabinetOS pins it.
+   by accident. CabinetOS does not have the problem: since #344 slot A is
+   Dolphin's own default, a folder of `.gci` files, so no card size is in any
+   name, and the size is not written at all, because Dolphin refuses it from
+   `Dolphin.ini` (`writeDolphinConfig` in `dolphinprep.cpp`).
 
 9. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
    save state. It has both.** The file opens with *"there is no sound, no

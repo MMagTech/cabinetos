@@ -70,7 +70,9 @@ Read before working on a core, an emulator, input, saves or states.
   `[input] port 0 does nothing in this game: ...`, which is the half that
   answers the question somebody actually asks.
 
-- **ONE PAD SEATED TWICE NEEDED THE FIRST CONNECTION AFTER A BOOT (#318).**
+- **ONE PAD SEATED TWICE NEEDED THE FIRST CONNECTION AFTER A BOOT (#318, "One
+  controller seated twice: presses count double (the pause menu opens and
+  closes)").**
   The kernel's `hid_have_special_driver` list makes only PS4 and PS5 pads
   wait for their own driver. An Xbox pad over Bluetooth meets `hid-generic`
   first, `hid_microsoft` loads and takes it over 50 to 80 ms later, and SDL
@@ -104,7 +106,7 @@ Read before working on a core, an emulator, input, saves or states.
   — an optimally-tiled destination through `VK_EXT_image_drm_format_modifier`,
   and an exported semaphore instead of the fence — were reasoned about, one was
   BUILT and measured, and neither is worth anything. The tables are in
-  `vkhost.cpp`'s `createShared`. **Do not rebuild either without a number that
+  `vkbridge.cpp`'s `createShared`. **Do not rebuild either without a number that
   contradicts them.**
 
 - **A core reports TWO geometries and neither is wrong.** MAME 2003-Plus
@@ -129,7 +131,9 @@ Read before working on a core, an emulator, input, saves or states.
   MAME-derived JSON files it ships hold `rotary`, `dial`, `trackball`,
   `pedals`, `lightgun` and `paddle` — control panels, not screens.
 
-- **MEASURE THE GLITCH BEFORE BELIEVING THE ARITHMETIC.** #221 predicted one
+- **MEASURE THE GLITCH BEFORE BELIEVING THE ARITHMETIC.** #221 ("Built-in
+  cores: no audio rate control, a frame repeats or drops every 10 to 17 s")
+  predicted one
   dropped frame every 10 s on SNES from the 60.10 against 60.00 Hz beat. The
   TV showed 4 to 11 skipped and up to 9 repeated every 10 s, because the
   clock pacing ran 2 frames or 0 whenever the stopwatch wobbled near a
@@ -153,6 +157,9 @@ Read before working on a core, an emulator, input, saves or states.
   wrong cost every arcade game on this console for a day.
 
 ## Games on several discs (#162)
+
+#162 is "Multi-disc games: Change disc in the pause menu, one save per game
+(Saturn first)".
 
 - **A CORE THE CONSOLE "UNLOADS" CAN STAY IN MEMORY, AND ITS STATIC STATE
   WITH IT.** Flycast's code was still mapped with the console on Home, and its
@@ -223,7 +230,9 @@ Read before working on a core, an emulator, input, saves or states.
   `card.raw` and it opens `card.USA.raw`, or `card.USA.251.raw` for a 2 MB
   card. For three weeks the console restored GameCube cards to `card.raw`,
   which Dolphin never opened, and the capture, which tried the predicted name
-  first, then read that same restored copy back after every game (#344).
+  first, then read that same restored copy back after every game (#344,
+  "GameCube: a save restored from RomM never reaches Dolphin (card.raw vs
+  card.USA.raw)").
   Nothing was lost only because no new save had been made since a restore.
   **A restore must write the name the emulator opens, and a capture must read
   the file the emulator wrote, never the one we put down.** GameCube now uses
@@ -246,7 +255,8 @@ Read before working on a core, an emulator, input, saves or states.
   MAILBOX.** gamescope never tears, so PCSX2 with vsync off got mailbox
   presentation ("Immediate not supported ... using mailbox" in its log), and
   at 59.94 against the TV's 60 a newer picture replaced a waiting one: 56 of
-  60 reached the screen (#226). Vsync on alone is mailbox again in PCSX2
+  60 reached the screen (#226, "PS2: show the picture without copying every
+  frame off the graphics chip"). Vsync on alone is mailbox again in PCSX2
   unless it times itself to the screen; `DisableMailboxPresentation` is what
   makes it a queue. **Read which present mode the emulator actually got.**
 
@@ -256,7 +266,9 @@ Read before working on a core, an emulator, input, saves or states.
   gpu_busy_percent`). Read the GPU's load beside the frame times before
   blaming the path.
 
-- **frames.py MEASURES THE WINDOW THAT PRESENTS, NOT THE GAME.** On the copy
+- **frames.py MEASURES THE WINDOW THAT PRESENTS, NOT THE GAME.** (frames.py
+  is a frame-time script kept on the reference console, not in this
+  repository; it reads gamescope's frame times.) On the copy
   path it timed the console redrawing at 60 whether PCSX2 had a new frame or
   not. With PCSX2 presenting itself it times PCSX2's own pictures, which is
   the honest number; the console's `[ps2] N fps, speed N%` line every ten
@@ -318,7 +330,7 @@ Read before working on a core, an emulator, input, saves or states.
 
 - **A SEPARATE BUILDER CONTAINER WAS THE RIGHT CALL.** PCSX2 needs about thirty
   packages the frontend does not. Putting them in `frontend/Containerfile` would
-  have slowed every one of the twenty-one core builds to serve one thing.
+  have slowed every one of the 22 core builds to serve one thing.
 
 - **PCSX2'S DEFAULT BUILD IS FOR THE BUILD MACHINE'S PROCESSOR ONLY**
   (`-march=native` unless `DISABLE_ADVANCE_SIMD=ON`). Every image until
@@ -436,7 +448,8 @@ Read before working on a core, an emulator, input, saves or states.
 
 - **A COPY'S SPEAKER CAN WORK AND STILL NOT WORK IN GAMES.** The TechKen
   Remotes played test tones set up as WiiBrew documents, and froze within two
-  seconds of the setup Wii games actually send (#276). Test with the game's own
+  seconds of the setup Wii games actually send (#276, "Wii: no sound from the
+  Remote's speaker"). Test with the game's own
   bytes, read off `btmon`, not with the documented ones. And Dolphin's
   `WiimoteEnableSpeaker` is off by default, so no Remote speaker gets sound in
   RetroArch or Batocera either: before chasing a missing sound, read which
@@ -446,9 +459,10 @@ Read before working on a core, an emulator, input, saves or states.
   it in the NAND before starting it and marks it in SYSCONF `IPL.TID`; the
   next WAD booted in the SAME NAND deletes it (`WiiUtils.cpp`). Harmless here,
   where every entry has its own NAND; fatal to any plan that boots several
-  WADs into one NAND to install them (#275).
+  WADs into one NAND to install them (#275, "Wii: the Wii Menu, and Miis
+  shared across games").
 
-- **DEVELOPER MODE (`--core ... --rom ...`) SHARES ONE SCRATCH NAND** across
+- **A `--core ... --rom ...` RUN SHARES ONE SCRATCH NAND** across
   every file run with that core (`users/0 - local/saves/local/0/<core>`). It
   is not empty just because the folder above it looks empty; list it before
   reading a test's result off it.
@@ -456,7 +470,8 @@ Read before working on a core, an emulator, input, saves or states.
 - **THE WII'S HOME MENU SAVES ITS SETTINGS WHEN IT CLOSES.** Rumble turned
   off there and the game exited with the menu still open: `BT.MOT` stayed 1
   on disk, and the console rightly kept rumble on. Closed with its Close
-  button, the file had 0 within the second (#274). Before calling a guest
+  button, the file had 0 within the second (#274, "Wii: keep the HOME Menu's
+  rumble and speaker volume across games"). Before calling a guest
   setting unsaved, watch the file while the game runs (a half-second poll of
   its mtime and value); the shutdown path was not the cause.
 

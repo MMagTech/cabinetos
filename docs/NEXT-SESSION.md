@@ -2,7 +2,8 @@
 
 Every session: `docs/lessons/README.md` (ten rules), then the lessons file
 named on the item. New here? `CONTRIBUTING.md`, then `docs/ARCHITECTURE.md`.
-The specification is `docs/PROJECT.md`. Name every issue and pull request by
+The specification is `docs/PROJECT.md`; its index, at the top, gives
+every section and every numbered question with where it ended. Name every issue and pull request by
 its title as well as its number, every time. Replies to reporters are in
 MMagTech's voice ("I"), ask them to test, and never claim a fix nobody
 reproduced. RomM's documentation together with RomM's behaviour is the
@@ -19,39 +20,35 @@ machines' are in MMagTech's local notes, which CLAUDE.md loads (they left the
 repository on 2026-10-17). testing and latest hold the same image: a branch
 cut from main goes to testing as a plain fast-forward.
 
-**The contributor guide is written** (#398, "Audit the code and restructure
-it for contributors (main.cpp is 20,000 lines)"), step 1 of the plan
-MMagTech approved on 2026-10-17 at 7:04 PM (recorded on #398):
-`CONTRIBUTING.md`, `docs/ARCHITECTURE.md` (the map of the code first),
-`CLAUDE.md` (his six rules, for this code) and `CLAUDE.local.example.md`.
-Two Opus agents read it cold, one after the other, and their findings were
-fixed (step 2). Its record is `guide-log.md`, `verifiers/guide-coldread.json`
-and `verifiers/guide-coldread-2.json` in the audit folder (the folder's path
-is in the local notes).
+**The contributor guide and the docs tidy are done** (#398, "Audit the
+code and restructure it for contributors (main.cpp is 20,000 lines)"),
+steps 1 to 3 of the plan MMagTech approved on 2026-10-17 at 7:04 PM
+(recorded on #398). The guide is #426 ("A contributor guide: how to build,
+test and change CabinetOS without asking (#398)"): `CONTRIBUTING.md`,
+`docs/ARCHITECTURE.md`, `CLAUDE.md`, `CLAUDE.local.example.md`. The docs tidy
+is #427 ("Docs tidy: every doc true to the code, or marked as history (#398)"): PROJECT.md's index; the 2026-09-20 snapshot, the three
+history files and frontend/README.md's September text in `docs/history/`;
+the stale doc lines fixed (PROJECT.md's as dated notes); MMagTech's machine
+addresses out of the older docs too (his yes, 8:37 PM); a pull request
+template. What is left of docs/ARCHITECTURE.md section 7 is code comments,
+for the faults step. The record is `guide-log.md` and `docs-tidy-log.md` in
+the audit folder (its path is in the local notes).
 
 ## Next
 
-Two sessions at once, both starting as soon as MMagTech merges the guide
-(MMagTech, 2026-10-17, about 8:20 PM: "go" to running them in parallel):
-
-1. **The docs tidy** (step 3; docs only, "Changelog: none", aimed at a few
-   hours): the PROJECT.md index, the three history files into
-   docs/history/ with their citations fixed, frontend/README.md cut down to
-   the build, the stale lines docs/ARCHITECTURE.md section 7 lists, a pull
-   request template; the machine details still in the other docs only on
-   MMagTech's yes, asked once at the start. Prompt: `docs-tidy-prompt.md`
-   in the audit folder.
-2. **The faults and the automatic checks** (step 4): first one list of
-   every recorded fault (#398, Parts 3 to 5, and what the moves left);
-   fixed now only what a player can meet and the checks that do not check
-   (about 8 to 12 pull requests), the rest filed as issues grouped by area
-   (about 15 to 20), no question per fault; MMagTech answers the one list.
-   Fixes are coded in parallel sessions, go into a `faults` branch and are
-   tested in three or four batches, with one checklist for him at the TV
-   for the few that change the screen. It edits no doc until the docs tidy
-   has merged. Prompt: `faults-prompt.md` in the audit folder.
-3. Then features and bug fixes resume. The monthly health check (step 5)
-   starts after that.
+1. **The faults and the automatic checks** (step 4), running in its own
+   session since 2026-10-17, 8:36 PM: first one list of every recorded
+   fault (#398, Parts 3 to 5, what the moves left, and the code items the
+   docs tidy left: `verifiers/docs-tidy-agent-*.md`); fixed now only what
+   a player can meet and the checks that do not check (about 8 to 12 pull
+   requests), the rest filed as issues grouped by area (about 15 to 20),
+   no question per fault; MMagTech answers the one list. Fixes are coded in
+   parallel sessions, go into a `faults` branch and are tested in three or
+   four batches, with one checklist for him at the TV for the few that
+   change the screen. Prompt: `faults-prompt.md` in the audit folder.
+2. Then features and bug fixes resume. The monthly health check (step 5)
+   starts after that. Splitting PROJECT.md (Part 5 section 47, step 3) is
+   not scheduled: at nearly 1 MB GitHub shows it as raw text, not rendered.
 
 **Owed by MMagTech**, settled inside the faults step's one recommended list,
 not asked one by one: Part 5 section 54; the wording of #401 and #402 (Part 5

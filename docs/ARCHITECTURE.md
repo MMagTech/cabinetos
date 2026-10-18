@@ -22,11 +22,11 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `build_files/` | The image build's scripts: `build.sh` and the scripts it calls (remove the desktop and the storefronts, set up the session, the branding), `install-*.sh` (one per piece the image carries), `require-*.sh` (checks that fail the build) | run once, inside the image build |
 | `system_files/` | Files copied over the image as they are: the session script, systemd units, the root helpers in `usr/libexec/`, polkit rules, udev rules, the diagnostic report, and a few files in `etc/` (the SSH settings, the update signing key) | `/usr` and `/etc` |
 | `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base | GitHub Actions |
-| `.github/` | The workflows, and the issue form for players | GitHub |
+| `.github/` | The workflows, the issue form for players, and the pull request template | GitHub |
 | `tools/` | Test and maintenance tools, run by hand; most are written for the maintainer's machines | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
 | `licences/` | The full licence texts the image ships, and `SOURCES`, where each comes from | `/usr/share/licenses/` |
-| `docs/` | The specification, the decisions, the lessons, and the website (`index.html` and `wiki/`, served by GitHub Pages) | only `docs/LICENCES.md` |
+| `docs/` | The specification, the decisions, the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
 | `Containerfile` | The image: the Bazzite base pinned by digest, then the build scripts in several layers | |
 | `Justfile`, `cabinetos.env` | The build recipes CI calls, and their parameters | |
 | `base-manifest.txt` | The base image's package list, for the weekly base-update check | |
@@ -327,16 +327,14 @@ Each with where it is recorded.
   `ui-loop.sh` and `installer-vm.sh` have no override) and need state he set up by hand on it;
   `tools/romm-readonly-relay.py` and `tools/offline-relay.py` have his server
   built in. The empty server address field on first run shows his server's
-  address as its example (`setup.cpp`). His addresses are still in a few
-  older docs too (PROJECT.md, SETTINGS.md, docs/lessons/testing.md,
-  frontend/README.md) and in comments (`cabinetos-session`, `romm.h`, `net.h`,
-  `settingsflow.cpp`). All of these go in
-  the steps after this file.
-- **A contributor cannot make a test image for their own console:** an image
-  built from a fork still carries the project's signing key and the policy
-  for `ghcr.io/mmagtech/cabinetos` (`require-signed-updates.sh`), and the
-  README section `build.yml` points to for making a signing key ("Generate a
-  signing key") does not exist.
+  address as its example (`setup.cpp`). His addresses are in comments too
+  (`cabinetos-session`, `romm.h`, `net.h`, `settingsflow.cpp`); the docs no
+  longer carry them (2026-10-17). All of these go in the faults step.
+- **A fork's image carries the project's key and image name until the fork
+  edits them:** they are written into tracked files (CONTRIBUTING.md,
+  "Generate a signing key", lists them). `build.yml`'s
+  warning for an unsigned image still points to a README section; the
+  section is in CONTRIBUTING.md.
 - **Two test stand-ins are not in the repository:** the frame-time tool many
   comments cite as `frames.py`, and `racemock.py`, which `--romm-race-test`
   needs (`romm_racetest.cpp`).
@@ -363,30 +361,17 @@ Each with where it is recorded.
 
 ## 7. Where the docs and the code disagree
 
-Found by the audit (#398, Part 5 sections 44 and 45), to be fixed in the
-docs tidy that follows this file. Until then, trust the code:
+The audit (#398, Part 5 sections 44 and 45) found the docs and the code
+apart in many places. The docs were brought into line in the docs tidy
+(#427, "Docs tidy: every doc true to the code, or marked as history
+(#398)", 2026-10-17): frontend/README.md cut down to the build; the
+2026-09-20 snapshot, the three history files and the old frontend README in
+`docs/history/`; the stale lines fixed where they stand, and in
+docs/PROJECT.md noted under the stale line with a date, since its rule is
+to record a reversal rather than edit history; an index at the top of
+PROJECT.md giving where each question ended. What is left is in code
+comments, which the faults step fixes. Until then, trust the code:
 
-- **frontend/README.md**, past "Building": it describes September 2026 (cage
-  as the session, where it is gamescope; twenty-one cores, where there are
-  22; five first-run screens and 96 rule combinations, where there are four
-  steps and 144; a "not here yet" list that is built, except a different core
-  and an export; 28 of 104 flags).
-- **docs/PROJECT.md:** the snapshot at its top, "Where the project is,
-  2026-09-20", is wrong on every machine fact, and says nothing launches the
-  separate emulators yet (five do). Its "Developer mode" section says there
-  is no hidden developer mode (there is: Developer access, in About), and
-  "The shape to build" calls the RomM client REST and WebSocket (it is HTTP
-  only). Questions 27 to 30 open with "NOT DECIDED", though 27 is decided and
-  30 built further down. Its banner says it is authoritative: it is, for what
-  was decided; for what the code does today, the code is.
-- **docs/SETTINGS.md:** some "to build" items are built (Remove an account,
-  the per-system pause rows); it says `strip-desktop.sh` turns off bootc's
-  own updater, which nothing in the repository does.
-- **docs/ROADMAP.md** lists signing as future work and multi-disc games as
-  Later; both are built.
-- **docs/SETTINGS-INVENTORY.md, docs/CORE-OPTIONS-AUDIT.md and
-  docs/PCSX2-HOST-SURFACE.md** are history: their line numbers and counts
-  are from before the code moved on.
 - **Code comments:** 59 point at the wrong place, most saying "in main.cpp"
   for code the restructure moved (app.h's own header among them). Several
   scripts say twenty-one cores (`Containerfile`, `.gitignore`,
@@ -405,3 +390,17 @@ docs tidy that follows this file. Until then, trust the code:
   ceasing to be a constraint (2026-10-11) and the stability rule for moving
   pins (docs/PROJECT.md, "Constraints and principles", 8, 2026-10-14), which
   is the rule now.
+- **More code comments the docs tidy found:** Developer access placed in
+  "Settings, System" (`system_files/etc/ssh/sshd_config.d/30-cabinetos.conf`,
+  `cabinetos-developer.service`, `enable-ssh.sh`, `app.h`; it is the last row
+  of About); `build.yml`'s warning for an unsigned image points to a README
+  section that is CONTRIBUTING.md, "Generate a signing key";
+  `frontend/Makefile` points to README.md for the loop, which is
+  CONTRIBUTING.md, "Running and testing"; `frontend/ps2/CabinetPS2Host.cpp`
+  and `.h` cite docs/PCSX2-HOST-SURFACE.md, now in `docs/history/` (a stub
+  keeps the old path); `storage.h`'s layout comment, which
+  frontend/README.md's tree corrects; Flycast said to have no shared tag
+  (`gamesession.h`, `cores/build-core.sh`; `savetable.cpp` gives it one);
+  `savetable.cpp`'s own claim that only cores built as Cabinet builds them
+  are listed; "twenty-one cores" in the workflows too (`build.yml`,
+  `build-core.yml`, `build-pcsx2.yml`, `build-frontend.yml`).
