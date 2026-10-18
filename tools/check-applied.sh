@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2015 # `test && ok || bad` is if-then-else: the helpers only print
 #
 # Did the emulators take what the console told them? Run from the Mac, against
 # the A9, after a version bump of anything CI cannot load.
@@ -26,9 +27,6 @@
 #   tools/check-applied.sh            both halves
 #   tools/check-applied.sh --lists    only the Dolphin and FBNeo lists
 #
-# `test && ok ... || bad ...` is an if-then-else here: ok, bad and note only
-# print, so they always succeed.
-# shellcheck disable=SC2015
 set -uo pipefail
 
 HOST="${CABINETOS_HOST:-192.168.1.212}"
