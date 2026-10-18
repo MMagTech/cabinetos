@@ -321,6 +321,27 @@ avahi-*
 kmod-wl
 broadcom-wl
 
+# --- Remote Play away from home ---------------------------------------------
+# Tailscale runs only while Remote Play and its Tailscale switch are both on
+# (system_files/usr/libexec/cabinetos-saved-services). Not watched until
+# 44.20261012.1, which moved it.
+area: Remote Play away from home
+log: Tailscale runs when Remote Play away from home is on :: s=/var/lib/cabinetos/config/settings.json; if [ "$(jq -r '.remote_play // "off"' "$s")" = on ] && [ "$(jq -r '.tailscale // "off"' "$s")" = on ]; then systemctl is-active -q tailscaled && tailscale status >/dev/null; fi
+tv: Remote Play away from home (only if you use it): a stream over Tailscale shows the picture
+tailscale
+
+# --- Xbox and Switch, from Flathub ------------------------------------------
+# xemu and Eden are flatpaks (system_files/usr/share/cabinetos/flatpaks.list),
+# installed at first boot by cabinetos-flatpak-setup and started with
+# `flatpak run`, inside bubblewrap. A change to either can stop both. Not
+# watched until 44.20261012.1, which moved flatpak.
+area: Original Xbox and Switch games
+log: xemu and Eden are installed at their pinned revisions :: grep -E '^(app|runtime) ' /usr/share/cabinetos/flatpaks.list | while read -r _ ref br c; do [ "$(flatpak info --system --show-commit "$ref" "$br" 2>&1)" = "$c" ] || { echo "$ref is not at $c"; exit 1; }; done
+tv: An Original Xbox or Switch game starts and plays, with sound
+flatpak
+flatpak-*
+bubblewrap
+
 # --- Developer access (see PROJECT.md open question 8) ---------------------
 # Password logins are MMagTech's to type, never the assistant's.
 area: Developer access
