@@ -56,13 +56,13 @@ in the local notes).
 
 ## Next
 
-1. **#401, "RomM 5.4.0: a game's page cannot read its time played without
-   devices.read or a device_id"**, so that his server can move to RomM 5.4
-   (he asked when, 2026-10-18; the advice: after #401 ships, with a
-   database backup first). The issue lists two options for him to choose;
-   the audit recommends the first, sending `device_id` from
-   `GET /api/users/me` on that one request, which needs no console to pair
-   again.
+1. **Finish #516, "Ready for RomM 5.4, and six small fixes a player can
+   meet"** (#401, #402, #478, #477, #417, #509 part 1, #387, #412), built as
+   testing image 2026.10.18.7 (8807f9d) on 2026-10-18 evening. Left: verify the testing image from
+   the A9, his short TV check (the PS5 touchpad shows no arrow; a system
+   reopened after a minute logs `read again`; a game plays with sound),
+   merge on his go, close the issues. Then his server can move to RomM 5.4, with a
+   database backup first; #401 was not run against a 5.4 server.
 2. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: RomM paths outside the client, docs naming missing files, new
    compiler warnings in touched files, the self-tests. Read their first
