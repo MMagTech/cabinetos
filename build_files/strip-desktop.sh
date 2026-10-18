@@ -185,20 +185,28 @@ remove_pkgs "CabinetOS owns first run, not Bazzite" \
 
 group_end
 
-group_start "Disabling Bazzite's automatic updater"
+group_start "Disabling the automatic updaters"
 
-# The update model is one version number for the whole system (docs/PROJECT.md).
-# `uupd` updates packages and Flatpaks independently of the image, which would
-# create exactly the partial-version state that model exists to prevent.
-# Phase 7 replaces this with a CabinetOS updater.
+# The update model is one version number for the whole system (docs/PROJECT.md),
+# applied only when the player asks: /usr/libexec/cabinetos-update runs
+# `bootc upgrade` itself and never starts any of these. `uupd` updates packages
+# and Flatpaks independently of the image, which would create exactly the
+# partial-version state that model exists to prevent; rpm-ostreed-automatic
+# stages updates by its own policy (none today); flatpak-system-update would
+# move the pinned emulators. bootc-fetch-apply-updates.timer is bootc's
+# own: `bootc upgrade --apply` an hour after boot and every 8 hours, which
+# restarts into the new image, possibly mid-game. Bazzite ships it disabled;
+# masked here so a base that turned it on changes nothing.
+# configure-flatpaks.sh fails the build if any of the four is enabled.
 #
 # Disabled rather than removed: `uupd` is a Bazzite integration point and
 # removing it may have consequences we have not mapped. The timer is what does
 # the damage.
-disable_units "Phase 7 owns updates; no partial version state" \
+disable_units "the player applies updates; no partial version state" \
     uupd.timer \
     rpm-ostreed-automatic.timer \
-    flatpak-system-update.timer
+    flatpak-system-update.timer \
+    bootc-fetch-apply-updates.timer
 
 group_end
 

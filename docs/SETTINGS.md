@@ -722,9 +722,10 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   real update proved from the TV, on 2026-09-25. The image turns Bazzite's
   own automatic updaters off on purpose, because they update packages and
   Flatpaks apart from the image: `strip-desktop.sh` masks `uupd.timer`,
-  `rpm-ostreed-automatic.timer` and `flatpak-system-update.timer`. Nothing
-  in the repository touches bootc's own `bootc-fetch-apply-updates.timer`,
-  so it is as Bazzite ships it.
+  `rpm-ostreed-automatic.timer` and `flatpak-system-update.timer`, and
+  bootc's own `bootc-fetch-apply-updates.timer`, which would apply an update
+  and restart the console by itself (Bazzite ships it disabled).
+  `configure-flatpaks.sh` fails the build if any of the four is enabled.
   - **Check for updates:** a row, **Manual** (the default) or **Weekly**.
     Weekly only ever checks, never downloads. It runs when all of these hold:
     on Home, no game running, online, and more than 7 days since the last
