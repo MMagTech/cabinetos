@@ -1,60 +1,63 @@
 # Next session
 
 Every session: `docs/lessons/README.md` (ten rules), then the lessons file
-named on the item. New here? `docs/WORKING.md`. The specification is
-`docs/PROJECT.md`. Name every issue and pull request by its title as well as
-its number, every time. Replies to reporters are in MMagTech's voice ("I"),
-ask them to test, and never claim a fix nobody reproduced.
+named on the item. New here? `CONTRIBUTING.md`, then `docs/ARCHITECTURE.md`.
+The specification is `docs/PROJECT.md`. Name every issue and pull request by
+its title as well as its number, every time. Replies to reporters are in
+MMagTech's voice ("I"), ask them to test, and never claim a fix nobody
+reproduced. RomM's documentation together with RomM's behaviour is the
+source of truth for anything on RomM's data.
 
 ## Where things stand
 
 **2026-10-17:** `latest` is **2026.10.17.3** (revision f4aa82c, digest
 sha256:f84aa879...dfa8), promoted at 8:48 AM by the merge of #421
 ("The restructure: main.cpp's 20,000 lines and the other big files split into
-files named for what they do") into main as 27abe89. The A9 (Wi-Fi,
-**192.168.1.109**; Tailscale cabinetos, 100.67.82.30) is on the testing
-channel, runs 2026.10.17.3, and its PIN is on. testing and latest hold the
-same image and work as they did before the restructure: a branch cut from
-main goes to testing as a plain fast-forward. RomM's documentation together with RomM's behaviour is the
-source of truth for anything on RomM's data.
+files named for what they do") into main as 27abe89. The A9 is on the testing
+channel, runs 2026.10.17.3, and its PIN is on; its address and the other
+machines' are in MMagTech's local notes, which CLAUDE.md loads (they left the
+repository on 2026-10-17). testing and latest hold the same image: a branch
+cut from main goes to testing as a plain fast-forward.
 
-**The restructure of #398 ("Audit the code and restructure it for
-contributors (main.cpp is 20,000 lines)") is done and shipped:** moves 1 to
-8 (#409, #410, #413, #414, #415, #418, #419, #420), MMagTech's checklist on
-the final image (all 22 TV steps good), and the move branches deleted. Each
-batch's image keeps its tag for narrowing a fault down on the A9:
-testing-61e1e84 (h1), testing-f01296c (h2), testing-f4aa82c (i); the console
-before the restructure is 2026.10.14.5 (git tag on 72c0c4b).
+**The contributor guide is written** (#398, "Audit the code and restructure
+it for contributors (main.cpp is 20,000 lines)"), step 1 of the plan
+MMagTech approved on 2026-10-17 at 7:04 PM (recorded on #398):
+`CONTRIBUTING.md`, `docs/ARCHITECTURE.md` (the map of the code first),
+`CLAUDE.md` (his six rules, for this code) and `CLAUDE.local.example.md`.
+Two Opus agents read it cold, one after the other, and their findings were
+fixed (step 2). Its record is `guide-log.md`, `verifiers/guide-coldread.json`
+and `verifiers/guide-coldread-2.json` in the audit folder (the folder's path
+is in the local notes).
 
 ## Next
 
-The contributor guide for #398 (docs only; one pull request, "Changelog:
-none"). Its prompt is `~/Documents/Development/cabinetos-audit/guide-prompt.md`:
-what the guide must hold is Part 5 section 46, and it asks MMagTech once, up
-front, which parts of his post-refactor cleanup plan the step includes (a
-map of the code, an architecture page, a CLAUDE.md, session rules, automatic
-checks) and what to do with the machine details Part 5 found. Quote the cost
-before any agent and wait for his go. Then the faults the moves left as they
-were and those Parts 3 and 4 recorded, each in its own pull request; then
-features and bug fixes resume.
+Two sessions at once, both starting as soon as MMagTech merges the guide
+(MMagTech, 2026-10-17, about 8:20 PM: "go" to running them in parallel):
 
-Part 5 is posted on #398 (three comments, 2026-10-17): the newcomer docs
-measured against the code, every stale reference, the RomM map as it stands
-today, every doc sorted, and the machine details in tracked files. Its
-record is `part5-log.md`, `verifiers/area-11-docs.json`,
-`verifiers/romm-residue.json`, `part5-docs-inventory.md` and
-`part5-address-scan.md`.
+1. **The docs tidy** (step 3; docs only, "Changelog: none", aimed at a few
+   hours): the PROJECT.md index, the three history files into
+   docs/history/ with their citations fixed, frontend/README.md cut down to
+   the build, the stale lines docs/ARCHITECTURE.md section 7 lists, a pull
+   request template; the machine details still in the other docs only on
+   MMagTech's yes, asked once at the start. Prompt: `docs-tidy-prompt.md`
+   in the audit folder.
+2. **The faults and the automatic checks** (step 4): first one list of
+   every recorded fault (#398, Parts 3 to 5, and what the moves left);
+   fixed now only what a player can meet and the checks that do not check
+   (about 8 to 12 pull requests), the rest filed as issues grouped by area
+   (about 15 to 20), no question per fault; MMagTech answers the one list.
+   Fixes are coded in parallel sessions, go into a `faults` branch and are
+   tested in three or four batches, with one checklist for him at the TV
+   for the few that change the screen. It edits no doc until the docs tidy
+   has merged. Prompt: `faults-prompt.md` in the audit folder.
+3. Then features and bug fixes resume. The monthly health check (step 5)
+   starts after that.
 
-**Owed by MMagTech:** Part 5 section 54; the wording of #401 and #402 (Part 5
-section 51); Part 4 section 40 (which faults get issues, whether the flatpak
-retry waits, which splits happen, a workflow to re-point latest); Part 6
-section 29 decisions 2 to 6; #408 ("Next session: Part 6 of the #398 audit
-is posted; the moves begin with batch (a)") is still open against main and
-out of date.
-
-The record of every move, its checks and its scripts is in
-`~/Documents/Development/cabinetos-audit/moves-log.md` and `scripts/move1/`
-to `scripts/move7/`; what the moves taught is in docs/lessons/testing.md.
+**Owed by MMagTech**, settled inside the faults step's one recommended list,
+not asked one by one: Part 5 section 54; the wording of #401 and #402 (Part 5
+section 51); Part 4 section 40; Part 6 section 29 decisions 2 to 6. #408
+("Next session: Part 6 of the #398 audit is posted; the moves begin with
+batch (a)") is still open against main and out of date.
 
 ## Waiting, not for the next session unless MMagTech raises them
 

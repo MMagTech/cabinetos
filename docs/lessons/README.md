@@ -23,7 +23,8 @@ not a warning.
    never fired; `gh run list --branch <b>` tells them apart.
    ([image and CI](image-and-ci.md))
 6. **A merge promotes the image tested on `testing`; anything committed after
-   that push, docs included, makes main build instead.**
+   that push makes main build instead, except docs** (`.md` files and
+   `docs/`, apart from `docs/LICENCES.md`; since #156).
    ([image and CI](image-and-ci.md))
 7. **Read the logs with `sudo journalctl -o cat | grep`**; `-u
    cabinetos-session` shows almost nothing. ([testing](testing.md))

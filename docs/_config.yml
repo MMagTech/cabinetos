@@ -43,6 +43,7 @@ defaults:
       layout: wiki
 
 exclude:
+  - ARCHITECTURE.md
   - CABINET.md
   - CORE-OPTIONS-AUDIT.md
   - LICENCES.md
