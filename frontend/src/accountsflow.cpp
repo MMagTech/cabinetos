@@ -80,19 +80,33 @@ auto App::switchAccount(int id, std::string* why) -> bool {
         return false;
     }
 
-    std::string err;
-    if (!accounts::activate(id, liveClient, &err)) {
-        if (why) *why = err;
+    // A REFUSED SWITCH PUTS THE LAST PERSON BACK (#398, SETTINGS-01).
+    // `activate` writes the new id into accounts.json before anything below
+    // can fail, and adoptUser moves the save folder, so every refusal from
+    // here on undoes both. Left half switched, the console kept the last
+    // person's Home and save folder under the new person's login and colour,
+    // and sent one person's saves to the other's RomM account. Going back
+    // can fail too; then it is only logged.
+    const int was = accounts::activeId();
+    const storage::User wasUser = storage::currentUser();
+    const auto refuse = [&](const std::string& message) {
+        if (why) *why = message;
+        std::string e;
+        if (was > 0 && !accounts::activate(was, liveClient, &e))
+            std::fprintf(stderr, "[accounts] could not go back to %d: %s\n", was, e.c_str());
+        storage::setCurrentUser(wasUser);
+        std::fprintf(stderr, "[accounts] switch to %d refused (%s), back to %d\n", id,
+                     message.c_str(), was);
         return false;
-    }
+    };
+
+    std::string err;
+    if (!accounts::activate(id, liveClient, &err)) return refuse(err);
     // OFFLINE (#88): the person is who accounts.json says, and Home is
     // the games on the drive, which are the console's and not anybody's
     // (MMagTech, 2026-10-05). Their saves are their own, as always.
     if (romm::serverAway()) {
-        if (!adoptAccountOffline(id)) {
-            if (why) *why = "Couldn't switch.";
-            return false;
-        }
+        if (!adoptAccountOffline(id)) return refuse("Couldn't switch.");
         lib = offlineLibrary();
         libFromDrive = true;   // loaded properly when the server answers
         libraryScreen.build(platformTiles, collectionTiles);
@@ -103,11 +117,12 @@ auto App::switchAccount(int id, std::string* why) -> bool {
         return true;
     }
     // ASKED AGAIN, NOT ASSUMED. The token changed, so the answer to "who is
-    // this" changed, and every save path below is built from it.
-    if (!adoptUser(liveClient)) {
-        if (why) *why = "Switched, but the server would not say who that is.";
-        return false;
-    }
+    // this" changed, and every save path below is built from it. When the
+    // server does not answer, adoptUser falls back to user.json, which still
+    // names the last person: that is a refusal too, not a switch
+    // (SETTINGS-02). An account's id is its RomM user id.
+    if (!adoptUser(liveClient) || storage::currentUser().id != id)
+        return refuse("The server would not say who that is.");
 
     // BUILT BESIDE THE LIVE ONE AND ONLY THEN SWAPPED IN. The store is a
     // single object now, so a failed switch must not have half-replaced it.
@@ -118,10 +133,9 @@ auto App::switchAccount(int id, std::string* why) -> bool {
     // server would have been refused. The platform list is what says the
     // server answered.
     if (fresh.platformTiles.empty()) {
-        // Left as it was rather than blanked: an empty Home is worse than
-        // the previous person's, and this is recoverable by switching back.
-        if (why) *why = "That account's library came back empty.";
-        return false;
+        // Home left as it was rather than blanked, with the last person back
+        // in to match it: an empty Home is worse than theirs.
+        return refuse("That account's library came back empty.");
     }
     lib = std::move(fresh);
     libraryScreen.build(platformTiles, collectionTiles);
@@ -303,8 +317,8 @@ void App::pumpSwitch() {
         const Uint64 t0 = SDL_GetTicks();
         switchWhy.clear();
         switchOk = switchAccount(switchPendingId, &switchWhy);
-        // Whatever the switch got to: a half-finished one has still
-        // changed who is active, and RetroAchievements follows that.
+        // Whoever is active now: the new person, or the last one again
+        // when the switch was refused (switchAccount puts them back).
         ra::useAccount(accounts::activeId());
         std::fprintf(stderr, "[accounts] switch took %llu ms\n",
                      static_cast<unsigned long long>(SDL_GetTicks() - t0));
