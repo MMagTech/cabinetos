@@ -411,7 +411,7 @@ minute and guessing at it for twenty.
   while he is at the TV**; use `tools/ui-loop.sh` and let him watch instead.
 
 - **Offline is tested with a wrong address, never by stopping RomM.**
-  `CABINETOS_ROMM=<server address>:6099`, the server with a port nothing
+  `CABINETOS_ROMM=<server host>:6099`, the server with a port nothing
   answers on (headless, or `tools/ui-loop.sh --env`), is offline from boot.
   For the server COMING BACK, point the console at a
   relay on the A9 itself, `CABINETOS_ROMM=127.0.0.1:16005` with
@@ -419,7 +419,7 @@ minute and guessing at it for twenty.
   named at its top): relay off is no server, relay
   on is the server back. Covers are filed by address, so link
   `covers/<that address>` to the real server's folder
-  (`covers/<server address>_<port>`) for the test and remove the link after.
+  (`covers/<server host>_<port>`) for the test and remove the link after.
 
 - **A server layout nobody has is tested through `tools/romm-readonly-relay.py`,
   never by changing RomM.** It forwards reads only (any write gets 403 and is

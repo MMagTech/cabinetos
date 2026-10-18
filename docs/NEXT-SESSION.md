@@ -26,7 +26,7 @@ steps 1 to 3 of the plan MMagTech approved on 2026-10-17 at 7:04 PM
 (recorded on #398). The guide is #426 ("A contributor guide: how to build,
 test and change CabinetOS without asking (#398)"): `CONTRIBUTING.md`,
 `docs/ARCHITECTURE.md`, `CLAUDE.md`, `CLAUDE.local.example.md`. The docs tidy
-is #PRNUM ("PRTITLE"): PROJECT.md's index; the 2026-09-20 snapshot, the three
+is #427 ("Docs tidy: every doc true to the code, or marked as history (#398)"): PROJECT.md's index; the 2026-09-20 snapshot, the three
 history files and frontend/README.md's September text in `docs/history/`;
 the stale doc lines fixed (PROJECT.md's as dated notes); MMagTech's machine
 addresses out of the older docs too (his yes, 8:37 PM); a pull request
@@ -48,7 +48,7 @@ the audit folder (its path is in the local notes).
    change the screen. Prompt: `faults-prompt.md` in the audit folder.
 2. Then features and bug fixes resume. The monthly health check (step 5)
    starts after that. Splitting PROJECT.md (Part 5 section 47, step 3) is
-   not scheduled: at 985 KB GitHub shows it as raw text, not rendered.
+   not scheduled: at nearly 1 MB GitHub shows it as raw text, not rendered.
 
 **Owed by MMagTech**, settled inside the faults step's one recommended list,
 not asked one by one: Part 5 section 54; the wording of #401 and #402 (Part 5

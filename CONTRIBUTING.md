@@ -312,10 +312,12 @@ signed with MMagTech's key, whose secret half is never in the repository
 3. **Replace `system_files/etc/pki/containers/cabinetos.pub`** with
    `cosign.pub`.
 4. **Change `ghcr.io/mmagtech/cabinetos` to the fork's image** in the three
-   files that name it: `build_files/require-signed-updates.sh` (`REPO`, the
-   policy's rule), `system_files/etc/containers/registries.d/cabinetos.yaml`
-   (where the signatures are found) and `disk_config/iso.toml` (the image
-   the installer points a console at for its updates).
+   files that use it for updates: `build_files/require-signed-updates.sh`
+   (`REPO`, the policy's rule),
+   `system_files/etc/containers/registries.d/cabinetos.yaml` (where the
+   signatures are found) and `disk_config/iso.toml` (the image the installer
+   points a console at for its updates). The diagnostic report names it too,
+   in `cabinetos-report`'s `PUBLIC` list of words it never scrubs.
 
 The image name itself needs no edit: `build.yml` publishes to
 `ghcr.io/<owner>/cabinetos`, from the repository's owner in lower case and

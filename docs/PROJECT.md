@@ -67,7 +67,7 @@ code cites them more than a hundred times.
 - **Staying current with Bazzite**: the base pinned by digest, and moving
   the pin.
 - **Measured behaviour**: the first booted image, the A9 Max measured,
-  every platform run once (September 2026).
+  every platform run once, a start with no display answering.
 - **Branding and the boot experience**: the palette.
 - **The design system**: Cabinet's design, written out.
 - **The frontend toolkit**: why C++20, SDL3 and a UI layer of its own.
@@ -86,8 +86,8 @@ status line written when a question was raised is often overtaken further
 down. "Look now at" is where the code or a later decision moved on.
 
 - **1. How much of KDE Plasma can actually be removed?** "Unresolved", to be
-  settled in Phase 2, which never came back to it. Plasma stays installed and
-  unreachable; *Measured behaviour* found packages that never run cost
+  settled in Phase 2, which never came back to it. Plasma stays installed
+  and unreachable; *Measured behaviour* found packages that never run cost
   nothing, and the toolkit chosen was not Qt. Look now at:
   `build_files/strip-desktop.sh`.
 - **2. Does removing `steam` also remove the controller udev rules?**
@@ -99,14 +99,14 @@ down. "Look now at" is where the code or a later decision moved on.
   image also carries bazzite-deck's gamescope session, for the Steam entry
   only. Look now at: `build_files/install-steam-session.sh`, question 37.
 - **4. Bundle libretro cores directly, or build on RetroDECK?** "RESOLVED in
-  Phase 0: bundle directly, as `.so` files". True for the 22 libretro
-  cores; the heavy systems run as separate programs. Look now at:
-  questions 21 and 32.
+  Phase 0: bundle directly, as `.so` files". True for the 22 libretro cores;
+  Switch, PS3, Xbox, Xbox 360 and Wii U run as separate programs. Look now
+  at: questions 21 and 32.
 - **5. Anaconda ISO vs. a plain disk image for installing to real
   hardware.** "ANSWERED 2026-10-07: keep the ISO, automated down to one
-  question", and built the same day. What the ISO builder will not change
-  is #284 ("Installer: what the ISO builder will not let us change"), closed
-  as cosmetic. Look now at: `disk_config/iso.toml`.
+  question", and built the same day. What the ISO builder will not change is
+  #284 ("Installer: what the ISO builder will not let us change"), closed as
+  cosmetic. Look now at: `disk_config/iso.toml`.
 - **6. `/opt` mutability.** "Left at Bazzite's default". Nothing needed it:
   the emulators built into the image live under `/usr/lib/cabinetos/`.
 - **7. OS branding in `/usr/lib/os-release`.** Its status line, "Deferred to
@@ -115,22 +115,23 @@ down. "Look now at" is where the code or a later decision moved on.
   `build_files/brand-os-release.sh`.
 - **8. How do we get a shell before Phase 6 ships developer mode?**
   "RESOLVED: SSH is on from the start"; the debt was "PAID 2026-10-07
-  (#134)": Developer access, off by default. The row is in About (seven
-  presses on Version), not "Settings, System" as the question says. Look
-  now at: docs/SETTINGS.md, "Developer access".
+  (#134)" ("A shipping image without the development shell"): Developer
+  access, off by default. The row is in About (seven presses on Version),
+  not "Settings, System" as the question says. Look now at:
+  docs/SETTINGS.md, "Developer access".
 - **9. How a person reaches their own files, and how it authenticates.**
   "ANSWERED 2026-09-19": a visible row, a generated password, SFTP and not a
   shell. Built as File access, under Storage. Binding it to the home network
   only was never decided. Look now at: docs/SETTINGS.md, "File access".
 - **10. Waking the machine, and turning the TV on.** "Superseded 2026-09-24
-  (#81): HDMI-CEC is shelved and its row is gone." Its blanking half was
-  built without CEC, under 10b. Look now at: question 31, "HDMI-CEC IS
-  SHELVED".
+  (#81): HDMI-CEC is shelved and its row is gone." (#81: "Docs: out-of-date
+  lines in PROJECT.md and NEXT-SESSION.md".) Its blanking half was built
+  without CEC, under 10b. Look now at: question 31, "HDMI-CEC IS SHELVED".
 - **10b. The console never sleeps, and never blanks the screen.** Pixel
   shift, dim and blank "BUILT 2026-09-22"; the Power menu and the save
   before shutdown were built 2026-09-22/23, further down. Still open: the
-  sleep each machine can really do. Look now at: #132 ("Offer the sleep
-  this machine can really do"); docs/SETTINGS.md, "Turn off screen after".
+  sleep each machine can really do. Look now at: #132 ("Offer the sleep this
+  machine can really do"); docs/SETTINGS.md, "Turn off screen after".
 - **11. NVIDIA hardware.** "Out of scope until there is hardware that needs
   it"; closed by decision 2026-10-12 in #300 ("An NVIDIA computer: what
   CabinetOS does on one today, and whether to offer an NVIDIA image"):
@@ -142,53 +143,54 @@ down. "Look now at" is where the code or a later decision moved on.
 - **12b. Every platform audited, and the order the rest get built.** The
   audit and the order were decided 2026-09-20; every heavy system on it has
   since been built; Jaguar, ColecoVision and Game & Watch will not be. Look
-  now at: questions 32 to 36; question 22 for the Library filter it waits
-  for (#117, "Library shows only the systems this console can play").
+  now at: questions 32 to 36; question 22 for the Library filter it waited
+  for, built there (#117, "Library shows only the systems this console can
+  play").
 - **13. Building the same cores for Linux x86-64.** "Repo layout DECIDED.
   SCOPED IN PHASE 0". Built since: every libretro core pinned and built in
   CI, file saves synced (2026-09-19), states sent to RomM (2026-09-23). Its
   "Still open" list is mostly Cabinet's side, no longer a constraint since
   2026-10-11. Look now at: CONTRIBUTING.md, "The rules";
   `frontend/src/savetable.cpp`.
-- **Prior art: how Cabinet and Grout already do this** (not a question).
-  A record, "Read 2026-09-13". Its "offline is one signal" is overtaken by
+- **Prior art: how Cabinet and Grout already do this** (not a question). A
+  record, "Read 2026-09-13". Its "offline is one signal" is overtaken by
   question 29, and Download All was never built.
 - **14. User-selectable game storage.** Its status line, "Mostly DECIDED",
   is stale: built 2026-09-19, revised 2026-09-25 (kept games fill the main
   drive first) and 2026-10-04 (#236, "Drives: use Linux's own format (ext4)
   for extra drives, shared with Steam"). Moving games between drives was
   never built. Look now at: docs/SETTINGS.md, "Storage".
-- **15. A phone companion page for first run.** "NOT ADOPTED YET":
-  deferred, never built and never closed. First run now pairs with RomM by
-  QR code on the console's own screen. Look now at: question 15b.
+- **15. A phone companion page for first run.** "NOT ADOPTED YET": deferred,
+  never built and never closed. First run now pairs with RomM by QR code on
+  the console's own screen. Look now at: question 15b.
 - **15b. First run, and the one input that can be guaranteed.** Its status
   line says "Not built"; further down, "THE FOUR MECHANISMS ARE BUILT" and
   "AND THE SCREENS ARE BUILT TOO", both 2026-09-20. Its "What is still owed"
   list is stale. Look now at: `frontend/src/setup.cpp`.
 - **16. Is a mouse supported, or not?** "ANSWERED 2026-09-19: option 2": a
   mouse "moves focus and clicks the focused thing, and nothing else". The
-  code does that in first run only; elsewhere a click wakes the screen.
-  Look now at: the input-model table in "What CabinetOS is", never amended
-  (it carries a dated note).
+  code does that in first run only; elsewhere a click wakes the screen. Look
+  now at: the input-model table in "What CabinetOS is", never amended (it
+  carries a dated note).
 - **17. Wi-Fi credentials on a controller-only console.** "The mechanism is
   DECIDED"; the polkit rule "SHIPPED 2026-09-20", and Wi-Fi is built in
   first run and in Settings. The password: "REVERSED 2026-09-24", masked,
   with the last character shown. Hidden networks are not built. Look now at:
   docs/SETTINGS.md, "Network".
-- **18. The on-disk layout.** "DECIDED" 2026-09-17, "BUILT 2026-09-18". "REVERSED
-  2026-09-19: releasing the last keep DELETES." Its "What is still not
-  built" list is built now. Look now at: `frontend/src/storage.h`,
+- **18. The on-disk layout.** "DECIDED" 2026-09-17, "BUILT 2026-09-18".
+  "REVERSED 2026-09-19: releasing the last keep DELETES." Its "What is still
+  not built" list is built now. Look now at: `frontend/src/storage.h`,
   `locations.h`.
-- **PSP save sync, BUILT AND PROVEN 2026-09-17** (not a question). The
-  first directory save: sent to RomM and back byte-identical. "Still open":
-  under a headless capture the core sometimes never starts. Look now at:
+- **PSP save sync, BUILT AND PROVEN 2026-09-17** (not a question). The first
+  directory save: sent to RomM and back byte-identical. "Still open": under
+  a headless capture the core sometimes never starts. Look now at:
   `frontend/src/saves.cpp`, `savetable.cpp`.
-- **19. Systems this console has and Cabinet does not.** "Raised and
-  DECIDED by MMagTech, 2026-09-17": CabinetOS may carry systems Cabinet
-  does not. PS3 built 2026-09-28 (#171, "New systems 2: PlayStation 3
-  (RPCS3)"). Its "core parity binds absolutely" was overtaken on
-  2026-10-11 (question 12b). Updates and DLC wait: #181 ("Updates and DLC
-  as separate files in RomM (Switch, PS3, Xbox 360)").
+- **19. Systems this console has and Cabinet does not.** "Raised and DECIDED
+  by MMagTech, 2026-09-17": CabinetOS may carry systems Cabinet does not.
+  PS3 built 2026-09-28 (#171, "New systems 2: PlayStation 3 (RPCS3)"). Its
+  rule that core parity "still binds absolutely" was overtaken on 2026-10-11
+  (question 12b). Updates and DLC wait: #181 ("Updates and DLC as separate
+  files in RomM (Switch, PS3, Xbox 360)").
 - **20. Vulkan, and how the host should choose a graphics API.** "BUILT
   2026-09-20": the core host serves Vulkan; the interface "stays on OpenGL
   ES". Its quality design of 2026-09-21 was redone and built under question
@@ -200,16 +202,15 @@ down. "Look now at" is where the code or a later decision moved on.
   at: `system_files/usr/share/cabinetos/flatpaks.list` (xemu and Eden).
 - **23. One quality setting for the whole console, instead of emulator
   menus.** Its status line says "Not designed, not built"; it was designed
-  and built under question 31 (#63, "Settings: picture quality"),
-  2026-10-02 and 2026-10-04. The drop rule was closed, not built (#250,
-  "Picture quality phase 3: lower a struggling game's level by itself (the
-  drop rule)"). Look now at: `frontend/src/quality.h`.
+  and built under question 31 (#63, "Settings: picture quality"), 2026-10-02
+  and 2026-10-04. The drop rule was closed, not built (#250, "Picture
+  quality phase 3: lower a struggling game's level by itself (the drop
+  rule)"). Look now at: `frontend/src/quality.h`.
 - **22. What the console does when the server is away** (it comes after 23
-  in the file). "Partly decided" 2026-09-19; "Offline play built
-  2026-10-05 (#88)" ("Offline: kept games play with no server"). Switching
-  people offline was allowed later. Two devices' saves wait on #346 ("Move
-  saves to RomM's save channels (Sigil) when they reach a stable RomM
-  release").
+  in the file). "Partly decided" 2026-09-19; "Offline play built 2026-10-05
+  (#88)" ("Offline: kept games play with no server"). Switching people
+  offline was allowed later. Two devices' saves wait on #346 ("Move saves to
+  RomM's save channels (Sigil) when they reach a stable RomM release").
 - **24. Will gamescope composite our overlay over a window we do not own?**
   "ANSWERED THE SAME DAY" (2026-09-21): "YES", in the `STEAM_OVERLAY` slot;
   "TWO PATHS ARE ACCEPTED". Built for the separate programs 2026-09-28 and
@@ -217,89 +218,100 @@ down. "Look now at" is where the code or a later decision moved on.
   frame off the graphics chip"). Look now at: `frontend/src/overlaywin.h`.
 - **25. Save states, and whether the modern systems should have them at
   all.** "DECIDED for PS2 and everything after it": no states where they
-  cannot be trusted to load ("MADE VISIBLE 2026-09-23"). The part left
-  "OPEN for the cartridge era" was answered under question 13 on 2026-09-23:
+  cannot be trusted to load ("MADE VISIBLE 2026-09-23"). The part left "OPEN
+  for the cartridge era" was answered under question 13 on 2026-09-23:
   states on every libretro core. Resume was never built. Look now at:
   `frontend/src/savetable.cpp`.
 - **26. Account switching, and what a console's version of it is.** "DECIDED
   2026-09-21"; its "Nothing is built yet" is stale: built and measured with
-  two real accounts the same day. Look now at: docs/SETTINGS.md,
-  "Accounts".
+  two real accounts the same day. Look now at: docs/SETTINGS.md, "Accounts".
 - **27. A one-line change ships half a gigabyte, because the image is one
   layer.** Opens "NOT DECIDED"; decided further down, 2026-09-23: "NO
   RECHUNK, AND THE LAYERS IN THE CONTAINERFILE DO THE JOB", the shipping
   build since #53 ("A small change ships small: 739 kB for a frontend
   update, not 546 MB").
-- **28. The boot is proportional to the library, and nothing decided
-  that.** Opens "NOT DECIDED"; "ANSWERED 2026-09-22": RomM searches, so boot
-  stops fetching the catalogue. Built. Fetching a game's firmware when it
-  is kept is not built. Look now at: `frontend/src/library.cpp`
-  (`loadLibrary`), `search.cpp`.
+- **28. The boot is proportional to the library, and nothing decided that.**
+  Opens "NOT DECIDED"; "ANSWERED 2026-09-22": RomM searches, so boot stops
+  fetching the catalogue. Built. Fetching a game's firmware when it is kept
+  is not built. Look now at: `frontend/src/library.cpp` (`loadLibrary`),
+  `search.cpp`.
 - **29. Offline is not one fact, and the console has three networks to be
   off.** "NOT DECIDED": it records the facts and the predicate. Partly
-  overtaken: offline play built (question 22, #88) and the update row's
-  own check. Look now at: docs/SETTINGS.md, "System update".
+  overtaken: offline play built (question 22, #88) and the update row's own
+  check. Look now at: docs/SETTINGS.md, "System update".
 - **30. The console re-does work it already did, every boot.** Opens "NOT
   DECIDED"; "BUILT 2026-09-22" further down: the cover cache, the tile map,
-  the sweep and the paged grid. Prefetch on focus and validation by date
-  are not built. Look now at: `frontend/src/covercache.cpp`.
+  the sweep and the paged grid. Prefetch on focus and validation by date are
+  not built. Look now at: `frontend/src/covercache.cpp`.
 - **31. The Settings screen, decided in conversation.** A running record,
   "later entries supersede earlier ones"; the final state is
   docs/SETTINGS.md. Built, with the picture quality phases 1 and 2 (#63);
   phase 3 (#250) closed, not built. Look now at: docs/SETTINGS.md.
 - **32. Standalone emulators as games, starting with Switch (Eden).** Opens
   "Nothing built yet"; "BUILT ON `standalone-emulators`, 2026-09-28", the
-  pause menu "BUILT AND JUDGED" on the TV. Its "ONE RULE FOR EVERY GAME,
-  AND EDEN AS IT SHIPS" is a project rule (CONTRIBUTING.md, "The rules").
-  Look now at: `frontend/src/standalone_eden.cpp`; #181.
-- **33. Xbox (xemu), issue #172** ("New systems 3: Xbox (xemu)"). Decided and
-  built 2026-09-29; its "Not yet judged on the TV" lags its own text (two
-  players and rumble were seen on the TV). Look now at:
+  pause menu "BUILT AND JUDGED" on the TV. Its "ONE RULE FOR EVERY GAME, AND
+  EDEN AS IT SHIPS" is a project rule (CONTRIBUTING.md, "The rules"). Look
+  now at: `frontend/src/standalone_eden.cpp`; #181.
+- **33. Xbox (xemu), issue #172** ("New systems 3: Xbox (xemu)"). Decided
+  and built 2026-09-29; its "Not yet judged on the TV" lags its own text
+  (two players and rumble were seen on the TV). Look now at:
   `frontend/src/standalone_xemu.cpp`.
 - **34. Xbox 360, and whether this machine can play it.** Decided
   2026-09-29, built 2026-09-30 (#192, "New systems 4: Xbox 360 (Xenia
-  Edge)"). Open upstream: Edge's Sign In box. Look now at:
+  Edge)"). Edge's Sign In box stays, a known gap: the upstream ask
+  (has207/xenia-edge#286) closed 2026-10-06 without the option. Look now at:
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
-  "Research only; no code"; built 2026-09-30, real Remotes 2026-10-02, Miis
-  and rumble 2026-10-07. Open: #203 ("Wii: the HOME menu's "Wii Menu"
-  leaves a black screen"). Look now at: `wiibridge/` (#200, "Real Wii
-  Remotes: pair once, like a Wii").
-- **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens "No
-  code yet"; built 2026-10-01, judged on the testing image 2026-10-02.
+  "Research only; no code"; built 2026-09-30; real Remotes decided
+  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07. Open: #203
+  ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
+  `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
+- **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
+  "No code yet"; built 2026-10-01, judged on the testing image 2026-10-02.
   Graphic packs: none (#207, "Wii U: Cemu's graphic packs (resolution and
   fix), reconsider", closed). Games that need a Wii Remote stay greyed
-  (#231, "Wii U: real Wii Remotes in Cemu", closed 2026-10-04). Look now
-  at: `frontend/src/standalone_cemu.cpp`.
-- **37. Steam: one entry that hands over to Big Picture, issue #223.**
-  Decided 2026-10-02 and 2026-10-03, built. Left out on purpose: Proton GE,
-  Steam's own pages, Steam per person.
-- **38. RetroAchievements, issue #74.** Decided 2026-10-05 and 2026-10-06,
-  built. Softcore only.
-- **39. Remote Play (Sunshine), issue #286.** Decided 2026-10-07, built;
-  "never patched" was reversed by #304 ("Stream into Steam: leaving Steam
-  back to Home turns the phone's picture black"): Sunshine is built with
-  one patch. Look now at: `build_files/install-sunshine.sh`.
-- **40. Controller battery on the top bar, issue #293.** Decided 2026-10-08,
-  built.
-- **41. The diagnostic report, issue #195.** Decided 2026-09-30 to
-  2026-10-10, built. A report with no network was closed, not built (#315,
-  "Diagnostic report with no network: save it to a drive").
-- **42. How to, in About, issue #314.** Decided on the TV 2026-10-10, built.
-- **43. Games on several discs, issue #162.** Decided while building,
-  2026-10-11, built.
-- **44. Volume keys, issue #351.** Decided and built 2026-10-11. Full volume
-  at start is #391 ("Headphones in at start get full volume").
-- **45. Smart collections, issue #352.** Decided 2026-10-12, built.
-- **46. Where the sound goes, issue #341.** Decided 2026-10-13, built
-  2026-10-14. Open: #390 ("Headphones don't take over after a Remote Play
-  session (waiting on Sunshine)") and #391.
-- **47. Interface sounds everywhere, and a calmer set, issue #389.** Decided
-  at the TV 2026-10-14, built. "No start-up or shut-down sound, ever." A
-  fade on the way down is #393 ("Power off and Restart cut the picture
+  (#231, "Wii U: real Wii Remotes in Cemu", closed 2026-10-04). Look now at:
+  `frontend/src/standalone_cemu.cpp`.
+- **37. Steam: one entry that hands over to Big Picture, issue #223**
+  ("Steam: one entry that hands over to Big Picture (audit first)"). Decided
+  2026-10-02 and 2026-10-03, built. Left out on purpose: Proton GE, Steam's
+  own pages, Steam per person.
+- **38. RetroAchievements, issue #74** ("RetroAchievements sign-in per
+  account"). Decided 2026-10-05 and 2026-10-06, built. Softcore only.
+- **39. Remote Play (Sunshine), issue #286** ("Remote Play: stream the
+  console to Moonlight (Sunshine), off by default"). Decided 2026-10-07,
+  built; "never patched" was reversed by #304 ("Stream into Steam: leaving
+  Steam back to Home turns the phone's picture black"): Sunshine is built
+  with one patch. Look now at: `build_files/install-sunshine.sh`.
+- **40. Controller battery on the top bar, issue #293** ("Controller battery
+  on Home, and a one-time low-battery notice"). Decided 2026-10-08, built.
+- **41. The diagnostic report, issue #195** ("Settings: create a diagnostic
+  report, with a QR code"). Decided 2026-09-30 to 2026-10-10, built. A
+  report with no network was closed, not built (#315, "Diagnostic report
+  with no network: save it to a drive").
+- **42. How to, in About, issue #314** ("About: a How to page, a mini manual
+  for the controls"). Decided on the TV 2026-10-10, built.
+- **43. Games on several discs, issue #162** ("Multi-disc games: Change disc
+  in the pause menu, one save per game (Saturn first)"). Decided while
+  building, 2026-10-11, built.
+- **44. Volume keys, issue #351** ("Steam Deck: the volume rocker does
+  nothing, and there's no way to change the volume"). Decided and built
+  2026-10-11. Full volume at start reaching headphones is #391 ("Headphones
+  in at start get full volume").
+- **45. Smart collections, issue #352** ("RomM Smart Collections don't show
+  up (only regular collections do)"). Decided 2026-10-12, built.
+- **46. Where the sound goes, issue #341** ("No audio [Expected on this
+  machine]"). Decided 2026-10-13, built 2026-10-14. Open: #390 ("Headphones
+  don't take over after a Remote Play session (waiting on Sunshine)") and
+  #391.
+- **47. Interface sounds everywhere, and a calmer set, issue #389**
+  ("Interface sounds on every screen and menu, not only some"). Decided at
+  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." A fade
+  on the way down is #393 ("Power off and Restart cut the picture
   abruptly").
-- **48. Same-name games, regions and versions, issue #383.** Decided
-  2026-10-14, built and judged on the TV the same day.
+- **48. Same-name games, regions and versions, issue #383** ("Same-name
+  games: show RomM's tags in the heading"). Decided 2026-10-14, built and
+  judged on the TV the same day.
 
 ---
 
@@ -15856,7 +15868,7 @@ Since 2026-10-03 (#200): what shipped is the console's own bridge,
 cabinetos-wii-bridge (wiibridge/bridge.cpp, started by
 frontend/src/wiiremote.cpp:417). It makes a stand-in for each Remote through
 /dev/uhid with Nintendo's id, which Dolphin's hidapi path and Cemu read;
-Dolphin's IOLinux backend is still not built (wiibridge/README.md).
+Dolphin's IOLinux backend is still not built (frontend/src/coreoptions.cpp:243-244).
 
 - **Copies answer only the Wii's own search** (the Limited Inquiry Access
   Code). Linux's normal Bluetooth search sends the general one, so a copy is

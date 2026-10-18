@@ -92,16 +92,25 @@ session picks up is `docs/NEXT-SESSION.md`.
    since 2026-10-11 Cabinet on Apple platforms is no longer a constraint.
 
 **Later** (was After first release): everything in that milestone on
-GitHub. The items this page once named there are all closed: the
-performance profile (#150), the emulators on the fast CPU cores (#163) and
-PCSX2's per-game fixes (#154) shipped; multi-disc swapping (#162,
-"Multi-disc games: Change disc in the pause menu, one save per game (Saturn
-first)") was built in a milestone of its own; the Dreamcast crash (#151),
-rewind's cost (#168), the other system tuning ideas (#164 to #167),
-controller batteries (#230) and Wii U Remotes in Cemu (#231) were closed by
-MMagTech's decision, most of them to be reopened on a report; the RomM
-5.2/5.3 features (#158 to #161) were declined or superseded. Each issue
-says which.
+GitHub. The items this page once named there are all closed. Shipped:
+#150 ("Use Bazzite's performance profile during a game, balanced on Home"),
+#163 ("Keep the emulators on the fast CPU cores") and #154 ("PS2: ship
+PCSX2's per-game fixes (patches.zip)"). Built in a milestone of its own:
+#162 ("Multi-disc games: Change disc in the pause menu, one save per game
+(Saturn first)"). Closed by MMagTech's decision, most of them to be reopened
+on a report: #151 ("Dreamcast crashed on load after an arcade game with a
+143 MB save state"), #168 ("Rewind: measure the snapshot cost per system,
+and a setting to turn rewind off"), the system tuning ideas #164 ("Explore:
+hold background system jobs while a game runs"), #165 ("Consider turning
+off the kernel's lockup watchdog (nmi_watchdog)"), #166 ("Consider
+real-time priority for gamescope") and #167 ("Check audio latency: what the
+console asks PipeWire for"), #230 ("Controller batteries: the Wii HOME menu
+shows an empty battery, and the console shows none") and #231 ("Wii U: real
+Wii Remotes in Cemu"). Declined or superseded, the RomM 5.2 and 5.3
+features: #158 ("Surprise me: play a random game (RomM 5.2)"), #159
+("Similar games and recommendations from RomM (5.3)"), #160 ("Use RomM's
+title_id and save_target for save matching (5.3)") and #161 ("Ask RomM only
+for BIOS files it still has (5.3)"). Each issue says which.
 
 Done: Settings (#57 to #72, except #63), the emulator block (#82 to #90), the
 in-game features (#76 to #80).

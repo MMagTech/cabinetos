@@ -22,7 +22,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `build_files/` | The image build's scripts: `build.sh` and the scripts it calls (remove the desktop and the storefronts, set up the session, the branding), `install-*.sh` (one per piece the image carries), `require-*.sh` (checks that fail the build) | run once, inside the image build |
 | `system_files/` | Files copied over the image as they are: the session script, systemd units, the root helpers in `usr/libexec/`, polkit rules, udev rules, the diagnostic report, and a few files in `etc/` (the SSH settings, the update signing key) | `/usr` and `/etc` |
 | `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base | GitHub Actions |
-| `.github/` | The workflows, and the issue form for players | GitHub |
+| `.github/` | The workflows, the issue form for players, and the pull request template | GitHub |
 | `tools/` | Test and maintenance tools, run by hand; most are written for the maintainer's machines | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
 | `licences/` | The full licence texts the image ships, and `SOURCES`, where each comes from | `/usr/share/licenses/` |
@@ -331,8 +331,8 @@ Each with where it is recorded.
   (`cabinetos-session`, `romm.h`, `net.h`, `settingsflow.cpp`); the docs no
   longer carry them (2026-10-17). All of these go in the faults step.
 - **A fork's image carries the project's key and image name until the fork
-  edits them:** they are written into four tracked files
-  (CONTRIBUTING.md, "Generate a signing key", lists them). `build.yml`'s
+  edits them:** they are written into tracked files (CONTRIBUTING.md,
+  "Generate a signing key", lists them). `build.yml`'s
   warning for an unsigned image still points to a README section; the
   section is in CONTRIBUTING.md.
 - **Two test stand-ins are not in the repository:** the frame-time tool many
@@ -363,7 +363,8 @@ Each with where it is recorded.
 
 The audit (#398, Part 5 sections 44 and 45) found the docs and the code
 apart in many places. The docs were brought into line in the docs tidy
-(#398's step 3, 2026-10-17): frontend/README.md cut down to the build; the
+(#427, "Docs tidy: every doc true to the code, or marked as history
+(#398)", 2026-10-17): frontend/README.md cut down to the build; the
 2026-09-20 snapshot, the three history files and the old frontend README in
 `docs/history/`; the stale lines fixed where they stand, and in
 docs/PROJECT.md noted under the stale line with a date, since its rule is
