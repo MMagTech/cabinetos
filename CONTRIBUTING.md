@@ -243,9 +243,20 @@ something besides `.md` files and `docs/`):
   `cores/`, and over every shell script in `system_files/` (picked by its
   first line). `just lint` runs the same two commands.
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
-  Wii bridge in the builder, runs `--check-option-tables`, and summarises the
-  compiler's warnings.
+  Wii bridge in the builder, runs `--check-option-tables`, summarises the
+  compiler's warnings, and fails a new one (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
+
+**No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
+after the Warnings step of `build-frontend.yml`, on every pull request it
+runs on): each warning in a file the pull request changes is compared with
+the same file compiled at the base, by file and text, so moved code is not
+new. Only what can put a warning in a touched file is compiled again at the
+base: one touched `.cpp` took 6 seconds, and `app.h`, which 53 files
+include, 38 seconds against 80 for the whole compile in the same run
+(2026-10-18). The run's summary lists each touched file's count at the base
+and now, and every new warning. Report only for its first week, like the
+checks below.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
@@ -288,9 +299,10 @@ runs `checks.yml`, a few seconds each:
   are on the script's list and left out.
 
 **A check's first week is report only.** Until the end of the date in
-`checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC), a check that can fail
-marks what it finds as warnings on the pull request and passes; from the
-next day it fails. A new check that can fail starts the same way, with that
+`checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC; `build-frontend.yml`
+has its own, the same date, for its checks), a check that can fail marks
+what it finds as warnings on the pull request and passes; from the next
+day it fails. A new check that can fail starts the same way, with that
 date set a week ahead in its pull request.
 
 **Not checked by CI:** the frontend's other self-tests, the shell scripts
