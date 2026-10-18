@@ -152,6 +152,13 @@ private:
     void typingFinished(ui::KeyboardResult result, const std::string& value);
     void activate();
     void activateStep();
+    // A ROW PRESS IS REFUSED WHILE THE JOB IT WOULD START IS STILL RUNNING:
+    // a Wi-Fi row during a join, a pad during a pairing or a scan. Job::start
+    // joins the one before it on the frame thread, so a second press froze
+    // the screen for up to 55 s (job.h), and a pad paired during a scan meets
+    // the radio still searching (bluetooth.cpp, bt::pair). Settings' Wi-Fi
+    // refuses a second join the same way.
+    bool rowRefused() const;
     void goBack();
 
     void startWifiScan();
@@ -587,7 +594,8 @@ void Flow::rebuild() {
             buttons_.push_back({Act::Restart, "Start again", !pairBeginJob_.busy(), {}});
             break;
         case firstrun::Step::Controller:
-            buttons_.push_back({Act::Rescan, "Scan again", !btScanJob_.busy(), {}});
+            buttons_.push_back({Act::Rescan, "Scan again",
+                                !btScanJob_.busy() && !btPairJob_.busy(), {}});
             if (hiddenDevices_ > 0)
                 buttons_.push_back({Act::ShowAll,
                                     "Show " + std::to_string(hiddenDevices_) +
@@ -701,6 +709,7 @@ void Flow::startWifiScan() {
 }
 
 void Flow::joinSelected(const std::string& passphrase) {
+    if (joinJob_.busy()) return;
     if (chosenNetwork_ < 0 || chosenNetwork_ >= static_cast<int>(networks_.size())) return;
     const std::string ssid = networks_[static_cast<size_t>(chosenNetwork_)].ssid;
     notice_ = "Joining " + ssid + "…";
@@ -810,7 +819,8 @@ void Flow::pollPairing() {
 }
 
 void Flow::startBtScan() {
-    if (btScanJob_.busy()) return;
+    // Never during a pairing: bluetoothctl does not want two at once.
+    if (btScanJob_.busy() || btPairJob_.busy()) return;
     // The cached answer, and only once it is known. Before the first refresh
     // lands the scan is allowed through: bt::scan() checks the adapter itself
     // and says so properly, which is a better answer than silently doing
@@ -825,6 +835,7 @@ void Flow::startBtScan() {
 }
 
 void Flow::pairSelected() {
+    if (btPairJob_.busy() || btScanJob_.busy()) return;
     if (chosenDevice_ < 0 || chosenDevice_ >= static_cast<int>(devices_.size())) return;
     const bt::Device dev = devices_[static_cast<size_t>(chosenDevice_)];
     notice_ = "Pairing with " + (dev.name.empty() ? dev.address : dev.name) + "…";
@@ -1281,9 +1292,18 @@ void Flow::activate() {
         onFooter_ ? (buttons_.empty() ||
                      !buttons_[static_cast<size_t>(button_)].enabled ||
                      buttons_[static_cast<size_t>(button_)].act == Act::None)
-                  : (rows_.empty() || !rows_[static_cast<size_t>(row_)].enabled);
+                  : (rows_.empty() || !rows_[static_cast<size_t>(row_)].enabled ||
+                     rowRefused());
     sound::play(nothing ? sound::Cue::Edge : sound::Cue::Activate);
     activateStep();
+}
+
+bool Flow::rowRefused() const {
+    switch (machine_.step()) {
+        case firstrun::Step::Network:    return joinJob_.busy();
+        case firstrun::Step::Controller: return btPairJob_.busy() || btScanJob_.busy();
+        default:                         return false;
+    }
 }
 
 void Flow::activateStep() {
@@ -1331,7 +1351,7 @@ void Flow::activateStep() {
 
     if (rows_.empty()) return;
     const Row& r = rows_[static_cast<size_t>(row_)];
-    if (!r.enabled) return;
+    if (!r.enabled || rowRefused()) return;
 
     switch (machine_.step()) {
         case firstrun::Step::Network: {
