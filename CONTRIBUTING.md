@@ -267,6 +267,11 @@ runs `checks.yml`, a few seconds each:
   `docs/history/` or `frontend/third_party/`. A path `.gitignore` covers (a
   build output) is there, and so is a file of Cabinet's own repository on
   the script's list.
+- **PROJECT.md index** (`ci/check-project-index.sh`), report only, never a
+  failure: a numbered question in `docs/PROJECT.md` (`### 32.`) with no line
+  in its index, an index line with no question, or the index's count of
+  questions gone wrong is a warning on the pull request. Add the line under
+  "The open questions, and where each ended".
 
 **A check's first week is report only.** Until the end of the date in
 `checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC), a check that can fail
