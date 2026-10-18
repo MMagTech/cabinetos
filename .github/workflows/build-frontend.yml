@@ -54,6 +54,13 @@ on:
 # No `concurrency:` — see the block in build-core.yml, which explains why, and
 # applies here for the same reason: build.yml calls this workflow too.
 
+# REPORT ONLY FOR A CHECK'S FIRST WEEK, the rule and the date checks.yml has:
+# until the end of this day (UTC) a check here that can fail warns and
+# passes; from the next day it fails. A new check that can fail starts the
+# same way: set this a week ahead in its pull request.
+env:
+  REPORT_ONLY_UNTIL: '2026-10-25'
+
 jobs:
   build:
     name: Compile
@@ -161,7 +168,7 @@ jobs:
       # #398): the touched files' warnings against the same files compiled
       # at the base, by ci/check-new-warnings.sh, which says how and what it
       # costs. Pull requests only, because a push has no base to compare
-      # with. Report only until the date in the script, then a failure.
+      # with. Report only until REPORT_ONLY_UNTIL, then a failure.
       - name: New warnings
         if: github.event_name == 'pull_request'
         run: ci/check-new-warnings.sh /tmp/build.log

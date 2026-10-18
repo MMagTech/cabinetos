@@ -255,10 +255,8 @@ new. Only what can put a warning in a touched file is compiled again at the
 base: one touched `.cpp` took 6 seconds, and `app.h`, which 53 files
 include, 38 seconds against 80 for the whole compile in the same run
 (2026-10-18). The run's summary lists each touched file's count at the base
-and now, and every new warning. **It reports only until 2026-10-25:** until
-that day a new warning is listed and annotated and the job passes; from
-that day (UTC) it fails the job. The date is `FAIL_FROM` at the top of the
-script.
+and now, and every new warning. Report only for its first week, like the
+checks below.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
@@ -301,9 +299,10 @@ runs `checks.yml`, a few seconds each:
   are on the script's list and left out.
 
 **A check's first week is report only.** Until the end of the date in
-`checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC), a check that can fail
-marks what it finds as warnings on the pull request and passes; from the
-next day it fails. A new check that can fail starts the same way, with that
+`checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC; `build-frontend.yml`
+has its own, the same date, for its checks), a check that can fail marks
+what it finds as warnings on the pull request and passes; from the next
+day it fails. A new check that can fail starts the same way, with that
 date set a week ahead in its pull request.
 
 **Not checked by CI:** the frontend's other self-tests, the shell scripts

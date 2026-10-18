@@ -24,9 +24,10 @@
 # code is not a new warning. Two of the same warning in one file where the
 # base had one is one new.
 #
-# REPORT ONLY UNTIL FAIL_FROM. A new warning fails the job from that day
-# (UTC) on; before it, the same report and a warning annotation, and the
-# job passes. CONTRIBUTING.md, "What CI checks", says the same.
+# REPORT ONLY UNTIL A DATE: while today (UTC) is not past REPORT_ONLY_UNTIL
+# (YYYY-MM-DD, set by build-frontend.yml), a new warning is the same report
+# and a warning annotation, and it exits 0; from the next day it fails, the
+# rule checks.yml's checks follow (CONTRIBUTING.md, "What CI checks").
 #
 # Usage: ci/check-new-warnings.sh <the head's build log>
 #
@@ -37,8 +38,6 @@
 
 set -euo pipefail
 export LC_ALL=C
-
-FAIL_FROM=2026-10-25
 
 HEAD_LOG="${1:?usage: ci/check-new-warnings.sh <the head build log>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,8 +57,8 @@ finish() {
     cat "$REPORT"
     cat "$REPORT" >> "$SUMMARY"
     if [[ "$failed" == yes ]]; then
-        if [[ "$(date -u +%F)" < "$FAIL_FROM" ]]; then
-            echo "::warning::$why (report only until $FAIL_FROM)"
+        if [[ -n "${REPORT_ONLY_UNTIL:-}" && ! "$(date -u +%F)" > "${REPORT_ONLY_UNTIL}" ]]; then
+            echo "::warning::$why Report only until ${REPORT_ONLY_UNTIL} (UTC): passing. From the next day this fails."
             exit 0
         fi
         echo "::error::$why"
