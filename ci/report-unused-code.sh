@@ -23,10 +23,11 @@
 # What is listed: functions, and variables that can change (.data, .bss).
 # Constants are not: a constexpr is folded where it is used and never
 # referenced, so it would be listed though it is used. Nor the C++
-# library's templates, vendored rcheevos (counted only), or static functions
-# nobody calls, which the compiler drops before the linker sees them
-# (-Wunused-function names those in the Warnings step). A function used
-# only by another listed one is listed too.
+# library's templates, or vendored rcheevos (counted only). Never seen at
+# all: a static function nobody calls (-Wunused-function names those in the
+# Warnings step) and an inline one nobody calls (a header's, or one written
+# in its class), which the compiler never emits. A function used only by
+# another listed one is listed too.
 #
 # Usage: ci/report-unused-code.sh
 #
