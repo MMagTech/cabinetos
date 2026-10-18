@@ -142,6 +142,11 @@ int firstRunWriteTest() {
             r + "/covers/srv_6005/a.jpg",        r + "/config/user.json",
             r + "/config/accounts.json",         home + "/.config/cabinetos/accounts/1.json",
             home + "/.config/cabinetos/pin",     home + "/.config/cabinetos/romm.json",
+            // What was learned per game, by rom id: the next server's game 1
+            // is another game (FILES-12).
+            r + "/games/1.json",                 r + "/games/1.facts.json",
+            r + "/config/wii-codes.txt",         r + "/config/wiiu-codes.txt",
+            r + "/config/picture-quality.json",  r + "/config/ps2-widescreen.json",
         };
         const std::vector<std::string> kept = {
             r + "/bios/scph5501.bin", r + "/config/settings.json",
@@ -157,7 +162,8 @@ int firstRunWriteTest() {
         bool allGone = true;
         for (const auto& p : gone)
             if (storage::exists(p)) { allGone = false; std::printf("        left: %s\n", p.c_str()); }
-        check(allGone, "games, saves, covers, accounts, tokens and the PIN are gone");
+        check(allGone, "games and what was learned about them, saves, covers, accounts, tokens "
+                       "and the PIN are gone");
         bool allKept = true;
         for (const auto& p : kept) allKept = allKept && storage::exists(p);
         check(allKept, "BIOS and the console's settings stay");
