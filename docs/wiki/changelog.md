@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.18.6 {#v2026-10-18-6}
+
+*18 October 2026*
 
 - **New:** PS1 games get a DualShock. The sticks work in the games made for
   them, and the controller rumbles. Games made for the original pad play as
