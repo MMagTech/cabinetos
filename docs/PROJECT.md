@@ -23,319 +23,293 @@
 > - When you are unsure about something, add it to **Open questions**. Do not
 >   guess and do not quietly resolve an open question without saying so.
 > - When a decision is reversed, record the reversal rather than editing history.
+>
+> **Since 2026-10-17 (#398, "Audit the code and restructure it for
+> contributors (main.cpp is 20,000 lines)"):** this file is the record of what
+> was decided and why; for what the code does today, the code and
+> CONTRIBUTING.md are current. Stale lines below carry a dated note rather
+> than an edit, as the rules above say. Since 2026-10-11 (open question 12b,
+> #344, "GameCube: a save restored from RomM never reaches Dolphin (card.raw vs
+> card.USA.raw)"), Cabinet is a reference, not a constraint: read
+> docs/CABINET.md for how a problem was solved before; Cabinet's own source
+> is not required reading.
 
 ---
 
-## Where the project is — 2026-09-20
+## Index
 
-**Phase 0 complete. Phase 1 complete. Phase 2 mostly done. Phase 3 well under
-way and running. Phase 5 started early, the hardest question in it is answered,
-and as of 2026-09-17 every one of the twenty-one libretro cores is built and can
-be run.**
+Added 2026-10-17 (#398, "Audit the code and restructure it for contributors
+(main.cpp is 20,000 lines)"). GitHub does not render this file (it is
+nearly 1 MB), so search it: a section by its heading (`## Hardware`), a
+question by its number (`### 32.`). **Question numbers never change**: the
+code cites them more than a hundred times.
 
-**AND IT IS INSTALLED ON THE REFERENCE MACHINE, 2026-09-19.** The GEEKOM A9
-Pro boots into the frontend on `gamescope (drm)`, rendering on its own Radeon
-890M with Vulkan present, zero session restarts, and the full 1147-game
-library. See *The A9 Max, measured*. **The UI freeze is lifted**: the machine
-runs at the panel's native 3840x2160, so what is on that television is the real
-thing rather than a scaled image.
+### The sections, in order
 
-**AND VERTICAL ARCADE GAMES PLAY THE RIGHT WAY UP, 2026-09-19.** Half the
-arcade library was on its side until then, because
-`RETRO_ENVIRONMENT_SET_ROTATION` was handled nowhere. See *Vertical arcade
-boards, and the turn they ask for* — it is a renderer change, it carries one
-product decision of MMagTech's, and it contains the one trap that Cabinet had
-already paid for.
+- **Where the project is**: where the current state is kept now.
+- **What CabinetOS is**: the product, the input model, the experience target.
+- **Hardware**: the target, and the reference console (an A9 Max since
+  2026-09-17).
+- **The backend model**: RomM is the single source of truth for the library.
+- **The frontend**: one visual language with the Cabinet apps.
+- **Reference implementations and upstreams**: what to read before
+  inventing anything.
+- **The update model**: one version number for the whole system.
+- **Emulation**: native emulators, how Cabinet does it, core parity.
+- **How Cabinet hosts cores**: read from Cabinet's source; the shape of one
+  C++ frontend with cores as data.
+- **Controls: what CabinetOS inherits, and what it cannot**: players, the
+  in-game shortcuts, and the dated screen decisions filed under it (the
+  launch screen, Home and the top bar, the Dreamcast, PSP and N64 fixes,
+  frame pacing, the emulator settings audit, the emulator queue, PS2's
+  BIOS, time played).
+- **Developer mode**: superseded; kept as history.
+- **Staying current with Bazzite**: the base pinned by digest, and moving
+  the pin.
+- **Measured behaviour**: the first booted image, the A9 Max measured,
+  every platform run once (September 2026).
+- **Branding and the boot experience**: the palette.
+- **The design system**: Cabinet's design, written out.
+- **The frontend toolkit**: why C++20, SDL3 and a UI layer of its own.
+- **Licensing, and the constraint it puts on the project**.
+- **Non goals**.
+- **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
+- **Phase plan**: history; its status lines say so at its top.
+- **Open questions**: the 51 below, plus two unnumbered sections ("Prior
+  art: how Cabinet and Grout already do this", after question 13, and
+  "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
-**AND AS OF 2026-09-19 THEY ARE IN THE IMAGE, along with the frontend.** Until
-that day the image was the OS half only: `cabinetos-session` ran
-`sleep infinity` inside gamescope, so an installed machine booted to a black
-screen, and everything a person would call the console lived on one development
-VM and was compiled there by hand. Installing CabinetOS now installs CabinetOS.
-See Phase 5, *The deploy*.
+### The open questions, and where each ended
 
-**AND A PERSON SAVED A GAME, 2026-09-19.** Somebody played Crazy Taxi 2 with a
-controller, saved inside it, quit through the overlay, and the Dreamcast VMU
-reached RomM — `updated 2026-09-20T02:48:19Z` on the row that already existed,
-overwritten rather than duplicated. **No save in this class had ever been
-written by actually playing a game here**; every round trip before it restored
-a real card, watched the core read it, and sent back byte-identical bytes,
-which is the right answer for a session that saved nothing. See
-`docs/NEXT-SESSION.md` item 3.
+Each status is the question's own words, read from the whole question: a
+status line written when a question was raised is often overtaken further
+down. "Look now at" is where the code or a later decision moved on.
 
-It could not have happened a day earlier, and the reason is the one below about
-the analogue trigger index: the Dreamcast's accelerator and brake are its
-triggers, this console answered that channel with the right stick, and Crazy
-Taxi could not be driven at all.
+- **1. How much of KDE Plasma can actually be removed?** "Unresolved", to be
+  settled in Phase 2, which never came back to it. Plasma stays installed and
+  unreachable; *Measured behaviour* found packages that never run cost
+  nothing, and the toolkit chosen was not Qt. Look now at:
+  `build_files/strip-desktop.sh`.
+- **2. Does removing `steam` also remove the controller udev rules?**
+  "RESOLVED by the first build": "no, controller support is intact". The
+  `steam` package is kept again since 2026-10-03 for the Steam entry
+  (question 37). Look now at: `build_files/strip-steam.sh`.
+- **3. `bazzite` or `bazzite-deck` as the base?** "RESOLVED: stay on plain
+  `bazzite` and write our own session". Still true; since 2026-10-03 the
+  image also carries bazzite-deck's gamescope session, for the Steam entry
+  only. Look now at: `build_files/install-steam-session.sh`, question 37.
+- **4. Bundle libretro cores directly, or build on RetroDECK?** "RESOLVED in
+  Phase 0: bundle directly, as `.so` files". True for the 22 libretro
+  cores; the heavy systems run as separate programs. Look now at:
+  questions 21 and 32.
+- **5. Anaconda ISO vs. a plain disk image for installing to real
+  hardware.** "ANSWERED 2026-10-07: keep the ISO, automated down to one
+  question", and built the same day. What the ISO builder will not change
+  is #284 ("Installer: what the ISO builder will not let us change"), closed
+  as cosmetic. Look now at: `disk_config/iso.toml`.
+- **6. `/opt` mutability.** "Left at Bazzite's default". Nothing needed it:
+  the emulators built into the image live under `/usr/lib/cabinetos/`.
+- **7. OS branding in `/usr/lib/os-release`.** Its status line, "Deferred to
+  Phase 8", is stale: built by #137 ("Name CabinetOS in the system's version
+  info"), the cosmetic fields only, `ID` stays `bazzite`. Look now at:
+  `build_files/brand-os-release.sh`.
+- **8. How do we get a shell before Phase 6 ships developer mode?**
+  "RESOLVED: SSH is on from the start"; the debt was "PAID 2026-10-07
+  (#134)": Developer access, off by default. The row is in About (seven
+  presses on Version), not "Settings, System" as the question says. Look
+  now at: docs/SETTINGS.md, "Developer access".
+- **9. How a person reaches their own files, and how it authenticates.**
+  "ANSWERED 2026-09-19": a visible row, a generated password, SFTP and not a
+  shell. Built as File access, under Storage. Binding it to the home network
+  only was never decided. Look now at: docs/SETTINGS.md, "File access".
+- **10. Waking the machine, and turning the TV on.** "Superseded 2026-09-24
+  (#81): HDMI-CEC is shelved and its row is gone." Its blanking half was
+  built without CEC, under 10b. Look now at: question 31, "HDMI-CEC IS
+  SHELVED".
+- **10b. The console never sleeps, and never blanks the screen.** Pixel
+  shift, dim and blank "BUILT 2026-09-22"; the Power menu and the save
+  before shutdown were built 2026-09-22/23, further down. Still open: the
+  sleep each machine can really do. Look now at: #132 ("Offer the sleep
+  this machine can really do"); docs/SETTINGS.md, "Turn off screen after".
+- **11. NVIDIA hardware.** "Out of scope until there is hardware that needs
+  it"; closed by decision 2026-10-12 in #300 ("An NVIDIA computer: what
+  CabinetOS does on one today, and whether to offer an NVIDIA image"):
+  CabinetOS is for AMD Radeon, and a fork is welcome.
+- **12. In-process cores for the heavy systems, or separate processes?**
+  "RESOLVED ... in-process, all of them" now holds only for PS2 (PCSX2 as a
+  library) and GameCube and Wii (the Dolphin core). Switch, PS3, Xbox, Xbox
+  360 and Wii U run as separate programs. Look now at: question 32.
+- **12b. Every platform audited, and the order the rest get built.** The
+  audit and the order were decided 2026-09-20; every heavy system on it has
+  since been built; Jaguar, ColecoVision and Game & Watch will not be. Look
+  now at: questions 32 to 36; question 22 for the Library filter it waits
+  for (#117, "Library shows only the systems this console can play").
+- **13. Building the same cores for Linux x86-64.** "Repo layout DECIDED.
+  SCOPED IN PHASE 0". Built since: every libretro core pinned and built in
+  CI, file saves synced (2026-09-19), states sent to RomM (2026-09-23). Its
+  "Still open" list is mostly Cabinet's side, no longer a constraint since
+  2026-10-11. Look now at: CONTRIBUTING.md, "The rules";
+  `frontend/src/savetable.cpp`.
+- **Prior art: how Cabinet and Grout already do this** (not a question).
+  A record, "Read 2026-09-13". Its "offline is one signal" is overtaken by
+  question 29, and Download All was never built.
+- **14. User-selectable game storage.** Its status line, "Mostly DECIDED",
+  is stale: built 2026-09-19, revised 2026-09-25 (kept games fill the main
+  drive first) and 2026-10-04 (#236, "Drives: use Linux's own format (ext4)
+  for extra drives, shared with Steam"). Moving games between drives was
+  never built. Look now at: docs/SETTINGS.md, "Storage".
+- **15. A phone companion page for first run.** "NOT ADOPTED YET":
+  deferred, never built and never closed. First run now pairs with RomM by
+  QR code on the console's own screen. Look now at: question 15b.
+- **15b. First run, and the one input that can be guaranteed.** Its status
+  line says "Not built"; further down, "THE FOUR MECHANISMS ARE BUILT" and
+  "AND THE SCREENS ARE BUILT TOO", both 2026-09-20. Its "What is still owed"
+  list is stale. Look now at: `frontend/src/setup.cpp`.
+- **16. Is a mouse supported, or not?** "ANSWERED 2026-09-19: option 2": a
+  mouse "moves focus and clicks the focused thing, and nothing else". The
+  code does that in first run only; elsewhere a click wakes the screen.
+  Look now at: the input-model table in "What CabinetOS is", never amended
+  (it carries a dated note).
+- **17. Wi-Fi credentials on a controller-only console.** "The mechanism is
+  DECIDED"; the polkit rule "SHIPPED 2026-09-20", and Wi-Fi is built in
+  first run and in Settings. The password: "REVERSED 2026-09-24", masked,
+  with the last character shown. Hidden networks are not built. Look now at:
+  docs/SETTINGS.md, "Network".
+- **18. The on-disk layout.** "DECIDED" 2026-09-17, "BUILT 2026-09-18". "REVERSED
+  2026-09-19: releasing the last keep DELETES." Its "What is still not
+  built" list is built now. Look now at: `frontend/src/storage.h`,
+  `locations.h`.
+- **PSP save sync, BUILT AND PROVEN 2026-09-17** (not a question). The
+  first directory save: sent to RomM and back byte-identical. "Still open":
+  under a headless capture the core sometimes never starts. Look now at:
+  `frontend/src/saves.cpp`, `savetable.cpp`.
+- **19. Systems this console has and Cabinet does not.** "Raised and
+  DECIDED by MMagTech, 2026-09-17": CabinetOS may carry systems Cabinet
+  does not. PS3 built 2026-09-28 (#171, "New systems 2: PlayStation 3
+  (RPCS3)"). Its "core parity binds absolutely" was overtaken on
+  2026-10-11 (question 12b). Updates and DLC wait: #181 ("Updates and DLC
+  as separate files in RomM (Switch, PS3, Xbox 360)").
+- **20. Vulkan, and how the host should choose a graphics API.** "BUILT
+  2026-09-20": the core host serves Vulkan; the interface "stays on OpenGL
+  ES". Its quality design of 2026-09-21 was redone and built under question
+  31 (#63, "Settings: picture quality").
+- **21. Emulators that are not cores, and why they cannot be baked into the
+  image.** "DECIDED and BUILT the same day" (2026-09-18): a pinned Flatpak
+  list installed at first boot; "RPCS3 leaves Flathub, 2026-09-28" for the
+  image. What the screen says while they download is "NOT SETTLED". Look now
+  at: `system_files/usr/share/cabinetos/flatpaks.list` (xemu and Eden).
+- **23. One quality setting for the whole console, instead of emulator
+  menus.** Its status line says "Not designed, not built"; it was designed
+  and built under question 31 (#63, "Settings: picture quality"),
+  2026-10-02 and 2026-10-04. The drop rule was closed, not built (#250,
+  "Picture quality phase 3: lower a struggling game's level by itself (the
+  drop rule)"). Look now at: `frontend/src/quality.h`.
+- **22. What the console does when the server is away** (it comes after 23
+  in the file). "Partly decided" 2026-09-19; "Offline play built
+  2026-10-05 (#88)" ("Offline: kept games play with no server"). Switching
+  people offline was allowed later. Two devices' saves wait on #346 ("Move
+  saves to RomM's save channels (Sigil) when they reach a stable RomM
+  release").
+- **24. Will gamescope composite our overlay over a window we do not own?**
+  "ANSWERED THE SAME DAY" (2026-09-21): "YES", in the `STEAM_OVERLAY` slot;
+  "TWO PATHS ARE ACCEPTED". Built for the separate programs 2026-09-28 and
+  for PS2 2026-10-04 (#226, "PS2: show the picture without copying every
+  frame off the graphics chip"). Look now at: `frontend/src/overlaywin.h`.
+- **25. Save states, and whether the modern systems should have them at
+  all.** "DECIDED for PS2 and everything after it": no states where they
+  cannot be trusted to load ("MADE VISIBLE 2026-09-23"). The part left
+  "OPEN for the cartridge era" was answered under question 13 on 2026-09-23:
+  states on every libretro core. Resume was never built. Look now at:
+  `frontend/src/savetable.cpp`.
+- **26. Account switching, and what a console's version of it is.** "DECIDED
+  2026-09-21"; its "Nothing is built yet" is stale: built and measured with
+  two real accounts the same day. Look now at: docs/SETTINGS.md,
+  "Accounts".
+- **27. A one-line change ships half a gigabyte, because the image is one
+  layer.** Opens "NOT DECIDED"; decided further down, 2026-09-23: "NO
+  RECHUNK, AND THE LAYERS IN THE CONTAINERFILE DO THE JOB", the shipping
+  build since #53 ("A small change ships small: 739 kB for a frontend
+  update, not 546 MB").
+- **28. The boot is proportional to the library, and nothing decided
+  that.** Opens "NOT DECIDED"; "ANSWERED 2026-09-22": RomM searches, so boot
+  stops fetching the catalogue. Built. Fetching a game's firmware when it
+  is kept is not built. Look now at: `frontend/src/library.cpp`
+  (`loadLibrary`), `search.cpp`.
+- **29. Offline is not one fact, and the console has three networks to be
+  off.** "NOT DECIDED": it records the facts and the predicate. Partly
+  overtaken: offline play built (question 22, #88) and the update row's
+  own check. Look now at: docs/SETTINGS.md, "System update".
+- **30. The console re-does work it already did, every boot.** Opens "NOT
+  DECIDED"; "BUILT 2026-09-22" further down: the cover cache, the tile map,
+  the sweep and the paged grid. Prefetch on focus and validation by date
+  are not built. Look now at: `frontend/src/covercache.cpp`.
+- **31. The Settings screen, decided in conversation.** A running record,
+  "later entries supersede earlier ones"; the final state is
+  docs/SETTINGS.md. Built, with the picture quality phases 1 and 2 (#63);
+  phase 3 (#250) closed, not built. Look now at: docs/SETTINGS.md.
+- **32. Standalone emulators as games, starting with Switch (Eden).** Opens
+  "Nothing built yet"; "BUILT ON `standalone-emulators`, 2026-09-28", the
+  pause menu "BUILT AND JUDGED" on the TV. Its "ONE RULE FOR EVERY GAME,
+  AND EDEN AS IT SHIPS" is a project rule (CONTRIBUTING.md, "The rules").
+  Look now at: `frontend/src/standalone_eden.cpp`; #181.
+- **33. Xbox (xemu), issue #172** ("New systems 3: Xbox (xemu)"). Decided and
+  built 2026-09-29; its "Not yet judged on the TV" lags its own text (two
+  players and rumble were seen on the TV). Look now at:
+  `frontend/src/standalone_xemu.cpp`.
+- **34. Xbox 360, and whether this machine can play it.** Decided
+  2026-09-29, built 2026-09-30 (#192, "New systems 4: Xbox 360 (Xenia
+  Edge)"). Open upstream: Edge's Sign In box. Look now at:
+  `frontend/src/standalone_xenia.cpp`.
+- **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
+  "Research only; no code"; built 2026-09-30, real Remotes 2026-10-02, Miis
+  and rumble 2026-10-07. Open: #203 ("Wii: the HOME menu's "Wii Menu"
+  leaves a black screen"). Look now at: `wiibridge/` (#200, "Real Wii
+  Remotes: pair once, like a Wii").
+- **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens "No
+  code yet"; built 2026-10-01, judged on the testing image 2026-10-02.
+  Graphic packs: none (#207, "Wii U: Cemu's graphic packs (resolution and
+  fix), reconsider", closed). Games that need a Wii Remote stay greyed
+  (#231, "Wii U: real Wii Remotes in Cemu", closed 2026-10-04). Look now
+  at: `frontend/src/standalone_cemu.cpp`.
+- **37. Steam: one entry that hands over to Big Picture, issue #223.**
+  Decided 2026-10-02 and 2026-10-03, built. Left out on purpose: Proton GE,
+  Steam's own pages, Steam per person.
+- **38. RetroAchievements, issue #74.** Decided 2026-10-05 and 2026-10-06,
+  built. Softcore only.
+- **39. Remote Play (Sunshine), issue #286.** Decided 2026-10-07, built;
+  "never patched" was reversed by #304 ("Stream into Steam: leaving Steam
+  back to Home turns the phone's picture black"): Sunshine is built with
+  one patch. Look now at: `build_files/install-sunshine.sh`.
+- **40. Controller battery on the top bar, issue #293.** Decided 2026-10-08,
+  built.
+- **41. The diagnostic report, issue #195.** Decided 2026-09-30 to
+  2026-10-10, built. A report with no network was closed, not built (#315,
+  "Diagnostic report with no network: save it to a drive").
+- **42. How to, in About, issue #314.** Decided on the TV 2026-10-10, built.
+- **43. Games on several discs, issue #162.** Decided while building,
+  2026-10-11, built.
+- **44. Volume keys, issue #351.** Decided and built 2026-10-11. Full volume
+  at start is #391 ("Headphones in at start get full volume").
+- **45. Smart collections, issue #352.** Decided 2026-10-12, built.
+- **46. Where the sound goes, issue #341.** Decided 2026-10-13, built
+  2026-10-14. Open: #390 ("Headphones don't take over after a Remote Play
+  session (waiting on Sunshine)") and #391.
+- **47. Interface sounds everywhere, and a calmer set, issue #389.** Decided
+  at the TV 2026-10-14, built. "No start-up or shut-down sound, ever." A
+  fade on the way down is #393 ("Power off and Restart cut the picture
+  abruptly").
+- **48. Same-name games, regions and versions, issue #383.** Decided
+  2026-10-14, built and judged on the TV the same day.
 
-### The thing that matters most
+---
 
-**Save states are portable between Cabinet and CabinetOS.** Proved, not
-reasoned about: Gambatte built for Linux x86-64 at the same commit Cabinet's
-macOS build is pinned to, then each platform loading the other's state and
-producing an identical digest — with a same-platform control run to make it a
-result rather than a coincidence. The emulation is bit-identical across
-architectures for twenty-five seconds of video and audio.
+## Where the project is
 
-That is the premise the whole product rests on, and it was the largest unknown.
-See Phase 3's notes and open question 13.
-
-### What runs today
-
-The frontend is a real program on the test VM, booted into by the session
-rather than launched by hand:
-
-- C++20, SDL3, one EGL/GLES 3 context. No toolkit. `frontend/`.
-- The design system's focus treatment, motion, canvas and type ramp, verified
-  identical at 4K, 1080p and 720p.
-- Text (Noto Sans, with CJK fallback), cover art (async, budgeted, evicting),
-  and **frosted glass**.
-- **An on-screen keyboard**, which was the gate on everything downstream.
-- **The library is reachable**, as of 2026-09-16: a Library of every system and
-  every collection, a grid of each one's games, and a launch screen carrying
-  Play and Download. Before it, 1100 playable games had fifty reachable.
-- **A libretro core host** that loads a `.so`, paces it against the wall clock,
-  plays its audio, draws its picture, and saves and restores its state.
-  **Dr. Mario runs.** It also hosts the cores that draw for themselves: it owns
-  the GLES context and hands a hardware-rendered core a framebuffer inside it,
-  so **Mario Kart 64 and Ikaruga run too**, with no pixel ever read back.
-- **An on-disk layout somebody can find their way around**, as of 2026-09-18:
-  `roms/`, `cache/`, `bios/` and a directory per person holding their saves and
-  states. Keeping a game is a decision per person rather than a flag on the
-  game, and releasing the last one deletes the game and gives the space back.
-  Open question 18.
-- **The image carries the console**, as of 2026-09-19: the frontend at
-  `/usr/bin/cabinetos-frontend`, the twenty-one cores at
-  `/usr/lib/cabinetos/cores/` and PPSSPP's system files at
-  `/usr/share/cabinetos/system/`. 273 MB. The image build calls
-  `build-frontend.yml` and `build-core.yml` rather than repeating them, so
-  **every image build now asserts all twenty-one pinned revisions**, and the
-  last thing it does before shipping is ask whether the binary and all
-  twenty-one cores can resolve every library they link against inside the image
-  itself. Phase 5, *The deploy*.
-- **Saves reach the server for every platform this console can play**, as of
-  2026-09-19. The 47 of 81 rows on the reference server that could neither be
-  uploaded nor restored — Dreamcast, Sega CD, both arcade emulators, 3DO, Neo
-  Geo Pocket, DS — now travel, filed under the same rows an Apple TV already
-  reads. Ikaruga says 「データファイルのロードに成功しました」 to a card that
-  came off RomM. See *The save audit*.
-
-### First run has its mechanisms, and no screens — 2026-09-20
-
-**All four of the things open question 15b listed as missing are built**: a
-state machine, a QR renderer, NetworkManager plumbing, and a way to know it is
-the first run at all. None of them draws anything, which is why they could go
-ahead of the look. **The screens still wait, like every other screen.**
-
-The polkit rule open question 17 asked for ships with them, and the reference
-console correctly reports that it is *already configured* and needs no setup —
-which is the rule that matters most, because that machine was set up by hand and
-must never be shown a wizard.
-
-Read open question 15b for the whole of it, including the three faults the QR
-encoder's verification found and the deadlock the state machine's rules check
-found.
-
-### Open against the frontend right now
-
-- **Mupen64Plus save states do not restore the machine exactly**, and it is
-  reproducible to the digit. Found 2026-09-16 the day N64 became runnable; it
-  blocks nothing, because mupen64plus has no shared emulator tag, so its states
-  never travel. What `--state-test` says on Mario Kart 64, twice, with
-  byte-identical digests across two separate processes:
-
-  - The picture is **moving**, so the comparison is meaningful — not the static
-    title screen that once made this test report PASS and prove nothing.
-  - **Restoring is self-consistent**: two restores produce identical video and
-    identical audio.
-  - **Both differ from the uninterrupted run**, from video frame 0 of 300, and
-    the audio differs too — by four bytes of a million, which is one sample.
-
-  Three candidate causes and **none of them is established**: the state may not
-  capture everything; `retro_serialize` may perturb the core, since the run it
-  is compared against is the one taken immediately *after* the save; or the
-  picture may depend on graphics-plugin state that lives outside the state at
-  all — though the audio differing argues against that last one on its own.
-
-  **The instrument is not what is wrong, and that was checked rather than
-  assumed.** The same test on the same build, on mGBA with a moving picture,
-  reports video and audio MATCH and PASS. The failure is this core's.
-
-- **A white line reported under the keyboard's title, not reproduced.** Every
-  row between the title and the field was scanned in the captured framebuffer
-  for a bright horizontal run and there is none; the strongest edge there is the
-  field's own top boundary, which can only darken. So it is either a VNC scaling
-  artefact or something the capture does not see. **Ask before chasing it.**
-- **Horizontal wrapping is in, vertical is not.** Judge it with a pad.
-
-### Decided 2026-09-17: the look waits for the reference machine
-
-**No more UI is designed or tuned until CabinetOS is installed on the mini PC.**
-The user's call, and it follows from what this document already records rather
-than from a new argument: overscan eats more vertical room than a framebuffer
-capture shows, motion on llvmpipe is tuned against the wrong feedback, and the
-reference implementation's hero height needed four attempts on real hardware.
-Building more screens against a software-rendered VM is building against a lie.
-
-**The line is the acceptance test, not the subsystem.** Plenty of work has a
-visible result and is still fair game:
-
-- **If the test is "does this look right" — wait.** Layout, spacing, type sizes,
-  motion, the letterbox glow, the safe area, the navigation bar, the boot
-  splash. A capture cannot answer any of them and a VM cannot either.
-- **If the test is a measurement or a behaviour — go.** Does the save reach
-  RomM. Does the core report the pinned revision. Does the disk refuse the keep.
-  Does the state load. Does the catalog give the right answer. These are decided
-  by numbers and by running things, and the VM answers them as well as any
-  television would.
-
-A screen that already exists is not frozen — fixing something *wrong* is not the
-same as tuning something. The rule is about adding and polishing.
-
-**What this unblocks rather than blocks.** The list that survives it is long,
-and it is the half of the project with the least guesswork in it: core options,
-the last emulator, saves landing on the right triggers, the save class that does
-not sync at all, BIOS detection, the N64 state divergence, storage that eviction
-cannot see, and the two heavy systems. See `docs/NEXT-SESSION.md`, which is
-ordered this way now.
-
-**WHEN IT LIFTS, AND IT IS NOT WHEN THE MACHINE ARRIVES.** The freeze says
-"until CabinetOS is installed on the reference machine", and the thing that
-makes that sentence mean something changed on 2026-09-19: until then,
-installing CabinetOS on it would have produced a black screen, because the
-image contained no frontend. It contains one now. **The condition is the
-console running the frontend on a television, not the box being unboxed and not
-the image being installed.**
-
-**IT IS NOW RUNNING THERE, AND THERE IS STILL ONE THING TO DO FIRST.** The
-console came up on `gamescope (drm)` on its own GPU the same day — but at
-1920x1080 on a 3840x2160 panel, because the session hardcoded the mode. Until
-an image carrying that fix is installed, **anything judged on that screen is
-judged through the television's scaler.** The fix ships in this change; verify
-the console reports `cabinetos-session: output 3840x2160` before forming a
-single opinion about the look.
-
-### What is still unknown, honestly
-
-- **Nothing has been judged on a television.** Motion, the letterbox glow and
-  the safe area are all recorded as needing the reference machine — the A9 Max,
-  which arrived AND WAS INSTALLED on 2026-09-19 and now runs the frontend on
-  its own GPU. A software-rendered VM could never answer any of them; that
-  machine can. They become answerable the moment it runs at the panel's native
-  resolution rather than a scaled 1080p — see *The A9 Max, measured*.
-- ~~**Twenty cores of twenty-one are built**~~ **— all twenty-one are, as of
-  2026-09-17.** PPSSPP was the last, and it runs: Lumines reaches its attract
-  demo in colour with sound, writes its memory-stick save, and quits back to
-  Home. **1147 of 1644 games are playable**, the four extra being PSP. All four
-  backend-sensitive cores are settled: pcsx_rearmed and melonDS take the
-  recompiler and share Cabinet's tag, picodrive matches Cabinet's flags exactly,
-  and Flycast is blocked on Cabinet's own unscripted edits rather than on
-  anything here. PPSSPP's backend is not a build flag at all — see open
-  question 13.
-- ~~**Two of the twenty cannot be RUN here**~~ **— they can, as of 2026-09-16.**
-  Flycast and Mupen64Plus render through a graphics context rather than handing
-  back pixels, and the host now owns one and hands them a framebuffer inside
-  it. Measured, not assumed: **Mario Kart 64 reaches its title screen and
-  Ikaruga reaches its own**, both launched from the real library, both with
-  sound, and Home draws correctly on the way back out. That is Dreamcast, Naomi
-  and N64 — the 43 games that took the count from 1100 to 1143.
-- **Every core builds in CI**, on a GitHub runner from a bare checkout, with the
-  finished `.so` asserted to report the pinned revision as its own version
-  string — see open question 13.
-- ~~**No controller has ever been attached.**~~ **A Switch Pro Controller is
-  paired over Bluetooth and has been played with**, 2026-09-19. It has to be
-  woken by its own Home button — `bluetoothctl connect` fails with
-  `br-connection-create-socket` on a sleeping pad — and there is still no
-  pairing screen, which is open question 15b.
-- **A GAME CAN DRAW NOTHING AND NOBODY KNOWS WHY.** Six FBNeo launches in one
-  session drew only the letterbox glow while the core ran and made sound, and
-  it has not reproduced since. The frame is known to reach the texture intact
-  and to be lost at sampling; two theories were tested and both falsified. See
-  `docs/NEXT-SESSION.md` item 3b, which also has the command that photographs
-  the television with the session running.
-- ~~**Whether a PS3 PKG install costs double the disk**~~ **— it does not, as of
-  2026-09-18.** A PKG installs to the same size it came in at, so the 2x lasts
-  only while both the PKG and the install exist. Measured on a 287 MB title and
-  a 19.8 GB one, and both boot with the PKG deleted. **PS3 games can still not
-  be PLAYED here** — that needs a GPU and Vulkan, and waits for the A9 Max. See
-  open question 19, *The PKG install, MEASURED 2026-09-18*.
-- **A decrypted ISO is a better shape where it is available** — one file, no
-  install, no licence, and `beginLaunch`'s reuse test works on it unchanged.
-  RPCS3 opens such an image itself, given a 20-byte disc header that ordinary
-  ISO builders omit; the fix is on the server rather than in this console.
-  **But it bounds out at six of the thirty titles**, because 24 are PSN PKGs
-  with no disc behind them, so the install route is the majority case and still
-  has to be built. See open question 19, *The better answer: a decrypted ISO*.
-- **Three emulators now come from Flathub at pinned revisions**, installed on
-  first boot rather than baked into the image — RPCS3, xemu and Eden. Baking
-  them in looks like it works and does not: `/var` is unpacked only from the
-  initial image, so the emulator would never move again. **Nothing launches them
-  yet** — that is open question 12. See open question 21.
-
-### The Cabinet-side debts this project has found
-
-1. **Flycast carries unscripted edits** in its working tree, so its pin does not
-   reproduce what ships — for Dreamcast and Naomi. Capture that diff before
-   anything touches the tree.
-2. **PPSSPP's manifest entry says `patches: null` and `build_args: null`, and
-   both are wrong.** `tools/build-ppsspp.sh` applies two source patches — a
-   shader-cache save on context loss, on every platform, and a CPU-engine probe
-   on the Mac — and passes real CMake flags, of which `USING_GLES2` and
-   `MOBILE_DEVICE` change what the binary is. The same shape as Flycast's thin
-   patch inventory, and recoverable in the same way: by reading the builder
-   rather than the manifest. **The manifest is not yet a complete description of
-   how a core is built**, and it is load-bearing for parity.
-3. **Eleven of twenty-three cores ship different revisions to iOS and macOS**,
-   and eleven of the twenty-one tvOS revisions were recorded as unrecoverable.
-   `core-manifest.json` pins each forward, which is right and far cheaper now,
-   in alpha, than once anyone has a save history. **Two of the eleven have since
-   been recovered straight out of the shipping archives** — see open question 13
-   — and the same trick probably works on several more.
-4. **mGBA's Mac archive reports `e31759b24-dirty`**, so that build carries a
-   working-tree modification no script applies, in a core whose manifest entry
-   lists no patches at all. Same shape as Flycast's, found the same way.
-5. ~~**`core-manifest.json` is not pushed to GitHub.**~~ **It is, and has been
-   since `37ca75d`** — `docs/core-manifest.json`, byte-identical to the copy in
-   `~/Downloads` that this project has been reading. Checked 2026-09-17 by
-   cloning Cabinet and diffing the two. Recorded because the opposite was
-   written down here and in the handover, and a debt that is already paid is
-   still a wrong fact about the project.
-6. **`PS2PlayerView.swift`'s header says the screen has no pause menu and no
-   save state. It has both.** The file opens with *"there is no sound, no
-   controller, no pause menu, and no save state or memory card sync — this
-   screen exists to put a picture on the display"*, and forty lines later there
-   is a four-row menu whose Save and Load call `CabinetPS2SaveStateToSlot(1)`
-   and `CabinetPS2LoadStateFromSlot(1)`.
-
-   **Same shape as 4 and as the `savesOverSaveRAM` comment in the handover's
-   list**, and it cost the same thing again on 2026-09-20: a stale comment reads
-   exactly like a current one, and the comment is what got remembered rather
-   than the code. The memory-card half of that sentence IS still true, which is
-   what makes the rest of it convincing.
-
-Running infrastructure:
-
-| | |
-|---|---|
-| Repository | https://github.com/MMagTech/cabinetos |
-| Image | `ghcr.io/mmagtech/cabinetos:latest` — public, unsigned |
-| Test machine | Unraid VM at `192.168.1.250`, 4 GB, VirtIO-GPU, SSH key installed |
-| Reference hardware | **GEEKOM A9 Max** — Ryzen AI 9 HX 370, Radeon 890M — **not yet installed**. Replaced the Beelink SER5 on 2026-09-17; see *Hardware*, where the rule is that everything keyed to "the SER5" now means this machine. |
-
-Everything in the pipeline has run green at least once: image build → GHCR →
-signing (skipped, no key) → qcow2 → VM boot → `bootc upgrade` in place →
-installer ISO. The one untested link is **booting that ISO** and installing to
-real hardware.
-
-Known gaps, none blocking:
-
-- **Unsigned images.** No `SIGNING_SECRET` set. Optional until Phase 7, when an
-  installed machine needs to verify an update before rebooting into it.
-- **SSH is on by default with password auth.** Deliberate for Phases 1–5, and a
-  debt Phase 6 must pay — see open question 8.
-- **The ISO has never been booted.**
-- **HDMI-CEC is specified and protected but unverified.** Nobody on the project
-  has an adapter.
+The snapshot of 2026-09-20 that stood here moved, as it was, to
+docs/history/state-2026-09-20.md on 2026-10-17. Where the project is now:
+docs/ROADMAP.md (the milestones and what was decided against),
+docs/NEXT-SESSION.md (what is being worked on) and docs/wiki/changelog.md
+(what each version changed, for players).
 
 ---
 
@@ -424,6 +398,11 @@ The distinction that matters:
 | **Supported** | Keyboard and mouse. A convenience, never a dependency. |
 | **Never** | A flow that *only* works with a keyboard or mouse. |
 
+Since 2026-09-19 (open question 16): a mouse moves focus and clicks the focused
+thing, and nothing else. The code does that in first run only
+(setup.cpp:1637-1677); on every other screen a click only wakes the screen
+(input.cpp:59-67). A keyboard works on every screen (input.cpp:144).
+
 Concretely: the on-screen keyboard is the baseline for all text entry and is
 always reachable. A physical keyboard types into the same field when present.
 Neither implementation may be the only one.
@@ -507,6 +486,10 @@ What follows from that:
   that needs it. See open question 11.
 
 ### HDMI-CEC is a hard requirement
+
+Since 2026-09-24 (open question 31, "HDMI-CEC IS SHELVED"): shelved, and its
+Settings row is gone; build_files/require-cec.sh still keeps the CEC packages
+in the image.
 
 **The console must be able to turn the television on, and be woken by it.** That
 is not a nicety. It is a large part of what separates a console from a computer
@@ -1643,6 +1626,10 @@ simple and take the complexity away alot of emulators add."* Decided:
   Series X|S pad ("No agent available for request type 2"). Pairing now
   registers a default agent for its length (`bluetooth.cpp`, PairAgent), and
   a dropped LE link gets the one retry a dropped classic link already had.
+
+  Since the restructure (#398, "Audit the code and restructure it for
+  contributors (main.cpp is 20,000 lines)", 2026-10-17): PairAgent is in
+  btagent.h:40, and bluetooth.cpp:321 uses it.
 - **The in-game shortcuts (#76 to #80) are NOT drift, in this shape**
   (MMagTech's argument, accepted: off by default, unknown to anyone who
   never turns them on): one Settings row, In-game shortcuts Off/On, **fixed
@@ -1819,6 +1806,9 @@ and Home is the button the list most often gets wrong.
 
 Built for Continue from (#80) and reworked with MMagTech on the A9, one change
 at a time. What it is now (`screens.cpp`, `DetailScreen`):
+
+Since the restructure (#398, 2026-10-17): `DetailScreen` is in
+detailscreen.h:59 and detailscreen.cpp; screens.cpp is gone.
 
 - **One column on the left, the cover on the right**, the pair centred across
   the screen. Title; two lines under it; Play and Download; Continue from.
@@ -2016,7 +2006,7 @@ with the every-core brake (every system that played still played); the
 speaker gate itself was swept on six (N64, Dreamcast, GameCube, SNES,
 Genesis, Neo Geo Pocket Color) plus PSP. The full sweep of the final build
 was stopped part way, on purpose, to move on: **run it before relying on a
-system nobody has played since** (`~/fb/sweep.sh` on the A9).
+system nobody has played since** (`sweep.sh`, in a scratch folder on the A9).
 
 **Not done then:** RetroArch's dynamic rate control; built 2026-10-05
 with the lock to the screen (#221, the section after this one). Quality
@@ -2198,6 +2188,9 @@ unanswered. RetroArch answers them exactly as this console does. FBNeo
 declares 16 and asks 16. Nothing to fix; `core.cpp` says so. **With DS
 parked, #89 is done.**
 
+Since the restructure (#398, 2026-10-17): that comment is in
+core_options.cpp:228-234.
+
 **A launch that fails says one plain sentence (#146, #90).** "Couldn't start
 this game", "Couldn't download this game", "Couldn't open this game's
 file"; the technical reason goes to the log. **The BIOS warning was cut
@@ -2374,6 +2367,11 @@ seat are confirmed; the ACL actually appearing on a real pad is not.
 > **SUPERSEDED 2026-09-19 (#81):** there is no hidden developer mode. Settings
 > has an ordinary, visible File access row that gives SFTP, not a shell (open
 > question 9; issue #69). Kept below as the history of how it was first planned.
+
+Since 2026-10-07 (#134, "A shipping image without the development shell"):
+there is one again. Developer access, the last row of About, appears after
+seven presses on Version and gives SSH on port 2222 (settingsflow.cpp:460-472;
+access.cpp:229-246).
 
 CabinetOS has no terminal, no file browser and no package manager. That makes it
 a console, and it also makes it very hard to work on — and hard for anyone else
@@ -2670,7 +2668,7 @@ cabinetos-session: gamescope (drm) is up
 | Session restarts | **0** |
 | Renderer | **radeonsi / strix1 / ACO**, not llvmpipe |
 | Vulkan | **AMD Radeon 890M Graphics (RADV STRIX1)** — open question 20's prerequisite, present |
-| Address | `cabinet@192.168.1.212`, key installed; sudo password `cabinet`, the same throwaway as the VM |
+| Address | `cabinet@<console address>`, key installed; a throwaway sudo password, the same as the VM's |
 
 **What this unblocks.** Vulkan existing on this machine is what open question
 20 was waiting for, and it serves three systems at once — RPCS3, parallel-RDP
@@ -3904,6 +3902,10 @@ cabinetos-frontend  (C++20, SDL3, EGL/GLES3)
   └── pcsx2.so           — PCSX2 + CabinetPS2Host, likewise
 ```
 
+Today: the RomM client is HTTP only, through libcurl (romm_http.cpp), with no
+WebSocket code. Dolphin is its libretro core, one of 22 (cores/build-core.sh),
+and PCSX2 is `cabinetos-ps2.so` in the same folder (install-frontend.sh:132).
+
 Three consequences, all good:
 
 - **The symbol-prefixing apparatus disappears.** `RTLD_LOCAL` gives namespace
@@ -3996,6 +3998,9 @@ and it is stricter: GPL restricts the terms you distribute under, these restrict
 whether you may sell at all. Between them they cover Arcade, SNES, Genesis, Sega
 CD, Master System, Game Gear, 32X and 3DO.
 
+Since 2026-09-21 (Dolphin built by CI, the 22nd core): 22 cores, and the same
+six are the non-commercial ones (docs/LICENCES.md:24; install-frontend.sh:111).
+
 > **CabinetOS is free, is not sold, and takes no donations. That is what keeps
 > those cores legitimate, and it is a deliberate constraint rather than an
 > oversight.** Cabinet states the same thing about itself, and **the risk is
@@ -4022,6 +4027,13 @@ patches are visible in that script rather than vendored.
 console itself (Settings → About, per *Branding*), and a verification pass over
 each licence line against the source it came from, since those were carried
 across from Cabinet's list rather than checked here.
+
+Since 2026-09-25: About has "Credits and licenses", each project with its
+licence (credits.h:12; about.cpp:69-80); the full texts are in the image under
+/usr/share/licenses/, not on the television (credits.h:5-7; build.sh:113-117).
+Since 2026-10-10 (#120, "Licences: check every line against its source, and
+ship the full texts"): every licence line is checked against its source
+(licences/SOURCES:1-3).
 
 ---
 
@@ -4052,6 +4064,9 @@ across from Cabinet's list rather than checked here.
 
 The one sanctioned exception is **developer mode**, above: hidden, opt-in, and
 invisible to anyone who has not deliberately turned it on.
+
+Since 2026-10-07 (#134): it is called Developer access, a hidden row in About
+(seven presses on Version; settingsflow.cpp:460-472).
 
 ---
 
@@ -6610,12 +6625,20 @@ know how emulators are packaged.
 ### 7. OS branding in `/usr/lib/os-release`
 **Raised: Phase 1. Deferred to Phase 8.**
 
+Since 2026-10-04 (#137, "Name CabinetOS in the system's version info"): built.
+build_files/brand-os-release.sh changes the cosmetic fields only (NAME,
+PRETTY_NAME, VERSION, the boot menu's name, the default hostname) and keeps ID
+and every other identifier Bazzite's (brand-os-release.sh:7-12, 53).
+
 Changing `NAME` and `PRETTY_NAME` is cosmetic and safe. Changing `ID` is not —
 `dnf` and the repo definitions resolve `$releasever` and repo paths from it.
 Phase 8 owns branding; when it happens, change the cosmetic fields only.
 
 ### 8. How do we get a shell before Phase 6 ships developer mode?
 **Raised: Phase 1. RESOLVED: SSH is on from the start.**
+
+Since 2026-10-07 (#134): nothing listens at boot; SSH is Developer access, a
+switch that starts off ("PAID 2026-10-07", below; build.sh:421-430).
 
 **Decision:** `openssh-server` is installed and `sshd` is enabled from Phase 1
 onward. Developer mode (Phase 6) is about *closing* SSH by default and gating it
@@ -6654,6 +6677,11 @@ full command line, with File access's password or a key. docs/SETTINGS.md,
 System. **What forced it now:** a console installed fresh from the new
 installer (open question 5) had no key, so the reference console, once
 reinstalled, could not have been reached at all.
+
+Since 2026-10-07 (#287, "Developer access: the command line behind a switch,
+off by default"): the row is in About, not System, hidden until Version is
+pressed seven times, and last in About since 2026-10-10
+(settingsflow.cpp:460-472; access.cpp:229-246).
 
 ### 9. How a person reaches their own files, and how it authenticates
 **Raised: Phase 1 as "how is developer mode revealed". ANSWERED 2026-09-19 by
@@ -7155,6 +7183,9 @@ press, `display awake: gamescope took it`. The test flags stay:
   leftover, and on the console it just gets the session restarted under
   whoever is watching. That line is what this replaces. The top-bar icon above
   is the discoverable companion to it, not a substitute.
+
+  Since 2026-09-23 (the Power menu, next): Start opens the Power menu instead
+  (input.cpp:459-476).
 - **THE POWER MENU IS BUILT — 2026-09-22/23, and tested on the A9 by
   MMagTech.** `frontend/src/power.{h,cpp}`, over sd-bus (libsystemd; the
   builder already carried systemd-devel and the image carries the runtime).
@@ -7232,6 +7263,11 @@ workflow over both variants — not to restructure anything.
 ### 12. In-process cores for the heavy systems, or separate processes?
 **Raised: Phase 1. RESOLVED by reading the Cabinet repository: in-process, all of them.**
 
+Since 2026-09-28 (#169, "New systems 0: run a standalone emulator as a game
+(the shared foundation)"): not all of them. The libretro cores and PCSX2 run
+in-process; five emulators run as separate programs, Eden, xemu, RPCS3, Xenia
+and Cemu (catalog.cpp:95-104). See questions 21 and 32.
+
 I had assumed the heavy systems would need standalone PCSX2 and Dolphin in their
 own processes, because their libretro cores lag the standalone emulators badly.
 
@@ -7249,6 +7285,9 @@ rather than using their libretro cores. Full emulator quality, still in-process.
   it to the RomM sync layer the same way each time.
 - **No process launching at all**, which removes an entire category of "returned
   to a desktop for half a second" bugs from Phase 5.
+
+  Since 2026-09-28 (#169): five emulators are started as separate programs
+  (catalog.cpp:95-104; question 32).
 
 **And the work is easier here than it was on macOS.** Dolphin and PCSX2 both
 target Linux x86-64 as a first-class platform. The Mac build needed patch
@@ -7278,7 +7317,7 @@ rather than anywhere useful. Upstream PCSX2 defaults `POSITION_INDEPENDENT_CODE`
 to ON, the build passes it explicitly rather than relying on that, and the whole
 emulator does link into a 28 MB `.so`. It does not yet `dlopen`, and the reason
 is the right one: the host layer that would resolve its 57 remaining symbols has
-not been written. See `docs/PCSX2-HOST-SURFACE.md`.
+not been written. See `docs/history/PCSX2-HOST-SURFACE.md`.
 
 **Upstream also answers the harder half of this entry for free**, which the
 original reasoning did not anticipate: `pcsx2-gsrunner` is a complete, in-tree,
@@ -7456,7 +7495,7 @@ libretro alternative is a decision somebody made after trying. **Read
 #### MEASURED 2026-09-21: UPSTREAM BUILDS AS A LIBRARY ON LINUX, WITH NO PATCHES
 
 **The first question this route had was answerable in one build, and the answer
-is the good one.** `docs/PCSX2-HOST-SURFACE.md` has the whole of it and
+is the good one.** `docs/history/PCSX2-HOST-SURFACE.md` has the whole of it and
 `cores/build-pcsx2.sh` reproduces it in 43 seconds from a clean clone.
 
 **A BELIEF THIS DOCUMENT AND THE HANDOVER BOTH CARRIED IS WRONG, and it is
@@ -7962,7 +8001,7 @@ once it lands; do not keep a copy here, it would drift.
 
 > **It landed, and this document did not notice for four days.** It is
 > `docs/core-manifest.json` in Cabinet, pushed in `37ca75d`, and a fresh clone
-> diffs byte-identical against the `~/Downloads` copy this project has been
+> diffs byte-identical against the copy on MMagTech's Mac this project has been
 > reading. Found 2026-09-17 while cloning Cabinet for PPSSPP's build flags.
 > **So it is fetchable, and `catalog.cpp`'s table is a candidate for generation
 > after all** — that table's own comment says it is hand-written "because the
@@ -8416,6 +8455,9 @@ disk". They are not: both render through `RETRO_ENVIRONMENT_SET_HW_RENDER`,
 which `core.cpp` refuses. That is the hero-offering-an-arcade-game bug again,
 one layer further in.
 
+Since the restructure (#398, 2026-10-17): `SET_HW_RENDER` is answered in
+core_hwrender.cpp:275, and since 2026-09-16 it is accepted (below).
+
 So `Support` now carries **`NeedsHardwareRender`** beside `NoCore`, `Excluded`
 and `NotInstalled`. Four answers, and they lead to four different pieces of
 work — which is the whole reason this document warned against collapsing them.
@@ -8707,7 +8749,7 @@ question of who moves is answered — CabinetOS targets **zip** and does not nee
 to write `rtfd`.
 
 **Recorded as reported, not as verified.** The Cabinet source is not on this Mac
-(checked: `~/Documents/Cabinet` is the ROM and BIOS folder, and the only git
+(checked: its Cabinet folder is the ROM and BIOS folder, and the only git
 repo here with a Cabinet remote is this one), and the change is not on GitHub
 yet, so nothing here has seen it.
 
@@ -8954,6 +8996,11 @@ rather than against files this session made up.
 table, and the two halves hang off the same triggers PSP's directory save
 taught: restore BEFORE `retro_load_game`, capture AFTER `retro_unload_game`,
 compare against a baseline taken at launch and send only what moved.
+
+Since the restructure (#398, 2026-10-17): the restore and the capture are in
+saves.cpp (`restoreFileSaves` at :308, `syncFileSaves` at :446) and the table
+is `catalog::saveFiles` in savetable.cpp:334; filesave.cpp keeps the checks on
+a file's contents.
 
 ##### What each platform actually does, measured on the test VM
 
@@ -10440,7 +10487,7 @@ scan"*: they mean different things and only one of them means try again.
 **Measured afterwards, with both Ethernet devices reporting `unavailable`:**
 joined in about thirty seconds including typing the password,
 `MMagTech.nmconnection` written root-owned 0600, autoconnect on, running on
-`192.168.1.109/24` over the radio.
+`<console address>/24` over the radio.
 
 ##### Three faults only walking it could find — 2026-09-20
 
@@ -10629,6 +10676,10 @@ input-model table to say exactly that, rather than the bare word "supported".
 
 ### 17. Wi-Fi credentials on a controller-only console
 **Raised 2026-09-13. The mechanism is DECIDED; the UI is Phase 6.**
+
+Since 2026-09-24 (#59, "Settings: Wi-Fi page"): the UI is built, in first run's
+network step (since 2026-09-20, setup.cpp) and in Settings, Network, Wi-Fi
+(settingsflow.cpp:185; wifi.cpp).
 
 The hard case in first-run setup, and the one the companion page (open question
 15) cannot solve: a page served by the console is unreachable from a phone when
@@ -10973,6 +11024,10 @@ one releases, it must remain kept for the other. Today `cache::keep`,
 `unkeep` and `isKept` are a boolean per rom id with no notion of who — **that is
 the one piece of existing code this answer changes.**
 
+Since 2026-09-18 ("BUILT 2026-09-18", below): kept is a set of people.
+`cache::keep` and `cache::unkeep` take the person, and `cache::isKeptBy` and
+`cache::isKeptByAnyone` answer (cache.cpp:397-410, 471, 502).
+
 **2. Releasing the last keep DEMOTES rather than deletes.** The game becomes an
 ordinary cached file: still playable, now evictable, and re-keeping costs
 nothing because the bytes never moved. That makes un-keep a safe button rather
@@ -11204,7 +11259,7 @@ directory the core was handed.
   holds. Its own session.
 - **`/var/lib/cabinetos` is not yet where this runs.** The root resolves to
   `/var/lib/cabinetos` when it can be created and written and to the working
-  directory otherwise, which on the VM is `~/frontend`. The image will need that
+  directory otherwise, which on the VM is a scratch folder. The image will need that
   directory to exist and be owned by the console user; today it does not exist
   at all.
 
@@ -11222,6 +11277,9 @@ captures, and the launch path restores. **The archive is rooted at the SAVEDATA
 level** — entries begin `ULUS10002LUMINES/PARAM.SFO` — so opening one shows the
 game's save folder, which is what every PSP save download on the internet looks
 like.
+
+Since the restructure (#398, 2026-10-17): `syncDirSave` is in saves.cpp:150,
+and the restore, `restoreDirSave`, is in the same file (saves.cpp:63).
 
 **Measured, not argued:**
 
@@ -11886,6 +11944,9 @@ the tables above.** The numbers live in `vkhost.cpp`'s `createShared` as well
 as here, because that is where somebody will be standing when they have the
 idea.
 
+Since the restructure (#398, 2026-10-17): `createShared` and its numbers are in
+vkbridge.cpp:201.
+
 #### The old recommendation, which held up
 
 
@@ -12214,7 +12275,7 @@ anyway. That conflates two different networks:
 | Flathub, and therefore PS3, Xbox, Switch | **the internet** | **never works, ever** |
 
 RomM is a server on the person's own LAN — this project's is at
-`192.168.1.10`. A console on an isolated network has a full library, 1147
+`<server address>`. A console on an isolated network has a full library, 1147
 playable games and twenty-one working emulators, and **three systems that will
 never arrive no matter how long the timer runs.** That is not a delayed
 condition that resolves itself; it is permanent, and under the silent design
@@ -12374,7 +12435,7 @@ from somebody running one.
 That also sets the acceptance test, and it is not a screenshot: **a person
 plays each of the seven systems and nobody reaches for a menu.**
 
-#### THE AUDIT IS DONE — `docs/CORE-OPTIONS-AUDIT.md`
+#### THE AUDIT IS DONE — `docs/history/CORE-OPTIONS-AUDIT.md`
 
 All 23 cores, 825 options, read out of the loaded `.so` rather than out of
 upstream documentation. **Eight systems have a resolution worth raising and
@@ -12440,7 +12501,7 @@ onto the image, and worth reading because the whole sequence is in one journal
 and every step of it is quiet:
 
 ```
-[romm] nothing answered at 192.168.1.10:6005 over http or https
+[romm] nothing answered at <server address> over http or https
 [gamescope] launch: Primary child shut down!
 cabinetos-session: gamescope (drm) died on startup
 cabinetos-session: WARNING — no Vulkan-capable GPU. Falling back to cage.
@@ -12594,6 +12655,10 @@ test, and a save that loads wrongly is worse than none. Considered and
 rejected: a best-effort fallback to another app's newest save, which would
 promise something unsupported. The README says plainly that such progress
 does not carry over and is left untouched on the server.
+
+Since the restructure (#398, 2026-10-17): each fetch filters in its own file,
+states.cpp:248 for states and saves.cpp:83, 378 and 564 for saves; the tags
+come from `catalog::emulatorTag` (savetable.cpp:23).
 
 #### Saves offline: the disk always wins first
 
@@ -13359,6 +13424,9 @@ these just seem like small updates to an OS, not upgrades. Windows and Linux do
 small updates all the time seamlessly. Why do these need the whole CI workflow
 and a long build?" NOT DECIDED — this records the measurement and the cause.**
 
+Since 2026-09-23: decided further down ("DECIDED 2026-09-23: NO RECHUNK"). The
+image is built in layers and not rechunked (build.yml:321; Containerfile:84).
+
 #### Three things were tangled in that question, and only one is a fault
 
 **THE DELIVERY IS ALREADY INCREMENTAL AND THAT PART WORKS.** From a real
@@ -13601,6 +13669,10 @@ time and slowing things down. My library is small compared to what other
 people have." NOT DECIDED — this records the measurement and the shape of the
 answer.**
 
+Since 2026-09-22: answered further down ("THE SERVER CAN SEARCH") and built the
+same day. Boot no longer loads the catalogue (library.cpp:196-212), and Search
+asks RomM with `search_term` (search.cpp:65).
+
 #### What happens today
 
 **Every boot fetches the entire catalogue from RomM.** Nothing about it is kept
@@ -13725,6 +13797,9 @@ of it stands: docked keyboard, live results, one request per keystroke, so
 moving to the server needs a debounce and in-flight cancellation that the
 substring filter never did. **The comment is a recorded decision and gets
 rewritten in the change that moves search, not before.**
+
+Since 2026-09-22: rewritten when search moved to the server. Since the
+restructure (#398, 2026-10-17): it is in frontend/src/searchscreen.h:17-35.
 
 #### THE ONE CASE THAT REALLY CHANGES, AND IT IS A REGRESSION WORTH TAKING
 
@@ -13887,6 +13962,10 @@ intent of the fast boot." Five tiers were proposed. THREE ARE WORTH BUILDING,
 ONE NEEDS RESHAPING, ONE IS ANSWERED BY SOMETHING BETTER. NOT DECIDED — this
 records the verdicts and the measurements behind them.**
 
+Since 2026-09-22 ("BUILT 2026-09-22", further down): the disk cache and its
+checks are built. Covers and the tile map are kept on disk, checked against the
+platform list, swept and evicted (covercache.cpp:178, 274; covercache.h:129).
+
 The instinct is the same one that produced question 28: the console does work
 it has already done. 28 removed it from boot. This is about not doing it twice.
 
@@ -13973,6 +14052,8 @@ only re-download unchanged 1994 box art on a timer.
 
 *(That path also contains a space, which is the exact bug `romm.cpp`'s
 `encodeUrl` was written for. A probe written during this discussion hit it.)*
+
+Since the restructure (#398, 2026-10-17): `encodeUrl` is in romm_http.cpp:48.
 
 **TWO TRAPS, AND THEY MATTER MORE THAN THE TTL QUESTION:**
 
@@ -14090,8 +14171,8 @@ for it deliberately, once, rather than carrying it on every call.
 already the one place every cover comes through.
 
 ```
-covers/192.168.1.10_6005/22/705/small.2026-08-20 10_45_28.img
-       └ server          └pid └rid └size └ the art's own ?ts=
+covers/<host>_<port>/22/705/small.2026-08-20 10_45_28.img
+       └ server      └pid └rid └size └ the art's own ?ts=
 ```
 
 **Organised rather than hashed, deliberately**: a flat directory of hashes
@@ -14184,7 +14265,7 @@ enough, together. The VM, not the A9: it is a network measurement and needs no
 panel.
 
 ### 31. The Settings screen, decided in conversation
-**Raised 2026-09-24 from `docs/SETTINGS-INVENTORY.md`. A running record: each
+**Raised 2026-09-24 from `docs/history/SETTINGS-INVENTORY.md`. A running record: each
 point is added as it is settled, in the order the conversation reached it, so
 later entries supersede earlier ones. THE FINAL STATE, ORGANISED BY SCREEN, IS
 `docs/SETTINGS.md`: read that first.**
@@ -14296,6 +14377,9 @@ categories: Accounts, Controllers, Network, Display and Sound, Storage, System,
 About. `frontend/src/settings.{h,cpp}`; the rows are built in `main.cpp`
 (`buildSettings`).
 
+Since the restructure (#398, 2026-10-17): the rows are built in
+settingsflow.cpp (`App::buildSettings`, settingsflow.cpp:47).
+
 - **Background: the plain purple gradient, no game art**, the same rule the
   add-account screen already follows because MMagTech preferred it for a text
   screen (2026-09-22).
@@ -14378,6 +14462,9 @@ out first, then the purple, then the text. Heading to Settings from a screen
 with art behind it: out (180 ms), background to plain (250 ms, nothing on
 screen), Settings in (320 ms). About three quarters of a second in all; the
 other switches keep two steps. `tabPhase` in `main.cpp`.
+
+Since 2026-09-24 (the entry below): `tabPhase` is gone, removed with the three
+steps.
 
 **SUPERSEDES THE TWO ENTRIES ABOVE: the background arrives WITH the new
 screen, as one.** MMagTech, 2026-09-24: *"setting still fade in but its done as
@@ -14522,6 +14609,10 @@ cache and unsent saves when pairing to a different server?
   Only when no PIN exists, and only once. MMagTech first suggested enforcing
   it in first run or warning there; this was his pick after the moment was
   explained.
+
+  Since 2026-09-24 (docs/SETTINGS.md, Accounts, "Dropped: offering a PIN when
+  the second account is added"): built, tried and removed the same day; the
+  owner sets a PIN from Settings when they want one.
 
 **SERVER: DECIDED 2026-09-24, replacing the proposal above.**
 
@@ -14683,6 +14774,9 @@ off. So the copy was never the only limit at 5x: the Radeon 890M cannot draw
 this race at 5x. Filtering costs next to nothing and stays 16x. MMagTech
 agreed 4x with 16x for Quality; Balanced stays 3x, Performance 1x.
 
+Today: frames.py is not in the repository; it lives only on the reference
+console.
+
 **Vsync is ON in PCSX2 when it has a window**, with mailbox presentation off.
 gamescope never tears, so with vsync off PCSX2's pictures go into a
 one-picture mailbox and the newer one replaces the older: at 59.94 against
@@ -14748,6 +14842,9 @@ defaults. Today none of that is noticed: an override key a core does not
 declare is ignored silently (core.cpp:239-241), and a value outside its list
 is passed through unchecked. Every emulator is pinned, so a setting can only
 change when a commit moves a pin; the check runs there.
+
+Since the restructure (#398, 2026-10-17): those lines are
+core_options.cpp:145-147.
 
 1. **A workflow check on any commit that moves a pin.** The built core is
    loaded, its declared options (name, default, accepted values) compared
@@ -14876,6 +14973,9 @@ need the image.
   Eden 59.8 fps and Cemu 30.0 fps at their right speed with vsync off; xemu
   kept on, because with it off it presented 631 frames a second.
   `--adaptive-sync` on the drm rung of the session.
+
+  Today: frames.py is not in the repository; it lives only on the reference
+  console.
 - **#217:** patches.zip packed in build-pcsx2.sh from pcsx2_patches at a
   pinned commit (4,710 games), widescreen and no-interlacing on; off-screen,
   Burnout 3 enabled "Widescreen 16:9" and set 16:9.
@@ -14938,6 +15038,9 @@ its right speed, nothing seen or heard wrong:
 | Hyrule Warriors (Wii U) | (none) | 30.0, its own rate, as before | |
 | Forza Horizon 2 (Xbox 360) | Quality, 3x | **7.5** | 99% at ~2.7 GHz |
 | Forza Horizon 2 | Balanced, 1x | 30.0, steady | 48% at ~1.8 GHz |
+
+Today: frames.py is not in the repository; it lives only on the reference
+console.
 
 **So vsync was cleared, and two Quality values were never measured and are
 too heavy for the A9:** PS3 300% and Xbox 360 3x, both written in phase 1
@@ -15004,6 +15107,10 @@ MMagTech asked, and the answer is worth keeping in one place:
   licensing; all are GPL. **RPCS3 is the exception since 2026-09-28**: the RPCS3
   team's official build, unpacked into `/usr` and pinned by checksum, because
   its Flatpak shows a warning box on every start (21, *RPCS3 leaves Flathub*).
+
+  Since 2026-10-01 (#208, "Wii U: play Wii U games in Cemu"; question 36): Cemu
+  is built from source into the image, at /usr/lib/cabinetos/cemu, not taken
+  from Flathub (Containerfile:114-117; install-cemu.sh:23).
 - **A legal point, not recorded before:** taking Eden from Flathub means this
   project never distributes a Switch emulator itself. Nintendo sent takedowns
   against Eden in February and July 2026. Batocera goes further and ships no
@@ -15301,6 +15408,9 @@ drive would cap at about 3 GB but put every game's saves in one file.
   the blank drive, and writes `xemu.toml` whole before every start (welcome,
   menu bar and toasts off, fullscreen, Vulkan on the GPU `gpu.cpp` chose,
   ports bound to the virtual controllers by SDL GUID, no auto-binding).
+
+  Since the restructure (#398, 2026-10-17): the row is still in standalone.cpp
+  (:73), and `prepareXemu` is in standalone_xemu.cpp:132.
 - `xboxhdd.cpp`: the console's own qcow2 and FATX code, reading and writing
   E:\UDATA and E:\TDATA. Not mborgerson/fatx, which is GPL; linking it into
   this MIT console is a decision nobody has made. qemu-img check of a drive it
@@ -15428,7 +15538,7 @@ named `.iso`; Renegade Ops, Charlie Murder and The Dishwasher: Vampire Smile,
 
 #### Measured on the A9, 2026-09-29, MMagTech at the TV
 
-Edge `a7c39fa` by hand (`~/x360/t360.sh`, the console's settings, the
+Edge `a7c39fa` by hand (a scratch script on the A9, the console's settings, the
 console frozen underneath), his real pads read directly.
 
 | Test | Result |
@@ -15485,6 +15595,9 @@ files. Left 4 Dead 2 was replaced on RomM with its plain ISO.
   place in the list, `--vulkan_device`). Only the virtual controllers, bound
   to slots by SDL GUID (`--slot_bindings_passthrough`). Closed by its window.
   A failed load or a fatal error mid-game is an `x>` line in its log.
+
+  Since the restructure (#398, 2026-10-17): the row is still in standalone.cpp
+  (:91), and Xenia's setup is in standalone_xenia.cpp (`prepareXenia`, :44).
 - A note in the person's folder while a game runs. A note found at the next
   start of the console, or at the next launch of that game, means the save
   was never zipped: the whole folder is zipped, owed and sent before any
@@ -15543,6 +15656,12 @@ a range or TV setting affecting everything.
 | WiiWare and Virtual Console (`.wad`) | in, with the rest of Wii, not after the release (MMagTech). Dolphin installs a WAD into the NAND and boots it; the NAND is per person per game here, so each install stays with its game. The same rule applies: Mega Man 9 (WR9E, Classic) plays on a pad, World of Goo (WGOE, Remote only) needs a Remote. Virtual Console mostly repeats systems the console already plays |
 | Motion from a pad's own gyro (DualSense, DualShock 4, Switch Pro) | after the first release. The core can use it (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`); the frontend does not offer it yet |
 | Hardware | MMagTech's own, ordered 2026-09-30, due 2026-10-03: two third-party Wii Remotes with MotionPlus built in, with Nunchuks (TechKen), and a USB-powered sensor bar (Aokin). The bar is two infrared lights on a USB power cable; the console never sees it. Not bought: the Mayflash DolphinBar, because copies like these are reported to pair badly with it or drop. It is plan C |
+
+Since 2026-10-10 (MMagTech): no gyro stand-in for Wii. Pointer and motion come
+only from Wii-Remote-type controllers, officially the TechKen copies through
+the console's own bridge (wiibridge/; #200, "Real Wii Remotes: pair once, like
+a Wii"). Games that take a Classic Controller or a GameCube pad still play on a
+pad (catalog.cpp:354-363).
 
 #### What a person does, and what happens
 
@@ -15733,6 +15852,12 @@ The eight Wii games on RomM, by header (7 RVZ, 1 ISO; no saves on the server):
 
 #### Real Wii Remotes on Linux (to test when the Remotes arrive, 2026-10-03)
 
+Since 2026-10-03 (#200): what shipped is the console's own bridge,
+cabinetos-wii-bridge (wiibridge/bridge.cpp, started by
+frontend/src/wiiremote.cpp:417). It makes a stand-in for each Remote through
+/dev/uhid with Nintendo's id, which Dolphin's hidapi path and Cemu read;
+Dolphin's IOLinux backend is still not built (wiibridge/README.md).
+
 - **Copies answer only the Wii's own search** (the Limited Inquiry Access
   Code). Linux's normal Bluetooth search sends the general one, so a copy is
   invisible to an ordinary pairing screen. Nintendo's own Remotes answer both.
@@ -15896,6 +16021,12 @@ what is new or different.
 | Graphic packs | **None now; not a hard no for later** (MMagTech, after the facts below; #207, After first release). Cemu has no resolution setting of its own; it renders sharper only through a community pack written for each game: 75 games have one out of about 2,860, about 8.5 MB together (Hyrule Warriors' is 7 text files, 57 KB), and the image would carry a pinned copy, not the user. MMagTech: it is not the same as the other systems' resolution setting, and problems in community packs would come to us as issues that are not ours. The fix packs (17, `Workarounds`) are decided with them in #207, not separately: MMagTech noted they do not patch Cemu and are not ours to maintain; against that, they are community-written, and Cemu itself leaves 16 of the 17 off until a player ticks one (only a Kirby Rainbow Curse fix declares `default = 1`), some for one graphics card only (Hyrule Warriors' for NVIDIA, a Wind Waker one for Intel), so using them means choosing per game and per card. Wii U renders at its own 720p with no packs |
 | Picture quality (#63), for every system | **MMagTech's rule: the quality setting uses only settings that need no external files**, for every core. Nothing downloaded or shipped per game to make a level work |
 
+Since 2026-10-04 (#231, "Wii U: real Wii Remotes in Cemu", closed as not
+planned): "Wii Remotes in Wii U games" above is reversed. A Wii U game that
+needs a Wii Remote and takes neither a Pro nor a Classic Controller stays greyed,
+"Needs a Wii Remote", whether or not a Remote is paired (catalog.cpp:367-375;
+`wiiu::needs`, wiiu.h:60).
+
 #### Carried over from Wii (question 35) unchanged
 
 GameTDB as the only source of which games play; the emulator's own per-game
@@ -15909,7 +16040,7 @@ as Xenia is, not a libretro core.
 
 #### Hand test on the A9, MMagTech at the TV, 2026-10-01
 
-Cemu main `4e3c824` (upstream's CI AppImage, by hand: `~/wiiu/tw.sh`, the
+Cemu main `4e3c824` (upstream's CI AppImage, by hand: a scratch script on the A9, the
 console frozen underneath), Hyrule Warriors from RomM (one 7.65 GB `.wua`).
 v2.6 was not run: the decision is main, so it would answer nothing.
 
@@ -16346,6 +16477,9 @@ requirement" (CEC section, above): MMagTech, 2026-10-07, "I'm not buying a
 CEC adapter ... I would be expecting other people to buy it as well". Not
 reopened here; noted so it is not missed.**
 
+Since 2026-09-24 (open question 31, "HDMI-CEC IS SHELVED"): the requirement
+this sits against was already shelved.
+
 **Pairing and names.** Sunshine's API (GET and POST `/api/pin`, which needs
 the request's `pairing_id` in this version, `/api/clients/list`, `/unpair`),
 on localhost with a login the console made; its web page answers the console
@@ -16467,6 +16601,11 @@ touches dims at 5 minutes on both screens and ends at "Turn off screen after"
 goes out, so is never cut off. Sunshine stays the stock release. Tested with
 MMagTech streaming, idle timers at a tenth: started dark, ended by the timer,
 rejoined, left without quitting and rejoined after the screen went out.
+
+Since 2026-10-09 (#304, "Stream into Steam: leaving Steam back to Home turns
+the phone's picture black"; "Sunshine patched after all", above): Sunshine is
+built from source with one patch (cores/sunshine-patches/;
+install-sunshine.sh:16-23).
 
 *Named and dropped:* **dimming without end while a device is connected**
 (his first proposal): Moonlight on iOS turns the phone's auto-lock off while

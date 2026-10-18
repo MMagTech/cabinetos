@@ -136,18 +136,42 @@ SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --no-setup \
 ```
 
 `--no-setup` skips first run; on a machine with no server address it shows
-a stand-in library of six made-up games. `--screen library`, `--screen grid
---tile N` and `--screen detail --game <id>` (a game's RomM id on your own
-server) open a screen by walking the route a person would; `--focus N`
-starts with a card focused; `--render-size` renders any television size, so
-a small machine can check a 4K layout.
+a stand-in library of six made-up games. The server is the first of
+`--romm <address>`, `$CABINETOS_ROMM`, `/etc/cabinetos/session.env` and
+`config/server.json` under the storage root (`serveraddress.cpp`).
+`--screenshot <file>` saves a BMP once `--frames N` frames are drawn (30 if
+not given) and quits. `--screen library`, `--screen grid --tile N` and `--screen
+detail --game <id>` (a game's RomM id on your own server) open a screen by
+walking the route a person would, as do `--screen settings --tile N`,
+`--screen search --query <text>` and `--screen howto` (`testhooks.cpp`);
+`--focus N` starts with a card focused; `--render-size` renders any
+television size, so a small machine can check a 4K layout. `--setup` shows
+first run on a console that is already set up, and saves no server address,
+sign-in or finish marker (`setup.h`, `dryRun`), though its pairing step asks
+the server for a real code, which expires by itself. `--setup-step <name>`
+opens it at `network`, `server`, `pair`, `controller` or `done`; Wi-Fi is
+part of `network`.
+
+**Reports that print and quit before a window opens**, so over SSH they
+leave a console's screen alone:
+
+| Flag | What it prints |
+|---|---|
+| `--first-run` | whether first run is needed, where the server address came from, and the step where first run would stop (`--first-run-step <name>` starts at one step; `--first-run-check-server` also asks the server) |
+| `--network` | the link, the Wi-Fi radio, and whether this session may save a Wi-Fi network (`--network-scan` adds the networks in range) |
+| `--storage` | the storage root, each drive's free space, floors and evictable games, and who kept what |
+| `--core-options` | every option every core in the core folder declares, and what the console answers it |
+
+`--launch <id>` and `--download <id>` press Play and Download for a game by
+its RomM id once Home is up, and `--unkeep <id>` removes its download
+without asking (`testhooks.cpp`).
 
 **Self-tests that need no network, server, controller or screen.** Each exits
 with 0 when it passes:
 
 | Flag | What it checks |
 |---|---|
-| `--first-run-rules` | every combination of facts first run can be handed, asserting what it must refuse |
+| `--first-run-rules` | all 144 combinations of facts first run can be handed, asserting what it must refuse |
 | `--first-run-writes` | that finishing first run actually sticks |
 | `--accounts-test` | the rules for the people on a console and switching between them |
 | `--players-test` | the rules for which controller is which player |
@@ -164,9 +188,9 @@ repository yet; do not point it at a real RomM.
 
 **Every flag is in `frontend/src/cli.cpp`**, 104 of them plus
 `--check-option-tables` in `main.cpp`; there is no `--help`.
-`frontend/README.md` explains some of them, but beyond its build section it
-describes September 2026 (see docs/ARCHITECTURE.md, "Where the docs and the
-code disagree").
+`frontend/README.md` holds the build recipe and the storage tree. What it
+said about running and the flags in September 2026 is history, in
+docs/history/frontend-readme-2026-09.md.
 
 **Against a RomM server: your own, never someone else's.** The console
 writes to RomM as the signed-in person: saves, states, screenshots, time
@@ -200,8 +224,9 @@ console's PIN (docs/SETTINGS.md, "Developer access"). The image itself is
 read-only. `tools/ui-loop.sh` is how the maintainer runs a test build on his
 console without an image build; it is written for his machines and for
 state he set up on them by hand, so read it for the steps rather than run
-it. A contributor cannot yet make a signed test image for their own console
-(docs/ARCHITECTURE.md, "Known gaps").
+it. A signed image of your own needs a fork with its own key and image name
+("Generate a signing key", below); running your own build on your own
+console is not written down yet (docs/ARCHITECTURE.md, "Known gaps").
 
 ## What CI checks on your pull request
 
@@ -258,6 +283,8 @@ when the `SIGNING_SECRET` repository secret is set (`build.yml`, "Sign
 image"). The image carries the
 public key and a policy that refuses an unsigned update, which bites on any
 console installed with the installer (`build_files/require-signed-updates.sh`).
+A fork signs its own images with a key of its own: "Generate a signing key",
+below.
 
 **The worked example, a change to the Wii bridge** (#398, Part 4 section 34):
 `wiibridge/Makefile` builds it; `build-frontend.yml` compiles it and puts it
@@ -267,6 +294,35 @@ to go on without it and checks it is a 64-bit Linux program;
 `/usr/libexec/cabinetos-wii-bridge` and checks its libraries; the frontend
 starts it from there (`frontend/src/wiiremote.cpp`). Each file names the next
 only in a comment, which is why the path is written out here.
+
+### Generate a signing key
+
+This is for a fork that publishes its own image. The project's images are
+signed with MMagTech's key, whose secret half is never in the repository
+(`.gitignore` lists `cosign.key`).
+
+1. **Make a key pair** with cosign (`build.yml` installs v3.1.2):
+   `COSIGN_PASSWORD="" cosign generate-key-pair` writes `cosign.key` and
+   `cosign.pub`. The password is empty because "Sign image" gives cosign
+   none.
+2. **Put all of `cosign.key` in the fork's `SIGNING_SECRET` repository
+   secret** (`gh secret set SIGNING_SECRET < cosign.key`). `build.yml` then
+   signs every image it publishes from `main` or `testing`; without the
+   secret it publishes them unsigned, and the run's summary says so.
+3. **Replace `system_files/etc/pki/containers/cabinetos.pub`** with
+   `cosign.pub`.
+4. **Change `ghcr.io/mmagtech/cabinetos` to the fork's image** in the three
+   files that name it: `build_files/require-signed-updates.sh` (`REPO`, the
+   policy's rule), `system_files/etc/containers/registries.d/cabinetos.yaml`
+   (where the signatures are found) and `disk_config/iso.toml` (the image
+   the installer points a console at for its updates).
+
+The image name itself needs no edit: `build.yml` publishes to
+`ghcr.io/<owner>/cabinetos`, from the repository's owner in lower case and
+`IMAGE_NAME` in `cabinetos.env`. The key and the image name in the four
+files above are written into tracked files today, so a fork edits them.
+Until it does, its image carries MMagTech's key and a rule for his image,
+and its installer points every console it installs at his image.
 
 ### Going back to an earlier version
 
@@ -428,9 +484,10 @@ Before proposing a change, look for the decision that already covers it:
 
 - **docs/PROJECT.md**: the specification, the phase history and 51 numbered
   open questions, most of them decided. Code cites them by number ("open
-  question 32"), so the numbers never change. It is 17,000 lines with no
-  index yet (one is coming): search it by question number (`### 32.`) or
-  keyword.
+  question 32"), so the numbers never change. It is 17,000 lines, too large
+  for GitHub to render, so it shows as plain text there. Its index, at the
+  top, lists every section and every question with where it ended; then
+  search it by question number (`### 32.`) or keyword.
 - **docs/SETTINGS.md**: every Settings decision, as the screen is.
 - **docs/ROADMAP.md**: milestones, and "Decided against", kept so nobody
   proposes those again.

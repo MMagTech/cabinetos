@@ -13,7 +13,9 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   **Everything the image installs goes in `/usr`.**
 
 - **A SYSFS SETTING A UDEV RULE MAKES CAN BE UNDONE BY TUNED AND BY THE
-  DRIVER, AND TRIGGERING THE RULE BY HAND WILL NOT SHOW IT.** #228's rule set
+  DRIVER, AND TRIGGERING THE RULE BY HAND WILL NOT SHOW IT.** The rule for
+  #228 ("Sound can die until a restart: the TV's HDMI audio chip fails to
+  power down") set
   `power/control=on` on the sound controllers; triggered on a running console
   it worked, and after a real reboot it was gone: the driver turns runtime PM
   back on after its probe, and tuned's audio plugin sets
@@ -30,7 +32,7 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   fallback visible rather than catastrophic, but the tmpfiles rule is the fix.
 
 - **`ldd` prints "not found" and exits 0.** `build_files/install-frontend.sh`
-  reads its output, not its status, for the frontend and all twenty-one cores.
+  reads its output, not its status, for the frontend and all 22 cores.
   **Run the control** — the same script into a bare `fedora:44` names all six
   libraries the frontend needs, plus `libGL` for melonDS and **`libX11` and
   `libXext` for PPSSPP**, which nothing had written down anywhere.
@@ -49,7 +51,8 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   the pin stopped gamescope doing it. Bazzite's own
   `/usr/share/gamescope-session-plus/gamescope-session-plus`, on our base,
   gives no size and turns on gamescope's memory of the last display. Read the
-  base image's own way before writing one. (#268, PROJECT.md.)
+  base image's own way before writing one. (#268, "Booting with no display
+  answering leaves the console at a guessed 1080p"; PROJECT.md.)
 
 - **A DISPLAY SWITCHED OFF AND ON THROUGH SYSFS SHOWS A STOPGAP MODE LIST.**
   After `echo detect > /sys/class/drm/card1-HDMI-A-1/status` the connector
@@ -95,7 +98,7 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   invalid `concurrency` expression is a workflow that does not parse.
 
 - **A workflow that build.yml CALLS must not also trigger itself where
-  build.yml runs**, or one change queues the same twenty-one core builds
+  build.yml runs**, or one change queues the same 22 core builds
   twice. That is not merely wasteful: the runner concurrency cap means the
   duplicate starves the image build of the runners it is waiting for, and it
   doubled the wall clock of the change that introduced it. Cancelling one by
@@ -132,10 +135,13 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   can be in. **`gh pr checks` printing nothing is not the same as passing** —
   count them. The documented remedy works: close the pull request and reopen it.
 
-- **A DOCUMENTATION-ONLY PULL REQUEST CORRECTLY RUNS NOTHING**, because
-  `build.yml` ignores `**.md` and `docs/**`. That is expected and is a different
-  thing from the fault above — check WHAT the pull request touches before
-  deciding which one you are looking at.
+- **A DOCUMENTATION-ONLY PULL REQUEST CORRECTLY RUNS ONLY THE CHANGELOG
+  CHECK**, because `build.yml`'s path filter leaves out `**.md` and `docs/**`
+  (all but `docs/LICENCES.md`), while `changelog.yml` runs on every pull
+  request to `main` and passes it as "Documentation only". One check and no
+  build is expected, and is a different thing from the fault above: check
+  WHAT the pull request touches before deciding which one you are looking
+  at.
 
 - **AND THERE IS A THIRD CAUSE, WHICH IS JUST A RACE.** `gh pr checks` says
   *"no checks reported"* for the first few seconds after a push, between the
@@ -168,7 +174,7 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
 
 - **A core build failing is not always the core.** `Curl error (28)` is the
   network. Re-run before reading anything into a single red core. This matters
-  more now: twenty-one core builds gate every image build.
+  more now: 22 core builds gate every image build.
 
 - **GitHub serves some repositories at 55 KB/s over git and 9.8 MB/s over
   HTTPS.** `build-core.sh` clones `--filter=blob:none` — but **NOT for
@@ -198,7 +204,9 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
 ## Promotion, the testing channel and updates
 
 - **PROMOTION COMPARES THE FILES THE IMAGE IS BUILT FROM** (`ci/promote-tested.sh`).
-  Until #156 it compared whole trees, docs included (learned 2026-09-27): a
+  Until #156 ("CI: docs changes should not force an image build, except
+  LICENCES.md, which is in the image") it compared whole trees, docs
+  included (learned 2026-09-27): a
   handover committed after the testing push made the merge BUILD a new image
   instead of promoting the judged one. Now `.md` files and `docs/` are
   ignored, the same files `build.yml`'s trigger ignores, except
@@ -297,7 +305,9 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   package's own file list (`rpm -ql`), so a version that moves a file is
   still covered.
 
-- **Building Sunshine ourselves (#304): three traps, each found on the A9.**
+- **Building Sunshine ourselves (#304, "Stream into Steam: leaving Steam back
+  to Home turns the phone's picture black"): three traps, each found on the
+  A9.**
   1. *Git must trust the build tree.* Sunshine's CMake asks git which
      build-deps tag its submodule is at and downloads that tag's prebuilt
      FFmpeg. rpmbuild unpacks the tree as another user than the container's
@@ -325,8 +335,9 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   Nobody checked the size when the release was planned; it surfaced on
   release day. The installer lives in Cloudflare R2 (`download.mmagtech.com`,
   MMagTech's account), uploaded by **Build disk images** with `publish`.
-  `docs/PROJECT.md` and the release-hosting memory have why not the
-  alternatives.
+  Why R2: the comment on that workflow's publish step (#308, "At the first
+  release: the download goes on a GitHub Release, and the page and wiki
+  point to it", whose plan the 2 GB limit overturned).
 - **A new DNS name is "not found" for a while on any machine that asked
   before it existed.** The Mac and the A9 both cached the miss for
   `download.mmagtech.com`; public resolvers had it at once. Check with

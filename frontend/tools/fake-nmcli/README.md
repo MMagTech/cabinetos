@@ -1,22 +1,26 @@
 # Seeing first run as a console with no cable sees it
 
-The network step is first run's one hard gate, and its two halves look nothing
-alike:
+The network step is first run's one hard gate, and its two halves behave
+differently:
 
 | | With a cable | Without |
 |---|---|---|
-| The panel | the link and its address | the Wi-Fi list — the only way forward |
-| Continue | enabled | **greyed out until connected** |
-| Skip | not offered | not offered, and never will be |
-| The Wi-Fi step after it | *optional, a fallback* | *connected* — the radio IS the connection |
+| The panel | the Wi-Fi list, as a fallback (with no radio, the link and its address) | the Wi-Fi list, the only way forward |
+| Continue | enabled: it is the skip | **greyed out until connected** |
+| Skip | no separate button | not offered, and never will be |
 
-**Neither machine here can show the second column.** The A9 is on a cable and
-the test VM has no radio at all, and taking either offline is how you lose the
-machine you are measuring. So this stands in for `nmcli`, answering its terse
-queries the way a disconnected machine with working Wi-Fi hardware would.
+Wi-Fi is part of the network step (`firstrun.h`, `Step::Network`).
+
+**Neither machine here can show the second column.** The reference console
+is always online and the test VM has no radio at all, and taking either
+offline is how you lose the machine you are measuring. So this stands in for
+`nmcli`, answering its terse queries the way a disconnected machine with
+working Wi-Fi hardware would.
+
+From `frontend/`:
 
 ```
-PATH=frontend/tools/fake-nmcli:$PATH SDL_VIDEODRIVER=offscreen \
+PATH="$PWD/tools/fake-nmcli:$PATH" SDL_VIDEODRIVER=offscreen \
   ./build/cabinetos-frontend --setup-step network \
   --screenshot /tmp/offline.bmp --render-size 1920x1080 --frames 200
 ```

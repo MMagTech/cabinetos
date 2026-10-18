@@ -6,8 +6,8 @@ the way the screen is. The reasoning, and the options tried and dropped, are in
 and question 31 ever disagree, fix this file: it is meant to be the one place
 to look.
 
-`docs/SETTINGS-INVENTORY.md` was the starting point for the discussion and is
-now history.
+`docs/history/SETTINGS-INVENTORY.md` was the starting point for the discussion
+and is history.
 
 **Status words:** **Built** works on the test build today. **To build** is
 decided, not built. **Later** is wanted, not now. **Dropped** was decided
@@ -33,11 +33,11 @@ status here to Built.
 - **Eight categories:** Accounts, Controllers, Network, Remote Play,
   Display and Sound, Storage, System, About. **Built.** Remote Play was
   added as its own section, a highlight (MMagTech, 2026-10-07, #286).
-- **Plain purple background, no game art**, because it is a screen of text.
-  **Built.**
-- **Rows not built yet are dimmed, say "Not built yet", and focus skips
-  them.** This is for judging the layout; they go away as each is built.
-  **Built.**
+- **A plain background in the signed-in person's colour, no game art**,
+  because it is a screen of text (Color, under Display and Sound). **Built.**
+- **Every row is built.** A row with nothing to do right now is dimmed and
+  focus skips it, with no explanation (`Disabled` in `settings.h`; MMagTech:
+  "just gray out the menu option"). **Built.**
 - **Changing category cross-fades the rows**, about 150 ms, no movement.
   **Built.** MMagTech on the TV, 2026-09-24: good.
 - **No emulator settings page.** Emulator options are either covered by
@@ -100,7 +100,14 @@ status here to Built.
   set from Settings, by the owner, when they want one.
 - **Remove an account** is in Settings only. It removes the account from this
   console; the RomM account and its saves are untouched. The account playing
-  now cannot be removed. **To build, #58.**
+  now cannot be removed, nor can the owner's; with nobody it could remove,
+  the row is dimmed. It first sends everything the person still owes RomM,
+  with their own login, then deletes their folder; if something could not be
+  sent it asks "Remove <name>?" / "Saves waiting to upload will be lost.",
+  with Cancel focused. **Built, #58 ("Settings: remove an account"), in pull
+  request #92 ("Settings: owner and PIN, remove an account; account
+  switching fixed"); the sending is #194 ("Removing a person deletes their
+  folder, after sending what is owed").**
 - **RetroAchievements**, a sign-in per account, **opt-in** (#74, decided with
   MMagTech 2026-10-06). One row, "RetroAchievements", its value "Sign in" or
   the username. Pressing it asks for the username, then the password, on the
@@ -114,9 +121,11 @@ status here to Built.
   pages' cups, the unlock cards and the Achievement sound row away with it.
   **Softcore only**: nothing hardcore is built, hidden or otherwise (decided
   2026-10-05). **Built on `retroachievements`, judged on the TV 2026-10-06.**
-- **Background colour per account:** a few hand-picked choices (purple, blue,
-  green, red, graphite), so the console takes on the colour of whoever is
-  signed in. The boot screen stays purple. **Later, #75.**
+- **Background colour per account**, so the console takes on the colour of
+  whoever is signed in: the Color row, under Display and Sound (sixteen
+  choices). The boot screen stays purple. **Built, #75 ("Background colour
+  per account"), in pull request #131 ("Home fixes, Home in the top bar,
+  Appearance and Color").**
 
 ## Controllers
 
@@ -243,8 +252,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   (MMagTech). 802.1X
   networks are not offered. First run's Wi-Fi step behaves the same way.
   Worked out on the TV with MMagTech, 2026-09-24. **Built, #59.**
-  **Later, if asked for:** joining a network that hides its name (first run
-  can; Settings cannot yet).
+  **Later, if asked for:** joining a network that hides its name. Neither
+  first run nor Settings can: both join only a network in the list, and a
+  network with no name is left out of it (`net::join` with `hidden` false in
+  `setup.cpp` and `wifi.cpp`; `net.cpp`).
 - **Addresses are automatic only.** A fixed address is set on the router.
   **Dropped: manual IP**, unless people ask, then it is one "Advanced" page.
 - **RomM server** is one row showing the address. Pressing it (PIN if set)
@@ -273,8 +284,10 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   after 10 s: "Press (A) to change the server address". A opens the PIN pad
   if one is set, then the same keyboard and check as Settings. The same
   server at the new address: the start carries on there, no restart. A
-  different server: a panel titled "A different server" with Sign out's two
-  lines, focus on Cancel, because Settings is out of reach. Settings keeps its
+  different server: a panel titled "A different server", "Removes every game
+  and account from this console." and "Saves stay on the server." (or "Saves
+  waiting to upload will be lost."), Sign out or Cancel, focus on Cancel,
+  because Settings is out of reach. Settings keeps its
   row for a move made while the old address still answers (a hostname,
   https) and for a console already running when the server moves. MMagTech,
   2026-09-25. **Built, #60**, judged on the TV the same day.
@@ -287,12 +300,12 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     retried by itself. The counter goes on in minutes ("4m 10s"). MMagTech,
     2026-09-25; the (A) line is the cue to go and check the server.
 - **Sign out:** one question, "Sign out?", focus on Cancel:
-  "Removes every game and account from this console." then "Saves stay on
-  the server.", or, if any save never reached the server, "Saves waiting to
-  upload will be lost." Said, not counted (MMagTech, 2026-09-25). Nothing
-  re-sends an old unsent save from the disk (the marker records only a size);
-  that belongs with the offline console, open question 22. Uploads still in
-  flight are waited for, 20 s at most. Then everything tied to that server is
+  "Removes every game and account from this console." Then everything any
+  account still owes RomM is sent, each with its own login, as Remove an
+  account does (#194); if something could not be sent it asks again, "Sign
+  out?" / "Saves waiting to upload will be lost." Said, not counted
+  (MMagTech, 2026-09-25). Uploads still in flight are waited for, 20 s at
+  most. Then everything tied to that server is
   cleared: kept and cached games on every drive plugged in, every account's
   saves, states and keeps on this console, its covers, the accounts, their
   tokens, the PIN and the address. Wi-Fi, controllers, BIOS and the console's
@@ -352,14 +365,15 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
       account your phone is signed in to.", the link in cyan, its QR code on
       the right. Approved on a phone, the screen goes back to Settings by
       itself; B leaves it, and Tailscale is off again.
-    - **Connected**: the address to give Moonlight on the right
-      ("100.67.82.30"), and under it the console's name and when its sign-in
-      ends, from the moment it is signed in ("cabinetos · Sign-in ends 6 Apr
-      2027"): somebody turns Remote Play on once and rarely comes back, so
-      that is when to see the date. No date when the owner turned expiry off
-      in Tailscale. Pressing it: **Disconnect**, **Log out** (asked again,
-      then the PIN), and **Sign in again** in the last 14 days, which starts
-      the 180 days again and keeps the name and address.
+    - **Connected**: the address to give Moonlight on the right (the
+      console's Tailscale address, `100.x.y.z`), and under it the console's
+      name and when its sign-in ends, from the moment it is signed in
+      ("cabinetos · Sign-in ends 6 Apr 2027"): somebody turns Remote Play
+      on once and rarely comes back, so that is when to see the date. No
+      date when the owner turned expiry off in Tailscale. Pressing it:
+      **Disconnect**, **Log out** (asked again, then the PIN), and **Sign in
+      again** in the last 14 days, which starts the 180 days again and keeps
+      the name and address.
     - **Disconnected**: signed in, not running. **Connect** (the PIN) and
       **Log out**.
     - **Sign in again**, with "Sign-in ended 6 Apr 2027" under it once the
@@ -553,8 +567,10 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   (MMagTech, 2026-09-26): one set of words, Download, Remove download,
   Downloads. "And keep" only told it apart from Play's fetch into the cache,
   which nobody sees.
-- **File access** (under Storage): **built on branch `file-access`, #69;
-  screens judged on the TV 2026-09-25, the login still to be tested.**
+- **File access** (under Storage): **built, #69 ("Settings: file access
+  (SFTP)"), in pull request #97 ("File access: saves and games from a
+  computer, over SFTP"); screens judged on the TV 2026-09-25, and the login
+  proved from a computer the same day.**
   - **One row**, "File access", "SFTP" under it, On or Off. **Everything a
     computer needs is in a panel the row opens**, not in rows under it:
     as rows they ran off the bottom of Storage, the same reason Wi-Fi's
@@ -580,26 +596,26 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
     confused on a television (no 0/O, 1/I/L). It is `cabinet`'s login
     password, because that is what sshd checks, so on today's images it is
     also the sudo password; that goes when the session user leaves `wheel`.
-  - From a computer you see `roms`, `cache`, `bios` and `users` (the
-    saves), and one folder per extra drive named as Storage names it
-    ("External", "Internal") holding only that drive's `CabinetOS` folder.
-    `config` (the RomM token) and `logs` are not there. Bind mounts in
-    `/run/cabinetos-files`, the chroot; taking them down never deletes
-    (rmdir only). A drive plugged in while it is on appears the next time
-    it is turned on.
+  - From a computer you see `roms`, `cache`, `bios`, `users` (the saves)
+    and `reports` (the diagnostic reports, System, below), and one folder
+    per extra drive named as Storage names it ("External", "Internal")
+    holding only that drive's `CabinetOS` folder. `config` (the RomM token)
+    and `logs` are not there. Bind mounts in `/run/cabinetos-files`, the
+    chroot; taking them down never deletes (rmdir only). A drive plugged in
+    or pulled while it is on is added or taken away at once (`cabinetos-files
+    refresh`; Extra drives, below).
   - **`cabinetos.local` already works**: Bazzite ships avahi. Open question
     9's mDNS half is answered by the base.
-  - **Ports, MMagTech 2026-09-25:** port 22 is File access (password, SFTP,
-    chrooted, listening only while on); **the development shell moved to
-    port 2222**, then key only and always on, on development images only
-    (`cabinetos-dev-ssh.service`). **Since 2026-10-07 port 2222 is Developer
-    access** (System, below): off until switched on, the same password or a
-    key. sshd cannot tell a key login from a
+  - **Ports, MMagTech 2026-09-25 and 2026-10-07:** port 22 is File access
+    (password, SFTP, chrooted, listening only while on); **port 2222 is
+    Developer access** (About, below): off until switched on, the same
+    password or a key. sshd cannot tell a key login from a
     password login in a Match block, so the port is the line between the
-    two uses of one account. SELinux allows sshd only port 22, so 2222 is
-    labelled at boot by the unit itself (a label in the image would not
-    reach a console with any local SELinux change). Keyboard-interactive is
-    off on 2222 too; it is a second way to type a password.
+    two uses of one account. SELinux allows sshd only port 22, so
+    `cabinetos-developer.service` labels 2222 itself each time it starts (a
+    label in the image would not reach a console with any local SELinux
+    change). Keyboard-interactive is off on 2222 too; it is a second way to
+    type a password.
   - Setting your own password: **later**, if people ask.
 - **Extra drives, decided with MMagTech 2026-09-25, built on `usb-drives`:**
   - **Mounted by the console itself**, internal and external alike, when it
@@ -620,9 +636,11 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
     "the first extra drive whenever one is plugged in", which sent games to a
     small stick while a big main drive sat empty. Nothing already on a drive
     moves. Cached games and saves stay on the main drive, as before.
-  - **Offline (#90, not built):** a game kept on a drive that is not attached
-    cannot be played and shows greyed. Online it downloads a stand-in, as
-    today. Saves never leave the main drive, so nothing of a person's progress
+  - **Offline (#88, "Offline: kept games play with no server"):** the
+    Library holds the games on the drives that are here, so a game kept on a
+    drive that is not attached is not listed until its drive comes back
+    (`offlineLibrary` in `library.cpp`). Online it downloads a stand-in.
+    Saves never leave the main drive, so nothing of a person's progress
     goes with the drive.
   - **Notices, in the pill, no sound** (a chime would play over a game):
     "External drive connected" once mounted and usable, "Safe to unplug"
@@ -698,13 +716,15 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
 
 ## System
 
-- **System update.** Decided with MMagTech, 2026-09-25; **built on the
-  `system-update` branch, #70, being judged on the TV** (the row's states
-  and the panel were judged and passed on 2026-09-25; the real update is
-  next). Why it comes
-  first: the image switches off every automatic updater on purpose
-  (`strip-desktop.sh`: `uupd`, `bootc-fetch-apply-updates`), so today a
-  console only updates if someone runs `bootc upgrade` over SSH.
+- **System update.** Decided with MMagTech, 2026-09-25; **built, #70
+  ("Settings: system update"), in pull request #96 ("System update and
+  About")**: every state of the row and the panel judged on the TV, and a
+  real update proved from the TV, on 2026-09-25. The image turns Bazzite's
+  own automatic updaters off on purpose, because they update packages and
+  Flatpaks apart from the image: `strip-desktop.sh` masks `uupd.timer`,
+  `rpm-ostreed-automatic.timer` and `flatpak-system-update.timer`. Nothing
+  in the repository touches bootc's own `bootc-fetch-apply-updates.timer`,
+  so it is as Bazzite ships it.
   - **Check for updates:** a row, **Manual** (the default) or **Weekly**.
     Weekly only ever checks, never downloads. It runs when all of these hold:
     on Home, no game running, online, and more than 7 days since the last
@@ -779,10 +799,9 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
     **Downloading** is bootc's JSON progress (`--progress-fd`, which has to
     be a pipe), bytes of bytes. **Installing** is everything after the last
     layer: bootc reports only four uneven steps there, with no bytes and no
-    total, which is why it shows time and bytes written. **To measure on the
-    first real update:** bootc unpacks each layer as it downloads, so
-    Installing may last only seconds, in which case its line is barely worth
-    having.
+    total, which is why it shows time and bytes written. **Measured on the
+    first real update** (2026-09-25, 0.9 MB, pull request #96): the download
+    took 2 s and Installing 26 s, so the line is worth having.
   - **Weekly, and "online":** there is no separate online test. A weekly
     check that fails says nothing and may try again half an hour later,
     which is how "offline skips it" and "the next reconnection catches up"
@@ -815,8 +834,8 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   builds nothing** (creating `testing` at a commit GitHub already had from
   another branch): the trigger's `paths` filter sees no changed files. Start that one by
   hand, `gh workflow run build.yml --ref testing`. The A9 was switched to it
-  on 2026-09-25 (a 60.2 MB download), to go back to `latest` when System
-  update is done.
+  on 2026-09-25 (a 60.2 MB download) and follows it still: it is the
+  reference console every change is judged on.
   **THE TESTED IMAGE IS WHAT SHIPS, 2026-09-25.** MMagTech: *"The intent of
   test was I could build and test features and then when all was good we
   go to main."* So a merge to main does not build: if main's files are
@@ -827,8 +846,9 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   handover written after the testing push still promotes; `docs/LICENCES.md`
   is in the image and does count, and a change to it alone builds. Otherwise it
   builds, as before. **The rule: push the final commit of a branch to
-  `testing`, judge it, then merge.** Pull requests no longer build the whole
-  image; they lint and compile the frontend. Until that day `testing` was a
+  `testing`, judge it, then merge.** A pull request to `main` builds no
+  image (what it runs: CONTRIBUTING.md, "What CI checks on your pull
+  request"). Until that day `testing` was a
   separate channel and main rebuilt everything, so a feature was built
   three times and `latest` was a rebuild of what had been judged.
 
@@ -837,9 +857,61 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   the Start menu and the row goes. Odd company for System update, and the
   least odd place (MMagTech, 2026-10-03). **Built on `steam-handoff`.**
 
-- **Developer access** (#134; decided with MMagTech 2026-10-07, built on
-  `developer-access`): **one row**, "Developer access", "SSH" under it, On
-  or Off, **in About, last (under Credits since 2026-10-10, so the
+- **Developer access**: moved to About, below (it is About's last row).
+
+- **Diagnostic report** (#195, built 2026-10-10; docs/PROJECT.md,
+  open question 41). One row, no PIN. Pressing it opens a screen, "Creating…"
+  for a few seconds, then the QR code (a download link to the report, home
+  network only, while the screen is open), the same link as text, and two
+  lines: "Your phone has to be on this network." / "Also in File access,
+  under reports." With no network: "No network, so it can't be downloaded."
+  The same report comes from `cabinetos-report` over Developer access.
+
+## About
+
+- **Version:** the date version (see System), with Bazzite's underneath,
+  "Bazzite 44.20260916". A console that does not follow `latest` adds the
+  tag, "2026.09.25.2 · Testing", so a test console is told from the rest at
+  a glance; nothing on screen changes the channel. Pressing it does nothing
+  until the seventh press in a row, each within two seconds of the last,
+  which shows or hides Developer access (below). Read without root: the
+  version file, Bazzite's `/usr/share/ublue-os/image-info.json`, and the
+  booted deployment's `.origin`. **Built, #72 ("Settings: About (version,
+  credits, licences)").** MMagTech, 2026-09-25.
+- **How to** (#314, built 2026-10-10, judged on the TV): the controls, in
+  Settings' own shape, a section per row on the left and its lines as rows
+  on the right, nothing to press. In a game (pause menu by both sticks, a
+  Wii Remote's HOME, Remote Play's Select; leaving; the Power menu),
+  Shortcuts (always shown; off, the first line says where to turn them on
+  and the rest are greyed; the button named is the one set for the pad in
+  hand), Menus, Steam (Switch to Steam; back by Steam's Switch to Desktop),
+  Controllers (Add a controller; a Wii Remote's red sync button), Drives
+  (Eject before unplugging), Wiki (the address as a row, and under it a QR
+  code with the cabinet in its middle, made once by tools/make-wiki-qr.py).
+  A one-page version was built first and read as a wall of text. **Every
+  change to the controls changes this and docs/wiki/navigation.md
+  together.** Not on it, on purpose: favourites and save states (found by
+  using them), plugging in a drive and formatting (the console says it on
+  the drive's row), the keyboard and mouse.
+- **Credits and licences: ONE row, not two.** A Credits list and a
+  Licences list would name the same projects twice, so it is one list, one
+  line per project: its name, what it does, its licence ("Snes9x · SNES ·
+  Non-commercial"). Ours, the base (Bazzite, Universal Blue, Fedora),
+  gamescope, the emulators with the six non-commercial ones first, then the
+  libraries and the type. The facts are `docs/LICENCES.md`'s; the list is
+  `kCredits` in `credits.h`, drawn by `about.cpp`. **No full licence texts
+  on the television**: they are in the image under `/usr/share/licenses/`.
+  **gamescope is credited**, and the console's session is our own script
+  running Valve's gamescope. MMagTech, 2026-09-25. Steam's session,
+  `gamescope-session` (MIT; OpenGamingCollective, formerly ChimeraOS), is
+  credited too since #223 ("Steam: one entry that hands over to Big Picture
+  (audit first)"), as `docs/LICENCES.md` says. **Built, #72, in pull request
+  #96 ("System update and About"); judged on the TV 2026-09-25.**
+
+- **Developer access** (#134, "A shipping image without the development
+  shell"; decided with MMagTech 2026-10-07, built on `developer-access`):
+  **one row**, "Developer access", "SSH" under it, On or Off, **in About,
+  last (under Credits since 2026-10-10, so the
   everyday rows never move), and hidden until Version is pressed
   seven times** (each within two seconds of the last), the way Android hides
   its developer options. Seven more hide it again, **and hiding turns it
@@ -878,50 +950,6 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   - `cabinet` is in `wheel`, so the password is also sudo's: full access is
     what this switch is for.
 
-- **Diagnostic report** (#195, built 2026-10-10; docs/PROJECT.md,
-  open question 41). One row, no PIN. Pressing it opens a screen, "Creating…"
-  for a few seconds, then the QR code (a download link to the report, home
-  network only, while the screen is open), the same link as text, and two
-  lines: "Your phone has to be on this network." / "Also in File access,
-  under reports." With no network: "No network, so it can't be downloaded."
-  The same report comes from `cabinetos-report` over Developer access.
-
-## About
-
-- **Version:** the date version (see System), with Bazzite's underneath,
-  "Bazzite 44.20260916". A console that does not follow `latest` adds the
-  tag, "2026.09.25.2 · Testing", so a test console is told from the rest at
-  a glance; nothing on screen changes the channel. Not focusable: a fact,
-  not a control. Read without root: the version file, Bazzite's
-  `/usr/share/ublue-os/image-info.json`, and the booted deployment's
-  `.origin`. **Built, #72.** MMagTech, 2026-09-25.
-- **How to** (#314, built 2026-10-10, judged on the TV): the controls, in
-  Settings' own shape, a section per row on the left and its lines as rows
-  on the right, nothing to press. In a game (pause menu by both sticks, a
-  Wii Remote's HOME, Remote Play's Select; leaving; the Power menu),
-  Shortcuts (always shown; off, the first line says where to turn them on
-  and the rest are greyed; the button named is the one set for the pad in
-  hand), Menus, Steam (Switch to Steam; back by Steam's Switch to Desktop),
-  Controllers (Add a controller; a Wii Remote's red sync button), Drives
-  (Eject before unplugging), Wiki (the address as a row, and under it a QR
-  code with the cabinet in its middle, made once by tools/make-wiki-qr.py).
-  A one-page version was built first and read as a wall of text. **Every
-  change to the controls changes this and docs/wiki/navigation.md
-  together.** Not on it, on purpose: favourites and save states (found by
-  using them), plugging in a drive and formatting (the console says it on
-  the drive's row), the keyboard and mouse.
-- **Credits and licences: ONE row, not two.** A Credits list and a
-  Licences list would name the same projects twice, so it is one list, one
-  line per project: its name, what it does, its licence ("Snes9x · SNES ·
-  Non-commercial"). Ours, the base (Bazzite, Universal Blue, Fedora),
-  gamescope, the emulators with the six non-commercial ones first, then the
-  libraries and the type. The facts are `docs/LICENCES.md`'s; the list is
-  `kCredits` in main.cpp. **No full licence texts on the television**: they
-  are in the image under `/usr/share/licenses/`. **gamescope is credited and
-  ChimeraOS is not**: nothing of ChimeraOS's is used directly (our session
-  is our own script running Valve's gamescope). MMagTech, 2026-09-25.
-  **Built; being judged on the TV.**
-
 ## In the pause menu, per system (not Settings)
 
 Every option Cabinet offers is kept, only moved here, because the picture is
@@ -947,7 +975,7 @@ right there and the choice is about a system:
   - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet draws
     each cartridge's sheet from its own images, none of which is built here.
     Its own issue, after the first release.
-- **How the rows behave:** centred like every other button, "3D glasses: Off",
+- **How the rows behave:** centred like every other button, "Screen: Red",
   with an arrow at each edge when selected; they change instantly, in front
   of the game.
 - ~~Controller type: Mega Drive 3 or 6 button, PC Engine 2 or 6 button.~~
@@ -962,4 +990,7 @@ right there and the choice is about a system:
   on by default; the glow has no row and is always on at Strong. Both in
   docs/PROJECT.md, *Shaders, and the glow around the picture*.
 
-**To build, #73.**
+**Built, #73 ("Pause menu: per-system picture and controller options"), in
+pull request #225 ("Picture quality: one setting for every system, and the
+pause menu's own rows (#63 phase 1)")**: the rows are `sysopts.cpp`, shown
+by `pausemenu.cpp`, on built-in cores only.

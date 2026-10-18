@@ -45,7 +45,7 @@ deliberate.
 **SIX OF THE SEVEN CARDS ON THE SERVER WERE EMPTY** and were deleted at
 MMagTech's request on 2026-09-20. Cabinet for Mac uploads a card on first play
 regardless of content and has no freshness rule for either platform — the same
-fault `catalog.h` records for Dreamcast, worse ratio. **CabinetOS now refuses**;
+fault `catalog.h` [now `savetable.h`] records for Dreamcast, worse ratio. **CabinetOS now refuses**;
 both rules are measured and in `filesave.cpp`.
 
 **WHAT IS NOT DONE, and none of it is hidden:**
@@ -271,7 +271,7 @@ buys the same thing — the whole flow can be walked at any point in it, on a
 machine with nothing attached.
 
 **Which made the rules testable, and the test found a real deadlock on its first
-run.** `--first-run-rules` walks all 96 reachable combinations of facts and
+run.** `--first-run-rules` walks all 96 [144 today] reachable combinations of facts and
 asserts the REFUSALS rather than the happy path. What it caught: the Wi-Fi
 step's skip was keyed on **Ethernet** being up rather than on being **online**,
 and those coincide only while this console knows about exactly two kinds of
@@ -306,7 +306,8 @@ simply never run, that was not a risk worth carrying. `--first-run-writes` runs
 against a scratch root, touches nothing real, passes nine checks and belongs in
 CI. **The token save is the one write not covered, and it is the one that is
 already proven** — both machines here were paired with `--romm-pair`, which
-calls the same `saveToken`.
+calls the same `saveToken` [gone; first run and `--romm-pair` now both write
+the token through `accounts::recordPairing`, accounts.cpp].
 
 **MMagTech will not reinstall until the UI is finished and every core is built
 and tested** (2026-09-20), which is the right call — a fresh install is

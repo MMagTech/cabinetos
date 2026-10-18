@@ -18,8 +18,10 @@ and how he wants it done. This changes rarely. New here? Start at
   final commit to `testing`, have MMagTech judge it on the A9, merge on his
   explicit go. Anything committed after the testing push makes main build
   instead, except documentation: `.md` files and `docs/` are not in the image
-  and do not count (#156), apart from `docs/LICENCES.md`, which is. Write
-  `NEXT-SESSION.md` inside the work's own branch, before or after the push.
+  and do not count (#156, "CI: docs changes should not force an image
+  build, except LICENCES.md, which is in the image"), apart from
+  `docs/LICENCES.md`, which is. Write `NEXT-SESSION.md` inside the work's
+  own branch, before or after the push.
 - **Every session starts with only `main` and `testing`.** Delete a branch
   once it merges, on GitHub and locally.
 - **Check CI yourself** (`gh run list --branch <b>`); never ask him to look at
@@ -38,9 +40,13 @@ and how he wants it done. This changes rarely. New here? Start at
   wiki page (MMagTech: the manuals entry said R1 and nothing about turning or
   zooming). A pushed-again `testing`
   image moves the heading to the new version; it is a docs change, so it
-  does not stop the promotion. A change a player cannot notice (CI, the
-  build) says `Changelog: none` in its PR body instead. The pull request
-  check `changelog.yml` enforces it.
+  does not stop the promotion. **A contributor's pull request** puts its
+  entry at the top under `## Next` (CONTRIBUTING.md, "Pull requests and
+  issues"), which `changelog.yml` accepts because it checks only that the
+  file changed; once that change's testing image is built, MMagTech turns
+  `## Next` into the version heading and date, as above. A change a player
+  cannot notice (CI, the build) says `Changelog: none` in its PR body
+  instead. The pull request check `changelog.yml` enforces it.
 - **The TV**: say every step and what success looks like, then wait for "go".
 - **Logs**: `sudo journalctl -o cat --since "-40 min" | grep -aE "\[launch\]|\[core\]"`;
   `-u cabinetos-session` shows almost nothing.
@@ -49,11 +55,15 @@ and how he wants it done. This changes rarely. New here? Start at
 
 The reference console (the A9 Max), the test VM and MMagTech's RomM server,
 their addresses, and the hand-made state on them are kept off this public
-repository (#398, 2026-10-17): they are in a notes file in his home folder
-that CLAUDE.md loads. CLAUDE.local.example.md shows what it holds.
+repository (#398, "Audit the code and restructure it for contributors
+(main.cpp is 20,000 lines)", 2026-10-17): they are in a notes file in his
+home folder that CLAUDE.md loads. CLAUDE.local.example.md shows what it
+holds.
 
 Recovery if port 2222 on a console ever fails: at the TV with a keyboard,
-Ctrl+Alt+F3, log in as `cabinet`, `sudo bootc rollback`, `sudo reboot`.
+Ctrl+Alt+F3, log in as `cabinet` (the password File access and Developer
+access show, kept in `/var/lib/cabinetos-files/password`), `sudo bootc
+rollback`, `sudo reboot`.
 
 ## Going back to an earlier version
 
@@ -85,9 +95,12 @@ controller list (`frontend/data/gamecontrollerdb.txt`);
 merges anything.
 
 **`build-disk.yml`**, by hand only: the installer ISO (`anaconda-iso`, an
-artifact kept 90 days) or a qcow2. Build it once per release; an installed
-console updates itself. Try installer changes in a throwaway VM first with
-`tools/installer-vm.sh`.
+artifact kept 90 days) or a qcow2. With `publish` ticked it also replaces the
+download, `cabinetos.iso` and its SHA-256 in Cloudflare R2
+(`download.mmagtech.com`, the link the README and the wiki's Install page
+give), and reads the size back to check it. Build it once per release; an
+installed console updates itself. Try installer changes in a throwaway VM
+first with `tools/installer-vm.sh`.
 
 **Repository settings the build depends on.** Settings, Actions, General,
 Workflow permissions: **Read and write**, or the push to GHCR fails with a 403.

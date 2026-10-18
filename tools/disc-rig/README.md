@@ -1,38 +1,49 @@
 # The disc rig (#162)
 
+#162 is "Multi-disc games: Change disc in the pause menu, one save per game
+(Saturn first)".
+
 Games on several discs, tested on the A9 with nobody at the TV: the console's
 own frontend, headless, against a scratch console root, with every request to
-RomM through `tools/romm-readonly-relay.py` (reads only; any write gets 403).
+RomM through `tools/romm-readonly-relay.py` (reads only; any write gets 403;
+its server is the constant `UP` near its top, so set that to yours first).
 Nothing reaches RomM and nothing touches the real console's drive or Recent.
 **Never while MMagTech is at the TV**: a headless frontend reads the same pads.
 
 ## Set up, once per boot
 
+`<rig>` below is the rig's scratch folder on the reference console. The
+scripts name it themselves (`run.sh`, `regression.sh` and `relay.sh` use
+one fixed folder in the home folder), so it must be the folder they name.
+
 ```
-# on the A9, from a frontend built in ~/md/frontend (lessons: testing.md)
-mkdir -p ~/md/root/config && cp /var/lib/cabinetos/config/*.json ~/md/root/config/
-echo '[]' > ~/md/root/config/drives.json
-printf '{\n  "address":"127.0.0.1:16006"\n}\n' > ~/md/root/config/server.json
-cp tools/romm-readonly-relay.py ~/md/relay.py      # from the Mac, with scp
-nohup python3 ~/md/relay.py 16006 > ~/md/relay.log 2>&1 &
+# on the reference console, from a frontend built in <rig>/frontend (lessons: testing.md)
+mkdir -p <rig>/root/config && cp /var/lib/cabinetos/config/*.json <rig>/root/config/
+echo '[]' > <rig>/root/config/drives.json
+printf '{\n  "address":"127.0.0.1:16006"\n}\n' > <rig>/root/config/server.json
+cp tools/romm-readonly-relay.py <rig>/relay.py      # from the Mac, with scp
+nohup python3 <rig>/relay.py 16006 > <rig>/relay.log 2>&1 &
 ```
 
-`run.sh`, `regression.sh`, `tile.sh` and `relay.sh` go to `~/md/` beside it.
+`run.sh`, `regression.sh`, `tile.sh` and `relay.sh` go to `<rig>/` beside it.
 
 ## Run
 
 ```
-~/md/run.sh <name> <romId> "<step>; <step>; ..." [frontend switches]
-~/md/regression.sh                     # one short pass per system
-~/md/tile.sh /tmp/m.png 3 /tmp/disc-a.png /tmp/disc-b.png ...   # contact sheet
+<rig>/run.sh <name> <romId> "<step>; <step>; ..." [frontend switches]
+<rig>/regression.sh                     # one short pass per system
+<rig>/tile.sh /tmp/m.png 3 /tmp/disc-a.png /tmp/disc-b.png ...   # contact sheet
 ```
 
 `ROMM=127.0.0.1:16099` is the server away; `ROOT=` another scratch root;
 `KEEPDISC=1` keeps the remembered discs (otherwise each run starts clean).
 A second relay for odd names or a disc missing on RomM:
-`~/md/relay.sh 16008 hide:38863` or `file:38873=daedalus1.chd`, then `ROMM=127.0.0.1:16008`.
+`<rig>/relay.sh 16008 hide:38863` or `file:38873=daedalus1.chd`, then `ROMM=127.0.0.1:16008`.
 
-## Steps (`--disc-script`, frontend/src/main.cpp)
+## Steps (`--disc-script`)
+
+The flag is read in `frontend/src/cli.cpp`; the steps are parsed and run in
+`frontend/src/discrig.cpp`.
 
 | Step | Does |
 |---|---|
