@@ -479,6 +479,8 @@ follows any web address in RomM's data, with the RomM sign-in attached").
 - **The maintainer merges**, after judging the testing image.
 - **Bug reports** come through the issue form, which asks for the console's
   diagnostic report (Settings, System, Diagnostic report).
+- **Security problems** are reported privately, never in a public issue:
+  [SECURITY.md](SECURITY.md).
 
 ## Where decisions live
 
