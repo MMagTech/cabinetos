@@ -24,7 +24,6 @@
 #include "qr.h"
 #include "romm.h"
 #include "accounts.h"
-#include "storage.h"
 #include "text.h"
 #include "ui.h"
 
@@ -1056,18 +1055,8 @@ void Flow::pumpJobs() {
             pairingLive_ = false;
             notice_ = "Approved.";
             noticeIsError_ = false;
-            // WHO THIS CONSOLE IS, settled before anything writes a save. The
-            // adoption rule in firstrun.cpp looks for this file, so a console
-            // that paired and never asked would be judged unconfigured on its
-            // next boot.
-            std::string serr;
-            if (client_.setAddress(address_.empty() ? firstrun::serverAddress() : address_,
-                                   &serr)) {
-                const char* home = getenv("HOME");
-                client_.loadToken(std::string(home ? home : ".") +
-                                  "/.config/cabinetos/romm.json");
-                storage::resolveCurrentUser(client_, &serr);
-            }
+            // Who this console is, the user, is settled at the app's start
+            // (adoptUser), with the token the worker filed under the account.
         } else if (poll.deviceCode != pairing_.deviceCode) {
             // Anything but an approval, about a code "Start again" has
             // replaced: ask about the one on screen instead. An approval of

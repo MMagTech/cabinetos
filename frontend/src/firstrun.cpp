@@ -21,10 +21,6 @@ namespace {
 
 std::string markerPath() { return storage::configDir() + "/first-run.json"; }
 
-// The token, which is a credential and lives under the session user rather than
-// in the console's storage tree. Same path main.cpp uses; kept in step with it
-// deliberately rather than shared, because this file must not drag main's
-// argument handling in behind it.
 // WHAT "PAIRED" MEANS, AND IT CHANGED ON 2026-09-21. It used to be the single
 // `~/.config/cabinetos/romm.json`. Pairing now writes an ACCOUNT, so the fact
 // to test is whether this console has one — `accounts::activeId()` is true
