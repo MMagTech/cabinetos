@@ -271,11 +271,10 @@ bool canServe(const retro_hw_render_callback& cb) {
     }
 }
 
-// The desktop GL core's context for this game, made when it asks
+// The desktop GL core's context for this game, made the first time it asks
 // (SET_HW_RENDER, inside retro_load_game). A 0.0 version is libretro's "any":
 // 2.1, SDL's own default.
 bool openDesktopContext(const retro_hw_render_callback& cb, std::string* what) {
-    closeDesktopContext();
     unsigned major = cb.version_major, minor = cb.version_minor;
     if (major == 0) {
         major = 2;
@@ -498,7 +497,13 @@ std::optional<bool> environmentHWRender(unsigned cmd, void* data) {
                                  gHWContextName.c_str(), haveMajor, haveMinor);
                 return false;
             }
-            if (isDesktopGL(*cb)) {
+            // ASKED AGAIN, THE CONTEXT IS KEPT. melonDS asks a second time
+            // from its first retro_run, with its own context current;
+            // making a new one there threw away every object it had and left
+            // the UI's context current under it, and the console crashed
+            // about 25 s later (A9, 2026-10-18). RetroArch only stores a
+            // repeated ask; so does this.
+            if (isDesktopGL(*cb) && !gHWDesktopContext) {
                 std::string what;
                 if (!openDesktopContext(*cb, &what)) {
                     std::fprintf(stderr, "[core] asked for %s and it could not be made: %s\n",

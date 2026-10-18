@@ -22,7 +22,7 @@ render. The console starts on the level its graphics chip suits.
 | Wii | 1x | 3x | 5x |
 | Nintendo 64 | 1x | 2x | 4x |
 | Dreamcast | 640x480 | 1440x1080 | 2880x2160 |
-| Nintendo DS | 1x (original) | 3x | 6x |
+| Nintendo DS | 1x (original) | 4x | 6x |
 | Switch | 1x | 1x | 2x |
 | PS3 | 100% | 150% | 150% |
 | Xbox | 1x | 2x | 4x |

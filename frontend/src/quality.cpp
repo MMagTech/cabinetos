@@ -230,9 +230,13 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
     }
     // Nintendo DS (#219): the software renderer at Performance, which is the
     // DS's own 256x192 a screen and how DS always looked here; melonDS's
-    // OpenGL renderer above it, at 3x (the two screens 768x1152, about 1080
-    // lines) and 6x (1536x2304, about 4K). Only the 3D is drawn larger; the
-    // 2D layers stay the DS's own pixels, enlarged. RetroArch and Batocera
+    // OpenGL renderer above it, at 4x (the two screens 1024x1536) and 6x
+    // (1536x2304, about 4K). Not 3x: with the OpenGL renderer melonDS builds
+    // its picture at 4x or more whatever it is asked (screenlayout.cpp, "at
+    // least 4x the native res"), so 3x only stretched a smaller 3D render to
+    // 4x (A9, 2026-10-18). Only the 3D is drawn larger; the 2D layers stay
+    // the DS's own pixels, enlarged. On the A9, 6x kept the graphics chip 30
+    // to 36% busy at 60 fps under gamescope (Mario Kart DS). RetroArch and Batocera
     // ship the OpenGL renderer off and leave it to the player: melonDS's
     // software renderer is the accurate one, and a game the OpenGL renderer
     // gets wrong plays at Performance from its pause menu. No desktop OpenGL
@@ -241,7 +245,7 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
     if (core == "melonds") {
         if (l == Level::Performance || !desktopGL)
             return {{"melonds_opengl_renderer", "disabled"}};
-        static const char* const kRes[] = {"1x native (256x192)", "3x native (768x576)",
+        static const char* const kRes[] = {"1x native (256x192)", "4x native (1024x768)",
                                            "6x native (1536x1152)"};
         return {
             {"melonds_opengl_renderer", "enabled"},

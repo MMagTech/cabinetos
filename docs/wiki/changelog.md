@@ -15,7 +15,7 @@ one you install, so you only ever install the newest.
   moves a pointer on it, and pressing the stick (**R3**) touches.
   ([#374](https://github.com/MMagTech/cabinetos/issues/374))
 - **New:** Nintendo DS games draw their 3D sharper at the Balanced and
-  Quality picture levels, 3 and 6 times the DS's own size. Performance keeps
+  Quality picture levels, 4 and 6 times the DS's own size. Performance keeps
   the DS's own size, as before.
   ([#219](https://github.com/MMagTech/cabinetos/issues/219))
 
