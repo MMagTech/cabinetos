@@ -1,4 +1,5 @@
 // Hardware-rendered cores: the render target in the UI's GLES context, the
+// desktop OpenGL context a core that asks for one gets beside it (#219), the
 // hand-over to vkhost for a Vulkan core, the SET_HW_RENDER family of
 // environment calls (environmentHWRender) and where the picture sits in the
 // texture. Moved out of core.cpp in the restructure (#398). When the target is
@@ -55,14 +56,33 @@ bool gRefuseHWRender = false;
 //
 // ONE CONTEXT, SHARED WITH THE UI. The core draws into a texture this file
 // owns, in the frontend's own GLES 3.0 context, and the player draws that
-// texture. There is no second context, no second thread, and no readback in
-// the steady path.
+// texture. For a GLES core there is no second context, no second thread, and
+// no readback in the steady path; a desktop GL core gets a second context
+// (below), still with no thread and no readback.
 //
 // WHICH CONTEXTS ARE ACCEPTED, AND WHY REFUSING IS STILL THE RIGHT ANSWER
-// SOMETIMES. Only GLES, because that is what this context is; desktop GL and
-// Vulkan are refused with the version named, rather than accepted and then
-// failed inside the core, which reads as a broken game rather than as a
-// frontend that cannot do something.
+// SOMETIMES. GLES, because that is what this context is; Vulkan through
+// vkhost; desktop GL in a second context (below) where this machine can make
+// one. Anything else is refused with the version named, rather than accepted
+// and then failed inside the core, which reads as a broken game rather than
+// as a frontend that cannot do something.
+//
+// DESKTOP GL IS A SECOND CONTEXT, SHARED WITH THE UI'S (#219). melonDS's
+// renderer, the only way the DS draws above its own 256x192, is desktop
+// OpenGL 3.1 and nothing else; it has no GLES or Vulkan path. A GLES context
+// cannot run it, so a core that asks for desktop GL gets a context of its own
+// in the same share group as the UI's: textures are shared, so the core draws
+// into the same colour texture the player samples and nothing is copied. A
+// framebuffer object is never shared between contexts, so the core's is made
+// in its context (gHWDesktopFBO) and gHWFBO, in the UI's, wraps the same
+// texture for the readers (core_picture.cpp). The core's context is current
+// only inside a call into the core (CoreContext); everywhere else the UI's
+// is, exactly as before, and the core's state can no longer disturb the UI's.
+// Mesa allows a desktop context to share with a GLES one through both GLX
+// and EGL (it checks only the reset strategy and no-error flags). Which
+// cores ask for desktop GL at all: melonDS alone. The others ask what the
+// console prefers, and the answer (GET_PREFERRED_HW_RENDER below) stays
+// Vulkan or GLES.
 //
 // THE VERSION IS READ, NOT ASSUMED. SDL is asked for GLES 3.0 and the driver
 // is free to hand back more — on the test VM it hands back 3.2. Refusing a
@@ -82,7 +102,15 @@ unsigned gHWTargetW = 0, gHWTargetH = 0;   // what the target is sized to
 bool gHWFrame = false;         // the last frame came from the core's GL
 std::string gHWContextName;
 
-uintptr_t currentFramebuffer(void) { return gHWFBO; }
+// The desktop GL core's own context and framebuffer, and the window and UI
+// context to go back to. Set for as long as such a core has a game loaded.
+bool gHWDesktop = false;
+SDL_GLContext gHWDesktopContext = nullptr;
+SDL_GLContext gUIContext = nullptr;
+SDL_Window* gHWWindow = nullptr;
+GLuint gHWDesktopFBO = 0;
+
+uintptr_t currentFramebuffer(void) { return gHWDesktop ? gHWDesktopFBO : gHWFBO; }
 
 retro_proc_address_t procAddress(const char* sym) {
     // SDL's, not EGL's: SDL created this context, and on a driver where the
@@ -135,6 +163,84 @@ void contextVersion(unsigned& major, unsigned& minor) {
     minor = cachedMinor;
 }
 
+bool isDesktopGL(const retro_hw_render_callback& cb) {
+    return cb.context_type == RETRO_HW_CONTEXT_OPENGL ||
+           cb.context_type == RETRO_HW_CONTEXT_OPENGL_CORE;
+}
+
+namespace {
+
+// The current context's version, from its version string ("4.6 (Core
+// Profile) Mesa 25.1.4"): a 2.x context has no GL_MAJOR_VERSION to ask.
+bool versionOf(unsigned& major, unsigned& minor) {
+    const char* v = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    return v && std::sscanf(v, "%u.%u", &major, &minor) == 2;
+}
+
+// A desktop GL context in the UI context's share group, at least the version
+// asked for, or null with the reason in `what`; on success `what` is the
+// context's version string. The UI's context is current again when this
+// returns, whatever happened: SDL makes a context current as it creates it.
+SDL_GLContext makeDesktopContext(unsigned major, unsigned minor, bool coreProfile,
+                                 std::string* what) {
+    SDL_GLContext ui = SDL_GL_GetCurrentContext();
+    SDL_Window* window = SDL_GL_GetCurrentWindow();
+    if (!ui || !window) {
+        *what = "there is no window";
+        return nullptr;
+    }
+    // SDL's attributes are global, and every context made after this one is
+    // made from them: put back exactly as found.
+    const SDL_GLAttr attrs[] = {SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_MAJOR_VERSION,
+                                SDL_GL_CONTEXT_MINOR_VERSION,
+                                SDL_GL_SHARE_WITH_CURRENT_CONTEXT};
+    int was[4] = {};
+    for (int i = 0; i < 4; ++i) SDL_GL_GetAttribute(attrs[i], &was[i]);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                        static_cast<int>(coreProfile ? SDL_GL_CONTEXT_PROFILE_CORE
+                                                     : SDL_GL_CONTEXT_PROFILE_COMPATIBILITY));
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, static_cast<int>(major));
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, static_cast<int>(minor));
+    SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+    SDL_GLContext ctx = SDL_GL_CreateContext(window);
+    for (int i = 0; i < 4; ++i) SDL_GL_SetAttribute(attrs[i], was[i]);
+    if (!ctx) {
+        *what = SDL_GetError();
+    } else {
+        unsigned a = 0, b = 0;
+        const char* v = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        *what = v ? v : "no version";
+        if (!versionOf(a, b) || a < major || (a == major && b < minor)) {
+            *what = "it came back as OpenGL " + *what;
+            SDL_GL_MakeCurrent(window, ui);
+            SDL_GL_DestroyContext(ctx);
+            ctx = nullptr;
+        }
+    }
+    SDL_GL_MakeCurrent(window, ui);
+    return ctx;
+}
+
+}  // namespace
+
+bool desktopGLServable() {
+    // ASKED ONCE, BY MAKING ONE, because nothing short of that answers it: a
+    // driver can offer desktop GL and still refuse to share with a GLES
+    // context. 3.1 core is what melonDS asks for; a core that asks for more
+    // is checked when it asks. Not answered, and asked again later, while
+    // there is no window (the option check, the core-options report).
+    static int answer = -1;
+    if (answer >= 0) return answer == 1;
+    if (!SDL_GL_GetCurrentContext()) return false;
+    std::string what;
+    SDL_GLContext ctx = makeDesktopContext(3, 1, /*coreProfile=*/true, &what);
+    if (ctx) SDL_GL_DestroyContext(ctx);
+    answer = ctx ? 1 : 0;
+    std::fprintf(stderr, "[core] desktop OpenGL for cores: %s (%s)\n", ctx ? "yes" : "no",
+                 what.c_str());
+    return answer == 1;
+}
+
 bool canServe(const retro_hw_render_callback& cb) {
     unsigned haveMajor = 3, haveMinor = 0;
     contextVersion(haveMajor, haveMinor);
@@ -154,14 +260,74 @@ bool canServe(const retro_hw_render_callback& cb) {
             // see gpu.h. On the test VM this is false and the core is refused
             // by name, exactly as before.
             return vk::available();
+        case RETRO_HW_CONTEXT_OPENGL:
+        case RETRO_HW_CONTEXT_OPENGL_CORE:
+            // In a second context, where this machine can make one (above).
+            return desktopGLServable();
         default:
-            // Desktop GL and Direct3D. Not this context, and not something an
-            // environment callback should quietly paper over.
+            // Direct3D. Not something an environment callback should quietly
+            // paper over.
             return false;
     }
 }
 
+// The desktop GL core's context for this game, made the first time it asks
+// (SET_HW_RENDER, inside retro_load_game). A 0.0 version is libretro's "any":
+// 2.1, SDL's own default.
+bool openDesktopContext(const retro_hw_render_callback& cb, std::string* what) {
+    unsigned major = cb.version_major, minor = cb.version_minor;
+    if (major == 0) {
+        major = 2;
+        minor = 1;
+    }
+    gUIContext = SDL_GL_GetCurrentContext();
+    gHWWindow = SDL_GL_GetCurrentWindow();
+    gHWDesktopContext = makeDesktopContext(
+        major, minor, cb.context_type == RETRO_HW_CONTEXT_OPENGL_CORE, what);
+    gHWDesktop = gHWDesktopContext != nullptr;
+    return gHWDesktop;
+}
+
+// After the core has unloaded and destroyHWTarget has run: the core's
+// framebuffer goes with its context.
+void closeDesktopContext() {
+    if (gHWDesktopContext) {
+        SDL_GL_MakeCurrent(gHWWindow, gUIContext);
+        SDL_GL_DestroyContext(gHWDesktopContext);
+    }
+    gHWDesktopContext = nullptr;
+    gHWDesktopFBO = 0;
+    gHWDesktop = false;
+}
+
+CoreContext::CoreContext() : switched_(gHWDesktop && gHWDesktopContext) {
+    if (switched_) SDL_GL_MakeCurrent(gHWWindow, gHWDesktopContext);
+}
+
+CoreContext::~CoreContext() {
+    if (!switched_) return;
+    // WHAT THE CORE DREW IS FINISHED BEFORE THE UI SAMPLES IT, which across
+    // two contexts the driver does not promise by itself. A fence in the
+    // core's context, waited on by the graphics chip in the UI's: nothing on
+    // the processor waits. Flushed first, so the wait is never on a fence
+    // that was never sent.
+    GLsync drawn = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    glFlush();
+    SDL_GL_MakeCurrent(gHWWindow, gUIContext);
+    if (drawn) {
+        glWaitSync(drawn, 0, GL_TIMEOUT_IGNORED);
+        glDeleteSync(drawn);
+    }
+}
+
 void destroyHWTarget() {
+    // The core's framebuffer in its own context: deleted from the UI's, the
+    // same number would delete one of the UI's.
+    if (gHWDesktopFBO && gHWDesktopContext) {
+        CoreContext in;
+        glDeleteFramebuffers(1, &gHWDesktopFBO);
+    }
+    gHWDesktopFBO = 0;
     if (gHWFBO) glDeleteFramebuffers(1, &gHWFBO);
     if (gHWColor) glDeleteTextures(1, &gHWColor);
     if (gHWDepth) glDeleteRenderbuffers(1, &gHWDepth);
@@ -169,34 +335,19 @@ void destroyHWTarget() {
     gHWTargetW = gHWTargetH = 0;
 }
 
-// Allocates the target the core renders into, at the size it declared as its
-// maximum. Returns false with the reason on stderr, which is a hard failure:
-// a hardware core with no target draws nothing at all.
-bool ensureHWTarget(unsigned w, unsigned h) {
-    if (w == 0 || h == 0) return false;
-    if (gHWFBO && w == gHWTargetW && h == gHWTargetH) return true;
-    destroyHWTarget();
+namespace {
 
-    glGenTextures(1, &gHWColor);
-    glBindTexture(GL_TEXTURE_2D, gHWColor);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(w),
-                 static_cast<GLsizei>(h), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    // Linear, where the software path uses nearest — and the difference is not
-    // an inconsistency. A Game Boy's 160x144 pixels were each chosen by
-    // somebody; a Dreamcast's output is already a rendering of a 3D scene at
-    // whatever internal resolution the core was asked for, so smoothing it
-    // between that size and the panel is what it wants.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+// A framebuffer on gHWColor in the context that is current, with the depth
+// and stencil the core asked for when `withDepth`. 0, with the reason on
+// stderr, when it is incomplete.
+GLuint framebufferOnTarget(unsigned w, unsigned h, bool withDepth) {
+    GLuint fbo = 0;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gHWColor, 0);
 
-    glGenFramebuffers(1, &gHWFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, gHWFBO);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                           gHWColor, 0);
-
-    if (gHW.depth) {
+    const bool depth = withDepth && gHW.depth;
+    if (depth) {
         // Packed 24/8 when stencil is wanted as well, which is what the ABI
         // says to do. Stencil alone is defined as invalid and ignored.
         glGenRenderbuffers(1, &gHWDepth);
@@ -215,17 +366,57 @@ bool ensureHWTarget(unsigned w, unsigned h) {
         std::fprintf(stderr,
                      "[core] the %ux%u render target this core asked for is "
                      "incomplete (0x%x)\n", w, h, status);
-        destroyHWTarget();
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return false;
+        glDeleteFramebuffers(1, &fbo);
+        return 0;
     }
 
     // Cleared once, so the first presented frame is black rather than whatever
     // the driver left in the allocation.
     glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT | (gHW.depth ? GL_DEPTH_BUFFER_BIT : 0u) |
-            (gHW.stencil ? GL_STENCIL_BUFFER_BIT : 0u));
+    glClear(GL_COLOR_BUFFER_BIT | (depth ? GL_DEPTH_BUFFER_BIT : 0u) |
+            (depth && gHW.stencil ? GL_STENCIL_BUFFER_BIT : 0u));
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return fbo;
+}
+
+}  // namespace
+
+// Allocates the target the core renders into, at the size it declared as its
+// maximum. Returns false with the reason on stderr, which is a hard failure:
+// a hardware core with no target draws nothing at all.
+bool ensureHWTarget(unsigned w, unsigned h) {
+    if (w == 0 || h == 0) return false;
+    if (gHWFBO && (!gHWDesktop || gHWDesktopFBO) && w == gHWTargetW && h == gHWTargetH)
+        return true;
+    destroyHWTarget();
+
+    glGenTextures(1, &gHWColor);
+    glBindTexture(GL_TEXTURE_2D, gHWColor);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(w),
+                 static_cast<GLsizei>(h), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    // Linear, where the software path uses nearest — and the difference is not
+    // an inconsistency. A Game Boy's 160x144 pixels were each chosen by
+    // somebody; a Dreamcast's output is already a rendering of a 3D scene at
+    // whatever internal resolution the core was asked for, so smoothing it
+    // between that size and the panel is what it wants.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // The core draws into gHWFBO, in this context, unless it is on desktop
+    // GL: then it draws into one made in its own context with the depth, and
+    // gHWFBO holds only the colour, for the readers.
+    gHWFBO = framebufferOnTarget(w, h, /*withDepth=*/!gHWDesktop);
+    if (gHWFBO && gHWDesktop) {
+        CoreContext in;
+        gHWDesktopFBO = framebufferOnTarget(w, h, /*withDepth=*/true);
+    }
+    if (!gHWFBO || (gHWDesktop && !gHWDesktopFBO)) {
+        destroyHWTarget();
+        return false;
+    }
 
     gHWTargetW = w;
     gHWTargetH = h;
@@ -273,9 +464,9 @@ void restoreGLState() {
 std::optional<bool> environmentHWRender(unsigned cmd, void* data) {
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_HW_RENDER: {
-            // Flycast, Mupen64Plus and PPSSPP. See the block above gHW for
-            // what is handed over and why it is a framebuffer rather than a
-            // context.
+            // Flycast, Mupen64Plus, PPSSPP and melonDS. See the block above
+            // gHW for what is handed over and why it is a framebuffer rather
+            // than a context (and, for desktop GL, a second context too).
             auto* cb = static_cast<retro_hw_render_callback*>(data);
             if (!cb) return false;
             gHWContextName = contextName(*cb);
@@ -293,11 +484,34 @@ std::optional<bool> environmentHWRender(unsigned cmd, void* data) {
                 // thing to change.
                 unsigned haveMajor = 3, haveMinor = 0;
                 contextVersion(haveMajor, haveMinor);
-                std::fprintf(stderr,
-                             "[core] asked for %s; this frontend holds an OpenGL "
-                             "ES %u.%u context and will not pretend otherwise\n",
-                             gHWContextName.c_str(), haveMajor, haveMinor);
+                if (isDesktopGL(*cb))
+                    std::fprintf(stderr,
+                                 "[core] asked for %s; this machine cannot make a desktop "
+                                 "OpenGL context beside the console's (\"desktop OpenGL "
+                                 "for cores\" above says why)\n",
+                                 gHWContextName.c_str());
+                else
+                    std::fprintf(stderr,
+                                 "[core] asked for %s; this frontend holds an OpenGL "
+                                 "ES %u.%u context and will not pretend otherwise\n",
+                                 gHWContextName.c_str(), haveMajor, haveMinor);
                 return false;
+            }
+            // ASKED AGAIN, THE CONTEXT IS KEPT. melonDS asks a second time
+            // from its first retro_run, with its own context current;
+            // making a new one there threw away every object it had and left
+            // the UI's context current under it, and the console crashed
+            // about 25 s later (A9, 2026-10-18). RetroArch only stores a
+            // repeated ask; so does this.
+            if (isDesktopGL(*cb) && !gHWDesktopContext) {
+                std::string what;
+                if (!openDesktopContext(*cb, &what)) {
+                    std::fprintf(stderr, "[core] asked for %s and it could not be made: %s\n",
+                                 gHWContextName.c_str(), what.c_str());
+                    return false;
+                }
+                std::fprintf(stderr, "[core] the core's own context: OpenGL %s\n",
+                             what.c_str());
             }
             gHWVulkan = cb->context_type == RETRO_HW_CONTEXT_VULKAN;
             if (!gHWVulkan) {

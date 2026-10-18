@@ -139,6 +139,21 @@ Read before working on a core, an emulator, input, saves or states.
   clock pacing ran 2 frames or 0 whenever the stopwatch wobbled near a
   frame boundary. The beat was the smallest cause.
 
+- **A CORE CAN ASK FOR ITS GL CONTEXT TWICE, AND THE SECOND ASK MUST KEEP
+  THE FIRST.** melonDS calls SET_HW_RENDER in retro_load_game and again
+  from its first retro_run. The host made a fresh desktop context on the
+  second ask, mid-frame, which threw away every object melonDS had and left
+  the UI's context current under it; the console crashed about 25 s into
+  Mario Kart DS (#219, 2026-10-18, headless on the A9). RetroArch only
+  stores a repeated ask. **Run a hardware core for a minute, not a few
+  frames, before believing its context.**
+
+- **melonDS'S OPENGL PICTURE IS NEVER SMALLER THAN 4x.** Whatever internal
+  resolution it is asked for, it builds its output at 4x the DS's size or
+  more (src/libretro/screenlayout.cpp), so 2x or 3x only draws the 3D
+  smaller and stretches it. Found by reading the render target's size in
+  the log (1024x1536 for "3x"), not the option's name.
+
 - **SDL'S SCREEN RATE IS CLOSE, NOT EXACT.** It says 59.980 for a TV whose
   EDID says 60.000, and 59.91 for a mode that measures 59.95. Anything locked
   to the screen needs a rate control to take up the difference; never

@@ -408,6 +408,8 @@ bool Core::load(const std::string& soPath) {
 
 void Core::setRefuseHWRender(bool on) { gRefuseHWRender = on; }
 
+bool Core::canServeDesktopGL() { return desktopGLServable(); }
+
 
 void Core::unload() {
     cpus::gameEnd();
@@ -432,6 +434,7 @@ void Core::unload() {
         texture_ = 0;
     }
     destroyHWTarget();
+    closeDesktopContext();
     if (gHWVulkan) vk::destroyContext();
     gHWWanted = false;
     gHWVulkan = false;
@@ -614,13 +617,19 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
             }
         } else if (!ensureHWTarget(w, h)) {
             error_ = "the core needs a render target this context cannot build";
-            g.unload_game();
+            {
+                CoreContext in;
+                g.unload_game();
+            }
             gameLoaded_ = false;
             return false;
         }
         // The core's GL resources do not exist until it is told the context is
         // ready, and it must be told before the first retro_run.
-        if (gHW.context_reset) gHW.context_reset();
+        if (gHW.context_reset) {
+            CoreContext in;
+            gHW.context_reset();
+        }
         gHWContextLive = true;
         // context_reset builds shaders and buffers, and leaves them bound.
         restoreGLState();
@@ -660,19 +669,27 @@ void Core::unloadGame() {
     // core's context_destroy walks structures that retro_unload_game is about
     // to tear down.
     if (gHWContextLive) {
-        if (gHW.context_destroy) gHW.context_destroy();
+        if (gHW.context_destroy) {
+            CoreContext in;
+            gHW.context_destroy();
+        }
         gHWContextLive = false;
         restoreGLState();
     }
     // This is the one moment a file-writing core flushes its save. RetroArch
     // does exactly this, in this order, and the reference implementation lost
     // saves for months by unloading lazily at the NEXT launch instead.
-    if (g.unload_game) g.unload_game();
+    // melonDS frees its renderer here, so its context is current.
+    if (g.unload_game) {
+        CoreContext in;
+        g.unload_game();
+    }
     gameLoaded_ = false;
     gPadDevice = RETRO_DEVICE_JOYPAD;   // the next game says its own
     gRealRemotesFrom = -1;
     gHWFrame = false;
     destroyHWTarget();
+    closeDesktopContext();
     // AFTER unload_game, for the same reason context_destroy runs before it:
     // the core's own Vulkan objects live on this device, and pulling the
     // device out from under a core that has not finished tearing down is a
@@ -771,19 +788,24 @@ int Core::runFrame() {
 }
 
 void Core::step() {
-    if (gHWWanted && gHWFBO) {
-        // Bound before the core runs as well as answered on request. Cores
-        // differ about when they ask for the framebuffer, and one that
-        // draws before asking would otherwise land on the window.
-        glBindFramebuffer(GL_FRAMEBUFFER, gHWFBO);
-        glViewport(0, 0, static_cast<GLsizei>(gHWTargetW),
-                   static_cast<GLsizei>(gHWTargetH));
+    {
+        // A desktop GL core runs in its own context (core_hwrender.cpp).
+        CoreContext in;
+        if (gHWWanted && currentFramebuffer()) {
+            // Bound before the core runs as well as answered on request.
+            // Cores differ about when they ask for the framebuffer, and one
+            // that draws before asking would otherwise land on the window.
+            glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(currentFramebuffer()));
+            glViewport(0, 0, static_cast<GLsizei>(gHWTargetW),
+                       static_cast<GLsizei>(gHWTargetH));
+        }
+        g.run();
     }
-    g.run();
     // Only the GLES path disturbs our GL state. A Vulkan core has not
-    // touched the context at all, and calling this for it would be a
-    // handful of redundant GL calls per frame for nothing.
-    if (gHWWanted && !gHWVulkan) restoreGLState();
+    // touched the context at all, nor has a desktop GL core, which drew in
+    // its own, and calling this for them would be a handful of redundant GL
+    // calls per frame for nothing.
+    if (gHWWanted && !gHWVulkan && !gHWDesktop) restoreGLState();
     ++gFramesRun;
     if (afterFrame_) afterFrame_();
 }

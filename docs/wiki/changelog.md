@@ -4,6 +4,23 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.18.6 {#v2026-10-18-6}
+
+*18 October 2026*
+
+- **New:** PS1 games get a DualShock. The sticks work in the games made for
+  them, and the controller rumbles. Games made for the original pad play as
+  they always did. A game that needs the DualShock's ANALOG button pressed
+  takes **L1 + R1 + Select**.
+  ([#345](https://github.com/MMagTech/cabinetos/issues/345))
+- **Fixed:** the Nintendo DS touch screen did nothing. The right stick now
+  moves a pointer on it, and pressing the stick (**R3**) touches.
+  ([#374](https://github.com/MMagTech/cabinetos/issues/374))
+- **New:** Nintendo DS games draw their 3D sharper at the Balanced and
+  Quality picture levels, 4 and 6 times the DS's own size. Performance keeps
+  the DS's own size, as before.
+  ([#219](https://github.com/MMagTech/cabinetos/issues/219))
+
 ## 2026.10.18.5 {#v2026-10-18-5}
 
 *18 October 2026*

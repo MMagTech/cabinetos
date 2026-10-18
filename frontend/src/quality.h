@@ -10,7 +10,9 @@
 //
 // THE DIAL MOVES TWO THINGS: the internal resolution, and on the emulators
 // that offer it, whether shaders are built in the background (Balanced,
-// Quality) or when first needed, with a short stutter (Performance).
+// Quality) or when first needed, with a short stutter (Performance). On the
+// DS the resolution comes with the renderer: its software one, at its own
+// size, at Performance, and its OpenGL one above (#219).
 // Everything else that is free is fixed at its best value for every level
 // (anisotropic filtering 16x, 3DO's high resolution, sharp vector lines), and
 // nothing here needs a file from anywhere.
@@ -60,9 +62,10 @@ void setGameChoice(int romId, std::optional<Level> l);
 // What a game runs at: its own choice, else the console's.
 Level forGame(int romId);
 
-// Whether a level changes anything for `core` (its manifest name): the nine
-// systems with a resolution to move. Only these get the pause menu's row;
-// Wii U (Cemu) has no lever without resolution packs (#207), Xbox 360 is
+// Whether a level changes anything for `core` (its manifest name): the ten
+// systems with a resolution to move, the DS only where its OpenGL renderer
+// can run (Core::canServeDesktopGL, #219). Only these get the pause menu's
+// row; Wii U (Cemu) has no lever without resolution packs (#207), Xbox 360 is
 // 720p at every level since the A9 measured it (2026-10-04), and 3DO and the
 // vector systems are fixed at every level.
 bool hasLevels(const std::string& core);
@@ -74,11 +77,13 @@ bool hasLevels(const std::string& core);
 // Applied on top of catalog::optionOverrides.
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l);
-// The same, saying whether there is Vulkan rather than asking the GPU, so the
-// option check (optcheck.h) can test both N64 renderers on any machine.
+// The same, saying whether there is Vulkan and whether a core can have
+// desktop OpenGL rather than asking the machine, so the option check
+// (optcheck.h) can test both N64 renderers and both DS renderers on any
+// machine.
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l,
-                                               bool vulkan);
+                                               bool vulkan, bool desktopGL);
 
 struct Ps2 {
     float upscale = 1.0f;

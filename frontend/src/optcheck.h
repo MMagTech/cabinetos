@@ -4,7 +4,8 @@
 // cores/check-options.sh fails when a core's options differ from cores/options/<core>.txt;
 // this fails when the console's own tables (catalog::optionOverrides with and
 // without Vulkan and for both sensor bar places, quality::coreOptions at every
-// level and on both N64 renderers, every choice of every sysopts row, and
+// level and on both N64 renderers and both DS renderers, every choice of every
+// sysopts row, and
 // wii::coreOptions both ways) name a key a core does not declare, or a value
 // it does not accept, according to those same files; and when a libretro core
 // the catalog plays a system on has no file there (catalog::libretroCores,
