@@ -297,8 +297,9 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   had the emulator readable by root alone: the console runs as `cabinet` and
   called it "not installed" (2026-09-30). The UI loop never saw it, because
   there the test copy belonged to `cabinet`. **An emulator is judged from the
-  image, not only from a copy.** `install-xenia.sh` now fails the build on
-  any file others cannot read.
+  image, not only from a copy.** `install-xenia.sh`, `install-cemu.sh` and
+  `install-rpcs3.sh` now make everything readable and fail the build on any
+  file others cannot read.
 
 - **A GITHUB ARTIFACT LOSES ITS FILES' EXECUTE BIT.** `actions/upload-artifact`
   does not keep permissions, so Cemu's program reached the image build as a
