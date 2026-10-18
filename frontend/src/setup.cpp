@@ -1313,14 +1313,10 @@ void Flow::activateStep() {
                 rebuild();
                 break;
             case Act::Edit: {
-                ui::Keyboard::Config cfg;
+                // Settings' keyboard, with first run's own title and hint.
+                ui::Keyboard::Config cfg = serverKeyboardConfig(address_);
                 cfg.title = "Your RomM server";
                 cfg.hint = "The address you open RomM at, without http://";
-                cfg.initial = address_;
-                cfg.placeholder = "192.168.1.10:6005";
-                // The two keys that save the most typing on this particular
-                // field. A passphrase wants neither.
-                cfg.shortcuts = {".local", ":8080"};
                 keyboard_.open(cfg);
                 typing_ = Typing::Address;
                 break;
@@ -1827,14 +1823,19 @@ Outcome run(const Deps& d, const Options& o) {
 
 }  // namespace setup
 
-// The keyboard for a server address, in Settings and on the startup screen:
-// first run's, without its hint, because the people here know what an
-// address is (docs/SETTINGS.md, Network).
+// The keyboard for a server address, in Settings and on the startup screen,
+// without a hint, because the people here know what an address is
+// (docs/SETTINGS.md, Network). First run builds its own from this one and adds
+// its title and hint (Flow, Act::Edit).
 ui::Keyboard::Config serverKeyboardConfig(const std::string& initial) {
     ui::Keyboard::Config cfg;
     cfg.title = "RomM server";
     cfg.initial = initial;
-    cfg.placeholder = "192.168.1.10:6005";
+    // A made-up address, the same as the wiki's (docs/wiki/first-run.md),
+    // never a real one.
+    cfg.placeholder = "192.168.0.20:8080";
+    // The two keys that save the most typing on this particular field. A
+    // passphrase wants neither.
     cfg.shortcuts = {".local", ":8080"};
     return cfg;
 }
