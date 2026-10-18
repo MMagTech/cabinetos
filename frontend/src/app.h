@@ -425,8 +425,8 @@ struct App {
     std::vector<design::Card>& cards = lib.cards;
     int& heroIndex = lib.heroIndex;
     std::string& heroPlatform = lib.heroPlatform;
-    // Which cards the Recent row shows. Empty means "everything", which is what
-    // the stand-in library wants — it has no play history to order by.
+    // Which cards the Recent row shows, and nothing else: empty is no Recent
+    // row. The stand-in library puts its six cards here (connectToServer).
     std::vector<int>& shelf = lib.shelf;
     std::vector<int>& favorites = lib.favorites;
     std::vector<romm::Game>& games = lib.games;
@@ -590,6 +590,7 @@ struct App {
     // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
     // under it.
     design::Animated scrollY;
+    int homeTopRow();
     void homeFromTheStart();
     // What is lighting the room, and what was lighting it before. Two cache
     // keys and a mix, because a cut between two covers is the one thing this

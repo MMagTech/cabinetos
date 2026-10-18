@@ -125,19 +125,26 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
     // that the thumbnail holds up and cheap enough that dozens stay resident.
     const std::string& key =
         (large && !card.coverLarge.empty()) ? card.coverLarge : card.cover;
-    if (key.empty()) return;
-    ui::drawImage(c.r, c.images.get(key), x, y, w, h, ui::Fit::Fill, 1.0f, radius);
-    // Unfocused artwork sits back. See design::kRestArtDim.
-    if (f < 1.0f)
-        c.r.draw(ui::Rect{x, y, w, h, radius,
-                          ui::Color::black(look::restDim(design::kRestArtDim) * (1.0f - f))});
+    if (!key.empty()) {
+        ui::drawImage(c.r, c.images.get(key), x, y, w, h, ui::Fit::Fill, 1.0f, radius);
+        // Unfocused artwork sits back. See design::kRestArtDim.
+        if (f < 1.0f)
+            c.r.draw(ui::Rect{x, y, w, h, radius,
+                              ui::Color::black(look::restDim(design::kRestArtDim) * (1.0f - f))});
+    }
+    // THE MARK AND THE GREY WITH OR WITHOUT ART. They came after a return
+    // for a game with no cover, so a coverless greyed arcade set showed as
+    // bright as a playable game and a coverless kept game had no dot
+    // (#398, HOME-08).
     drawKeptMark(c, card, x, y, w, radius);
     // GREYED: a game this console cannot play until a controller is paired.
     // Held back whether focused or not, so focus lands on it and it still
     // reads as unavailable; its name says why.
     if (!card.unavailable.empty())
         c.r.draw(ui::Rect{x, y, w, h, radius, ui::Color::black(design::kUnavailableDim)});
-    if (f > 0.0f && rim) {
+    // Only over something drawn on the panel: the panel's own rim is the
+    // same rim, and a second one on bare panel is a brighter edge.
+    if (f > 0.0f && rim && (!key.empty() || !card.unavailable.empty())) {
         ui::Rect edge{x, y, w, h, radius, ui::Color::white(0)};
         edge.border = f * design::kFocusRimWidth;
         edge.borderColor = ui::palette::kFocusRim;
