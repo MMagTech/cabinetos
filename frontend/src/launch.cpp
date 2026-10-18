@@ -893,6 +893,7 @@ void App::openSoundAndPace(cab::Core& core) {
         paceEvery = 0;
         paceBaseRatio = 1.0;
         paceCount = 0;
+        pace = PaceTally{};
         // Headless (offscreen) there is no refresh to lock to: nothing
         // waits for one, so a frame per loop would run the game flat out.
         const char* vd = SDL_GetCurrentVideoDriver();

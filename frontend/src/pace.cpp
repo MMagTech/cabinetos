@@ -1,7 +1,7 @@
 // The game frame: the core stepped (frozen, redrawn, rewound or run),
 // paced to the screen or the speaker, the frame uploaded, the sound
-// queued and its rate bent, and the [audio] and [pace] lines, whole and
-// unchanged (#221) (#398, restructure batch f).
+// queued and its rate bent, and the [audio] and [pace] lines (#221), whose
+// counts start again at each launch (App::pace) (#398, restructure batch f).
 
 #include "app.h"
 
@@ -22,9 +22,6 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
     // Set when a paused frame was run only to redraw it; its sound is
     // dropped below, as rewind's is.
     bool redrew = false;
-    // Frames shown, repeated and skipped in play, for the [pace] line.
-    static uint64_t paceShown = 0, paceRepeated = 0, paceHeld = 0, paceSkipped = 0;
-    static double paceDtSum = 0.0;
     // RUMBLE (#149): what the game asked for, to each player's pad,
     // and nothing while the game is not being played. Rewind replays
     // frames backwards, which is not play either.
@@ -134,12 +131,12 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
         // HOW SMOOTH IT WAS (#221): a frame shown with no new game frame
         // behind it is a repeat, and every run past the first in one
         // frame is a game frame nobody saw. Said with the [audio] line.
-        if (due > 0) ++paceShown;
+        if (due > 0) ++pace.shown;
         if (due == 0) ran = 1;   // not a repeat: the screen is faster than the game
-        if (ran == 0) ++paceRepeated;
-        if (ran == 0 && holdForSpeaker) ++paceHeld;
-        if (ran > 1) paceSkipped += static_cast<uint64_t>(ran - 1);
-        paceDtSum += dt;
+        if (ran == 0) ++pace.repeated;
+        if (ran == 0 && holdForSpeaker) ++pace.held;
+        if (ran > 1) pace.skipped += static_cast<uint64_t>(ran - 1);
+        pace.dtSum += dt;
         // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
         // own frames so fast forward keeps them half a game-second
         // apart. Taken here, compressed on rewind's worker.
@@ -189,8 +186,6 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
         // in the sound instead of a delay that lasts. Measured against
         // this stream only, so it is the same on any machine.
         static constexpr double kMaxWaitingMs = 1000.0;
-        static uint64_t droppedBytes = 0;
-        static uint64_t droppedLogAt = 0;
         if (!samples.empty() && core.speed() <= 1.0 && !rewinding && !redrew) {
             const double bytesPerMs =
                 4.0 * std::max(core.avInfo().sampleRate, 1.0) / 1000.0;
@@ -199,7 +194,7 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
             const int want = static_cast<int>(samples.size() * sizeof(int16_t));
             const int take = std::max(0, std::min(want, room)) & ~3;
             if (take > 0) SDL_PutAudioStreamData(audioStream, samples.data(), take);
-            droppedBytes += static_cast<uint64_t>(want - take);
+            pace.droppedBytes += static_cast<uint64_t>(want - take);
         }
         // THE RATE CONTROL, while locked (#221). The lock sets the
         // sound's speed from the two rates; this bends it up to 0.5%
@@ -223,21 +218,20 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
         }
         // Said at most every ten seconds, so a system that trips it
         // constantly shows up in the log rather than hiding in it.
-        if (droppedBytes > 0 && SDL_GetTicksNS() >= droppedLogAt) {
+        if (pace.droppedBytes > 0 && SDL_GetTicksNS() >= pace.droppedLogAt) {
             const double rate = std::max(core.avInfo().sampleRate, 1.0);
             std::fprintf(stderr, "[audio] dropped %.0f ms of sound to keep it in time\n",
-                         droppedBytes / (4.0 * rate) * 1000.0);
-            droppedBytes = 0;
-            droppedLogAt = SDL_GetTicksNS() + 10'000'000'000ull;
+                         pace.droppedBytes / (4.0 * rate) * 1000.0);
+            pace.droppedBytes = 0;
+            pace.droppedLogAt = SDL_GetTicksNS() + 10'000'000'000ull;
         }
         // HOW MUCH SOUND IS WAITING, every ten seconds of play, beside
         // any sound the safety net below had to drop. Together they
         // say whether a system keeps time. Added for Dreamcast on
         // 2026-09-27.
-        static uint64_t audioLogAt = 0;
         const uint64_t nowNs = SDL_GetTicksNS();
-        if (nowNs >= audioLogAt) {
-            if (audioLogAt != 0) {
+        if (nowNs >= pace.audioLogAt) {
+            if (pace.audioLogAt != 0) {
                 const double rate = std::max(core.avInfo().sampleRate, 1.0);
                 const double queuedMs =
                     SDL_GetAudioStreamQueued(audioStream) / (4.0 * rate) * 1000.0;
@@ -250,41 +244,42 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
                 // whatever the game did. Only known with a screen rate.
                 const long long missed =
                     paceScreenHz > 0.0
-                        ? std::max(0LL, std::llround(paceDtSum * paceScreenHz) -
-                                            static_cast<long long>(paceShown) *
+                        ? std::max(0LL, std::llround(pace.dtSum * paceScreenHz) -
+                                            static_cast<long long>(pace.shown) *
                                                 std::max(paceEvery, 1))
                         : 0;
                 // SOUND PER GAME FRAME against what the core's own rate
                 // and frame rate promise. A core above 0 makes more
                 // sound than real time and gets held by the speaker
-                // (N64 and Dreamcast, PROJECT.md #221).
-                static uint64_t lastAudio = 0, lastFrames = 0;
+                // (N64 and Dreamcast, PROJECT.md #221). The core's counts
+                // start at its load, as these do, so the first line's
+                // figure is the game's first ten seconds.
                 const uint64_t a = core.audioFramesTotal(), f = core.framesRun();
                 double perFrame = 0.0;
-                if (f > lastFrames && a >= lastAudio && lastFrames > 0 &&
-                    core.avInfo().fps > 0.0)
-                    perFrame = (static_cast<double>(a - lastAudio) / (f - lastFrames)) /
+                if (f > pace.lastFrames && a >= pace.lastAudio && core.avInfo().fps > 0.0)
+                    perFrame = (static_cast<double>(a - pace.lastAudio) /
+                                (f - pace.lastFrames)) /
                                    (rate / core.avInfo().fps) -
                                1.0;
-                lastAudio = a;
-                lastFrames = f;
-                if (paceShown > 0)
+                pace.lastAudio = a;
+                pace.lastFrames = f;
+                if (pace.shown > 0)
                     std::fprintf(stderr,
                                  "[pace] %llu frames shown at %.3f Hz: %llu repeated "
                                  "(%llu held for the speaker), %llu game frames "
                                  "skipped, %lld refreshes missed; sound %+.2f%%, "
                                  "sound per game frame %+.2f%%\n",
-                                 static_cast<unsigned long long>(paceShown),
-                                 paceShown / std::max(paceDtSum, 1e-9),
-                                 static_cast<unsigned long long>(paceRepeated),
-                                 static_cast<unsigned long long>(paceHeld),
-                                 static_cast<unsigned long long>(paceSkipped),
+                                 static_cast<unsigned long long>(pace.shown),
+                                 pace.shown / std::max(pace.dtSum, 1e-9),
+                                 static_cast<unsigned long long>(pace.repeated),
+                                 static_cast<unsigned long long>(pace.held),
+                                 static_cast<unsigned long long>(pace.skipped),
                                  missed, (paceRatio - 1.0f) * 100.0f,
                                  perFrame * 100.0);
-                paceShown = paceRepeated = paceHeld = paceSkipped = 0;
-                paceDtSum = 0.0;
+                pace.shown = pace.repeated = pace.held = pace.skipped = 0;
+                pace.dtSum = 0.0;
             }
-            audioLogAt = nowNs + 10'000'000'000ull;
+            pace.audioLogAt = nowNs + 10'000'000'000ull;
         }
     }
 }

@@ -19,7 +19,10 @@ period."
   open"). The exact mechanism was not pinned down.
 - **The console said so, and nobody read it.** The `[pace]` line in the very
   first test game read `sound +0.00%, sound per game frame +0.00%` (silent),
-  in the same log the volume lines were being read from.
+  in the same log the volume lines were being read from. Until #398's fix
+  for the counters (2026-10-17), every game's first `[pace]` line read +0.00%
+  per game frame whatever it played, so on a first line that figure proved
+  nothing; since then a core that makes no sound reads -100.00% there.
 - **The tests measured the change, not the console.** Anything that runs at
   every start (a thread, a reset, a service) touches everything: check sound,
   picture and a pad, not only the feature.
