@@ -99,18 +99,18 @@ install -m 0755 "$FRONTEND" "$OUT/bin/cabinetos-frontend"
 [ -f "$BRIDGE" ] || { echo "no Wii bridge at $BRIDGE" >&2; exit 1; }
 install -m 0755 "$BRIDGE" "$OUT/bin/cabinetos-wii-bridge"
 
-# It has to be an executable this machine's kernel will run, not a script, an
-# empty file, or — the one that has actually happened in this project — an
-# artifact that downloaded as a directory. `file` is in every runner image.
-if command -v file >/dev/null 2>&1; then
-    for bin in cabinetos-frontend cabinetos-wii-bridge; do
-        case "$(file -b "$OUT/bin/$bin")" in
-            ELF\ 64-bit\ LSB\ *executable*|ELF\ 64-bit\ LSB\ *shared\ object*) ;;
-            *) echo "$bin is not an x86-64 ELF: $(file -b "$OUT/bin/$bin")" >&2
-               exit 1 ;;
-        esac
-    done
-fi
+# It has to be an x86-64 executable this machine's kernel will run, not a
+# script, an empty file, a build for another processor, or — the one that has
+# actually happened in this project — an artifact that downloaded as a
+# directory. Without `file` nothing is checked, so it is required.
+command -v file >/dev/null 2>&1 || { echo "file is needed to check the binaries" >&2; exit 1; }
+for bin in cabinetos-frontend cabinetos-wii-bridge; do
+    case "$(file -b "$OUT/bin/$bin")" in
+        ELF\ 64-bit\ LSB\ *executable,\ x86-64,*|ELF\ 64-bit\ LSB\ shared\ object,\ x86-64,*) ;;
+        *) echo "$bin is not an x86-64 ELF: $(file -b "$OUT/bin/$bin")" >&2
+           exit 1 ;;
+    esac
+done
 
 # --- The cores -------------------------------------------------------------
 #
