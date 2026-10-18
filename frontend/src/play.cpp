@@ -121,6 +121,9 @@ void App::finishExit() {
     pendingStateId = 0;
     pendingStatePath.clear();
     pendingResume = false;
+    // A quit that was waiting on the core is answered by any exit, or the
+    // next game's pumpExit would quit it the moment it is up (#398).
+    exitPending = false;
     stateHold = stateHoldWaiting = false;
     rewindKeep.reset();
     rewindAvailable = -1;

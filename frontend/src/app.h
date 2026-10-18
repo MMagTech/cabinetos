@@ -2051,6 +2051,7 @@ struct App {
     // pace.cpp
     void runGameFrame(cab::Core& core, float dt, bool rewinding);
     // launch.cpp
+    void forgetLaunchAsks();
     bool takeFinishedJob();
     void prepareSaveDirAndDiscs(LaunchContext& c);
     void restoreBeforeLoad(LaunchContext& c);
