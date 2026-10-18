@@ -203,7 +203,7 @@ fi
                 ($1 FS $2) in n { k = $1 FS $2; at[k] = at[k] sep[k] $3; sep[k] = ", "; c[k]++ }
                 END { for (k in n) { split(k, p, FS)
                       printf "%s: warning: %s (%d more than at the base; now on line%s %s)\n",
-                             p[1], p[2], n[k], c[k] > 1 ? "s" : "", at[k] } }' \
+                             p[1], p[2], n[k], (c[k] > 1 ? "s" : ""), at[k] } }' \
         "$WORK/new.k" "$WORK/head.w" | sort
     echo '```'
 } >> "$REPORT"
