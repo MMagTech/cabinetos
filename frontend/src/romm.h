@@ -93,7 +93,9 @@ public:
     // Step two, called on the pairing's own interval.
     //   1  approved — the token is now held by this client
     //   0  still pending
-    //  -1  failed or expired; `err` says which
+    //  -1  failed; `err` says why
+    //  -2  this code is over: it expired, or was refused on the phone;
+    //      `err` says which. A new code is the way on.
     int pollPairing(const Pairing& p, std::string* err);
 
     // `/api/users/me` — the id and name behind the token. Needs the `me.read`

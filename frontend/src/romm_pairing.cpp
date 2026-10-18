@@ -179,9 +179,28 @@ int Client::pollPairing(const Pairing& p, std::string* err) {
     long status = 0;
     if (!postJson("/api/auth/device/token", payload, &body, &status, err)) return -1;
 
-    // Still waiting for the person to approve. Not an error, and the common
-    // case for as long as it takes them to pick up a phone.
-    if (status == 400 || status == 428) return 0;
+    // RomM answers 400 to every poll that has no token yet and says why in
+    // `detail` (backend/endpoints/device_auth.py, the same from 5.1.0 to
+    // 5.4.0): authorization_pending and slow_down are still waiting, the
+    // common case for as long as it takes somebody to pick up a phone;
+    // expired_token (ten minutes, or a minute after a deny) and access_denied
+    // are the end of this code.
+    if (status == 400 || status == 428) {
+        std::string detail;
+        if (json_object* root = json_tokener_parse(body.c_str())) {
+            detail = jstr(root, "detail");
+            json_object_put(root);
+        }
+        if (detail == "expired_token") {
+            if (err) *err = "the code expired";
+            return -2;
+        }
+        if (detail == "access_denied") {
+            if (err) *err = "the pairing was refused";
+            return -2;
+        }
+        return 0;
+    }
     if (status == 404 || status == 410) {
         if (err) *err = "the pairing expired before it was approved";
         return -1;
