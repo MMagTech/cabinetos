@@ -21,6 +21,7 @@
 #pragma once
 
 #include <cstddef>
+#include <map>
 #include <string>
 
 namespace wii {
@@ -103,8 +104,14 @@ constexpr const char* kMiiDatabase = "shared2/menu/FaceLib/RFL_DB.dat";
 // `BT.MOT` from a SYSCONF file: 1 on, 0 off, -1 when the file or the entry is
 // not there.
 int readMotor(const std::string& sysconfPath);
-// What the console last read, as the core's word: "enabled" or "disabled".
-std::string rumbleOption();
+// THE ONE RULE, for the launch and the option check (optcheck.h): a Wii game
+// on Dolphin is given `dolphin_enable_rumble` as the console last read it;
+// every other game, nothing. Applied last, on top of the other options. The
+// second form is told the switch, so the check can test both words.
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug);
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug, bool rumbleOn);
 // Reads a closed game's SYSCONF and keeps what it says.
 void keepRumbleFrom(const std::string& sysconfPath);
 

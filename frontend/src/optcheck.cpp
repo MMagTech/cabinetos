@@ -1,7 +1,5 @@
 #include "optcheck.h"
 
-#include <dirent.h>
-
 #include <cstdio>
 #include <fstream>
 #include <map>
@@ -11,7 +9,9 @@
 
 #include "catalog.h"
 #include "quality.h"
+#include "storage.h"
 #include "sysopts.h"
+#include "wii.h"
 
 namespace optcheck {
 
@@ -35,14 +35,6 @@ std::map<std::string, std::set<std::string>> readList(const std::string& path) {
     return out;
 }
 
-// The systems a core serves, where a table depends on the system.
-std::vector<std::string> slugsFor(const std::string& core) {
-    if (core == "dolphin") return {"ngc", "wii"};
-    if (core == "beetle_vb") return {"virtualboy"};
-    if (core == "gambatte") return {"gb", "gbc"};
-    return {""};
-}
-
 // Options whose values are files the core finds on the console, so a listing
 // made with an empty system folder shows none of them. Opera lists the BIOS
 // images it finds; with none, only "disabled". Only the key is checked.
@@ -51,28 +43,32 @@ bool valuesAreFiles(const std::string& key) { return key == "opera_bios"; }
 }  // namespace
 
 int run(const std::string& dir) {
-    std::vector<std::string> cores;
-    if (DIR* d = ::opendir(dir.c_str())) {
-        while (dirent* e = ::readdir(d)) {
-            const std::string n = e->d_name;
-            if (n.size() > 4 && n.compare(n.size() - 4, 4, ".txt") == 0)
-                cores.push_back(n.substr(0, n.size() - 4));
-        }
-        ::closedir(d);
-    }
-    if (cores.empty()) {
-        std::fprintf(stderr, "[optcheck] no option lists in %s\n", dir.c_str());
-        return 1;
-    }
-
+    // EVERY LIBRETRO CORE THE CATALOG PLAYS A SYSTEM ON, and those systems,
+    // rather than the lists that happen to be in the folder: a core with no
+    // list had nothing checked and passed (#398).
+    const std::map<std::string, std::vector<std::string>> cores = catalog::libretroCores();
     int bad = 0, checked = 0;
-    for (const std::string& core : cores) {
-        const auto declared = readList(dir + "/" + core + ".txt");
+    for (const auto& [core, slugs] : cores) {
+        const std::string list = dir + "/" + core + ".txt";
+        if (!storage::exists(list)) {
+            std::fprintf(stderr, "[optcheck] %s has no option list (%s)\n", core.c_str(),
+                         list.c_str());
+            ++bad;
+            continue;
+        }
+        const auto declared = readList(list);
         // Everything the console can set on this core, with where it came from.
         std::vector<std::pair<std::pair<std::string, std::string>, std::string>> sets;
-        for (const auto& kv : catalog::optionOverrides(core))
-            sets.push_back({kv, "catalog"});
-        for (const std::string& slug : slugsFor(core)) {
+        // The catalog's choices on any machine: with Vulkan and without (the
+        // N64's renderer), the sensor bar above the TV and below. Each value
+        // once.
+        std::set<std::pair<std::string, std::string>> fromCatalog;
+        for (bool vk : {true, false})
+            for (bool above : {true, false})
+                for (const auto& kv : catalog::optionOverrides(core, vk, above))
+                    fromCatalog.emplace(kv.first, kv.second);
+        for (const auto& kv : fromCatalog) sets.push_back({kv, "catalog"});
+        for (const std::string& slug : slugs) {
             for (int l = 0; l < quality::kLevelCount; ++l)
                 for (bool vk : {true, false})
                     for (const auto& kv : quality::coreOptions(
@@ -84,6 +80,10 @@ int run(const std::string& dir) {
                 for (const sysopts::Choice& c : o.choices)
                     for (const auto& kv : c.sets)
                         sets.push_back({{kv.first, kv.second}, std::string("pause menu ") + o.id});
+            // And the Wii's rumble switch, both ways (#274).
+            for (bool on : {true, false})
+                for (const auto& kv : wii::coreOptions(core, slug, on))
+                    sets.push_back({kv, "wii rumble"});
         }
         for (const auto& [kv, from] : sets) {
             ++checked;
