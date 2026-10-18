@@ -9,7 +9,9 @@
 
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <fstream>
+#include <map>
 #include <unordered_set>
 #include <vector>
 
@@ -245,6 +247,21 @@ std::string coreFileName(const std::string& manifestCoreName) {
         stem.compare(stem.size() - suffix.size(), suffix.size(), suffix) == 0)
         stem.erase(stem.size() - suffix.size());
     return stem + "_libretro.so";
+}
+
+std::map<std::string, std::vector<std::string>> libretroCores() {
+    static const std::string kLibretro = "_libretro.so";
+    std::map<std::string, std::vector<std::string>> out;
+    for (const Entry& e : kTable) {
+        if (e.support != Support::Playable || !e.core || cab::standalone::find(e.core)) continue;
+        const std::string file = coreFileName(e.core);
+        if (file.size() <= kLibretro.size() ||
+            file.compare(file.size() - kLibretro.size(), kLibretro.size(), kLibretro) != 0)
+            continue;
+        std::vector<std::string>& slugs = out[e.core];
+        if (std::find(slugs.begin(), slugs.end(), e.slug) == slugs.end()) slugs.push_back(e.slug);
+    }
+    return out;
 }
 
 namespace {

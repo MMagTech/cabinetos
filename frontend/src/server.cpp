@@ -98,6 +98,15 @@ void finishSignOut() {
     remove(storage::root() + "/users");
     remove(covercache::dir());
     remove(storage::configDir() + "/user.json");
+    // What the console learned about that server's games, filed by rom id:
+    // their records, the codes read off their files (wii.cpp, wiiu.cpp) and
+    // the per-game picture and widescreen choices (quality.cpp, ps2.cpp).
+    // RomM numbers every server's games from 1, so the next server's games
+    // would take them over (#398, FILES-12).
+    remove(storage::gamesDir());
+    for (const char* f : {"wii-codes.txt", "wiiu-codes.txt", "picture-quality.json",
+                          "ps2-widescreen.json"})
+        remove(storage::configDir() + "/" + f);
     accounts::forgetEveryone();
     firstrun::forgetServerAddress();
     // The empty folders back, so the tree is what a new console has.

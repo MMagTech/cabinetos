@@ -46,14 +46,7 @@ void App::goToDestination(int d) {
         searchTyped.clear();
         searchPending.clear();
         stack.push_back(Screen::Search);
-        ui::Keyboard::Config cfg;
-        cfg.title = "Search";
-        // "Game name" spelled out what the box was for (MMagTech,
-        // 2026-10-14: "we can do better than that"); a search box says
-        // Search, and the dots make it read as a place to type.
-        cfg.placeholder = "Search\xE2\x80\xA6";
-        cfg.dockedBottom = true;
-        keyboard.open(cfg);
+        openSearchKeyboard();
     } else if (d == 3) {
         // Rebuilt on every visit: the drives, the network and the account
         // are read fresh, never remembered.

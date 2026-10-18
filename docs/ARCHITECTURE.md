@@ -21,9 +21,9 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `cores/` | How every emulator the image carries is built: `build-core.sh` (the 22 libretro cores, each pinned by commit in its `case` arm), `build-pcsx2.sh`, `build-cemu.sh`, `build-sunshine.sh` and their builder containers; `options/<core>.txt`, every option each core declares at its pin | `/usr/lib/cabinetos/cores/` and the emulators' folders |
 | `build_files/` | The image build's scripts: `build.sh` and the scripts it calls (remove the desktop and the storefronts, set up the session, the branding), `install-*.sh` (one per piece the image carries), `require-*.sh` (checks that fail the build) | run once, inside the image build |
 | `system_files/` | Files copied over the image as they are: the session script, systemd units, the root helpers in `usr/libexec/`, polkit rules, udev rules, the diagnostic report, and a few files in `etc/` (the SSH settings, the update signing key) | `/usr` and `/etc` |
-| `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base | GitHub Actions |
+| `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base, the checks every pull request runs (`checks.yml`: `check-romm-paths.sh`, `check-doc-paths.py`, `check-project-index.sh`, `check-long-files.sh`), and the frontend's checks and reports (`build-frontend.yml`: `check-new-warnings.sh`, `run-self-tests.sh`, `report-unused-code.sh`) | GitHub Actions |
 | `.github/` | The workflows, the issue form for players, and the pull request template | GitHub |
-| `tools/` | Test and maintenance tools, run by hand; most are written for the maintainer's machines | nowhere |
+| `tools/` | Test and maintenance tools, run by hand; they take their machines from the environment (CONTRIBUTING.md, "Running and testing") | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
 | `licences/` | The full licence texts the image ships, and `SOURCES`, where each comes from | `/usr/share/licenses/` |
 | `docs/` | The specification, the decisions, the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
@@ -160,7 +160,9 @@ is in the file named for its feature, and
 8. `startBrowsing`; `startSync`, which starts the upload queue and sends
    first whatever an earlier run still owed (`uploader.resendOwed`);
    `recoverPowerCutSaves`, which finishes the saves a power cut left in an
-   emulator run as a program; then the rest of the start-up steps.
+   emulator run as a program (an Xbox game's drive through
+   `recoverDriveSaves`, which that game's launch also runs); then the rest
+   of the start-up steps.
 9. `runFrameLoop` (`frame.cpp`) until the console exits or restarts; then the
    game is left, the emulators closed, the core unloaded, and `shutDown`.
 
@@ -180,11 +182,16 @@ is in the file named for its feature, and
 3. Each frame, `pumpLaunch` (`launch.cpp`) reads the job. A failed job is
    undone (the keep record comes out; the bytes stay, to be evicted). A
    Download that was not a Play stops when the game is on disk. A game the
-   person walked away from finishes quietly and does not start.
+   person walked away from finishes quietly and does not start. A launch
+   that loads no game here (these three, a core that refuses the game, an
+   emulator run as a program) forgets what its press asked for: a picked
+   state, Home's Resume, a start disc (`forgetLaunchAsks`).
 4. The curtain comes down before the rest of the blocking work (restoring
    the saves from RomM and loading the game, both on the frame thread), so
    the person sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
-   (`standalone_play.cpp`) and ends this flow.
+   (`standalone_play.cpp`) and ends this flow; an Xbox game whose last saves
+   are still on its drive has them taken off first (`recoverDriveSaves`,
+   `startup.cpp`), or does not start.
 5. For a core: this person's save folder for this game and core is made, a
    folder save is restored and the starting disc chosen
    (`prepareSaveDirAndDiscs`); then the file saves (most saves) are restored
@@ -254,7 +261,7 @@ reaches a console".
 | A Settings row | `settingsflow.cpp` (the rows and what each does), the feature's `*flow.cpp`, docs/SETTINGS.md |
 | What a button does, or where it goes | `input.cpp` (who gets the event), `nav.cpp`, `actions.cpp`; then About, How to, and `docs/wiki/navigation.md` |
 | Which core plays a platform | `catalog.cpp` (the platform table), `savetable.cpp` (its saves' tag) |
-| An option the console sets on a core | `coreoptions.cpp`, `quality.cpp`, `sysopts.cpp` (the three tables `--check-option-tables` checks against `cores/options/`); `launch.cpp` also sets one by hand (Dolphin's rumble for Wii), which the check does not see |
+| An option the console sets on a core | `coreoptions.cpp`, `quality.cpp`, `sysopts.cpp` and `wii.cpp` (Dolphin's rumble for Wii): the four sources `launch.cpp` merges, in that order, and `--check-option-tables` checks against `cores/options/` (`optcheck.cpp`); a libretro core in `catalog.cpp`'s table with no list there fails it |
 | A new libretro core | `cores/build-core.sh` (a `case` arm; its name there is the core's name everywhere, and the file is that name without a trailing `_libretro`, plus `_libretro.so`), `build-core.yml`'s list, the two counts of 22 (`ci/stage-image-payload.sh`'s `EXPECTED` and `build_files/install-frontend.sh`), `cores/options/<core>.txt` (made from what `tools/core-options.c` prints for the built core; `cores/check-options.sh` runs it), `catalog.cpp` (the platform's row; the table is positional, read its struct first), `savetable.cpp` (its two tags), `coreoptions.cpp`, `achievements.cpp`'s console table for a new system, `docs/wiki/systems.md`, and the licences (CONTRIBUTING.md, "Duties") |
 | Moving a core's pin | its `COMMIT` in `cores/build-core.sh`; in the same commit `cores/options/<core>.txt`, and the same commit in `licences/SOURCES` (then `tools/fetch-licences.py`) and `docs/LICENCES.md` |
 | An emulator run as a program | `standalone.h`, its `standalone_<name>.cpp`, its `build_files/install-*.sh` or `system_files/usr/share/cabinetos/flatpaks.list`, its row in `catalog.cpp` |
@@ -305,6 +312,8 @@ Each with where it is recorded.
   downloads (`launch_routes.cpp`), `probes.cpp`, the manual (`manual.cpp`),
   avatars (`startup.cpp`), small and big covers (`image.cpp`) and the cover
   cache's key (`covercache.cpp`). They should move into the client.
+  `ci/check-romm-paths.sh` lists them and fails a pull request that adds
+  another.
 - **Threads not yet put right:** #404 ("The launch worker writes the job's
   entry path while the frame thread reads it"), #405 ("favorites.json is
   written from two threads through the same temporary file with no lock"),
@@ -317,24 +326,20 @@ Each with where it is recorded.
   testing push, including a core's options list that no longer matches
   (`cores/check-options.sh` runs inside the core build).
 - **No test framework and no single local check command:** a test is a flag
-  in the shipped program; `just lint` does not lint the `system_files/`
-  scripts that CI lints. The compiler's warnings are listed, not counted
+  in the shipped program. The compiler's warnings are listed, not counted
   against a baseline.
-- **The test tools are written for the maintainer's machines.**
-  `tools/ui-loop.sh`, `tools/base-checks.sh`, `tools/check-applied.sh` and
-  `tools/installer-vm.sh` default to his console (`CABINETOS_A9` or
-  `CABINETOS_HOST` overrides it; `ui-loop.sh`'s test VM and the key paths in
-  `ui-loop.sh` and `installer-vm.sh` have no override) and need state he set up by hand on it;
-  `tools/romm-readonly-relay.py` and `tools/offline-relay.py` have his server
-  built in. The empty server address field on first run shows his server's
-  address as its example (`setup.cpp`). His addresses are in comments too
-  (`cabinetos-session`, `romm.h`, `net.h`, `settingsflow.cpp`); the docs no
-  longer carry them (2026-10-17). All of these go in the faults step.
+- **Some test tools lean on state the maintainer set up by hand** on his
+  console: `tools/ui-loop.sh` (a folder of cores and the builder image),
+  `tools/check-applied.sh` (the builder image) and the disc rig
+  (`tools/disc-rig/README.md`). Their machines come from the environment
+  (CONTRIBUTING.md, "Running and testing").
+- **Some of the maintainer's own details are still in the code:** the empty server
+  address field on first run shows his server's address as its example
+  (`setup.cpp`), and comments carry his controllers' Bluetooth addresses
+  (`bluetooth.cpp`, `bluetooth.h`, `players.cpp`, `players.h`).
 - **A fork's image carries the project's key and image name until the fork
   edits them:** they are written into tracked files (CONTRIBUTING.md,
-  "Generate a signing key", lists them). `build.yml`'s
-  warning for an unsigned image still points to a README section; the
-  section is in CONTRIBUTING.md.
+  "Generate a signing key", lists them).
 - **Two test stand-ins are not in the repository:** the frame-time tool many
   comments cite as `frames.py`, and `racemock.py`, which `--romm-race-test`
   needs (`romm_racetest.cpp`).
@@ -379,13 +384,12 @@ comments, which the faults step fixes. Until then, trust the code:
   one); `build_files/build.sh` and `build_files/require-cec.sh` call HDMI-CEC
   a hard requirement, though it was shelved on 2026-09-24; several workflow
   headers say pull requests to `main` build the image, which they do not.
-  Others: `frontend/Containerfile` cites `frontend/src/archive.h`, which does
-  not exist; `selftests.cpp` says `--first-run-rules` runs in CI (it does
+  Others: `frontend/Containerfile` cites an `archive.h` that `frontend/src/`
+  does not have; `selftests.cpp` says `--first-run-rules` runs in CI (it does
   not); `samplelibrary.h` says main.cpp is its only user (startup.cpp is);
   `cores/check-options.sh` names catalog.cpp for what is now
   `coreoptions.cpp`; `catalog.cpp` says Cabinet's manifest is the source of
-  truth for its table; `ci/stage-image-payload.sh` says it checks for an
-  x86-64 program and accepts any 64-bit one; `cores/build-core.sh` says core pins follow Cabinet's
+  truth for its table; `cores/build-core.sh` says core pins follow Cabinet's
   manifest and "are not to be updated here", which predates both Cabinet
   ceasing to be a constraint (2026-10-11) and the stability rule for moving
   pins (docs/PROJECT.md, "Constraints and principles", 8, 2026-10-14), which
@@ -393,9 +397,7 @@ comments, which the faults step fixes. Until then, trust the code:
 - **More code comments the docs tidy found:** Developer access placed in
   "Settings, System" (`system_files/etc/ssh/sshd_config.d/30-cabinetos.conf`,
   `cabinetos-developer.service`, `enable-ssh.sh`, `app.h`; it is the last row
-  of About); `build.yml`'s warning for an unsigned image points to a README
-  section that is CONTRIBUTING.md, "Generate a signing key";
-  `frontend/Makefile` points to README.md for the loop, which is
+  of About); `frontend/Makefile` points to README.md for the loop, which is
   CONTRIBUTING.md, "Running and testing"; `frontend/ps2/CabinetPS2Host.cpp`
   and `.h` cite docs/PCSX2-HOST-SURFACE.md, now in `docs/history/` (a stub
   keeps the old path); `storage.h`'s layout comment, which

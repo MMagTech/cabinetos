@@ -635,7 +635,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 static_cast<int64_t>(static_cast<double>(expectedSize) *
                                      cache::kOverheadFraction);
             if (cache::freeBytes(location) < want) {
-                cache::evictUntilFree(location, want, /*protectRomId=*/0);
+                cache::evictUntilFree(location, want, id);
                 if (cache::freeBytes(location) < want) {
                     // THE CONSTRAINT, NOT WHAT TO DO ABOUT IT (#110,
                     // MMagTech, 2026-10-06). It said "Remove downloads or
@@ -720,10 +720,12 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     // what comes out, on top of the archive already on disk. Nothing to do
     // for a .chd or an arcade set handed over unextracted, which is most of
     // the large files in a library.
-    if (const int64_t unpacked = romfile::unpackedSize(dest, validExts, blockExtract);
-        unpacked > 0 && cache::freeBytes(location) < unpacked) {
-        cache::evictUntilFree(location, unpacked, id);
-        if (cache::freeBytes(location) < unpacked) {
+    const int64_t unpacked = romfile::unpackedSize(dest, validExts, blockExtract);
+    const int64_t need =
+        unpacked + static_cast<int64_t>(static_cast<double>(unpacked) * cache::kOverheadFraction);
+    if (need > 0 && cache::freeBytes(location) < need) {
+        cache::evictUntilFree(location, need, id);
+        if (cache::freeBytes(location) < need) {
             job.message = "Not enough space";
             job.stage = LaunchJob::Stage::Failed;
             return;

@@ -2,20 +2,21 @@
 //
 // THE OTHER HALF OF THE VERSION-BUMP CHECK (#63, MMagTech 2026-10-02).
 // cores/check-options.sh fails when a core's options differ from cores/options/<core>.txt;
-// this fails when the console's own tables (catalog::optionOverrides,
-// quality::coreOptions at every level and on both N64 renderers, and every
-// choice of every sysopts row) name a key a core does not declare, or a value
-// it does not accept, according to those same files. Run by CI on every
-// frontend build, with no core and no GPU:
+// this fails when the console's own tables (catalog::optionOverrides with and
+// without Vulkan and for both sensor bar places, quality::coreOptions at every
+// level and on both N64 renderers, every choice of every sysopts row, and
+// wii::coreOptions both ways) name a key a core does not declare, or a value
+// it does not accept, according to those same files; and when a libretro core
+// the catalog plays a system on has no file there (catalog::libretroCores,
+// which also gives each core's systems). Run by CI on every frontend build,
+// with no core and no GPU:
 //
 //   cabinetos-frontend --check-option-tables cores/options
 //
 // Exits 0 when everything fits, 1 with one line per misfit otherwise.
 //
-// One gap, said plainly: catalog's N64 renderer choice is only made where
-// there is Vulkan, so on a machine without it that line is not checked here.
-// The console's own launch-time check (core_options.cpp, checkOverrides)
-// covers it on every real console.
+// Not checked: PCSX2's options (catalog::optionOverrides names three), since
+// PCSX2 is not a libretro core and has no list in cores/options/.
 
 #pragma once
 

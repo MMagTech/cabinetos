@@ -17,7 +17,12 @@ using namespace design;   // NOLINT, as main.cpp names them
 // sixteen cards could focus none of them (the d-pad clicked, nothing
 // moved), and the other way round it reached for a card that no longer
 // existed and crashed. Found on the A9, 2026-09-24.
-auto App::shelfSlots() -> size_t { return shelf.empty() ? cards.size() : shelf.size(); }
+//
+// THE SHELF AND NOTHING ELSE. An empty shelf used to mean every card in the
+// store, which grows with every grid page and search result, so a person
+// who had played nothing saw a whole platform as Recent once they opened
+// one, and their favourites twice (#398, HOME-01).
+auto App::shelfSlots() -> size_t { return shelf.size(); }
 
 // Whether there is a game to resume. It is shelf slot 0 when there is.
 bool App::haveResume() { return heroIndex >= 0 && !shelf.empty(); }
@@ -59,8 +64,7 @@ bool App::rowExists(int row) { return rowSlots(row) > 0; }
 auto App::cardAt(int row, int slot) -> Card* {
     if (row == RowRecent) {
         if (slot < 0 || static_cast<size_t>(slot) >= shelfSlots()) return nullptr;
-        return &cards[shelf.empty() ? static_cast<size_t>(slot)
-                                    : static_cast<size_t>(shelf[slot])];
+        return &cards[static_cast<size_t>(shelf[slot])];
     }
     if (slot < 0 || static_cast<size_t>(slot) >= favorites.size()) return nullptr;
     return &cards[favorites[slot]];
@@ -73,11 +77,16 @@ auto App::slotAnim(std::vector<Animated>* v, int row, int slot) -> Animated& {
     return r[s];
 }
 
-// HOME FROM THE START: the first card of Recent, every row scrolled back.
-// For a new person, and for arriving by the bar or a shoulder, which
+// The row Home starts on: Recent, or Favorites when nothing has been played.
+int App::homeTopRow() {
+    return (!rowExists(RowRecent) && rowExists(RowFavorites)) ? RowFavorites : RowRecent;
+}
+
+// HOME FROM THE START: the first card of the top row, every row scrolled
+// back. For a new person, and for arriving by the bar or a shoulder, which
 // enters every destination fresh. Back to Home keeps your place.
 void App::homeFromTheStart() {
-    focusRow = RowRecent;
+    focusRow = homeTopRow();
     focusSlot = 0;
     shelfScroll[0].settle(0.0f);
     shelfScroll[1].settle(0.0f);
@@ -215,8 +224,9 @@ auto App::homeKey(screens::Nav n) -> bool {
         case screens::Nav::Up:
             // Up out of the top shelf is the bar, the same as it is on the
             // Library and in a grid. This is the one that used to be a row
-            // move into RowBar.
-            if (focusRow == RowRecent) {
+            // move into RowBar. Favorites is the top shelf when there is
+            // no Recent.
+            if (focusRow == RowRecent || !rowExists(RowRecent)) {
                 leaveFocus();
                 barSlot = BarHome;
                 barFocused = true;
@@ -255,7 +265,8 @@ void App::drawHome(float dt, float sc) {
         kShelfCoverHeight + kShelfHeadroom;
 
     const float recentTop = barTop + barHeight + barGapBelow;
-    const float favoritesTop = recentTop + shelfBlockHeight;
+    // Favorites takes Recent's place when nothing has been played.
+    const float favoritesTop = recentTop + (rowExists(RowRecent) ? shelfBlockHeight : 0.0f);
 
     // Scroll only as far as the focused row needs. On the bar or Recent
     // that is not at all — Home should not drift under the cursor. With
@@ -279,6 +290,7 @@ void App::drawHome(float dt, float sc) {
     // ---- The hero -------------------------------------------------------
     //
     float shelfHeaderY = recentTop - scroll;
+    screens::Ctx coverCtx{renderer, text, images, sc, &cards};
 
     // One shelf, drawn twice: Recent and Favorites are the same component in
     // different arrangements, which is what the design system says every
@@ -291,11 +303,9 @@ void App::drawHome(float dt, float sc) {
         // card, or two things look selected at once and pressing A appears
         // to do something to the wrong one.
         const bool rowFocused = (focusRow == rowId) && !barFocused && !accountsOpen;
-        const size_t count = indices.empty() ? cards.size() : indices.size();
+        const size_t count = indices.size();
         if (count == 0) return 0.0f;
-        auto at = [&](size_t slot) -> size_t {
-            return indices.empty() ? slot : static_cast<size_t>(indices[slot]);
-        };
+        auto at = [&](size_t slot) -> size_t { return static_cast<size_t>(indices[slot]); };
 
         // The shelf header: Title 3, with the chevron that says the row
         // continues into a screen of its own.
@@ -426,7 +436,7 @@ void App::drawHome(float dt, float sc) {
             if (cullX + kShelfCoverWidth < -kCullMargin) continue;
             if (cullX > ui::kCanvasWidth + kCullMargin) break;
 
-            Card& card = cards[i];
+            const Card& card = cards[i];
             // THE LIFT FOLLOWS FOCUS EVERY FRAME, as the grid's does, so
             // focus going up to the bar, into the account panel, or
             // arriving fresh from the bar all look right without each
@@ -448,50 +458,11 @@ void App::drawHome(float dt, float sc) {
             const float x = baseX - (w - kShelfCoverWidth) * 0.5f;
             const float y = shelfTop - (h - kShelfCoverHeight) * 0.5f;
 
-            // The coloured panel under the art: it is what shows while a
-            // cover is still decoding, what stays if there is none, and
-            // what the art fades in over.
-            ui::Rect cover{x, y, w, h, kCoverRadius * scale, card.art};
-            cover.border = f * kFocusRimWidth;
-            cover.borderColor = ui::palette::kFocusRim;
-            cover.shadowBlur = f * kFocusShadowBlur;
-            cover.shadowOffsetY = f * kFocusShadowOffsetY;
-            cover.shadowColor = ui::Color::black(0.55f * f);
-            renderer.draw(cover);
-
-            if (!card.cover.empty()) {
-                // Fill, which the drawing code turns into fit-over-a-
-                // blurred-echo by itself when the cover is the wrong shape.
-                ui::drawImage(renderer, images.get(card.cover), x, y, w, h,
-                              ui::Fit::Fill, 1.0f, kCoverRadius * scale);
-                // Unfocused artwork sits back. See design::kRestArtDim.
-                if (f < 1.0f)
-                    renderer.draw(ui::Rect{x, y, w, h, kCoverRadius * scale,
-                                           ui::Color::black(look::restDim(kRestArtDim) * (1.0f - f))});
-                // The kept mark, the same as the grid draws. A mark that
-                // appeared on a game in one screen and not in another is
-                // exactly the drift the shared design system exists to
-                // prevent.
-                if (card.kept) {
-                    const float d = kKeptMarkSize * scale;
-                    const float mx = x + w - kKeptMarkInset * scale - d;
-                    const float my = y + kKeptMarkInset * scale;
-                    const float r = kKeptMarkRing * scale;
-                    renderer.draw(ui::Rect{mx - r, my - r, d + r * 2.0f, d + r * 2.0f,
-                                           (d + r * 2.0f) * 0.5f,
-                                           ui::Color::black(0.55f)});
-                    renderer.draw(ui::Rect{mx, my, d, d, d * 0.5f,
-                                           ui::palette::kScreenCyan});
-                }
-                // The rim again, over the art: it is the focus indicator and
-                // nothing may sit on top of it.
-                if (f > 0.0f) {
-                    ui::Rect rim{x, y, w, h, kCoverRadius * scale, ui::Color::white(0)};
-                    rim.border = f * kFocusRimWidth;
-                    rim.borderColor = ui::palette::kFocusRim;
-                    renderer.draw(rim);
-                }
-            }
+            // THE GRID'S COVER, NOT A COPY OF IT. Home had its own, which
+            // drifted: no grey for a game that cannot be played here, and a
+            // kept dot that grew with focus (#398, HOME-07).
+            screens::drawCover(coverCtx, card, x, y, w, h, kCoverRadius * scale, f,
+                               /*rim=*/true);
 
             // No caption here any more — the focused card's title is in
             // the shelf header. At 158 points wide a caption truncated

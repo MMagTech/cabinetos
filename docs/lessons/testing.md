@@ -19,7 +19,10 @@ period."
   open"). The exact mechanism was not pinned down.
 - **The console said so, and nobody read it.** The `[pace]` line in the very
   first test game read `sound +0.00%, sound per game frame +0.00%` (silent),
-  in the same log the volume lines were being read from.
+  in the same log the volume lines were being read from. Until #398's fix
+  for the counters (2026-10-17), every game's first `[pace]` line read +0.00%
+  per game frame whatever it played, so on a first line that figure proved
+  nothing; since then a core that makes no sound reads -100.00% there.
 - **The tests measured the change, not the console.** Anything that runs at
   every start (a thread, a reset, a service) touches everything: check sound,
   picture and a pad, not only the feature.
@@ -334,7 +337,9 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   the `input` group's alone; only pads get the seat user's grant.
 
 - **ydotool's virtual keyboard has no key repeat**, so a held key sends one
-  press. A held volume or arrow key cannot be tested with it.
+  press. A held volume key cannot be tested with it. A held arrow can: the
+  console runs its own hold from the press to the release, on every screen
+  since #398 (PLAY-03).
 
 - **frames.py CANNOT SEE A REPEATED GAME FRAME.** (frames.py is a frame-time
   script kept on the reference console, not in this repository; it reads
@@ -416,7 +421,7 @@ minute and guessing at it for twenty.
   For the server COMING BACK, point the console at a
   relay on the A9 itself, `CABINETOS_ROMM=127.0.0.1:16005` with
   `tools/offline-relay.py` copied to the A9 (it forwards to the RomM server
-  named at its top): relay off is no server, relay
+  in `CABINETOS_RELAY_UP`): relay off is no server, relay
   on is the server back. Covers are filed by address, so link
   `covers/<that address>` to the real server's folder
   (`covers/<server host>_<port>`) for the test and remove the link after.
@@ -424,7 +429,8 @@ minute and guessing at it for twenty.
 - **A server layout nobody has is tested through `tools/romm-readonly-relay.py`,
   never by changing RomM.** It forwards reads only (any write gets 403 and is
   logged) and can show a platform under another folder name:
-  `romm-readonly-relay.py 16006 45=arcade:Arcade`, then
+  `CABINETOS_RELAY_UP=http://<server>:<port> romm-readonly-relay.py 16006
+  45=arcade:Arcade`, then
   `CABINETOS_ROMM=127.0.0.1:16006` headless with a scratch `--storage-root`
   (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
   to the real games drive). #310 ("Arcade games in any RomM arcade folder
@@ -581,11 +587,13 @@ opened once and reused needs a test of two different games in one run.**
   categories podman chose). **Give podman an absolute folder, never `$PWD`,
   and run a chain under `set -e` so nothing runs after a failed step.**
 
-- **THE LOOP'S RSYNC KEEPS FILES IT DOES NOT KNOW.** `tools/ui-loop.sh`
-  copies a tree's `frontend/src` onto the A9 without deleting, so after a
-  tree with new files, an older tree's build fails on the files it does not
-  have (move 4 and move 5 both). `rsync --delete` the older tree's sources
-  onto the A9 first.
+- **THE LOOP'S RSYNC KEPT FILES IT DID NOT KNOW.** `tools/ui-loop.sh`
+  copied a tree's `frontend/src` onto the A9 without deleting, so after a
+  tree with new files, an older tree's build failed on the files it does not
+  have (move 4 and move 5 both), and a source removed or renamed in git was
+  compiled again beside its replacement. Since 2026-10-17 (#398's faults
+  step) the loop copies with `--delete`, on the A9 and the VM alike. Any
+  other copy of `frontend/src` onto a build machine needs it too.
 
 - **TWO SUITE RUNS SIDE BY SIDE NEED THEIR OWN PORTS, AND ONE PATH IS
   SHARED.** 2026-10-16, move 6 of #398: the binary under test and the base

@@ -431,8 +431,11 @@ void SettingsScreen::drawGlass(Ctx& c) {
     // them, a clear gap below the last row, as large as reaches the bottom of
     // the category's own item in the list. The card above anchors it and the
     // list's item ends level with it. Alone, at the pane's edge or centred,
-    // it floated (MMagTech on the TV, 2026-10-10).
-    auto drawQr = [&](const SettingsCategory& cat, float alpha) {
+    // it floated (MMagTech on the TV, 2026-10-10). Sized from the drawn
+    // category's own item, not the focused one's, so a code fading out keeps
+    // its size (SETTINGS-16).
+    auto drawQr = [&](int ci, float alpha) {
+        const SettingsCategory& cat = cats_[ci];
         // THE WIKI'S CODE IS MADE ONCE, with the cabinet in it
         // (tools/make-wiki-qr.py, level H): its address never changes.
         const bool wiki = cat.qr == wikiqr::kUrl;
@@ -449,7 +452,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
         for (const SettingsRow& r : cat.rows) below += rowHeight(c, r) + gap;
         c.r.setContentAlpha(a * alpha);
         const float qy = top + below + 28.0f;
-        const float itemBottom = top + cat_ * (itemH + design::kSettingsListGap) + itemH;
+        const float itemBottom = top + ci * (itemH + design::kSettingsListGap) + itemH;
         const float side = std::clamp(itemBottom - qy, 360.0f, std::min(pw, 640.0f));
         const float qx = px + (pw - side) * 0.5f;
         if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
@@ -457,7 +460,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
     };
     auto drawPane = [&](int ci, float alpha, int focusRow, float scrollY) {
         drawRows(cats_[ci].rows, alpha, focusRow, scrollY);
-        if (!cats_[ci].qr.empty()) drawQr(cats_[ci], alpha);
+        if (!cats_[ci].qr.empty()) drawQr(ci, alpha);
     };
     const float pa = paneChange_.value();
     if (pa < 1.0f && prevCat_ >= 0 && prevCat_ < static_cast<int>(cats_.size()) &&

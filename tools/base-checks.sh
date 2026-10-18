@@ -19,7 +19,7 @@ set -uo pipefail
 export LC_ALL=C
 
 BRANCH="${1:?usage: tools/base-checks.sh <base-update branch>}"
-A9="${CABINETOS_A9:-cabinet@192.168.1.212}"
+A9="${CABINETOS_A9:?set it to cabinet@<your console> (CLAUDE.local.example.md)}"
 KEY="${CABINETOS_KEY:-$HOME/.ssh/cabinetos}"
 SSH=(ssh -p 2222 -i "$KEY" -o ConnectTimeout=20 -o BatchMode=yes "$A9")
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,6 +34,7 @@ python3 ci/base-report.py checks "$TMP/old.txt" "$TMP/new.txt" > "$TMP/checks.ts
 
 fail=0
 ok() { printf 'ok    %s\n' "$1"; }
+# shellcheck disable=SC2001 # sed indents every line, which ${//} cannot
 bad() { printf 'FAIL  %s\n' "$1"; [[ -n "${2:-}" ]] && sed 's/^/      /' <<<"$2"; fail=1; }
 
 echo "== areas this update changed"
@@ -57,8 +58,7 @@ fi
 
 while IFS=$'\t' read -r kind check command; do
     [[ "$kind" == log ]] || continue
-    out=$("${SSH[@]}" bash -s <<<"$command" 2>&1)
-    if [[ $? -eq 0 ]]; then ok "$check"; else bad "$check" "$out"; fi
+    if out=$("${SSH[@]}" bash -s <<<"$command" 2>&1); then ok "$check"; else bad "$check" "$out"; fi
 done < "$TMP/checks.tsv"
 
 echo "== at the TV (MMagTech)"

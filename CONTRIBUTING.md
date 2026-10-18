@@ -118,9 +118,10 @@ through here; read the Justfile's `build` recipe first.
 **The frontend runs without a screen.** With `SDL_VIDEODRIVER=offscreen` it
 needs no compositor, no controller and no window, and can photograph what it
 drew. It needs the libraries it was built against, so run it on a CabinetOS
-console (over Developer access, below), where they match; inside the
-builder container may work too, but nobody has tried it, and off a console
-it needs environment variables written down nowhere yet
+console (over Developer access, below), where they match. Inside the
+builder container the self-tests below run (CI runs them there); a run that
+draws may work there too, but nobody has tried it, and off a console it
+needs environment variables written down nowhere yet
 (docs/ARCHITECTURE.md, "Known gaps"). Always give it a scratch
 `--storage-root`: otherwise it writes into `/var/lib/cabinetos` when it
 can, or into the folder it was started in. On a console a scratch root
@@ -167,7 +168,7 @@ its RomM id once Home is up, and `--unkeep <id>` removes its download
 without asking (`testhooks.cpp`).
 
 **Self-tests that need no network, server, controller or screen.** Each exits
-with 0 when it passes:
+with 0 when it passes, and CI runs every one ("What CI checks"):
 
 | Flag | What it checks |
 |---|---|
@@ -180,7 +181,7 @@ with 0 when it passes:
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
-| `--check-option-tables cores/options` | that every option in the console's three option tables (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`) exists in the core it is set on, for each core with a list in `cores/options/` (this one CI runs) |
+| `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, and the Wii's rumble in `wii.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (CI runs it as a step of its own) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
 under load, but only against a stand-in server that is not in the
@@ -204,12 +205,18 @@ in: run it on a console already signed in to your server (the tokens are
 outside the storage root, above), copy the console's `config/*.json` into
 the scratch root's `config/`, and write `[]` to its `config/drives.json`,
 or downloads go to the real games drive (docs/lessons/testing.md, the
-bullet on the read-only relay). **Its upstream server is a constant near
-the top of the
-file (`UP`), set to the maintainer's server: change it to yours before you
-run it, and do not commit the change.** `tools/offline-relay.py` has the same constant. The test tools in
-`tools/` are written for the maintainer's machines (docs/ARCHITECTURE.md,
-"Known gaps").
+bullet on the read-only relay). **Its upstream server comes from
+`CABINETOS_RELAY_UP`** (`http://<your server>:<port>`), and so does
+`tools/offline-relay.py`'s.
+
+**The tools in `tools/` take their machines from the environment;** none
+has an address written in. `CABINETOS_A9` is the test console, as
+`cabinet@<address>` (`ui-loop.sh`, `base-checks.sh`, `check-applied.sh`,
+`installer-vm.sh`); `CABINETOS_KEY` is the SSH key (`~/.ssh/cabinetos`
+when unset); `CABINETOS_VM` is the build machine for
+`ui-loop.sh --via-vm`; `CABINETOS_RELAY_UP` is the relays' server. A tool
+stops at once, naming the variable, when one it needs is unset.
+CLAUDE.local.example.md has the lines to fill in.
 
 **What only a television can judge:** anything you see or hear. An
 offscreen capture has looked right while the television showed nothing
@@ -222,9 +229,9 @@ seven times and a Developer access row appears. Switching it on starts SSH
 on port 2222 and shows the password on the television; it needs the
 console's PIN (docs/SETTINGS.md, "Developer access"). The image itself is
 read-only. `tools/ui-loop.sh` is how the maintainer runs a test build on his
-console without an image build; it is written for his machines and for
-state he set up on them by hand, so read it for the steps rather than run
-it. A signed image of your own needs a fork with its own key and image name
+console without an image build; it leans on state he set up on his console
+by hand (a folder of cores and the builder image), so read it for the steps
+rather than run it. A signed image of your own needs a fork with its own key and image name
 ("Generate a signing key", below); running your own build on your own
 console is not written down yet (docs/ARCHITECTURE.md, "Known gaps").
 
@@ -235,11 +242,44 @@ something besides `.md` files and `docs/`):
 
 - **Lint**: shellcheck over every `.sh` in `build_files/`, `ci/` and
   `cores/`, and over every shell script in `system_files/` (picked by its
-  first line).
+  first line). `just lint` runs the same two commands.
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
-  Wii bridge in the builder, runs `--check-option-tables`, and summarises the
-  compiler's warnings.
+  Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
+  summarises the compiler's warnings, fails a new one, and lists the code
+  nothing calls (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
+
+**No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
+after the Warnings step of `build-frontend.yml`, on every pull request it
+runs on): each warning in a file the pull request changes is compared with
+the same file compiled at the base, by file and text, so moved code is not
+new. Only what can put a warning in a touched file is compiled again at the
+base: one touched `.cpp` took 6 seconds, and `app.h`, which 53 files
+include, 38 seconds against 80 for the whole compile in the same run
+(2026-10-18). The run's summary lists each touched file's count at the base
+and now, and every new warning. Report only for its first week, like the
+checks below.
+
+**The self-tests** (`ci/run-self-tests.sh`, after the option tables, on
+every run of `build-frontend.yml`, pushes included): each one in the table
+in "Running and testing", in the builder container, with a scratch storage
+root, a scratch `HOME` and `CABINETOS_DRIVES` at an empty folder, so no run
+can reach a real sign-in or games drive. The run's summary has each test's
+result and time. `--romm-race-test` and the tests that need a screen, a core
+or a server do not run; the script's header names them. Report only for
+its first week, like the checks below.
+
+**The unused code** (`ci/report-unused-code.sh`, the job's last step, on
+pull requests): every function, and every variable that can change, that
+nothing reachable from `main` uses, by file, in the run's summary. It comes
+from a second build of the frontend in a scratch folder at `-O0`, with a
+section for each function and variable, linked with `--gc-sections
+--print-gc-sections`; a name is listed only when no copy of it is left in
+the linked program, so a header's function that one file never calls is
+not. Constants are not listed (a `constexpr` is folded where it is used),
+nor the C++ library or vendored rcheevos, and an inline function nobody
+calls is never compiled, so the linker never sees it. The binary that ships
+is not that one. A report only: it never fails the job.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
@@ -248,10 +288,50 @@ maintainer pushes to `testing`. A pull request into any other branch runs
 and `build-sunshine.yml` when it touches their paths (each workflow's
 `paths:` list).
 
-**Not checked by CI:** the frontend's other self-tests, the shell scripts
-under `tools/` and `disk_config/`, any Python (including the diagnostic
-report's privacy scrubber), and the workflows themselves. Run what your
-change touches yourself and say so.
+**Every pull request**, whatever it is aimed at and whatever it changes,
+runs `checks.yml`, a few seconds each:
+
+- **RomM paths** (`ci/check-romm-paths.sh`): a line the pull request adds
+  that spells a RomM path in code (`/api/`, `/assets/`, `/resources/roms/`,
+  `/cover/`) outside the RomM client's files (`romm.h`, `romm_*`) fails. Ask
+  the client for it instead. Comments, `.md` files, `docs/` and `tools/` are
+  not read, nor is Sunshine's client (`remoteplay.cpp`), whose `/api/` is
+  Sunshine's. The paths spelled outside the client today are listed in the
+  script (`KNOWN`), so editing one of those lines does not fail; moving one
+  into the client takes it off the list.
+- **Doc paths** (`ci/check-doc-paths.py`): a `.md` file that names a file
+  or folder of this repository that is not there fails, so a pull request
+  that moves or deletes a file also puts right the docs that name it. It
+  reads every link, and every path in backticks that starts with one of the
+  repository's top-level folders (`frontend/src/app.h`); not code blocks,
+  `docs/history/` or `frontend/third_party/`. A path `.gitignore` covers (a
+  build output) is there, and so is a file of Cabinet's own repository on
+  the script's list.
+- **PROJECT.md index** (`ci/check-project-index.sh`), report only, never a
+  failure: a numbered question in `docs/PROJECT.md` (`### 32.`) with no line
+  in its index, an index line with no question, or the index's count of
+  questions gone wrong is a warning on the pull request. Add the line under
+  "The open questions, and where each ended".
+- **Long files** (`ci/check-long-files.sh`), report only, never a failure:
+  every source file over 1,500 lines in `frontend/`, `wiibridge/`,
+  `build_files/`, `ci/`, `cores/`, `system_files/` and `tools/` is listed in
+  the run's summary, and one the pull request makes longer is a warning on
+  it, so a file growing into another 20,000-line main.cpp is seen early.
+  Source is code (`.c`, `.cpp`, `.h`, `.sh`, `.py`, or a script starting
+  `#!`); vendored files (`frontend/third_party/`, `frontend/src/libretro.h`)
+  are on the script's list and left out.
+
+**A check's first week is report only.** Until the end of the date in
+`checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC; `build-frontend.yml`
+has its own, the same date, for its checks), a check that can fail marks
+what it finds as warnings on the pull request and passes; from the next
+day it fails. A new check that can fail starts the same way, with that
+date set a week ahead in its pull request.
+
+**Not checked by CI:** the frontend's tests that need a screen, a core or a
+server, the shell scripts under `tools/` and `disk_config/`, any Python
+(including the diagnostic report's privacy scrubber), and the workflows
+themselves. Run what your change touches yourself and say so.
 
 **The proof of a change is its testing image**, judged on the reference
 console. That step is the maintainer's.
@@ -278,9 +358,16 @@ images that day, numbered from the tags already published
 (`ci/next-version.sh`). Every image keeps its version tag, and the console
 reads its own from `/usr/share/cabinetos/version`.
 
-**Signed updates.** Each build signs the image by its digest with cosign
-when the `SIGNING_SECRET` repository secret is set (`build.yml`, "Sign
-image"). The image carries the
+**Signed updates.** Each build that publishes pushes the image under every
+tag but the channel's (the version, the sha, and on `main` the date), signs
+it by its digest with cosign (`build.yml`, "Sign image"), checks that
+signature against
+`system_files/etc/pki/containers/cabinetos.pub` the way a console does, and
+only then moves `testing` or `latest` to it. A run that stops before that
+last step leaves the channel where it was; its version tag stays up,
+perhaps unsigned, and nothing follows it. Without the `SIGNING_SECRET` repository
+secret, a push to `main` or `testing` fails before anything is published.
+The image carries the
 public key and a policy that refuses an unsigned update, which bites on any
 console installed with the installer (`build_files/require-signed-updates.sh`).
 A fork signs its own images with a key of its own: "Generate a signing key",
@@ -289,7 +376,7 @@ below.
 **The worked example, a change to the Wii bridge** (#398, Part 4 section 34):
 `wiibridge/Makefile` builds it; `build-frontend.yml` compiles it and puts it
 in the `frontend-linux-x86_64` artifact; `ci/stage-image-payload.sh` refuses
-to go on without it and checks it is a 64-bit Linux program;
+to go on without it and checks it is an x86-64 Linux program;
 `build_files/install-frontend.sh` installs it at
 `/usr/libexec/cabinetos-wii-bridge` and checks its libraries; the frontend
 starts it from there (`frontend/src/wiiremote.cpp`). Each file names the next
@@ -308,9 +395,11 @@ signed with MMagTech's key, whose secret half is never in the repository
 2. **Put all of `cosign.key` in the fork's `SIGNING_SECRET` repository
    secret** (`gh secret set SIGNING_SECRET < cosign.key`). `build.yml` then
    signs every image it publishes from `main` or `testing`; without the
-   secret it publishes them unsigned, and the run's summary says so.
+   secret a push there fails and publishes nothing.
 3. **Replace `system_files/etc/pki/containers/cabinetos.pub`** with
-   `cosign.pub`.
+   `cosign.pub`, in the same push: `build.yml` checks each signature against
+   that file and will not move `testing` or `latest` to an image it does not
+   match.
 4. **Change `ghcr.io/mmagtech/cabinetos` to the fork's image** in the three
    files that use it for updates: `build_files/require-signed-updates.sh`
    (`REPO`, the policy's rule),

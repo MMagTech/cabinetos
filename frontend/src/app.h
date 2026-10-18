@@ -425,8 +425,8 @@ struct App {
     std::vector<design::Card>& cards = lib.cards;
     int& heroIndex = lib.heroIndex;
     std::string& heroPlatform = lib.heroPlatform;
-    // Which cards the Recent row shows. Empty means "everything", which is what
-    // the stand-in library wants — it has no play history to order by.
+    // Which cards the Recent row shows, and nothing else: empty is no Recent
+    // row. The stand-in library puts its six cards here (connectToServer).
     std::vector<int>& shelf = lib.shelf;
     std::vector<int>& favorites = lib.favorites;
     std::vector<romm::Game>& games = lib.games;
@@ -459,6 +459,9 @@ struct App {
 
     setup::Deps waitDeps;
     bool startupShown = false;
+    // Why Home started empty although the server answered: a refused
+    // sign-in, or no system this console plays. Said once Home is up.
+    std::string startProblem;
     // HOME IS THE DRIVE'S GAMES (#88): the console started with no server, or
     // the server went away while it was on, or a person was switched offline.
     // The frame loop loads the library properly once the server answers.
@@ -479,6 +482,19 @@ struct App {
     int paceCount = 0;
     double paceScreenHz = 0.0;   // as SDL reports it, for the [pace] line
     float paceRatio = 1.0f;      // the sound's speed now, for the [pace] line
+    // WHAT THE [pace] AND [audio] LINES COUNT, since the last line said it.
+    // Set back at each launch with the lock (openSoundAndPace): kept from
+    // the last game, a game's first line was that game's last seconds,
+    // and its sound per game frame read +0.00%, a silent game's (#398).
+    // Members, not a frame's locals: they add up across frames.
+    struct PaceTally {
+        uint64_t shown = 0, repeated = 0, held = 0, skipped = 0;
+        double dtSum = 0.0;
+        uint64_t audioLogAt = 0;              // when the next lines are due
+        uint64_t lastAudio = 0, lastFrames = 0;   // the core's counts then
+        uint64_t droppedBytes = 0, droppedLogAt = 0;
+    };
+    PaceTally pace;
 
     // ---- Focus -------------------------------------------------------------
     //
@@ -590,6 +606,7 @@ struct App {
     // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
     // under it.
     design::Animated scrollY;
+    int homeTopRow();
     void homeFromTheStart();
     // What is lighting the room, and what was lighting it before. Two cache
     // keys and a mix, because a cut between two covers is the one thing this
@@ -810,10 +827,12 @@ struct App {
     // the controllers, and the ordinary loop runs and draws the ordinary menu
     // over the frozen picture.
     bool standalonePaused = false;
-    // Frames still to clear to nothing after this window becomes the overlay.
-    // ONE WAS NOT ENOUGH: gamescope kept showing the launch page on top of the
-    // game until the next frame this window drew, which was the pause menu
-    // (2026-09-28, Metroid Prime 4 loading behind its own launch page).
+    // Frames still to clear to nothing after this window becomes the overlay,
+    // and again when the pause menu over the game closes, or a notice still
+    // showing stays frozen over the game (#398, PLAY-31). ONE WAS NOT ENOUGH:
+    // gamescope kept showing the launch page on top of the game until the
+    // next frame this window drew, which was the pause menu (2026-09-28,
+    // Metroid Prime 4 loading behind its own launch page).
     int standaloneClearFrames = 0;
     // The shortcut button's tap, per player, as the in-process path reads it:
     // down, and whether anything else was pressed while it was, and by which
@@ -1139,6 +1158,10 @@ struct App {
         bool ok = false;
         accounts::Paired who;
         std::string err;
+        // Set at exit (shutDown), under `m`: the wait between polls ends
+        // at once and the worker returns, so it can be joined.
+        bool stop = false;
+        std::condition_variable wake;
     };
     std::shared_ptr<AddJob> addJob = std::make_shared<AddJob>();
     // The QR is encoded once, when the code first arrives, not per frame.
@@ -1231,6 +1254,7 @@ struct App {
     float heldFor = 0.0f, nextRepeat = 0.0f;
     void holdNav(screens::Nav n);
     void releaseNav(screens::Nav n);
+    void letGoOfHeld();
 
     bool navigate(screens::Nav n);
     // Home's own keys, as one function, so that everything — Home, the Library,
@@ -1903,14 +1927,17 @@ struct App {
     void settleScreensAtStart();
     void startBrowsing();
     void startSync();
+    bool recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::string& path);
     void recoverPowerCutSaves();
     void applyStartColour();
     void noticeAppliedUpdate();
+    void sayStartProblem();
     void settleTabsAtStart();
     int shutDown(char** argv);
     // serverwait.cpp
     std::optional<int> waitForServer(char** argv);
     // search.cpp
+    void openSearchKeyboard();
     void searchKeyboardResult(ui::KeyboardResult res);
     void tickSearch(float dt, screens::Ctx& ctx);
     void pumpSearch(float dt);
@@ -2051,6 +2078,7 @@ struct App {
     // pace.cpp
     void runGameFrame(cab::Core& core, float dt, bool rewinding);
     // launch.cpp
+    void forgetLaunchAsks();
     bool takeFinishedJob();
     void prepareSaveDirAndDiscs(LaunchContext& c);
     void restoreBeforeLoad(LaunchContext& c);

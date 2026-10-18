@@ -28,8 +28,9 @@ first three.
   reference console in the maintainer's loop (`tools/ui-loop.sh`).
 - Headless runs and the self-tests: CONTRIBUTING.md, "Running and testing".
 - Never write to a RomM server you do not own. Test through
-  `tools/romm-readonly-relay.py` (its server address is a constant: change
-  it locally, never commit it).
+  `tools/romm-readonly-relay.py` (its server comes from
+  `CABINETOS_RELAY_UP`). The tools take every machine from the environment
+  (CONTRIBUTING.md, "Running and testing").
 
 ## Rules for every change
 

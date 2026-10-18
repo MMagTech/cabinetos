@@ -81,24 +81,30 @@ jobs:
 
           BRANCH="base-update/${NEW_VERSION}"
 
-          # Nothing to do if this bump already has a branch — the previous run
-          # opened the PR and it has not been dealt with yet.
+          # This bump already pushed: nothing to do if it has a pull request
+          # (open, or one a person closed or merged). With none, a run before
+          # this one failed to open it (below): open it now.
           if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
-            echo "Branch ${BRANCH} already exists; leaving the open PR alone."
-            exit 0
+            prs=$(gh pr list --head "${BRANCH}" --state all --json number \
+              --jq 'map("#\(.number)") | join(" ")')
+            if [[ -n "${prs}" ]]; then
+              echo "Branch ${BRANCH} already has a pull request (${prs}); leaving it alone."
+              exit 0
+            fi
+            echo "Branch ${BRANCH} is pushed but has no pull request; opening it."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            git checkout -b "${BRANCH}"
+            git add Containerfile base-manifest.txt
+            # The update notes are the commit's body, so `git log` reads as
+            # the update's notes too.
+            { echo "Bump Bazzite base to ${NEW_VERSION}"; echo; echo "${SUMMARY}"; echo
+              cat /tmp/base-notes.md; } > /tmp/commit-msg.txt
+            git commit -F /tmp/commit-msg.txt
+            git push origin "${BRANCH}"
           fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git checkout -b "${BRANCH}"
-          git add Containerfile base-manifest.txt
-          # The update notes are the commit's body, so `git log` reads as the
-          # update's notes too.
-          { echo "Bump Bazzite base to ${NEW_VERSION}"; echo; echo "${SUMMARY}"; echo
-            cat /tmp/base-notes.md; } > /tmp/commit-msg.txt
-          git commit -F /tmp/commit-msg.txt
-          git push origin "${BRANCH}"
 
           LABEL="routine"
           if [[ "${RELEVANT}" == "true" ]]; then LABEL="relevant"; fi

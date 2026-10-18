@@ -28,6 +28,18 @@ void App::releaseNav(screens::Nav n) {
     if (navHeld && heldNav == n) navHeld = false;
 }
 
+// EVERYTHING HELD IS LET GO when presses stop reaching this loop and when
+// they start again: a game in an emulator of its own takes every event,
+// releases included, so A held into one left Home's cover pressed in after
+// it, a held direction ran on by itself and a held trigger's next pull did
+// nothing (#398, PLAY-14).
+void App::letGoOfHeld() {
+    pressing = false;
+    navHeld = false;
+    letterHeld = 0;
+    l2Held = r2Held = false;
+}
+
 // What a commit or a cancel MEANS, which is not the same on every screen.
 // On Search, done goes up into the results and cancel leaves the screen —
 // and cancel closing the keyboard while leaving an empty Search behind it
@@ -142,6 +154,22 @@ void App::handleEvent(const SDL_Event& e) {
             if (keyboard.isOpen()) keyboard.typeText(e.text.text);
             break;
         case SDL_EVENT_KEY_DOWN:
+            // A HELD KEY CHOOSES ONCE, as a pad's A and B do (#398,
+            // PLAY-04). The system's key repeat sent a held Return,
+            // Space, Escape or Backspace again and again, and each
+            // repeat reached whatever the first press had opened:
+            // Return held on Exit to Home quit the game and started it
+            // again from Home. Backspace still repeats where it
+            // deletes, on the on-screen keyboard and the PIN pad. The
+            // arrows hold the console's own way, below.
+            if (e.key.repeat) {
+                const SDL_Keycode k = e.key.key;
+                const bool deletes = owner == InputOwner::Keyboard ||
+                                     (pinScreen.isOpen() && owner == InputOwner::UI);
+                if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_ESCAPE ||
+                    (k == SDLK_BACKSPACE && !deletes))
+                    break;
+            }
             // A physical keyboard's digits go into the PIN pad, the
             // same field the controller fills.
             if (pinScreen.isOpen() && owner == InputOwner::UI) {
@@ -249,31 +277,15 @@ void App::handleEvent(const SDL_Event& e) {
             if (playing && session.snapshots && e.key.key == SDLK_F8) beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
             if (playing && e.key.key == SDLK_F6) syncSave(session, uploader);
             if (owner != InputOwner::UI) break;
-            // Anything pushed on top of Home owns its own focus model,
-            // so the press goes there and this function does not get an
-            // opinion about it. Home is handled below because it is the
-            // one screen whose focus lives here.
-            if (here() != Screen::Home) {
-                switch (e.key.key) {
-                    case SDLK_LEFT:  navigate(screens::Nav::Left); break;
-                    case SDLK_RIGHT: navigate(screens::Nav::Right); break;
-                    case SDLK_UP:    navigate(screens::Nav::Up); break;
-                    case SDLK_DOWN:  navigate(screens::Nav::Down); break;
-                    case SDLK_RETURN:
-                    case SDLK_SPACE: navigate(screens::Nav::Activate); break;
-                    case SDLK_BACKSPACE: navigate(screens::Nav::Back); break;
-                    default: break;
-                }
-                break;
-            }
-            // THROUGH `navigate`, NOT STRAIGHT AT HOME. Every key on
-            // every screen arrives at one place now, so the bar can be
+            // THROUGH `navigate`, NOT STRAIGHT AT A SCREEN. Every key on
+            // every screen arrives at one place, so the bar can be
             // offered it first wherever it holds focus.
             // `e.key.repeat` is the system's own key repeat, at the
             // system's own rate. Ignore it and run the same accelerating
-            // repeat the pad gets, so the two input devices behave
-            // identically — which is the rule the whole input model is
-            // built on.
+            // repeat the pad gets, on every screen as the pad does, so
+            // the two input devices behave identically: the rule the
+            // whole input model is built on. Until #398 (PLAY-03) only
+            // Home's arrows held this way.
             if (!e.key.repeat) {
                 if (e.key.key == SDLK_LEFT) {
                     navigate(screens::Nav::Left); holdNav(screens::Nav::Left);
@@ -288,13 +300,18 @@ void App::handleEvent(const SDL_Event& e) {
                     navigate(screens::Nav::Down); holdNav(screens::Nav::Down);
                 }
             }
-            // Until the navigation bar exists, this is the door to the
-            // Library. See docs/NEXT-SESSION.md: the bar the design
-            // system specifies costs exactly the vertical slack Home has
-            // left, which is a measurement only a television can settle.
-            if (e.key.key == SDLK_L) {
-                libraryScreen.enter();
-                stack.push_back(Screen::Library);
+            // Anything pushed on top of Home owns its own focus model,
+            // so the press goes there and this function does not get an
+            // opinion about it. Home is handled below because it is the
+            // one screen whose focus lives here.
+            if (here() != Screen::Home) {
+                switch (e.key.key) {
+                    case SDLK_RETURN:
+                    case SDLK_SPACE: navigate(screens::Nav::Activate); break;
+                    case SDLK_BACKSPACE: navigate(screens::Nav::Back); break;
+                    default: break;
+                }
+                break;
             }
             if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) {
                 pressing = true;

@@ -70,21 +70,29 @@ jobs:
         run: |
           set -euo pipefail
           BRANCH="pad-db/${SHORT}"
-          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
-            echo "Branch ${BRANCH} already exists; leaving the open PR alone."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "${BRANCH}"
-          git add frontend/data/gamecontrollerdb.txt
-          git commit -m "Controller list: SDL_GameControllerDB at ${SHORT}"
-          git push origin "${BRANCH}"
           cat > /tmp/pr-body.md <<EOF
           **What it does:** updates the list of controllers the console recognises to SDL_GameControllerDB at \`${SHA}\` (${LINUX} Linux entries).
 
           **Why:** it is how a pad SDL does not know gets its buttons right, instead of a mapping screen (#66). Merging ships it to every console with the next System update.
           EOF
+          # Already pushed: as base-update.yml, left alone with a pull
+          # request, opened now without one.
+          if git ls-remote --exit-code --heads origin "${BRANCH}" >/dev/null 2>&1; then
+            prs=$(gh pr list --head "${BRANCH}" --state all --json number \
+              --jq 'map("#\(.number)") | join(" ")')
+            if [[ -n "${prs}" ]]; then
+              echo "Branch ${BRANCH} already has a pull request (${prs}); leaving it alone."
+              exit 0
+            fi
+            echo "Branch ${BRANCH} is pushed but has no pull request; opening it."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -b "${BRANCH}"
+            git add frontend/data/gamecontrollerdb.txt
+            git commit -m "Controller list: SDL_GameControllerDB at ${SHORT}"
+            git push origin "${BRANCH}"
+          fi
           # Needs Settings -> Actions -> General -> "Allow GitHub Actions to
           # create and approve pull requests", as base-update.yml explains.
           gh pr create --title "Controller list → ${SHORT}" --body-file /tmp/pr-body.md \

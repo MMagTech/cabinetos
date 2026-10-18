@@ -24,7 +24,6 @@
 #include "qr.h"
 #include "romm.h"
 #include "accounts.h"
-#include "storage.h"
 #include "text.h"
 #include "ui.h"
 
@@ -108,6 +107,14 @@ struct ServerProbe {
     std::string version;
 };
 
+// A pairing poll's answer (romm::Client::pollPairing) and the code it was
+// asked about, so an answer for a code "Start again" has replaced is not
+// read as the new one's.
+struct PairPoll {
+    int state = 0;
+    std::string deviceCode;
+};
+
 class Flow {
 public:
     Flow(const Deps& d, const Options& o) : d_(d), o_(o) {}
@@ -152,6 +159,13 @@ private:
     void typingFinished(ui::KeyboardResult result, const std::string& value);
     void activate();
     void activateStep();
+    // A ROW PRESS IS REFUSED WHILE THE JOB IT WOULD START IS STILL RUNNING:
+    // a Wi-Fi row during a join, a pad during a pairing or a scan. Job::start
+    // joins the one before it on the frame thread, so a second press froze
+    // the screen for up to 55 s (job.h), and a pad paired during a scan meets
+    // the radio still searching (bluetooth.cpp, bt::pair). Settings' Wi-Fi
+    // refuses a second join the same way.
+    bool rowRefused() const;
     void goBack();
 
     void startWifiScan();
@@ -227,7 +241,7 @@ private:
     qr::Code code_;
     ui::QrTexture qrTex_;
     Job<romm::Pairing> pairBeginJob_;
-    Job<int> pairPollJob_;
+    Job<PairPoll> pairPollJob_;
 
     // Controller
     std::vector<bt::Device> devices_;
@@ -587,7 +601,8 @@ void Flow::rebuild() {
             buttons_.push_back({Act::Restart, "Start again", !pairBeginJob_.busy(), {}});
             break;
         case firstrun::Step::Controller:
-            buttons_.push_back({Act::Rescan, "Scan again", !btScanJob_.busy(), {}});
+            buttons_.push_back({Act::Rescan, "Scan again",
+                                !btScanJob_.busy() && !btPairJob_.busy(), {}});
             if (hiddenDevices_ > 0)
                 buttons_.push_back({Act::ShowAll,
                                     "Show " + std::to_string(hiddenDevices_) +
@@ -701,6 +716,7 @@ void Flow::startWifiScan() {
 }
 
 void Flow::joinSelected(const std::string& passphrase) {
+    if (joinJob_.busy()) return;
     if (chosenNetwork_ < 0 || chosenNetwork_ >= static_cast<int>(networks_.size())) return;
     const std::string ssid = networks_[static_cast<size_t>(chosenNetwork_)].ssid;
     notice_ = "Joining " + ssid + "…";
@@ -767,7 +783,9 @@ void Flow::pollPairing() {
     const romm::Pairing p = pairing_;
     const std::string address = address_.empty() ? firstrun::serverAddress() : address_;
     const bool dryRun = o_.dryRun;
-    pairPollJob_.start([p, address, dryRun](int& out, std::string& err) {
+    pairPollJob_.start([p, address, dryRun](PairPoll& poll, std::string& err) {
+        poll.deviceCode = p.deviceCode;
+        int& out = poll.state;
         // THE INTERVAL IS SLEPT ON THE WORKER, not counted on the frame loop.
         // RomM asks to be polled on its own interval and a console that ignored
         // it would be hammering somebody's server from a screen that is
@@ -810,7 +828,8 @@ void Flow::pollPairing() {
 }
 
 void Flow::startBtScan() {
-    if (btScanJob_.busy()) return;
+    // Never during a pairing: bluetoothctl does not want two at once.
+    if (btScanJob_.busy() || btPairJob_.busy()) return;
     // The cached answer, and only once it is known. Before the first refresh
     // lands the scan is allowed through: bt::scan() checks the adapter itself
     // and says so properly, which is a better answer than silently doing
@@ -825,6 +844,7 @@ void Flow::startBtScan() {
 }
 
 void Flow::pairSelected() {
+    if (btPairJob_.busy() || btScanJob_.busy()) return;
     if (chosenDevice_ < 0 || chosenDevice_ >= static_cast<int>(devices_.size())) return;
     const bt::Device dev = devices_[static_cast<size_t>(chosenDevice_)];
     notice_ = "Pairing with " + (dev.name.empty() ? dev.address : dev.name) + "…";
@@ -1038,27 +1058,34 @@ void Flow::pumpJobs() {
         changed = true;
     }
 
-    if (int state = 0; pairPollJob_.take(&state, &err, &ok)) {
+    if (PairPoll poll; pairPollJob_.take(&poll, &err, &ok)) {
+        const int state = poll.state;
         if (state == 1) {
             facts_.havePairedToken = true;
             machine_.update(facts_);
             pairingLive_ = false;
             notice_ = "Approved.";
             noticeIsError_ = false;
-            // WHO THIS CONSOLE IS, settled before anything writes a save. The
-            // adoption rule in firstrun.cpp looks for this file, so a console
-            // that paired and never asked would be judged unconfigured on its
-            // next boot.
-            std::string serr;
-            if (client_.setAddress(address_.empty() ? firstrun::serverAddress() : address_,
-                                   &serr)) {
-                const char* home = getenv("HOME");
-                client_.loadToken(std::string(home ? home : ".") +
-                                  "/.config/cabinetos/romm.json");
-                storage::resolveCurrentUser(client_, &serr);
-            }
+            // Who this console is, the user, is settled at the app's start
+            // (adoptUser), with the token the worker filed under the account.
+        } else if (poll.deviceCode != pairing_.deviceCode) {
+            // Anything but an approval, about a code "Start again" has
+            // replaced: ask about the one on screen instead. An approval of
+            // the old code is still an approval, and its account is written.
+            pollPairing();
         } else if (state == 0) {
             pollPairing();      // still waiting; ask again on its interval
+        } else if (state == -2) {
+            // THE CODE IS OVER ON THE SERVER: ten minutes went by, or somebody
+            // pressed Deny on the phone. Its QR now opens a page refusing it,
+            // and polling it was waiting for ever. On the pairing step, a new
+            // one, as "Start again" makes; on any other the polling stops, and
+            // coming back to the step makes a new code anyway (enterStep).
+            const bool here = machine_.step() == firstrun::Step::Pair;
+            std::fprintf(stderr, "[first-run] %s%s\n", err.c_str(),
+                         here ? "; a new code" : "");
+            if (here) startPairing();
+            else pairingLive_ = false;
         } else {
             pairingLive_ = false;
             notice_ = err.empty() ? "The pairing expired." : err;
@@ -1281,9 +1308,18 @@ void Flow::activate() {
         onFooter_ ? (buttons_.empty() ||
                      !buttons_[static_cast<size_t>(button_)].enabled ||
                      buttons_[static_cast<size_t>(button_)].act == Act::None)
-                  : (rows_.empty() || !rows_[static_cast<size_t>(row_)].enabled);
+                  : (rows_.empty() || !rows_[static_cast<size_t>(row_)].enabled ||
+                     rowRefused());
     sound::play(nothing ? sound::Cue::Edge : sound::Cue::Activate);
     activateStep();
+}
+
+bool Flow::rowRefused() const {
+    switch (machine_.step()) {
+        case firstrun::Step::Network:    return joinJob_.busy();
+        case firstrun::Step::Controller: return btPairJob_.busy() || btScanJob_.busy();
+        default:                         return false;
+    }
 }
 
 void Flow::activateStep() {
@@ -1313,14 +1349,10 @@ void Flow::activateStep() {
                 rebuild();
                 break;
             case Act::Edit: {
-                ui::Keyboard::Config cfg;
+                // Settings' keyboard, with first run's own title and hint.
+                ui::Keyboard::Config cfg = serverKeyboardConfig(address_);
                 cfg.title = "Your RomM server";
                 cfg.hint = "The address you open RomM at, without http://";
-                cfg.initial = address_;
-                cfg.placeholder = "192.168.1.10:6005";
-                // The two keys that save the most typing on this particular
-                // field. A passphrase wants neither.
-                cfg.shortcuts = {".local", ":8080"};
                 keyboard_.open(cfg);
                 typing_ = Typing::Address;
                 break;
@@ -1335,7 +1367,7 @@ void Flow::activateStep() {
 
     if (rows_.empty()) return;
     const Row& r = rows_[static_cast<size_t>(row_)];
-    if (!r.enabled) return;
+    if (!r.enabled || rowRefused()) return;
 
     switch (machine_.step()) {
         case firstrun::Step::Network: {
@@ -1827,14 +1859,19 @@ Outcome run(const Deps& d, const Options& o) {
 
 }  // namespace setup
 
-// The keyboard for a server address, in Settings and on the startup screen:
-// first run's, without its hint, because the people here know what an
-// address is (docs/SETTINGS.md, Network).
+// The keyboard for a server address, in Settings and on the startup screen,
+// without a hint, because the people here know what an address is
+// (docs/SETTINGS.md, Network). First run builds its own from this one and adds
+// its title and hint (Flow, Act::Edit).
 ui::Keyboard::Config serverKeyboardConfig(const std::string& initial) {
     ui::Keyboard::Config cfg;
     cfg.title = "RomM server";
     cfg.initial = initial;
-    cfg.placeholder = "192.168.1.10:6005";
+    // A made-up address, the same as the wiki's (docs/wiki/first-run.md),
+    // never a real one.
+    cfg.placeholder = "192.168.0.20:8080";
+    // The two keys that save the most typing on this particular field. A
+    // passphrase wants neither.
     cfg.shortcuts = {".local", ":8080"};
     return cfg;
 }

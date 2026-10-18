@@ -159,8 +159,8 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                 opts[kv.first] = kv.second;
             // The Wii's rumble switch as the last Wii game's HOME Menu left
             // it (#274, wii.h).
-            if (game.platformSlug == "wii" && job.coreName == "dolphin")
-                opts["dolphin_enable_rumble"] = wii::rumbleOption();
+            for (const auto& kv : wii::coreOptions(job.coreName, game.platformSlug))
+                opts[kv.first] = kv.second;
             core.setOptionOverrides(opts);
             quality::logApplied(job.coreName, game.id, level);
         }
@@ -304,6 +304,12 @@ auto App::launchById(int romId) -> bool {
     std::string lerr;
     if (!beginLaunch(launchJob, liveClient, *g, coreDir, &lerr)) {
         std::fprintf(stderr, "[launch] %s\n", lerr.c_str());
+        // A CORE THAT WILL NOT LOAD AT THE PRESS SAYS SO, where every other
+        // launch refusal does (#398); it said nothing anywhere. Not a game
+        // this console cannot play: beginLaunch refuses that before it
+        // touches the job, so refuseLaunch would name the last game.
+        const catalog::Coverage cov = catalog::coverageFor(*g);
+        if (cov.support == catalog::Support::Playable && cov.core) refuseLaunch(lerr);
         return false;
     }
     launchJob.startedOn = static_cast<int>(here());
@@ -336,6 +342,20 @@ void App::refuseLaunch(const std::string& why) {
     else detailScreen.setNotice(why);
     sound::play(sound::Cue::Edge);
     curtain.retarget(0.0f, kCurtainUp);
+}
+
+// A LAUNCH THAT DOES NOT START A GAME TAKES WHAT ITS PRESS ASKED FOR WITH
+// IT: the state picked on the game's page, Home's Resume and the disc Start
+// over asked for belong to this launch, and left set they were loaded into
+// the next game of any title on its first frame (#398). Called on every
+// way out of takeFinishedJob and loadLaunchedGame that loads no game here.
+// NOT IN finishExit, which keeps its own three lines: Start over sets the
+// disc just before it leaves the game (startOverOnDisc).
+void App::forgetLaunchAsks() {
+    pendingStateId = 0;
+    pendingStatePath.clear();
+    pendingResume = false;
+    gNextStartDisc = 0;
 }
 
 // What pumpLaunch's stages hand on: the locals of the one function it was
@@ -393,15 +413,23 @@ bool App::takeFinishedJob() {
         if (launchJob.keepWhenReady)
             cache::unkeep(storage::currentUser(), launchJob.romId,
                           /*keepTheBytes=*/true);
+        // A PLAY THAT FAILED SAYS WHY WHERE THE PERSON IS, as a core that
+        // will not load the game does (refuseLaunch): pressed on Home's
+        // Resume, it said nothing anywhere (#398). A Download, a Play the
+        // person walked away from and a cancel keep the page's notice.
+        const bool sayIt = launchJob.playWhenReady && !launchJob.cancel.load() &&
+                           launchJob.startedOn == static_cast<int>(here());
         if (here() == Screen::Detail &&
             detailScreen.game().romId == launchJob.romId) {
             detailScreen.setKept(
                 cache::isKeptBy(storage::currentUser(), launchJob.romId));
-            detailScreen.setNotice(launchJob.message);
+            if (!sayIt) detailScreen.setNotice(launchJob.message);
         }
         refreshKeeps();
+        forgetLaunchAsks();
         launchJob.stop();
         launchJob.stage = LaunchJob::Stage::Idle;
+        if (sayIt) refuseLaunch(launchJob.message);
         return false;
     }
     if (st != LaunchJob::Stage::Ready) return false;
@@ -455,6 +483,7 @@ bool App::takeFinishedJob() {
         // something new. MMagTech, 2026-09-25.
         if (launchJob.keepWhenReady && cache::almostFull())
             menuNotice.say("Storage almost full", Tone::Info);
+        forgetLaunchAsks();
         return false;
     }
 
@@ -486,11 +515,15 @@ bool App::takeFinishedJob() {
             detailScreen.setKept(
                 cache::isKeptBy(storage::currentUser(), launchJob.romId));
         refreshKeeps();
+        forgetLaunchAsks();
         return false;
     }
 
+    // No states and no discs in an emulator run as a program, so Home's
+    // Resume on one asked for nothing it can give, even when it starts.
     if (const cab::standalone::Emulator* emu =
             cab::standalone::find(launchJob.coreName)) {
+        forgetLaunchAsks();
         startStandalone(*emu);
         return false;
     }
@@ -664,6 +697,7 @@ bool App::loadLaunchedGame(LaunchContext& c) {
         // forever. The launch screen already has somewhere to put this:
         // `setNotice` is the same place a full disk reports itself.
         std::fprintf(stderr, "[launch] %s\n", c.core.error().c_str());
+        forgetLaunchAsks();
         // If the press came from somewhere with nowhere to put a message —
         // Home's Resume card, for instance — the console goes to the
         // game's own screen and says it there, rather than inventing a
@@ -859,6 +893,7 @@ void App::openSoundAndPace(cab::Core& core) {
         paceEvery = 0;
         paceBaseRatio = 1.0;
         paceCount = 0;
+        pace = PaceTally{};
         // Headless (offscreen) there is no refresh to lock to: nothing
         // waits for one, so a frame per loop would run the game flat out.
         const char* vd = SDL_GetCurrentVideoDriver();

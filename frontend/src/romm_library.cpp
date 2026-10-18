@@ -7,6 +7,7 @@
 #include "romm.h"
 
 #include "romm_internal.h"
+#include "wiiu.h"
 
 #include <json-c/json.h>
 
@@ -103,11 +104,21 @@ std::string tagLabel(const Game& g) {
     return out;
 }
 
+// A record also carries the one thing the console reads off a file itself
+// that a game needs offline: a Wii U game's product code, without which the
+// Wii U rule reads it as needing the GamePad and Home leaves it off (#398,
+// ROMM-31). A record written before it carried one takes the code this
+// console read online (wiiu-codes.txt).
 bool gameFromJson(const std::string& json, Game* out) {
     json_object* o = json_tokener_parse(json.c_str());
     if (!o) return false;
     const bool ok = parseGame(o, out);
+    if (ok) out->productCode = jstr(o, "product_code");
     json_object_put(o);
+    if (ok && out->platformSlug == "wiiu" && out->productCode.empty()) {
+        bool known = false;
+        out->productCode = wiiu::rememberedCode(out->id, &known);
+    }
     return ok;
 }
 

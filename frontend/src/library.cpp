@@ -15,7 +15,20 @@
 
 using namespace design;   // NOLINT: Card and colorForTitle, as main.cpp names them
 
+// What a game's card says while its grid shows it greyed, or nothing.
+//
+// A LIVE ANSWER, ASKED AGAIN EACH TIME (#398, HOME-09). A Wii game that needs
+// a Wii Remote greys while none is paired or a stream plays
+// (catalog::coverageFor). Worked out once, when the game was first fetched,
+// pairing the first Remote left Kirby greyed at the end of the Wii grid while
+// its page offered Play.
+static std::string greyedReason(const romm::Game& g) {
+    const catalog::Coverage cov = catalog::coverageFor(g);
+    return catalog::shownGreyed(cov.support) ? cov.reason : std::string();
+}
+
 // Adds a game to the store if it is not already there, and answers where it is.
+// A game already there is asked again whether it is greyed.
 //
 // `cards` IS APPEND-ONLY, AND THIS IS THE REASON. Every shelf, every tile and
 // the hero hold plain indices into it, so sorting or erasing would silently
@@ -29,7 +42,10 @@ using namespace design;   // NOLINT: Card and colorForTitle, as main.cpp names t
 // any more.
 int appendGame(Library& lib, const romm::Game& g) {
     auto it = lib.byRomId.find(g.id);
-    if (it != lib.byRomId.end()) return it->second;
+    if (it != lib.byRomId.end()) {
+        lib.cards[static_cast<size_t>(it->second)].unavailable = greyedReason(g);
+        return it->second;
+    }
     Card c;
     c.id = g.id;
     c.title = g.name.empty() ? g.fsName : g.name;
@@ -40,9 +56,7 @@ int appendGame(Library& lib, const romm::Game& g) {
     c.platformId = g.platformId;
     c.tagLabel = g.tagLabel;
     c.art = colorForTitle(c.title);
-    if (const catalog::Coverage cov = catalog::coverageFor(g);
-        catalog::shownGreyed(cov.support))
-        c.unavailable = cov.reason;
+    c.unavailable = greyedReason(g);
     const int idx = static_cast<int>(lib.cards.size());
     lib.cards.push_back(std::move(c));
     lib.games.push_back(g);
@@ -115,15 +129,8 @@ bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
     // NOT SORTED HERE. RomM returns roms in title order already, which is what
     // the grid's letter-jump needs, and a later page has to concatenate onto
     // this one — a sort would fight the append and move cards out from under
-    // whoever is looking at them.
-    //
-    // EXCEPT THAT GREYED GAMES GO LAST, each half still in title order.
-    // MMagTech, 2026-09-30, on the Wii grid: mixed in, the playable games were
-    // hard to find. A later page puts its playable games before the greyed
-    // ones (GridScreen::append), so the order holds as pages arrive.
-    std::stable_partition(tile.cards.begin(), tile.cards.end(), [&](int i) {
-        return lib.cards[static_cast<size_t>(i)].unavailable.empty();
-    });
+    // whoever is looking at them. The tile keeps the server's order; the
+    // greyed games go last as the grid opens (gridOrder).
     if (unplayable > 0) {
         // Say what is missing rather than quietly showing a shorter list: a
         // collection of twelve that opens onto four looks like a bug unless
@@ -138,6 +145,26 @@ bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
                  tile.cards.size(),
                  unplayable ? " (some not playable here)" : "");
     return true;
+}
+
+// A tile's games in the order its grid shows them, each asked again whether
+// it is greyed (greyedReason), every time the grid opens.
+//
+// GREYED GAMES GO LAST, each half still in title order. MMagTech, 2026-09-30,
+// on the Wii grid: mixed in, the playable games were hard to find. A later
+// page puts its playable games before the greyed ones (GridScreen::append),
+// so the order holds as pages arrive. Split from the tile's own list, which
+// stays in the server's order, so a game that stops being greyed goes back
+// to its place among the letters rather than to the end of the playable ones.
+std::vector<int> gridOrder(Library& lib, const screens::Tile& tile) {
+    std::vector<int> order = tile.cards;
+    for (int i : order)
+        lib.cards[static_cast<size_t>(i)].unavailable =
+            greyedReason(lib.games[static_cast<size_t>(i)]);
+    std::stable_partition(order.begin(), order.end(), [&](int i) {
+        return lib.cards[static_cast<size_t>(i)].unavailable.empty();
+    });
+    return order;
 }
 
 // THE SERVER'S SYSTEMS, KEPT FOR OFFLINE (#88), so an offline Library tile
@@ -209,13 +236,14 @@ static std::map<int, romm::Platform> savedPlatforms() {
 // So boot is CONSTANT rather than proportional, which is the whole prize: the
 // person with twenty thousand games boots as fast as the person with two
 // hundred.
-Library loadLibrary(romm::Client& client) {
+Library loadLibrary(romm::Client& client, std::string* platformsErr) {
     Library lib;
     std::string err;
 
     std::vector<romm::Platform> platforms;
     if (!client.fetchPlatforms(&platforms, &err)) {
         std::fprintf(stderr, "[romm] platforms: %s\n", err.c_str());
+        if (platformsErr) *platformsErr = err;
         return lib;
     }
     savePlatforms(platforms);
@@ -597,6 +625,9 @@ std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
     json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
     json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
+    // Not RomM's: read off a Wii U game's file online, and needed offline to
+    // tell which controllers it takes (romm::gameFromJson).
+    json_object_object_add(o, "product_code", json_object_new_string(g.productCode.c_str()));
     json_object_object_add(o, "ra_hash", json_object_new_string(g.raHash.c_str()));
     json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));

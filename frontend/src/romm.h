@@ -53,7 +53,7 @@ public:
     Client();
     ~Client();
 
-    // Accepts "romm.local:8080", "192.168.1.10:6005", "http://host", "host".
+    // Accepts "romm.local:8080", "192.168.0.20:8080", "http://host", "host".
     // With no scheme it tries both and keeps whichever answers, preferring
     // http for an address that is obviously local. Returns false and fills
     // `err` if neither answers.
@@ -93,7 +93,9 @@ public:
     // Step two, called on the pairing's own interval.
     //   1  approved — the token is now held by this client
     //   0  still pending
-    //  -1  failed or expired; `err` says which
+    //  -1  failed; `err` says why
+    //  -2  this code is over: it expired, or was refused on the phone;
+    //      `err` says which. A new code is the way on.
     int pollPairing(const Pairing& p, std::string* err);
 
     // `/api/users/me` — the id and name behind the token. Needs the `me.read`

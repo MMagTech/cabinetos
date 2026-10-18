@@ -502,7 +502,8 @@ std::optional<int> App::connectToServer(char** argv) {
         // coming back after a power cut is not something this can make faster.
         setup::showWaiting(waitDeps, kLoadingLine);
         startupShown = true;
-        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient);
+        std::string platformsErr;
+        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient, &platformsErr);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
 
@@ -513,9 +514,27 @@ std::optional<int> App::connectToServer(char** argv) {
         // been told its library came back empty and refused to start. The
         // question worth asking is whether the SERVER answered, and the
         // platform list is what answers it.
+        //
+        // AND A SERVER THAT ANSWERS "NO" STARTS TO HOME (#398, FIRSTRUN-23).
+        // This exited for a refused sign-in (a token that expired, say) and
+        // for a RomM with no system this console plays, and the session
+        // started it again two seconds later, for ever, with nothing on the
+        // screen: Settings, where Sign out and Add account are, was never
+        // reached. Home starts empty instead and says which. Anything else
+        // (the server gone again, an HTTP error) still exits, so the next
+        // start waits for the server.
         if (platformTiles.empty() && !libFromDrive) {
-            std::fprintf(stderr, "[romm] the library came back empty\n");
-            return 1;
+            const bool refused = platformsErr.rfind("not authorised", 0) == 0;
+            if (!refused && !platformsErr.empty()) {
+                std::fprintf(stderr, "[romm] the library did not load: %s\n",
+                             platformsErr.c_str());
+                return 1;
+            }
+            std::fprintf(stderr, "[romm] %s; starting to an empty Home\n",
+                         refused ? "the server refused this console's sign-in"
+                                 : "the server has no system this console plays");
+            startProblem = refused ? "RomM refused this console's sign-in"
+                                   : "RomM has no systems this console plays";
         }
         // Covers come from the server, authenticated. The cache never learns
         // what a server is — it was built to take exactly this.
@@ -585,6 +604,8 @@ std::optional<int> App::connectToServer(char** argv) {
             // cover IS the cover. Keeping the field filled rather than empty
             // means the drawing code never has to ask which library it is in.
             c.coverLarge = c.cover;
+            // On Recent, which shows the shelf and nothing else.
+            shelf.push_back(static_cast<int>(cards.size()));
             cards.push_back(std::move(c));
         }
     }
@@ -673,6 +694,8 @@ std::optional<int> App::startDeveloperLaunch() {
 }
 
 void App::settleScreensAtStart() {
+    // Favorites when nothing has been played, as homeFromTheStart.
+    focusRow = homeTopRow();
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
     if (initialFocus >= 0) {
@@ -681,7 +704,7 @@ void App::settleScreensAtStart() {
     }
     if (initialRow >= 0) {
         focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
-        if (!rowExists(focusRow)) focusRow = RowRecent;
+        if (!rowExists(focusRow)) focusRow = homeTopRow();
         focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
     }
     scrollY.from = scrollY.to = 0.0f;
@@ -736,43 +759,8 @@ void App::recoverPowerCutSaves() {
         for (const std::string& loc : storage::locations()) {
             for (const std::string& half : {storage::cacheDir(loc), storage::romsDir(loc)}) {
                 for (const std::string& platform : listNames(half)) {
-                    for (const std::string& entry : listNames(half + "/" + platform)) {
-                        const std::string path = half + "/" + platform + "/" + entry;
-                        if (!cab::standalone::hasPlayingNote(path)) continue;
-                        std::istringstream note(cab::standalone::playingNote(path));
-                        std::string id, dir, title, tag;
-                        std::getline(note, id);
-                        std::getline(note, dir);
-                        std::getline(note, title);
-                        std::getline(note, tag);
-                        // ONLY THIS PERSON'S. The upload goes as whoever the
-                        // console acts as, so somebody else's stays on the
-                        // drive, still protected, until they are the one here.
-                        const std::string mine =
-                            storage::userDir(storage::currentUser()) + "/";
-                        if (dir.compare(0, mine.size(), mine) != 0) {
-                            std::fprintf(stderr, "[xbox] %s holds another person's saves; "
-                                         "left for them\n", path.c_str());
-                            continue;
-                        }
-                        GameSession owed;
-                        owed.romId = std::atoi(id.c_str());
-                        owed.title = title;
-                        owed.saveDir = dir;
-                        owed.saveTag = tag;
-                        owed.dirSaveRoot = cab::standalone::saveRoot(*xemu, dir);
-                        owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
-                        std::string aerr;
-                        if (dir.empty() ||
-                            !cab::standalone::afterEnd(*xemu, path, dir, &aerr)) {
-                            std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(),
-                                         aerr.c_str());
-                            continue;
-                        }
-                        std::fprintf(stderr, "[xbox] finished what a stop left on %s\n",
-                                     path.c_str());
-                        syncDirSave(owed, uploader);
-                    }
+                    for (const std::string& entry : listNames(half + "/" + platform))
+                        recoverDriveSaves(*xemu, half + "/" + platform + "/" + entry);
                 }
             }
         }
@@ -793,6 +781,45 @@ void App::recoverPowerCutSaves() {
     }
 }
 
+// ONE XBOX GAME'S FOLDER, as above: true when it holds no note, or its
+// saves came off. False while they stay on the drive (somebody else's, or
+// the drive would not give them up): nothing may write that drive until
+// they are off. A launch of the game runs it too, before beforeStart would
+// put this person's older copy over them (#398, EMU-12).
+bool App::recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::string& path) {
+    if (!cab::standalone::hasPlayingNote(path)) return true;
+    std::istringstream note(cab::standalone::playingNote(path));
+    std::string id, dir, title, tag;
+    std::getline(note, id);
+    std::getline(note, dir);
+    std::getline(note, title);
+    std::getline(note, tag);
+    // ONLY THIS PERSON'S. The upload goes as whoever the console acts as,
+    // so somebody else's stays on the drive, still protected, until they
+    // are the one here.
+    const std::string mine = storage::userDir(storage::currentUser()) + "/";
+    if (dir.compare(0, mine.size(), mine) != 0) {
+        std::fprintf(stderr, "[xbox] %s holds another person's saves; left for them\n",
+                     path.c_str());
+        return false;
+    }
+    GameSession owed;
+    owed.romId = std::atoi(id.c_str());
+    owed.title = title;
+    owed.saveDir = dir;
+    owed.saveTag = tag;
+    owed.dirSaveRoot = cab::standalone::saveRoot(xemu, dir);
+    owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
+    std::string aerr;
+    if (dir.empty() || !cab::standalone::afterEnd(xemu, path, dir, &aerr)) {
+        std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(), aerr.c_str());
+        return false;
+    }
+    std::fprintf(stderr, "[xbox] finished what a stop left on %s\n", path.c_str());
+    syncDirSave(owed, uploader);
+    return true;
+}
+
 // WHAT THE MENUS ARE DRAWN IN — #75 and #129, 2026-09-27. The colour is
 // the signed-in person's (accounts.json); Appearance and its hours are the
 // console's (settings.json). See look.h.
@@ -805,6 +832,16 @@ void App::applyStartColour() {
     if (lookColour) look::setColour(look::colourFromWord(lookColour), true);
     if (lookDark) appearance = look::Appearance::Dark;
     look::setDark(wantDark(), true);
+}
+
+// WHY HOME IS EMPTY (connectToServer), said once Home is up and after
+// "Updated to", since one notice shows at a time.
+void App::sayStartProblem() {
+    if (!startProblem.empty() && updStartNotice.empty() && menuNotice.life <= 0.0f &&
+        !playing && here() == Screen::Home && curtain.value() < 0.01f) {
+        menuNotice.say(startProblem, Tone::Problem);
+        startProblem.clear();
+    }
 }
 
 // AFTERWARDS: the first start after a restart compares the version the
@@ -846,6 +883,17 @@ int App::shutDown(char** argv) {
     tailscale::cancelLogin();
     if (tsWorker.joinable()) tsWorker.join();
     stopReport();
+    // AND ADD AN ACCOUNT'S PAIRING (#398, SETTINGS-03; part of #406). It was
+    // joined only before the next pairing, so after any visit to Add an
+    // account the App was destroyed holding a joinable thread and Switch to
+    // Steam ended in std::terminate. A poll still waiting stops at once; one
+    // in flight is the server's answer away.
+    {
+        std::lock_guard<std::mutex> lk(addJob->m);
+        addJob->stop = true;
+    }
+    addJob->wake.notify_all();
+    if (addJob->th.joinable()) addJob->th.join();
 
     ra::shutdown();
     images.shutdown();

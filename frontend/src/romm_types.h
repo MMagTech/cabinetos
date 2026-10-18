@@ -250,9 +250,9 @@ struct PlaySession {
     int64_t durationMs = 0;
 };
 
-// A game read back from a record written in RomM's own field names: a keep
-// record, or the console's note of a game it has on its drive. False when it
-// is not one.
+// A game read back from a record written in RomM's own field names (plus a
+// Wii U game's `product_code`, the console's own): a keep record, or the
+// console's note of a game it has on its drive. False when it is not one.
 bool gameFromJson(const std::string& json, Game* out);
 
 }  // namespace romm

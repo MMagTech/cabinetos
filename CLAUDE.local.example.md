@@ -27,8 +27,25 @@ it would make `main` build an update with nothing in it.
 
 ## Your RomM server
 
-`<address:port>`. Point `tools/romm-readonly-relay.py` and
-`tools/offline-relay.py` at it (their `UP` line) before testing.
+`<address:port>`. `tools/romm-readonly-relay.py` and
+`tools/offline-relay.py` read it from `CABINETOS_RELAY_UP`.
+
+## For the tools
+
+The tools in `tools/` take your machines from the environment
+(CONTRIBUTING.md, "Running and testing"). Paste these into `~/.zshrc` (or
+your shell's start-up file), filled in:
+
+```
+export CABINETOS_A9=cabinet@<console address>
+export CABINETOS_KEY=<path to your SSH key>        # if not ~/.ssh/cabinetos
+export CABINETOS_VM=cabinet@<build VM address>      # only for ui-loop.sh --via-vm
+export CABINETOS_RELAY_UP=http://<address:port>     # your RomM server
+```
+
+The relays and the disc rig run on the console, so there the server goes
+on their command line: `CABINETOS_RELAY_UP=http://<address:port> python3
+relay.py 16006`.
 
 ## Hand-made state on your machines, not in git
 

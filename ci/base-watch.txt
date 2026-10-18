@@ -348,7 +348,7 @@ gamescope-session-steam
 # cardwire since #223: Steam's session would launch Steam through it.
 area: Apps CabinetOS removes
 kind: stripped
-log: None of the removed apps is back :: out=$(rpm -q cardwire lutris sddm firefox konsole dolphin waydroid uupd bazzite-portal 2>/dev/null | grep -v 'is not installed'); [ -z "$out" ] || { echo "$out"; exit 1; }
+log: None of the removed apps is back :: out=$(rpm -q cardwire lutris sddm firefox konsole dolphin waydroid bazzite-portal 2>/dev/null | grep -v 'is not installed'); [ -z "$out" ] || { echo "$out"; exit 1; }
 cardwire
 cardwire-gui
 lutris
@@ -365,5 +365,8 @@ konsole
 # put a file manager back in the image and change nothing about the core.
 dolphin
 cockpit*
+# Kept installed on purpose (build_files/strip-desktop.sh masks only its
+# timer), so not in the check above; listed so a base that drops or renames
+# it shows.
 uupd
 bazzite-portal

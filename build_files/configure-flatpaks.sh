@@ -76,7 +76,14 @@ path = sys.argv[1]
 seen, apps, runtimes, bad = set(), 0, 0, 0
 
 for n, raw in enumerate(open(path), 1):
-    line = raw.split('#', 1)[0].strip()
+    if raw.lstrip().startswith('#'):
+        continue
+    # The console reads each line with `read -r kind ref branch commit` and
+    # skips only a line that starts with #, so a comment after the fields would
+    # land in the commit: the pin fails on every console, every 6 hours.
+    if '#' in raw:
+        print(f"    ERROR line {n}: a comment after the fields; the console would read it into the commit"); bad += 1; continue
+    line = raw.strip()
     if not line:
         continue
     parts = line.split()
@@ -132,16 +139,19 @@ done
 # The masked timers this design depends on.
 # ---------------------------------------------------------------------------
 #
-# strip-desktop.sh masks these so nothing updates a flatpak on its own schedule.
-# That is not a tidiness measure here — it is what makes a pinned commit STAY
-# pinned. If a future change unmasks them, the emulators would drift and this
-# file's promise would quietly stop being true.
+# strip-desktop.sh masks these so nothing updates a flatpak, or the image that
+# names the pins, on its own schedule. That is not a tidiness measure here — it
+# is what makes a pinned commit STAY pinned, and what keeps the console from
+# restarting into an update nobody asked for. If a future change or a base bump
+# turned one on, this file's promise would quietly stop being true.
 #
 # `systemctl is-enabled` EXITS NON-ZERO FOR A MASKED UNIT while still printing
 # "masked", so the obvious `|| echo absent` appends a second line and the
 # comparison never matches. That is what failed this build the first time it
 # ran. Capture the output, ignore the status, and take the first line.
-for unit in flatpak-system-update.timer uupd.timer; do
+for unit in flatpak-system-update.timer uupd.timer rpm-ostreed-automatic.timer \
+    bootc-fetch-apply-updates.timer
+do
     state=$(systemctl is-enabled "${unit}" 2>/dev/null | head -n1) || true
     state="${state:-not-found}"
 
@@ -155,9 +165,9 @@ for unit in flatpak-system-update.timer uupd.timer; do
             log "  ok: ${unit} is not present at all"
             ;;
         enabled|enabled-runtime|alias|indirect)
-            log "  ERROR: ${unit} is '${state}' — it would update flatpaks on its"
-            log "         own schedule and pinned emulators would silently drift."
-            log "         See docs/PROJECT.md open question 21."
+            log "  ERROR: ${unit} is '${state}' — it would update the console on"
+            log "         its own schedule, apart from the player and the pins."
+            log "         See docs/PROJECT.md open question 21, and strip-desktop.sh."
             exit 1
             ;;
         *)

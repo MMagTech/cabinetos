@@ -21,6 +21,11 @@
 namespace catalog {
 
 std::map<std::string, std::string> optionOverrides(const std::string& core) {
+    return optionOverrides(core, cab::gpu::vulkan().available, wiiremote::sensorBarAbove());
+}
+
+std::map<std::string, std::string> optionOverrides(const std::string& core, bool vulkan,
+                                                   bool sensorBarAbove) {
     // Callers hold the core by two different names — the manifest's, which is
     // what the launch path has, and the FILE's, which is what the options
     // audit has when it is walking a directory. So this takes either, and
@@ -204,7 +209,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
     //
     // ITS RESOLUTION IS PICTURE QUALITY'S (quality.h, #63), on either
     // renderer: the 2x that stood here was a starting value until then.
-    if (coreName == "mupen64plus" && cab::gpu::vulkan().available) {
+    if (coreName == "mupen64plus" && vulkan) {
         return {
             {"mupen64plus-rdp-plugin", "parallel"},
             {"mupen64plus-rsp-plugin", "parallel"},
@@ -234,7 +239,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& core) {
             {"dolphin_log_level", "2"},
             // WHERE THE SENSOR BAR IS, as the console was told under
             // Controllers (#200). 0 is below the TV, 1 above.
-            {"dolphin_sensor_bar_position", wiiremote::sensorBarAbove() ? "1" : "0"},
+            {"dolphin_sensor_bar_position", sensorBarAbove ? "1" : "0"},
             // A REMOTE SWITCHED ON DURING A GAME JOINS IT (#269, MMagTech
             // 2026-10-06), as on a Wii: without this Dolphin looks for Remotes
             // once, at boot. Only for one the console has not met since it

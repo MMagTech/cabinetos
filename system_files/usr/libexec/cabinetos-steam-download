@@ -79,7 +79,8 @@ rm -f "${HOME}/.config/autostart/steam.desktop"
 # Steam's session flags, exactly (sessions.d/steam's CLIENTCMD): the same
 # client branch is fetched here as the real start will look for. And without
 # the login's capabilities, as in the session, or Steam's sandbox refuses.
-setsid gamescope --backend headless -W 1280 -H 720 -- \
+# gamescope's long flags: ci/check-gamescope-flags.sh reads only those (#227).
+setsid gamescope --backend headless --output-width 1280 --output-height 720 -- \
     setpriv --inh-caps=-all --ambient-caps=-all -- \
     steam -silent -gamepadui -steamos3 -steampal -steamdeck > "${LOG}" 2>&1 &
 gs=$!

@@ -4,6 +4,62 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.18.2 {#v2026-10-18-2}
+
+*18 October 2026*
+
+- **Fixed:** a console set up over Wi-Fi now gets its Xbox and Switch
+  emulators without needing a restart.
+- **Fixed:** a game no longer opens on an old save state, or on the wrong
+  disc, after a game before it failed to start, or after resuming a Switch,
+  PS3 or Xbox game from Home.
+- **Fixed:** Resume on Home now says why a game cannot start (for example
+  "Not enough space") instead of doing nothing.
+- **Fixed:** on a nearly full console, Play no longer deletes the game it is
+  about to download and then fail with "Couldn't download this game".
+- **Fixed:** in PS3, Switch, Xbox, Xbox 360 and Wii U games, a controller
+  switching off now pauses the game and the other players keep their
+  numbers; a button held when the game started no longer stays pressed on
+  Home afterwards; a message showing when you close the game's pause menu
+  no longer stays frozen on the game; and a stray "Paused" box no longer
+  shows over a game while A is held.
+- **Fixed:** an Xbox game's saves can no longer be lost when they could not
+  be copied off its drive the last time it was played.
+- **Fixed:** with a USB keyboard, holding an arrow now speeds up on every
+  screen, and holding Return or Escape acts once (holding Return on Exit to
+  Home no longer starts the game again).
+- **Fixed:** downloaded Wii U games now show on Home, the Library and Search
+  while the console is offline.
+- **Fixed:** a switch to another person that fails now goes back to whoever
+  was signed in, instead of mixing the two people's games, saves and RomM
+  sign-in.
+- **Fixed:** signing out now also forgets each game's picture choices and
+  what the console read off its files, so a new server's games never take
+  over another server's.
+- **Fixed:** in Settings, B on a question goes back to the panel it came
+  from, as Cancel does; coming back to Add an account while its code is
+  still valid shows that code again; the cursor stays on the controller you
+  just gave a new player number; and the Wiki's QR code in How to no longer
+  jumps smaller as you move away from it.
+- **Fixed:** Home keeps saying "Nothing played yet" until you play
+  something, instead of filling Recent with every game you browsed; a Home
+  with only favourites starts on them; and games that cannot be played here
+  are greyed on Home as they are in a system's games.
+- **Fixed:** the Wii games turn bright or greyed the next time you open them
+  after you pair or remove a Wii Remote, or a stream starts or ends.
+- **Fixed:** on Search, Down from the results brings the keyboard back with
+  what you typed, after opening a game or pressing Done.
+- **Fixed:** first setup no longer freezes when you press a Wi-Fi network or
+  a controller again while it is still joining or pairing, and a pairing
+  code that expires or is refused on the phone is replaced by a new one by
+  itself.
+- **Fixed:** a console whose RomM sign-in has been refused, or whose RomM
+  has no systems it plays, now starts to an empty Home and says so, instead
+  of restarting over and over with a black screen.
+- **Changed:** the grey example in the RomM server address field is now a
+  made-up address.
+  ([#398](https://github.com/MMagTech/cabinetos/issues/398))
+
 ## 2026.10.17.3 {#v2026-10-17-3}
 
 *17 October 2026*

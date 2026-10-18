@@ -116,15 +116,28 @@ int readMotor(const std::string& sysconfPath) {
     return -1;
 }
 
-std::string rumbleOption() {
-    return prefs::get("wii_rumble", "on") == "off" ? "disabled" : "enabled";
+namespace {
+bool rumbleOn() { return prefs::get("wii_rumble", "on") != "off"; }
+// The core's word for the switch.
+const char* rumbleWord(bool on) { return on ? "enabled" : "disabled"; }
+}  // namespace
+
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug) {
+    return coreOptions(core, platformSlug, rumbleOn());
+}
+
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug, bool on) {
+    if (platformSlug != "wii" || core != "dolphin") return {};
+    return {{"dolphin_enable_rumble", rumbleWord(on)}};
 }
 
 void keepRumbleFrom(const std::string& sysconfPath) {
     const int motor = readMotor(sysconfPath);
     if (motor < 0) {
         std::fprintf(stderr, "[wii] no BT.MOT in %s; rumble stays %s\n", sysconfPath.c_str(),
-                     rumbleOption().c_str());
+                     rumbleWord(rumbleOn()));
         return;
     }
     const std::string was = prefs::get("wii_rumble", "on");

@@ -23,5 +23,10 @@ namespace catalog {
 // and that list is the obvious thing to bring across, one platform at a time,
 // with a reason recorded for each.
 std::map<std::string, std::string> optionOverrides(const std::string& coreName);
+// The same, told whether there is Vulkan (the N64's renderer) and where the
+// sensor bar is rather than asking the GPU and the settings, so the option
+// check (optcheck.h) can test every answer on any machine.
+std::map<std::string, std::string> optionOverrides(const std::string& coreName, bool vulkan,
+                                                   bool sensorBarAbove);
 
 }  // namespace catalog

@@ -61,6 +61,17 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // the restore below keeps it (finishInterruptedSave).
     if (cab::standalone::hasPlayingNote(saveDir))
         finishInterruptedSave(emu, saveDir, uploader);
+    // AN XBOX GAME WHOSE LAST SAVES NEVER CAME OFF ITS DRIVE (the note in
+    // the game's own folder): off now, as a start-up would take them, or the
+    // game does not start, since beforeStart writes this person's older copy
+    // over the drive's (recoverDriveSaves).
+    if (!recoverDriveSaves(emu, launchJob.entryPath)) {
+        cab::vpad::close();
+        std::fprintf(stderr, "[standalone] %s still holds saves from its last game; "
+                     "not started\n", launchJob.entryPath.c_str());
+        refuseLaunch("Couldn't start this game");
+        return;
+    }
     if (!root.empty() && tag && liveClient.haveToken())
         restoreDirSave(liveClient, launchJob.romId, tag, root, launchJob.title);
     // AND ONTO WHERE THE EMULATOR READS THEM, when that is not a folder
@@ -87,6 +98,11 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
         refuseLaunch("Couldn't start this game");
         return;
     }
+    // A GAME FOR THE SEATS, as one of ours is (players.h): a pad that goes off
+    // keeps its player, so the next pad does not take over its controller.
+    // The frame loop says so while the menu is up; while the emulator has the
+    // screen that loop skips it, so it is said here.
+    players::setInGame(true);
     session = GameSession{};
     session.romId = launchJob.romId;
     session.core = launchJob.coreName;
@@ -129,6 +145,9 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     curtain.elapsed = curtain.duration;
     standaloneClearFrames = 30;
     standalonePaused = false;
+    // From here every press and release is the emulator's (takeStandaloneEvent),
+    // so nothing still held may stay held for this loop.
+    letGoOfHeld();
 }
 
 // AND WHEN IT ENDS, however it ends, the console is where it was: Home,
@@ -152,6 +171,7 @@ void App::finishStandalone() {
     if (const cab::standalone::Emulator* ran = cab::standalone::find(session.standaloneCore))
         cab::standalone::finished(*ran, session.saveDir);
     cab::vpad::close();
+    players::setInGame(false);
     if (playClock.active()) {
         playtime::close(storage::currentUser(), playClock.finish(playtime::wallMs()));
         uploader.sendPlay();
@@ -192,6 +212,7 @@ void App::finishStandalone() {
     overlayFade.from = overlayFade.to = 0.0f;
     overlayFade.elapsed = overlayFade.duration;
     dropPressesFromClosing();
+    letGoOfHeld();
     std::fprintf(stderr, "[standalone] back to Home\n");
 }
 
@@ -222,7 +243,8 @@ void App::openStandaloneMenu() {
 // the moment they arrive: this loop waits on events rather than
 // sleeping while the emulator runs, so nothing is added to the
 // time between a press and the game. A pad arriving or leaving
-// still reaches players.h, so the order stays the console's.
+// still reaches players.h, so the order stays the console's, and
+// a playing pad leaving opens the pause menu.
 //
 // AND THE PAUSE MENU OPENS THE WAY IT DOES FOR EVERY SYSTEM: both
 // stick clicks, always, or a tap of the shortcut button with the
@@ -309,9 +331,19 @@ bool App::takeStandaloneEvent(const SDL_Event& e) {
             case SDL_EVENT_GAMEPAD_ADDED:
                 players::added(e.gdevice.which);
                 break;
-            case SDL_EVENT_GAMEPAD_REMOVED:
+            case SDL_EVENT_GAMEPAD_REMOVED: {
+                // A PLAYING PAD DROPPING OUT PAUSES THE GAME, as one of ours
+                // does (handleEvent): its player would otherwise be run over
+                // while they find the charger. Any pad resumes.
+                const int was = players::playerOf(e.gdevice.which);
                 players::removed(e.gdevice.which);
+                if (was >= 0) {
+                    std::fprintf(stderr, "[players] player %d's pad went off: pausing\n",
+                                 was + 1);
+                    openStandaloneMenu();
+                }
                 break;
+            }
             case SDL_EVENT_KEY_DOWN:
                 playClock.touch();
                 break;
@@ -348,6 +380,9 @@ bool App::watchStandalone(float dt) {
             standalonePaused = false;
             for (auto& sh : standaloneShortcut) sh = {};
             standaloneRun.thaw();
+            // The menu is gone but a notice may still show (Screenshot
+            // saved): cleared, or its last frame stays over the game.
+            standaloneClearFrames = 30;
             std::fprintf(stderr, "[standalone] resumed\n");
         }
     }

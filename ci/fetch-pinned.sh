@@ -48,7 +48,7 @@ pins() {
                 exit 1
             fi
             echo "${sha} ${url} ${s}"
-        )
+        ) || return 1
     done
 }
 
@@ -60,6 +60,10 @@ case "${1:-}" in
         cache="${2:?cache directory}"
         out="${3:?output directory}"
         mkdir -p "${cache}" "${out}"
+        # Read whole first, so a pin that does not parse stops the script
+        # here; a loop fed by `< <(pins)` never sees its status, and would
+        # skip that pin and every later one, then drop their cached files.
+        pinlist="$(pins)"
         keep=()
         while read -r sha url script; do
             keep+=("${sha}")
@@ -91,7 +95,7 @@ case "${1:-}" in
                 echo "${script}: downloaded, $(stat -c %s "${file}") bytes"
             fi
             cp "${file}" "${out}/${sha}"
-        done < <(pins)
+        done <<<"${pinlist}"
         # A pin that moved leaves its old file behind; the cache keeps only
         # what the pins name.
         for f in "${cache}"/*; do

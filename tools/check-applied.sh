@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2015 # `test && ok || bad` is if-then-else: the helpers only print
 #
 # Did the emulators take what the console told them? Run from the Mac, against
 # the A9, after a version bump of anything CI cannot load.
@@ -28,9 +29,9 @@
 #
 set -uo pipefail
 
-HOST="${CABINETOS_HOST:-192.168.1.212}"
+A9="${CABINETOS_A9:?set it to cabinet@<your console> (CLAUDE.local.example.md)}"
 KEY="${CABINETOS_KEY:-$HOME/.ssh/cabinetos}"
-SSH=(ssh -p 2222 -i "$KEY" -o ConnectTimeout=8 "cabinet@$HOST")
+SSH=(ssh -p 2222 -i "$KEY" -o ConnectTimeout=8 "$A9")
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ONLY_LISTS=0
 [[ "${1:-}" == "--lists" ]] && ONLY_LISTS=1
@@ -44,10 +45,10 @@ note() { printf 'note  %s\n' "$*"; }
 # --- 1. Dolphin and FBNeo, listed with real games ----------------------------
 say "== option lists that need a real game"
 rsync -az -e "ssh -p 2222 -i $KEY" "$ROOT/tools/core-options.c" "$ROOT/frontend/src/libretro.h" \
-    "cabinet@$HOST:/tmp/check-applied/" >/dev/null 2>&1 || {
+    "$A9:/tmp/check-applied/" >/dev/null 2>&1 || {
     "${SSH[@]}" 'mkdir -p /tmp/check-applied' &&
         rsync -az -e "ssh -p 2222 -i $KEY" "$ROOT/tools/core-options.c" \
-            "$ROOT/frontend/src/libretro.h" "cabinet@$HOST:/tmp/check-applied/"
+            "$ROOT/frontend/src/libretro.h" "$A9:/tmp/check-applied/"
 }
 "${SSH[@]}" 'cd /tmp/check-applied && sed -i "s#../frontend/src/libretro.h#libretro.h#" core-options.c &&
     podman run --rm -v /tmp/check-applied:/w:Z -w /w localhost/cabinetos-builder \
@@ -135,11 +136,11 @@ elif (( xl < 1000 )); then bad "Xenia: its log is ${xl} bytes: a flag it does no
 else ok "Xenia: log ${xl} bytes, started"; fi
 
 # Cemu drops unknown keys when it rewrites settings.xml on exit; ours must
-# still be there.
+# still be there, with the values standalone_cemu.cpp writes.
 cx=$("${SSH[@]}" "cat $E/cemu/Cemu/settings.xml 2>/dev/null")
 if [[ -z "$cx" ]]; then note "Cemu: no settings"
 else
-    for k in '<api>1</api>' '<VSync>0</VSync>' '<AsyncCompile>true</AsyncCompile>'; do
+    for k in '<api>1</api>' '<VSync>1</VSync>' '<AsyncCompile>true</AsyncCompile>'; do
         grep -qF "$k" <<<"$cx" && ok "Cemu: $k" || bad "Cemu: $k gone after its rewrite: renamed?"
     done
 fi

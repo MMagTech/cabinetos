@@ -13,9 +13,9 @@
 #
 # What this asserts is modest and worth having: the tree compiles from a bare
 # checkout, in the same Fedora 44 container the cores and the VM use, with the
-# warnings the Makefile asks for. It does not run anything. The frontend needs a
-# Wayland display and a GPU to do anything interesting, and the test machine
-# remains where that happens.
+# warnings the Makefile asks for. It runs only what needs no screen: the option
+# tables and the self-tests (ci/run-self-tests.sh). The rest needs a Wayland
+# display and a GPU, and the test machine remains where that happens.
 #
 # ON EVERY PULL REQUEST AIMED AT ANYTHING **BUT** MAIN. This asked for
 # `branches: [main]` until 2026-09-16, and that day four branches were stacked
@@ -54,14 +54,25 @@ on:
 # No `concurrency:` — see the block in build-core.yml, which explains why, and
 # applies here for the same reason: build.yml calls this workflow too.
 
+# REPORT ONLY FOR A CHECK'S FIRST WEEK, the rule and the date checks.yml has:
+# until the end of this day (UTC) a check here that can fail warns and
+# passes; from the next day it fails. A new check that can fail starts the
+# same way: set this a week ahead in its pull request.
+env:
+  REPORT_ONLY_UNTIL: '2026-10-25'
+
 jobs:
   build:
     name: Compile
     runs-on: ubuntu-24.04
 
     steps:
+      # Two deep, so a pull request's base (the merge commit's first parent)
+      # is here for "New warnings" at the end.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 2
 
       # The same container the cores are built in and the same one the test VM
       # uses, so CI and the development loop are not two different builds
@@ -88,7 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           podman run --rm -v "$PWD/frontend":/src:Z -w /src cabinetos-builder \
-            make -j"$(nproc)" 2>&1 | tee /tmp/build.log
+            make -j"$(nproc)" -O 2>&1 | tee /tmp/build.log
 
       # THE WII BRIDGE (#200, wiibridge/): its own program, GPL, in the same
       # container. Built here so the image carries it beside the frontend that
@@ -102,13 +113,22 @@ jobs:
       # EVERY OPTION VALUE THE CONSOLE SETS, AGAINST WHAT EACH CORE DECLARES
       # (#63, the version-bump check, frontend/src/optcheck.h). A table that
       # names a key a core does not have, or a value it does not accept,
-      # fails here rather than going nowhere on a television. The cores'
-      # lists are cores/options/, which build-core.sh keeps honest.
+      # fails here rather than going nowhere on a television, and so does a
+      # libretro core with no list. The cores' lists are cores/options/,
+      # which build-core.sh keeps honest.
       - name: Check the option tables
         run: |
           set -euo pipefail
           podman run --rm -v "$PWD":/repo:Z -w /repo cabinetos-builder \
             frontend/build/cabinetos-frontend --check-option-tables cores/options
+
+      # THE SELF-TESTS THAT NEED NO SCREEN, SERVER OR CONSOLE (#398): the
+      # table in CONTRIBUTING.md, "Running and testing", each in a scratch
+      # storage root, HOME and drive search. ci/run-self-tests.sh lists them
+      # and the ones that cannot run here. Report only until
+      # REPORT_ONLY_UNTIL, then a failure.
+      - name: Self-tests
+        run: ci/run-self-tests.sh
 
       # The image build downloads this. Uploaded on every run and not only
       # when called, because a binary you can fetch off a finished run is how
@@ -151,3 +171,22 @@ jobs:
               echo "No warnings."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      # NO NEW WARNINGS IN THE FILES A PULL REQUEST TOUCHES (CLAUDE.md rule 6,
+      # #398): the touched files' warnings against the same files compiled
+      # at the base, by ci/check-new-warnings.sh, which says how and what it
+      # costs. Pull requests only, because a push has no base to compare
+      # with. Report only until REPORT_ONLY_UNTIL, then a failure.
+      - name: New warnings
+        if: github.event_name == 'pull_request'
+        run: ci/check-new-warnings.sh /tmp/build.log
+
+      # THE CODE NOTHING CALLS, AS THE LINKER SEES IT (#398): a scratch build
+      # at -O0 with a section per function, linked with --gc-sections
+      # --print-gc-sections, by ci/report-unused-code.sh. A report in the
+      # summary, never a failure, and never the binary that ships, which is
+      # uploaded above. Pull requests only, so an image build never waits for
+      # it; not skipped when "New warnings" fails.
+      - name: Unused code
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: ci/report-unused-code.sh

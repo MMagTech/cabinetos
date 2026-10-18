@@ -213,6 +213,17 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   `docs/LICENCES.md`, which the image carries. Any other file committed
   after the testing push still makes main build.
 
+- **THE CHANNEL TAG MOVES LAST, TO A SIGNED AND CHECKED DIGEST** (#398,
+  SCRIPTS-02 and 48). Until 2026-10-17 `build.yml` pushed `testing` or
+  `latest` first and signed after, so a cosign error, a Sigstore outage or
+  a cancel in between left the channel on an image every installed console
+  refuses, and promotion would carry such a `testing` to `latest`. Nothing
+  checked that the secret key matched the public key the image ships. Now:
+  push the other tags, sign, `cosign verify` against
+  `system_files/etc/pki/containers/cabinetos.pub`, then copy the digest to
+  the channel and read it back. Do not fold the channel back into the push
+  loop.
+
 - **CREATING `testing` AT A COMMIT GITHUB ALREADY HAS BUILDS NOTHING.** The
   first push to it carried no new commits (the same commit had gone up on
   `system-update`), so the trigger's path filter saw no changed files and
@@ -286,8 +297,9 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   had the emulator readable by root alone: the console runs as `cabinet` and
   called it "not installed" (2026-09-30). The UI loop never saw it, because
   there the test copy belonged to `cabinet`. **An emulator is judged from the
-  image, not only from a copy.** `install-xenia.sh` now fails the build on
-  any file others cannot read.
+  image, not only from a copy.** `install-xenia.sh`, `install-cemu.sh` and
+  `install-rpcs3.sh` now make everything readable and fail the build on any
+  file others cannot read.
 
 - **A GITHUB ARTIFACT LOSES ITS FILES' EXECUTE BIT.** `actions/upload-artifact`
   does not keep permissions, so Cemu's program reached the image build as a

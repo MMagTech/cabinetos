@@ -231,6 +231,13 @@ bool gPs2Widescreen = true;
 
 bool Core::load(const std::string& soPath) {
     unload();
+    // WHAT EACH PLAYER'S PORT HOLDS IS THE NEXT GAME'S TO SAY, and a Wii
+    // game the core refused never reached unloadGame, which resets them
+    // after a game: the next game of any system was told its ports held
+    // Wii devices (#398). Every launch loads its core at the press, and
+    // restoreBeforeLoad sets a Wii game's after that.
+    gPadDevice = RETRO_DEVICE_JOYPAD;
+    gRealRemotesFrom = -1;
 
     // The emulator is recognised by its filename, the same way every core is.
     // catalog::coreFileName produces this for the `ps2` platform.

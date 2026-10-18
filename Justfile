@@ -193,11 +193,17 @@ build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_bui
 [group('Disk')]
 build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "anaconda-iso" "disk_config/iso.toml")
 
-# Shellcheck the build scripts.
+# Shellcheck every script CI lints: the same two commands as build.yml's lint
+# job, so a script that fails there fails here.
 [group('Lint')]
 lint:
     #!/usr/bin/env bash
     set -eou pipefail
     # SC1091: shellcheck cannot follow `source /ctx/lib.sh`, because /ctx only
     # exists inside the container build.
-    find build_files ci cores -iname "*.sh" -type f -exec shellcheck -e SC1091 "{}" ';'
+    find build_files ci cores -name '*.sh' -print0 \
+        | xargs -0 shellcheck -e SC1091
+    # The scripts that ship in the image, picked by their first line.
+    find system_files -type f -exec \
+        sh -c 'head -1 "$1" | grep -q "^#!.*sh" && echo "$1"' _ {} \; \
+        | xargs -r shellcheck -e SC1091
