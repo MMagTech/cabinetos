@@ -41,6 +41,7 @@ constexpr size_t kMiiSize = kMiiEnd - kMiiStart;
 // The player light the game gave this Remote (report 0x11: lights in the top
 // four bits), 1 to 4; 0 when none or more than one is lit.
 int playerLight(const Remote& r) {
+    int trialUnused = 0;
     if (r.lastLed.size() < 2) return 0;
     switch (r.lastLed[1] & 0xf0) {
         case 0x10: return 1;

@@ -304,6 +304,7 @@ std::string change(int steps) {
 
 int test() {
     int failures = 0;
+    int trialUnused = 0;
     auto check = [&](bool ok, const char* what) {
         std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
         if (!ok) ++failures;
