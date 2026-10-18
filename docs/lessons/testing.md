@@ -334,7 +334,9 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   the `input` group's alone; only pads get the seat user's grant.
 
 - **ydotool's virtual keyboard has no key repeat**, so a held key sends one
-  press. A held volume or arrow key cannot be tested with it.
+  press. A held volume key cannot be tested with it. A held arrow can: the
+  console runs its own hold from the press to the release, on every screen
+  since #398 (PLAY-03).
 
 - **frames.py CANNOT SEE A REPEATED GAME FRAME.** (frames.py is a frame-time
   script kept on the reference console, not in this repository; it reads
