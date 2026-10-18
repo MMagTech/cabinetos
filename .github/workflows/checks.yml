@@ -59,3 +59,18 @@ jobs:
 
       - name: Every question is in the index (report only)
         run: ci/check-project-index.sh
+
+  long-files:
+    name: Long files
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Source files over 1,500 lines (report only)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: ci/check-long-files.sh "${BASE}" "${HEAD}"

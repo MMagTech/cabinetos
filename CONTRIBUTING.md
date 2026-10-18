@@ -272,6 +272,14 @@ runs `checks.yml`, a few seconds each:
   in its index, an index line with no question, or the index's count of
   questions gone wrong is a warning on the pull request. Add the line under
   "The open questions, and where each ended".
+- **Long files** (`ci/check-long-files.sh`), report only, never a failure:
+  every source file over 1,500 lines in `frontend/`, `wiibridge/`,
+  `build_files/`, `ci/`, `cores/`, `system_files/` and `tools/` is listed in
+  the run's summary, and one the pull request makes longer is a warning on
+  it, so a file growing into another 20,000-line main.cpp is seen early.
+  Source is code (`.c`, `.cpp`, `.h`, `.sh`, `.py`, or a script starting
+  `#!`); vendored files (`frontend/third_party/`, `frontend/src/libretro.h`)
+  are on the script's list and left out.
 
 **A check's first week is report only.** Until the end of the date in
 `checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC), a check that can fail
