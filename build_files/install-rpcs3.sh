@@ -68,6 +68,20 @@ mkdir -p "${DEST}"
 cp -a "${root}/usr" "${DEST}/"
 printf '%s\n' "${RPCS3_VERSION}" > "${DEST}/VERSION"
 
+# READABLE BY EVERYONE: the console runs as `cabinet`, and the checks below run
+# as root, so they would pass on a folder only root can read. Xenia's AppImage
+# unpacks that way and its first testing image shipped it (install-xenia.sh).
+# RPCS3's does not today; a new build could. Done and checked the same way.
+chmod -R u+rwX,go+rX,go-w "${DEST}"
+shut="$(find "${DEST}" ! -perm -o+r | head -5)"
+if [[ -n "${shut}" ]]; then
+    log "ERROR: files in ${DEST} that the console's user cannot read:"
+    echo "${shut}"
+    exit 1
+fi
+[[ -x "${DEST}/usr/bin/rpcs3" && "$(stat -c %A "${DEST}/usr/bin/rpcs3")" == *x ]] ||
+    { log "ERROR: rpcs3 is not executable by everyone"; exit 1; }
+
 # THE CHECK THAT MATTERS: it starts, from where it now lives, against the
 # image's own libraries, and it is the build this file pins. `--headless` as
 # well as `--version`: without it RPCS3 builds its Qt window layer first, and
