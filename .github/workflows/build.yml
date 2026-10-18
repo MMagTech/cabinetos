@@ -271,10 +271,13 @@ jobs:
       # Edge, xemu's drive), kept in the Actions cache so a release site that
       # answers 500 cannot fail a build (RPCS3's, 2026-10-12). The key is the
       # install scripts' own pins; the scripts check each sha256 again.
-      # ci/fetch-pinned.sh.
+      # ci/fetch-pinned.sh. The key is read on its own line: inside echo's
+      # arguments a pin that does not parse would fail unseen.
       - name: Pinned downloads, the cache key
         id: pins
-        run: echo "key=pinned-downloads-$(ci/fetch-pinned.sh key)" >> "${GITHUB_OUTPUT}"
+        run: |
+          key=$(ci/fetch-pinned.sh key)
+          echo "key=pinned-downloads-${key}" >> "${GITHUB_OUTPUT}"
 
       - name: Pinned downloads, from the cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
