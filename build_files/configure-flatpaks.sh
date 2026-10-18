@@ -76,7 +76,14 @@ path = sys.argv[1]
 seen, apps, runtimes, bad = set(), 0, 0, 0
 
 for n, raw in enumerate(open(path), 1):
-    line = raw.split('#', 1)[0].strip()
+    if raw.lstrip().startswith('#'):
+        continue
+    # The console reads each line with `read -r kind ref branch commit` and
+    # skips only a line that starts with #, so a comment after the fields would
+    # land in the commit: the pin fails on every console, every 6 hours.
+    if '#' in raw:
+        print(f"    ERROR line {n}: a comment after the fields; the console would read it into the commit"); bad += 1; continue
+    line = raw.strip()
     if not line:
         continue
     parts = line.split()
