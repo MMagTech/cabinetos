@@ -14,6 +14,7 @@ constexpr GalleryNotice kNoticeGallery[] = {
     {"Saving\xE2\x80\xA6", Tone::Busy},
     {"Saved to RomM", Tone::Done},
     {"Saved. Will upload when RomM is back", Tone::Info},
+    {"Saved on this console. RomM refused it", Tone::Problem},
     {"Saved on this console only", Tone::Info},
     {"No save states for this system", Tone::Info},
     {"No screenshots for this system", Tone::Info},

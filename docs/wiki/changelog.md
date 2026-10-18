@@ -4,6 +4,32 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** ready for RomM 5.4. After your server moves to RomM 5.4, a
+  game's page still shows how long you have played it.
+  ([#401](https://github.com/MMagTech/cabinetos/issues/401))
+- **Fixed:** a game whose file name on your server begins with # or ? would
+  not download. It downloads now.
+  ([#402](https://github.com/MMagTech/cabinetos/issues/402))
+- **Fixed:** on a server address that redirects (for example to https), saves
+  and save states could be marked as sent when RomM never got them. They now
+  stay waiting until RomM takes them.
+  ([#478](https://github.com/MMagTech/cabinetos/issues/478))
+- **Fixed:** when RomM refused a save state, for example because your account
+  cannot upload, the console said it would upload when RomM was back. It now
+  says RomM refused it. The state is kept on the console.
+  ([#477](https://github.com/MMagTech/cabinetos/issues/477))
+- **Fixed:** a diagnostic report bigger than about 2.5 MB never finished
+  downloading to your phone. It downloads whole now.
+  ([#417](https://github.com/MMagTech/cabinetos/issues/417))
+- **Fixed:** touching a PS5 controller's touchpad showed a mouse arrow over
+  Home and games. There is no arrow now.
+  ([#509](https://github.com/MMagTech/cabinetos/issues/509))
+- **Fixed:** a cover fixed on your server showed only after the console
+  restarted. Open the system again a minute later and it shows.
+  ([#387](https://github.com/MMagTech/cabinetos/issues/387))
+
 ## 2026.10.18.6 {#v2026-10-18-6}
 
 *18 October 2026*

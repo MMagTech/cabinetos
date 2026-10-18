@@ -43,7 +43,18 @@ static std::string greyedReason(const romm::Game& g) {
 int appendGame(Library& lib, const romm::Game& g) {
     auto it = lib.byRomId.find(g.id);
     if (it != lib.byRomId.end()) {
-        lib.cards[static_cast<size_t>(it->second)].unavailable = greyedReason(g);
+        // A GAME ALREADY KNOWN TAKES WHAT THE SERVER SAYS NOW: a cover or a
+        // name fixed on RomM (a Match, an uploaded cover) shows the next time
+        // its grid is read, not after a restart (#387). The colour stand-in
+        // stays, so nothing flashes while the new cover loads.
+        const size_t i = static_cast<size_t>(it->second);
+        Card& c = lib.cards[i];
+        c.title = g.name.empty() ? g.fsName : g.name;
+        c.sortKey = g.sortKey;
+        c.cover = g.coverPath;
+        c.coverLarge = g.coverLargePath;
+        c.unavailable = greyedReason(g);
+        if (i < lib.games.size()) lib.games[i] = g;
         return it->second;
     }
     Card c;
@@ -105,6 +116,7 @@ bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
         }
         games = std::move(page);
     }
+    tile.loadedAtMs = SDL_GetTicks();
     if (more) *more = (total > static_cast<int>(games.size()));
     int unplayable = 0;
     for (const auto& g : games) {

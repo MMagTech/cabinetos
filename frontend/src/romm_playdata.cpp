@@ -140,7 +140,7 @@ bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
     std::string body;
     long status = 0;
     if (!postJson("/api/states/delete", json, &body, &status, err)) return false;
-    if (status >= 400) {
+    if (status < 200 || status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + " deleting states";
         return false;
     }
@@ -201,7 +201,7 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
         curl_easy_cleanup(c);
         if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
         if (status == 401 || status == 403) *forbidden = true;
-        if (status >= 400) {
+        if (status < 200 || status >= 300) {
             if (err) *err = "HTTP " + std::to_string(status) + " making the favourites";
             return false;
         }
@@ -219,7 +219,7 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
                   json, &body, &status, err))
         return false;
     if (status == 401 || status == 403) *forbidden = true;
-    if (status >= 400) {
+    if (status < 200 || status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + (on ? " adding" : " removing") +
                         " a favourite";
         return false;
@@ -248,7 +248,7 @@ bool Client::postPlaySessions(const std::vector<PlaySession>& list, std::vector<
     std::string body;
     long status = 0;
     if (!postJson("/api/play-sessions", payload, &body, &status, err)) return false;
-    if (status >= 400) {
+    if (status < 200 || status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + " sending play sessions";
         return false;
     }
@@ -277,11 +277,22 @@ bool Client::fetchPlayedMs(int romId, int64_t* ms, std::string* err) const {
     // Newest first, a page at a time. A game played every day for years is a
     // few thousand sessions; the cap is there so a wrong answer cannot loop.
     constexpr int kPage = 500;
+    // NAMED FOR THIS DEVICE (#401). RomM 5.4.0 answers 403 to a list that
+    // names no device unless the token holds devices.read, which this console
+    // does not ask for; 5.3.1 filled the token's own device in, and takes it
+    // named just the same (checked on the reference server, 2026-10-18). So
+    // the total stays what it was, and no console pairs again. Should the
+    // device be unknown, it asks as before, which 5.3.1 answers.
+    std::string device, derr;
+    const std::string forDevice =
+        deviceId(&device, &derr) ? "&device_id=" + encodeUrl(device) : std::string();
+    if (forDevice.empty())
+        std::fprintf(stderr, "[playtime] asking without a device id: %s\n", derr.c_str());
     for (int page = 0; page < 40; ++page) {
         std::string body;
         if (!get("/api/play-sessions?rom_id=" + std::to_string(romId) +
                      "&limit=" + std::to_string(kPage) +
-                     "&offset=" + std::to_string(page * kPage),
+                     "&offset=" + std::to_string(page * kPage) + forDevice,
                  &body, err))
             return false;
         json_object* root = json_tokener_parse(body.c_str());

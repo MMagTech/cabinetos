@@ -169,9 +169,10 @@ down. "Look now at" is where the code or a later decision moved on.
   list is stale. Look now at: `frontend/src/setup.cpp`.
 - **16. Is a mouse supported, or not?** "ANSWERED 2026-09-19: option 2": a
   mouse "moves focus and clicks the focused thing, and nothing else". The
-  code does that in first run only; elsewhere a click wakes the screen. Look
-  now at: the input-model table in "What CabinetOS is", never amended (it
-  carries a dated note).
+  code does that in first run only; elsewhere a click wakes the screen. The
+  pointer itself is hidden since 2026-10-18 (#509, a PS5 pad's touchpad drew
+  gamescope's arrow). Look now at: the input-model table in "What CabinetOS
+  is", never amended (it carries a dated note).
 - **17. Wi-Fi credentials on a controller-only console.** "The mechanism is
   DECIDED"; the polkit rule "SHIPPED 2026-09-20", and Wi-Fi is built in
   first run and in Settings. The password: "REVERSED 2026-09-24", masked,
@@ -10709,6 +10710,16 @@ overruled — pointer input *would* pull the design toward hover and click
 targets, which is why none of that is built. A mouse under this rule is not a
 pointer; it is a second way to drive the one model that exists. Amend the
 input-model table to say exactly that, rather than the bare word "supported".
+
+**The pointer, hidden 2026-10-18 (#509, "A mouse arrow shows over Home and
+games (a PS5 pad's touchpad moves it)").** A DualSense's touchpad is a
+touchpad to Linux, so a thumb on it moved a mouse pointer and gamescope drew
+its arrow over Home and over games, against "no cursor". The console's window
+now hides the cursor (`startup.cpp`, `SDL_HideCursor`), so gamescope draws
+none over it or over the games drawn in it. The emulators that run as programs
+of their own have their own windows and were not changed. A mouse still moves
+focus in first run only; whether it should drive the rest of the console is
+the issue's second part, not decided.
 
 ### 17. Wi-Fi credentials on a controller-only console
 **Raised 2026-09-13. The mechanism is DECIDED; the UI is Phase 6.**

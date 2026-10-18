@@ -73,6 +73,23 @@ std::string encodeUrl(const std::string& in) {
     return out;
 }
 
+std::string encodeSegment(const std::string& name) {
+    static const char* kHex = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(name.size() + 16);
+    for (const unsigned char c : name) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+            c == '-' || c == '.' || c == '_' || c == '~') {
+            out.push_back(static_cast<char>(c));
+        } else {
+            out.push_back('%');
+            out.push_back(kHex[c >> 4]);
+            out.push_back(kHex[c & 0x0F]);
+        }
+    }
+    return out;
+}
+
 // WHETHER THE SERVER IS AWAY (#88). One fact for the whole console, set by
 // what every request actually met rather than by a separate check: a request
 // that could not reach the server at all says so, and any answer at all says
@@ -260,7 +277,11 @@ bool Client::postMultipart(const std::string& path, const char* partName,
     curl_easy_cleanup(c);
 
     if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
-    if (status >= 400) {
+    // ONLY A 2xx IS AN UPLOAD. This request does not follow redirects, so an
+    // address that answers a POST with 301, 302, 307 or 308 (http behind an
+    // https proxy, a path prefix, a sign-in page) received nothing; counting
+    // it as sent cleared the owed marker and rotated local states away (#478).
+    if (status < 200 || status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + ": " + reply.substr(0, 180);
         return false;
     }
@@ -428,20 +449,9 @@ std::vector<uint8_t> Client::fetchHead(const Game& g, size_t bytes) const {
 std::vector<uint8_t> Client::fetchRange(const Game& g, uint64_t offset, size_t bytes) const {
     std::vector<uint8_t> data;
     if (bytes == 0 || g.id == 0) return data;
-    // The name in the path is RomM's and is escaped whole, as romFilePath
-    // does: `Sonic & Sega All-Stars Racing` must not become a query.
-    static const char* kHex = "0123456789ABCDEF";
-    std::string name;
-    for (const unsigned char c : g.fsName) {
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-            c == '-' || c == '.' || c == '_' || c == '~') {
-            name.push_back(static_cast<char>(c));
-        } else {
-            name.push_back('%');
-            name.push_back(kHex[c >> 4]);
-            name.push_back(kHex[c & 0x0F]);
-        }
-    }
+    // The name in the path is RomM's and is escaped whole (encodeSegment):
+    // `Sonic & Sega All-Stars Racing` must not become a query.
+    const std::string name = encodeSegment(g.fsName);
     CURL* c = curl_easy_init();
     if (!c) return data;
     const Where at = where();

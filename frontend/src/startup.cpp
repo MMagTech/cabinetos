@@ -218,6 +218,14 @@ std::optional<int> App::startDisplay() {
         SDL_Quit();
         return 1;
     }
+    // NO POINTER, EVER (docs/PROJECT.md, question 16): a mouse moves focus and
+    // clicks the focused thing, nothing else. A PS5 pad's touchpad is a mouse
+    // to Linux, so a thumb brushing it drew gamescope's arrow over Home and
+    // over every game drawn in this window (#509). With the cursor hidden on
+    // the console's windows, gamescope draws none while one of them has the
+    // pointer; the emulators that run as programs of their own have windows
+    // of their own.
+    SDL_HideCursor();
 
     if (overlayTest) {
         if (!cab::overlaywin::mark(window, /*takeInput=*/true))

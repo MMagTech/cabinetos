@@ -91,7 +91,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                     continue;
                 }
                 const std::string fpath = "/api/firmware/" + std::to_string(f.id) +
-                                          "/content/" + f.fileName;
+                                          "/content/" + romm::encodeSegment(f.fileName);
                 std::string derr;
                 if (client.fetchToFile(fpath, fdest,
                         [&job](int64_t got, int64_t total) {
@@ -654,8 +654,10 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 }
             }
         }
+        // Escaped whole (#402): a name beginning with # or ? was cut before the
+        // server saw it, and the download answered 404.
         const std::string path =
-            "/api/roms/" + std::to_string(id) + "/content/" + fsName;
+            "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName);
         const bool ok = client.fetchToFile(path, dest,
             [&job](int64_t got, int64_t total) {
                 job.got = got;

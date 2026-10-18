@@ -229,7 +229,12 @@ void Uploader::run() {
         }
         if (ok && job.isState) rotate(job);
         if (ok && !job.isState && !job.isScreenshot) refreshSaveCopy(job);
-        if (job.isState && !job.resend) stateOutcome.store(ok ? 1 : 2);
+        // 1 reached RomM; 2 RomM could not be reached, so it will be retried;
+        // 3 RomM was there and refused it (a permission unticked at pairing, a
+        // role without write access, any HTTP error), which is not "when RomM
+        // is back" (#477). The file stays owed either way.
+        if (job.isState && !job.resend)
+            stateOutcome.store(ok ? 1 : romm::serverAway() ? 2 : 3);
         std::fprintf(stderr, "[%s] %s%s %s%s\n",
                      job.isScreenshot ? "screenshot" : job.isState ? "state" : "save",
                      job.resend ? "resent, " : "",

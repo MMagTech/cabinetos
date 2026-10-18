@@ -936,7 +936,10 @@ void App::openSoundAndPace(cab::Core& core) {
 // Stage 12: running. playing is set here, then RetroAchievements and the
 // play clock begin.
 void App::startPlaying(cab::Core& core) {
-    std::fprintf(stderr, "[launch] running %s\n", core.coreName().c_str());
+    // PCSX2 is not a libretro core and sets no core name; the line used to
+    // print the previous core's ("running Beetle Saturn" for a PS2 game, #412).
+    std::fprintf(stderr, "[launch] running %s\n",
+                 core.isPs2() ? "PCSX2" : core.coreName().c_str());
     playing = true;
     // RetroAchievements, when this person signed in (achievements.h):
     // after the battery save and before the first frame it checks.

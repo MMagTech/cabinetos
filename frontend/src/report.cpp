@@ -4,6 +4,8 @@
 
 #include "proc.h"
 
+#include <chrono>
+#include <algorithm>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <poll.h>
@@ -63,12 +65,18 @@ std::string baseName(const std::string& path) {
 // EVERY WAIT IS A QUARTER OF A SECOND AT A TIME, checking for stop(): the
 // screen's close joins this thread on the frame thread, and a phone that
 // connects and then says nothing must not freeze the console. Ten seconds in
-// all for anything one device does.
+// all for anything one device does, counted in time spent: a socket that is
+// ready at once costs nothing. It used to cost 250 ms a wait whether or not
+// it waited, so forty 64 KB pieces, about 2.5 MB, was all a report could ever
+// send (#417).
 bool ready(int fd, short events, int64_t* budgetMs) {
+    using clock = std::chrono::steady_clock;
     while (!g_stop && *budgetMs > 0) {
         pollfd p{fd, events, 0};
-        const int r = ::poll(&p, 1, 250);
-        *budgetMs -= 250;
+        const auto t0 = clock::now();
+        const int r = ::poll(&p, 1, static_cast<int>(std::min<int64_t>(250, *budgetMs)));
+        *budgetMs -= std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - t0)
+                         .count();
         if (r > 0) return true;
         if (r < 0 && errno != EINTR) return false;
     }

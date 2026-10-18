@@ -38,6 +38,10 @@ struct Tile {
     // under "From <their name>" (#352). A group starts a new row.
     std::string group;
     std::vector<int> cards;   // indices into Ctx::cards
+    // When `cards` was last read from the server, in SDL_GetTicks
+    // milliseconds; 0 for never. A grid reopened a while later is read again
+    // (App::openTile, #387).
+    unsigned long long loadedAtMs = 0;
     design::Animated focus;
 };
 

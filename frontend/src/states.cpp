@@ -496,8 +496,11 @@ void App::drawStateHold(float sc) {
 
 // What became of the last state saved, said once the uploader knows.
 void App::sayStateUploaded() {
+    // The uploader's outcome (uploader.cpp): 1 on RomM, 2 RomM away and the
+    // state waiting for it, 3 RomM there and refusing it (#477), still here.
     if (const int outcome = uploader.stateOutcome.exchange(0); outcome != 0)
-        menuNotice.say(outcome == 1 ? "Saved to RomM"
-                                    : "Saved. Will upload when RomM is back",
-                       outcome == 1 ? Tone::Done : Tone::Info);
+        menuNotice.say(outcome == 1   ? "Saved to RomM"
+                       : outcome == 2 ? "Saved. Will upload when RomM is back"
+                                      : "Saved on this console. RomM refused it",
+                       outcome == 1 ? Tone::Done : outcome == 2 ? Tone::Info : Tone::Problem);
 }

@@ -214,6 +214,8 @@ struct Asset {
 struct User {
     int id = 0;
     std::string username;
+    // RomM's `current_device_id`: the device this token is (#401).
+    std::string deviceId;
     // The avatar, as a path this client can fetch, or empty when the person
     // never set one. NOT the `avatar_path` the server reports — that is a
     // location inside RomM's own asset tree ("users/<hash>/profile/<name>.png")

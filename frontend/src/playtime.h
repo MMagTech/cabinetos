@@ -13,8 +13,10 @@
 // one), the sessions not yet on RomM, and the last total RomM gave for each
 // game (so the number is right with no server).
 //
-// WHOSE TIME RomM RETURNS. A console's token is tied to a RomM device, and
-// RomM answers a session list with that device's sessions only. Every
+// WHOSE TIME RomM RETURNS. A console's token is tied to a RomM device, and the
+// session list is asked for that device by name (romm::Client::fetchPlayedMs,
+// `device_id`, which RomM 5.4.0 requires, #401), so it holds that device's
+// sessions only. Every
 // CabinetOS console pairs under the same device identifier, so for one person
 // that is all their play on any CabinetOS console, surviving a reinstall; RomM's
 // web player and the Apple TV are not in it. rommapp/romm#4837 asks for the
