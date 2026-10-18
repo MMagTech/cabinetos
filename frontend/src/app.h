@@ -21,6 +21,8 @@
 
 #pragma once
 
+inline int trialHeader() { int trialInHeader = 0; return 1; }
+
 #include <SDL3/SDL.h>
 
 #include <unistd.h>

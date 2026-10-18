@@ -38,7 +38,7 @@
 set -euo pipefail
 export LC_ALL=C
 
-FAIL_FROM=2026-10-25
+FAIL_FROM=2026-10-01
 
 HEAD_LOG="${1:?usage: ci/check-new-warnings.sh <the head build log>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
