@@ -846,6 +846,17 @@ int App::shutDown(char** argv) {
     tailscale::cancelLogin();
     if (tsWorker.joinable()) tsWorker.join();
     stopReport();
+    // AND ADD AN ACCOUNT'S PAIRING (#398, SETTINGS-03; part of #406). It was
+    // joined only before the next pairing, so after any visit to Add an
+    // account the App was destroyed holding a joinable thread and Switch to
+    // Steam ended in std::terminate. A poll still waiting stops at once; one
+    // in flight is the server's answer away.
+    {
+        std::lock_guard<std::mutex> lk(addJob->m);
+        addJob->stop = true;
+    }
+    addJob->wake.notify_all();
+    if (addJob->th.joinable()) addJob->th.join();
 
     ra::shutdown();
     images.shutdown();

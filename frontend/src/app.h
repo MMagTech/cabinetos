@@ -1139,6 +1139,10 @@ struct App {
         bool ok = false;
         accounts::Paired who;
         std::string err;
+        // Set at exit (shutDown), under `m`: the wait between polls ends
+        // at once and the worker returns, so it can be joined.
+        bool stop = false;
+        std::condition_variable wake;
     };
     std::shared_ptr<AddJob> addJob = std::make_shared<AddJob>();
     // The QR is encoded once, when the code first arrives, not per frame.
