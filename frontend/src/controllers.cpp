@@ -197,7 +197,13 @@ void App::openPadsPanelAt(int focus) {
             if (k >= 0 && k < static_cast<int>(numbers.size())) {
                 players::swap(me, numbers[k]);
                 rebuildSettingsRows();
-                openPadsPanelAt(i);
+                // ON THE SAME PAD, which the swap moved to its new
+                // number's row (the list is in player order).
+                int at = i;
+                const std::vector<players::Pad> now = players::connected();
+                for (size_t j = 0; j < now.size(); ++j)
+                    if (now[j].id == pad.id) at = static_cast<int>(j);
+                openPadsPanelAt(at);
                 return;
             }
             if (!canForget || k != static_cast<int>(numbers.size())) {
