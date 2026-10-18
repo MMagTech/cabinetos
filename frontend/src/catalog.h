@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -136,6 +137,13 @@ struct Coverage {
 // the list, which is how a name that drifts shows up as a line of output
 // rather than as a platform the console says it cannot play.
 std::string coreFileName(const std::string& manifestCoreName);
+
+// Every libretro core the table plays a system on, by its manifest name, with
+// the RomM platform slugs it serves: what the option check (optcheck.h) walks,
+// so a core with no list in cores/options/ fails it rather than going
+// unchecked. Not PCSX2, whose file is not a libretro core's, nor an emulator
+// run as a program.
+std::map<std::string, std::vector<std::string>> libretroCores();
 
 Coverage coverageFor(const romm::Platform& p);
 

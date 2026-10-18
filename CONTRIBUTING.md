@@ -180,7 +180,7 @@ with 0 when it passes:
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
-| `--check-option-tables cores/options` | that every option in the console's three option tables (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`) exists in the core it is set on, for each core with a list in `cores/options/` (this one CI runs) |
+| `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, and the Wii's rumble in `wii.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (this one CI runs) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
 under load, but only against a stand-in server that is not in the

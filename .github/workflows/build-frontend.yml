@@ -102,8 +102,9 @@ jobs:
       # EVERY OPTION VALUE THE CONSOLE SETS, AGAINST WHAT EACH CORE DECLARES
       # (#63, the version-bump check, frontend/src/optcheck.h). A table that
       # names a key a core does not have, or a value it does not accept,
-      # fails here rather than going nowhere on a television. The cores'
-      # lists are cores/options/, which build-core.sh keeps honest.
+      # fails here rather than going nowhere on a television, and so does a
+      # libretro core with no list. The cores' lists are cores/options/,
+      # which build-core.sh keeps honest.
       - name: Check the option tables
         run: |
           set -euo pipefail

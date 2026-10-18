@@ -159,8 +159,8 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                 opts[kv.first] = kv.second;
             // The Wii's rumble switch as the last Wii game's HOME Menu left
             // it (#274, wii.h).
-            if (game.platformSlug == "wii" && job.coreName == "dolphin")
-                opts["dolphin_enable_rumble"] = wii::rumbleOption();
+            for (const auto& kv : wii::coreOptions(job.coreName, game.platformSlug))
+                opts[kv.first] = kv.second;
             core.setOptionOverrides(opts);
             quality::logApplied(job.coreName, game.id, level);
         }
