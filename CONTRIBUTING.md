@@ -118,9 +118,10 @@ through here; read the Justfile's `build` recipe first.
 **The frontend runs without a screen.** With `SDL_VIDEODRIVER=offscreen` it
 needs no compositor, no controller and no window, and can photograph what it
 drew. It needs the libraries it was built against, so run it on a CabinetOS
-console (over Developer access, below), where they match; inside the
-builder container may work too, but nobody has tried it, and off a console
-it needs environment variables written down nowhere yet
+console (over Developer access, below), where they match. Inside the
+builder container the self-tests below run (CI runs them there); a run that
+draws may work there too, but nobody has tried it, and off a console it
+needs environment variables written down nowhere yet
 (docs/ARCHITECTURE.md, "Known gaps"). Always give it a scratch
 `--storage-root`: otherwise it writes into `/var/lib/cabinetos` when it
 can, or into the folder it was started in. On a console a scratch root
