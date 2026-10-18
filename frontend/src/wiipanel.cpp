@@ -119,6 +119,8 @@ void App::openWiiPanelAt(int focus) {
             }
             openWiiPanelAt(i);
         });
+        // B goes back to the panel, as Cancel does.
+        choiceBack = [&, i]() { openWiiPanelAt(i); };
     });
     choiceScreen.setValues(values);
     choiceScreen.setStaysOpen(true);
@@ -191,6 +193,7 @@ void App::pumpWiiPairing() {
                         buildSettings();
                         openWiiPanelAt(at);
                     });
+                    choiceBack = [&, at]() { openWiiPanelAt(at); };
                 } else {
                     openWiiPanelAt(at);
                 }
