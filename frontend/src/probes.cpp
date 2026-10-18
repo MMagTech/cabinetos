@@ -37,11 +37,6 @@
 #include "storage.h"
 #include "volume.h"
 
-static std::string rommTokenPath() {
-    const char* home = getenv("HOME");
-    return std::string(home ? home : ".") + "/.config/cabinetos/romm.json";
-}
-
 // Downloads one ROM and says what a core would actually be given.
 static int romProbe(const char* address, int romId, const char* validExts) {
     romm::Client client;
@@ -50,8 +45,8 @@ static int romProbe(const char* address, int romId, const char* validExts) {
         std::fprintf(stderr, "[romm] %s\n", err.c_str());
         return 1;
     }
-    if (!client.loadToken(rommTokenPath())) {
-        std::fprintf(stderr, "[romm] no token\n");
+    if (!accounts::loadActiveToken(client)) {
+        std::fprintf(stderr, "[romm] no account on this console\n");
         return 1;
     }
 
@@ -381,8 +376,9 @@ static int firstRunProbe(romm::Client& client, const char* startAt, bool tryServ
 //   --romm <address>              connect and list the library
 //   --romm <address> --romm-pair  pair first, if there is no token yet
 //
-// The token lives in ~/.config/cabinetos/romm.json at 0600. It is a credential:
-// it is never printed here, and it does not belong in the repository.
+// The token lives in the account's ~/.config/cabinetos/accounts/<id>.json at
+// 0600 (accounts.h). It is a credential: it is never printed here, and it does
+// not belong in the repository.
 static int rommProbe(const char* address, bool allowPairing) {
     romm::Client client;
     std::string err;
@@ -693,7 +689,7 @@ std::optional<int> storageProbe(const StorageProbeOptions& o) {
     // them.
     if (firstRunProbeMode) {
         romm::Client fr;
-        fr.loadToken(rommTokenPath());
+        accounts::loadActiveToken(fr);
         return firstRunProbe(fr, firstRunStep, firstRunServerCheck);
     }
 
@@ -822,7 +818,7 @@ std::optional<int> storageProbe(const StorageProbeOptions& o) {
     if (storageReport) {
         romm::Client sclient;
         if (rommAddress && sclient.setAddress(rommAddress, nullptr))
-            sclient.loadToken(rommTokenPath());
+            accounts::loadActiveToken(sclient);
         adoptUser(sclient);
 
         std::printf("root            %s\n", storage::root().c_str());
