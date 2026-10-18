@@ -24,6 +24,20 @@ he turns it back on. The machines' addresses are in his local notes, which
 CLAUDE.md loads; the test tools read them from the environment
 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`).
 
+**2026-10-18, evening: FSR for the Xbox 360 picture was tried on the TV and
+not shipped** (MMagTech: "the whole point of the OS is focusing on gameplay";
+off is also what Xenia and Batocera ship). The research, Edge's flags at the
+pin, the A9 numbers and his words are in docs/PROJECT.md, question 34,
+"DECIDED, MMagTech 2026-10-18". Nothing on consoles changed. Found on the
+way and recorded there, not filed: black patches on Gears of War 2's
+character models (Unreal's MSAA tiling; Xenia Canary fixed it 2026-10-06,
+Edge has not taken it yet, so the next Edge pin that carries it is the fix)
+and one hang each in Gears of War and Gears of War 2 (Edge's guest-thread
+scheduler is the lead). **His rule from the evening: no issue is opened
+unless he asks for one.** Things seen once while testing go in PROJECT.md
+or the pull request, not the tracker; the backlog is full of issues for
+faults no player has met.
+
 **The ecosystem, from MMagTech 2026-10-18:** CabinetOS is the console at
 home; **Cabinet Go** (the old Cabinet iOS app, renamed, at
 github.com/MMagTech/cabinet-go) is the pocket version that plays only the
@@ -42,30 +56,19 @@ in the local notes).
 
 ## Next
 
-1. **FSR for Xbox 360, an experiment** (MMagTech, 2026-10-18: "id like to
-   experment with fsr on 360 next before moving into the rest"). Xbox 360
-   renders 720p at every Picture level (`quality.cpp`, `xenia()`: 2x could
-   not hold 30 fps on the A9). Xenia Edge at our pin (a7c39fa,
-   `build_files/install-xenia.sh`) has FSR 1.0 built in,
-   `--postprocess_scaling_and_sharpening=fsr`, and also **CAS and its own
-   sharpness settings; research every one of them at the pin before choosing**
-   (MMagTech: "Both should be researched so we implement the feature
-   correctly"). Xenia's own flags only: gamescope's FSR cannot reach the
-   libretro cores and cannot stop short of the screen's size. Then a before
-   and after on the TV, and his call. Lessons: docs/lessons/emulators.md.
-2. **#401, "RomM 5.4.0: a game's page cannot read its time played without
+1. **#401, "RomM 5.4.0: a game's page cannot read its time played without
    devices.read or a device_id"**, so that his server can move to RomM 5.4
    (he asked when, 2026-10-18; the advice: after #401 ships, with a
    database backup first). The issue lists two options for him to choose;
    the audit recommends the first, sending `device_id` from
    `GET /api/users/me` on that one request, which needs no console to pair
    again.
-3. **The automatic checks report only until 2026-10-25**, then fail a pull
+2. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: RomM paths outside the client, docs naming missing files, new
    compiler warnings in touched files, the self-tests. Read their first
    week's reports before that date and fix what they find, so nothing turns
    red by surprise (CONTRIBUTING.md, "What CI checks").
-4. **A priority list of every open issue, then work through it**
+3. **A priority list of every open issue, then work through it**
    (MMagTech, 2026-10-18). The Later milestone holds 66, including
    the three found at the TV on 2026-10-18, ranked with the rest and no
    sooner: #509, "A mouse arrow shows over Home and games (a PS5 pad's
@@ -80,8 +83,8 @@ in the local notes).
    reopen on a report"; show him the list before closing anything, ask his
    decisions as one short list, keep the TV checks for one sitting at the
    end. Player reports and features come first.
-5. **Review the docs for Cabinet Go** (above).
-6. **The monthly health check** starts after item 3: the checks' reports
+4. **Review the docs for Cabinet Go** (above).
+5. **The monthly health check** starts after item 2: the checks' reports
    (warnings, long files, unused code, PROJECT.md's index) and the Later
    milestone, once a month.
 
