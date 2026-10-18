@@ -28,6 +28,18 @@ void App::releaseNav(screens::Nav n) {
     if (navHeld && heldNav == n) navHeld = false;
 }
 
+// EVERYTHING HELD IS LET GO when presses stop reaching this loop and when
+// they start again: a game in an emulator of its own takes every event,
+// releases included, so A held into one left Home's cover pressed in after
+// it, a held direction ran on by itself and a held trigger's next pull did
+// nothing (#398, PLAY-14).
+void App::letGoOfHeld() {
+    pressing = false;
+    navHeld = false;
+    letterHeld = 0;
+    l2Held = r2Held = false;
+}
+
 // What a commit or a cancel MEANS, which is not the same on every screen.
 // On Search, done goes up into the results and cancel leaves the screen —
 // and cancel closing the keyboard while leaving an empty Search behind it

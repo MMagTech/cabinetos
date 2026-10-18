@@ -198,30 +198,6 @@ void App::runFrameLoop() {
         if (gameUp) {
             cab::Core& core = cab::Core::shared();
             drawGamePicture(core, dh);
-
-            // The overlay is not composited by anything clever: the frontend
-            // owns the frame loop, so the pause menu is simply drawn over the
-            // game. That is the payoff of hosting cores in process rather than
-            // launching them.
-            if (pressing) {
-                renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                                       ui::Color::black(0.55f)});
-                const float panelW = 560, panelH = 260;
-                renderer.draw(ui::Rect{(ui::kCanvasWidth - panelW) * 0.5f,
-                                       (ui::kCanvasHeight - panelH) * 0.5f, panelW, panelH,
-                                       32, ui::Color::white(0.14f)});
-                const float sc2 = renderer.scale();
-                const char* title = core.coreName().c_str();
-                const float tw = text.measure(title, ui::TextStyle::Title2, sc2);
-                text.draw(renderer, title, (ui::kCanvasWidth - tw) * 0.5f,
-                          ui::kCanvasHeight * 0.5f - 40,
-                          ui::TextStyle::Title2, ui::Color::white(1.0f), sc2);
-                const char* sub = "Paused";
-                const float sw = text.measure(sub, ui::TextStyle::Callout, sc2);
-                text.draw(renderer, sub, (ui::kCanvasWidth - sw) * 0.5f,
-                          ui::kCanvasHeight * 0.5f + 10, ui::TextStyle::Callout,
-                          ui::Color::white(0.60f), sc2);
-            }
         } else if (here() != Screen::Home) {
             drawScreen(sc);
         } else {
