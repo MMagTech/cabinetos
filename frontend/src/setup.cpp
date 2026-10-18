@@ -1078,10 +1078,14 @@ void Flow::pumpJobs() {
         } else if (state == -2) {
             // THE CODE IS OVER ON THE SERVER: ten minutes went by, or somebody
             // pressed Deny on the phone. Its QR now opens a page refusing it,
-            // and polling it was waiting for ever, so a new one, as "Start
-            // again" makes.
-            std::fprintf(stderr, "[first-run] %s; a new code\n", err.c_str());
-            startPairing();
+            // and polling it was waiting for ever. On the pairing step, a new
+            // one, as "Start again" makes; on any other the polling stops, and
+            // coming back to the step makes a new code anyway (enterStep).
+            const bool here = machine_.step() == firstrun::Step::Pair;
+            std::fprintf(stderr, "[first-run] %s%s\n", err.c_str(),
+                         here ? "; a new code" : "");
+            if (here) startPairing();
+            else pairingLive_ = false;
         } else {
             pairingLive_ = false;
             notice_ = err.empty() ? "The pairing expired." : err;
