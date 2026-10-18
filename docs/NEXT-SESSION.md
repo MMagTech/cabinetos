@@ -11,24 +11,18 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-18:** `latest` and `testing` are **2026.10.18.5** (revision
-0c3d33a, digest sha256:092aaf81...b0846a), #505 ("PS2 games start on the
-BIOS for their region (#416); the base check goes monthly"), merged on his
-go after his TV check and promoted. A PS2 game now starts on a BIOS of its
-own region, from the disc code RomM reads (`title_id`); with none for its
-region, the newest USA BIOS; with no USA one, the newest there is
-(`frontend/ps2/CabinetPS2Bios.h`). On the A9 Burnout 3 took the USA BIOS,
-Homura the Europe one and Gradius V the USA one. #416 is closed with a
-comment that asks the reporter nothing unless it is still wrong (MMagTech
-wants no back-and-forth). `base-update.yml` now runs
-on the 1st of each month (next 2026-11-01); between runs a base moves early
-only for a player's fault a newer Bazzite fixes, or a security hole
-(docs/PROJECT.md, "Staying current with Bazzite"), and one that moves to
-Fedora 45 goes alone on `testing`, as #503 did. The A9 is on the testing
-channel; its PIN is off until he turns it back on. The machines' addresses
-are in his local notes, which CLAUDE.md loads; the test tools read them
-from the environment (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`,
-`CABINETOS_RELAY_UP`).
+**2026-10-18:** `latest` and `testing` are **2026.10.18.6** (revision
+c1f716d, digest sha256:78ec67bf...a843), #508 ("PS1 gets a DualShock, DS
+touch on the right stick, DS 3D upscaled (#345, #374, #219)"), merged on
+his go after his TV check and promoted; #345, #374 and #219 are closed. PS1
+games get a DualShock (device 517); DS touch is on the right stick (R3
+touches); melonDS is built with its OpenGL renderer and the core host gives
+a core that asks for desktop OpenGL a context of its own beside the UI's
+(`core_hwrender.cpp`), at Balanced 4x and Quality 6x (Performance keeps the
+software renderer). The A9 is on the testing channel; its PIN is off until
+he turns it back on. The machines' addresses are in his local notes, which
+CLAUDE.md loads; the test tools read them from the environment
+(`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`).
 
 **The ecosystem, from MMagTech 2026-10-18:** CabinetOS is the console at
 home; **Cabinet Go** (the old Cabinet iOS app, renamed, at
@@ -48,29 +42,17 @@ in the local notes).
 
 ## Next
 
-1. **Three things players will notice, in one testing image and one TV
-   sitting** (MMagTech, 2026-10-18: user-facing improvements next). Read
-   docs/lessons/emulators.md, and compare each with RetroArch's and
-   Batocera's build flags and options before any TV test.
-   - **#345, "PS1: plug in a DualShock, not the digital pad (sticks and
-     rumble)".** The research and the proposal are on the issue: the
-     DualShock (device 517) on every port for every PS1 game, the core's
-     defaults kept. Its TV check: a digital-only game, a DualShock game and
-     a rumble game (check the titles against Redump first).
-   - **#374, "Nintendo DS: the touch screen probably does nothing; set it
-     to the right stick".** `melonds_touch_mode` to `Joystick` in
-     catalog.cpp's melonDS options; the right stick moves the pointer and
-     R3 taps. TV: a game that needs a tap, before and after. #288 ("Nintendo
-     DS: a controller's touchpad as the touch screen") stays for later.
-   - **#219, "DS: built without its graphics renderer, so it cannot
-     upscale".** The big one: melonDS asks for a desktop OpenGL 3.1 core
-     context and the core host serves only OpenGL ES and Vulkan
-     (core.cpp, `canServe`). So the host learns desktop GL first, then
-     `HAVE_OPENGL=1` in cores/build-core.sh (and its stale comment there),
-     then melonDS's internal resolution joins the picture-quality dial.
-     OpenGL is allowed here because melonDS has no Vulkan renderer
-     (MMagTech on the issue, 2026-10-12). Measure on the A9. If it turns
-     out large, tell him before the other two wait on it.
+1. **FSR for Xbox 360, an experiment** (MMagTech, 2026-10-18: "id like to
+   experment with fsr on 360 next before moving into the rest"). Xbox 360
+   renders 720p at every Picture level (`quality.cpp`, `xenia()`: 2x could
+   not hold 30 fps on the A9). Xenia Edge at our pin (a7c39fa,
+   `build_files/install-xenia.sh`) has FSR 1.0 built in,
+   `--postprocess_scaling_and_sharpening=fsr`, and also **CAS and its own
+   sharpness settings; research every one of them at the pin before choosing**
+   (MMagTech: "Both should be researched so we implement the feature
+   correctly"). Xenia's own flags only: gamescope's FSR cannot reach the
+   libretro cores and cannot stop short of the screen's size. Then a before
+   and after on the TV, and his call. Lessons: docs/lessons/emulators.md.
 2. **#401, "RomM 5.4.0: a game's page cannot read its time played without
    devices.read or a device_id"**, so that his server can move to RomM 5.4
    (he asked when, 2026-10-18; the advice: after #401 ships, with a
@@ -84,7 +66,14 @@ in the local notes).
    week's reports before that date and fix what they find, so nothing turns
    red by surprise (CONTRIBUTING.md, "What CI checks").
 4. **A priority list of every open issue, then work through it**
-   (MMagTech, 2026-10-18). The Later milestone holds about 65. For the
+   (MMagTech, 2026-10-18). The Later milestone holds 66, including
+   the three found at the TV on 2026-10-18, ranked with the rest and no
+   sooner: #509, "A mouse arrow shows over Home and games (a PS5 pad's
+   touchpad moves it); hide it, as question 16 decided"; #510, "No sound
+   after the TV comes back from standby: the console's stream misses every
+   PipeWire cycle (not #228)"; #511, "Every update downloads about 310 MB
+   that did not change (the boot splash and OS layers differ in every
+   image)". For the
    faults step's 21 (#471 to #493), the view he was given: fix the ones a
    player could hit, close the developer-only ones with "found by reading,
    reopen on a report"; show him the list before closing anything, ask his
