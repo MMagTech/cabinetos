@@ -281,16 +281,10 @@ bool installXbox(const std::string& entryPath, std::string* romPath, std::string
     return true;
 }
 
-// What beforeStart does for xemu: the note in the game's folder, then this
-// person's saves onto the game's drive.
+// What beforeStart does for xemu: this person's saves onto the game's drive,
+// then the note in the game's folder.
 bool xemuBeforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
                      const std::string& note, std::string* err) {
-    // The note first: from here until afterEnd, this folder holds somebody's
-    // saves that are nowhere else once the game writes to the drive.
-    if (!writeFile(entryPath + "/" + kPlayingNote, note)) {
-        *err = "could not mark " + entryPath + " as playing";
-        return false;
-    }
     const std::string drive = entryPath + "/" + kXboxDrive;
     std::string why;
     if (!xboxhdd::writeSaves(drive, saveRoot(e, saveDir), &why)) {
@@ -302,9 +296,17 @@ bool xemuBeforeStart(const Emulator& e, const std::string& entryPath, const std:
         if (!placeFile(xemuAssets() + "/" + kXboxDrive, drive) ||
             !xboxhdd::writeSaves(drive, saveRoot(e, saveDir), &why)) {
             *err = "could not put the saves on " + drive + ": " + why;
-            ::unlink((entryPath + "/" + kPlayingNote).c_str());
             return false;
         }
+    }
+    // The note only once the saves are on: from here until afterEnd, this
+    // folder holds somebody's saves that are nowhere else once the game
+    // writes to the drive. Until the game runs the drive holds nothing their
+    // folder lacks, and a note beside a drive a stop left half written had
+    // the next start copy it back over their saves (#398, EMU-15).
+    if (!writeFile(entryPath + "/" + kPlayingNote, note)) {
+        *err = "could not mark " + entryPath + " as playing";
+        return false;
     }
     return true;
 }

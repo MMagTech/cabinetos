@@ -61,6 +61,17 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // the restore below keeps it (finishInterruptedSave).
     if (cab::standalone::hasPlayingNote(saveDir))
         finishInterruptedSave(emu, saveDir, uploader);
+    // AN XBOX GAME WHOSE LAST SAVES NEVER CAME OFF ITS DRIVE (the note in
+    // the game's own folder): off now, as a start-up would take them, or the
+    // game does not start, since beforeStart writes this person's older copy
+    // over the drive's (recoverDriveSaves).
+    if (!recoverDriveSaves(emu, launchJob.entryPath)) {
+        cab::vpad::close();
+        std::fprintf(stderr, "[standalone] %s still holds saves from its last game; "
+                     "not started\n", launchJob.entryPath.c_str());
+        refuseLaunch("Couldn't start this game");
+        return;
+    }
     if (!root.empty() && tag && liveClient.haveToken())
         restoreDirSave(liveClient, launchJob.romId, tag, root, launchJob.title);
     // AND ONTO WHERE THE EMULATOR READS THEM, when that is not a folder

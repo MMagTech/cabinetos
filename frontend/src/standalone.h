@@ -197,8 +197,10 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir);
 //
 // xemu: the saves are carried onto its hard drive image and off it again.
 // While a game runs, the GAME's folder holds a note saying whose saves are on
-// the drive; eviction leaves such a folder alone (cache.cpp), and the next
-// start of the console finishes it after a crash or a power cut.
+// the drive, written once they are on it; eviction leaves such a folder alone
+// (cache.cpp), and the next start of the console, or the next launch of that
+// game, finishes it after a crash, a power cut or a copy-off that failed
+// (App::recoverDriveSaves). Until it is finished that game does not start.
 //
 // Xenia, Cemu, Eden and RPCS3 (`notesPlaying`): the note goes in the PERSON's folder for
 // the game (`saveDir`), where the emulator writes the saves itself. A note
