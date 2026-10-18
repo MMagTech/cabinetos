@@ -39,3 +39,13 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: ci/check-romm-paths.sh "${BASE}" "${HEAD}"
+
+  doc-paths:
+    name: Doc paths
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: Every file the docs name is there
+        run: python3 -I ci/check-doc-paths.py
