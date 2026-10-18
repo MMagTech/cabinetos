@@ -1911,6 +1911,7 @@ struct App {
     // serverwait.cpp
     std::optional<int> waitForServer(char** argv);
     // search.cpp
+    void openSearchKeyboard();
     void searchKeyboardResult(ui::KeyboardResult res);
     void tickSearch(float dt, screens::Ctx& ctx);
     void pumpSearch(float dt);
