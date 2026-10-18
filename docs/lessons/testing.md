@@ -581,11 +581,13 @@ opened once and reused needs a test of two different games in one run.**
   categories podman chose). **Give podman an absolute folder, never `$PWD`,
   and run a chain under `set -e` so nothing runs after a failed step.**
 
-- **THE LOOP'S RSYNC KEEPS FILES IT DOES NOT KNOW.** `tools/ui-loop.sh`
-  copies a tree's `frontend/src` onto the A9 without deleting, so after a
-  tree with new files, an older tree's build fails on the files it does not
-  have (move 4 and move 5 both). `rsync --delete` the older tree's sources
-  onto the A9 first.
+- **THE LOOP'S RSYNC KEPT FILES IT DID NOT KNOW.** `tools/ui-loop.sh`
+  copied a tree's `frontend/src` onto the A9 without deleting, so after a
+  tree with new files, an older tree's build failed on the files it does not
+  have (move 4 and move 5 both), and a source removed or renamed in git was
+  compiled again beside its replacement. Since 2026-10-17 (#398's faults
+  step) the loop copies with `--delete`, on the A9 and the VM alike. Any
+  other copy of `frontend/src` onto a build machine needs it too.
 
 - **TWO SUITE RUNS SIDE BY SIDE NEED THEIR OWN PORTS, AND ONE PATH IS
   SHARED.** 2026-10-16, move 6 of #398: the binary under test and the base
