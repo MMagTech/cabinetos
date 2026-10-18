@@ -38,6 +38,10 @@ namespace
 	// Widescreen for the next start, set by cps2_set_widescreen (#368).
 	std::atomic<bool> s_widescreen{true};
 
+	// The disc code for the next start, set by cps2_set_disc_code (#416).
+	// Set and read on the frontend's thread, just before cps2_start.
+	std::string s_disc_code;
+
 	// The frame most recently handed over, kept so that `cps2_take_frame` can
 	// lend a pointer that stays valid until the NEXT call. The frontend
 	// uploads it to a texture immediately and never keeps it, which is the
@@ -81,6 +85,7 @@ int cps2_start(const char* disc, const char* bios_dir, const char* memcards_dir,
 	CabinetPS2::Config config;
 	config.disc_path = disc ? disc : "";
 	config.bios_dir = bios_dir ? bios_dir : "";
+	config.disc_code = s_disc_code;
 	config.memcards_dir = memcards_dir ? memcards_dir : "";
 	config.memory_card = memory_card ? memory_card : "";
 	config.scratch_dir = scratch_dir ? scratch_dir : "";
@@ -192,6 +197,15 @@ void cps2_set_window(const char* display, unsigned long window, unsigned width, 
 void cps2_set_widescreen(int on)
 {
 	s_widescreen.store(on != 0);
+}
+
+// The game's disc code as RomM reads it (`SLUS-21090`) for the next
+// cps2_start, null or empty for none; it picks the BIOS by the game's region
+// (#416). Optional for the frontend: an older library lacks it and takes the
+// first BIOS it finds.
+void cps2_set_disc_code(const char* code)
+{
+	s_disc_code = code ? code : "";
 }
 
 // 1 when the running game's patch file has a "Widescreen 16:9" section, known

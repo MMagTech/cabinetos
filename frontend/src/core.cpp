@@ -227,6 +227,7 @@ std::string gPs2ResourcesDir;
 float gPs2Upscale = 1.0f;
 int gPs2Anisotropy = 0;
 bool gPs2Widescreen = true;
+std::string gPs2DiscCode;
 }  // namespace corestate
 
 bool Core::load(const std::string& soPath) {

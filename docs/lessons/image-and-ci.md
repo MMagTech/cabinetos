@@ -166,7 +166,7 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   no obvious cause; this is what makes the base-bump pull request say "read
   this" first.
 
-- **The weekly base bump needs two clicks, not none.** It opens a pull request,
+- **The monthly base bump needs two clicks, not none.** It opens a pull request,
   but the build on it lands as `action_required` and waits for approval —
   `gh api -X POST /repos/MMagTech/cabinetos/actions/runs/<id>/approve`. And
   **read the relevant list**: when something breaks on real hardware, look at

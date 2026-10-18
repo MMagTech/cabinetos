@@ -77,7 +77,7 @@ downloads anything new into the console's shared BIOS folder.
 | Switch | `switch` | Eden | nsp, xci | **Required:** `prod.keys`. Optional: `title.keys`, and a firmware zip (any zip with *firmware* in its name) |
 | Neo Geo Pocket Color | `neo-geo-pocket-color` | Beetle NGP | ngp, ngc, ngpc | None |
 | PlayStation | `psx` | PCSX ReARMed | chd, cue, bin, pbp, m3u, img, iso | Optional: `scph5501.bin` (or `scph5500`, `scph5502`, `scph1001`, `scph7001`, `scph101`). Without one it uses its own. |
-| PlayStation 2 | `ps2` | PCSX2 | chd, iso | **Required:** a PS2 BIOS dump, for example `SCPH-70012.bin` (any name) |
+| PlayStation 2 | `ps2` | PCSX2 | chd, iso | **Required:** a PS2 BIOS dump, for example `SCPH-70012.bin` (any name). With several, each game uses the one for its region, else a USA one |
 | PSP | `psp` | PPSSPP | iso, cso, chd, pbp | None |
 | PlayStation 3 | `ps3` | RPCS3 | decrypted iso, or pkg | **Required:** `PS3UPDAT.PUP` (installed once). A PKG game also needs its `.rap` licence in the same RomM game folder. |
 | TurboGrafx-16 | `tg16` | Beetle PCE Fast | pce | None |

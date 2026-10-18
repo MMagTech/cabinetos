@@ -87,12 +87,17 @@ request", "How a change reaches a console") and docs/ARCHITECTURE.md (the
 map), corrected against the workflows on 2026-10-17 (#398). What stays here
 is what only the maintainer runs.
 
-**Weekly, on Mondays.** `base-update.yml` checks for a new Bazzite base and
-opens a pull request listing what moved; `pad-db-update.yml` refreshes the
-controller list (`frontend/data/gamecontrollerdb.txt`);
-`terra-fallback-update.yml` keeps the stored spare of Steam's session
-(`build_files/terra-fallback/`) current. None of them
-merges anything.
+**Monthly, on the 1st.** `base-update.yml` checks for a new Bazzite base and
+opens a pull request listing what moved. A player's fault that a newer
+Bazzite fixes, or a security hole, is taken by hand in between
+(`gh workflow run base-update.yml`; docs/PROJECT.md, "Staying current with
+Bazzite").
+
+**Weekly, on Mondays.** `pad-db-update.yml` refreshes the controller list
+(`frontend/data/gamecontrollerdb.txt`); `terra-fallback-update.yml` keeps the
+stored spare of Steam's session (`build_files/terra-fallback/`) current.
+
+None of the three merges anything.
 
 **`build-disk.yml`**, by hand only: the installer ISO (`anaconda-iso`, an
 artifact kept 90 days) or a qcow2. With `publish` ticked it also replaces the

@@ -36,6 +36,11 @@ namespace CabinetPS2
 		/// console is concerned — it comes from RomM with the game.
 		std::string bios_dir;
 
+		/// The game's disc code as RomM reads it (`title_id`, `SLUS-21090`),
+		/// empty when RomM has none. It picks the BIOS by the game's region
+		/// (CabinetPS2Bios.h, #416).
+		std::string disc_code;
+
 		/// Where the memory card goes. **THE PER-GAME, PER-USER SAVE
 		/// DIRECTORY**, which is what makes the whole existing save machinery
 		/// work unchanged: `catalog::saveFiles` already says a PlayStation 2

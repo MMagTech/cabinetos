@@ -29,7 +29,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `docs/` | The specification, the decisions, the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
 | `Containerfile` | The image: the Bazzite base pinned by digest, then the build scripts in several layers | |
 | `Justfile`, `cabinetos.env` | The build recipes CI calls, and their parameters | |
-| `base-manifest.txt` | The base image's package list, for the weekly base-update check | |
+| `base-manifest.txt` | The base image's package list, for the monthly base-update check | |
 
 ### frontend/src
 
@@ -53,7 +53,7 @@ is in the file named for its feature, and
 | Library data | `library.cpp` (the store of cards, the shelves), `catalog.cpp` and `catalog_internal.h` (which platforms play, on which core), `covercache.cpp`, `coverfill.cpp`, `gridfill.cpp`, `search.cpp`, `codecache.cpp` and `gametdb.cpp` (game codes and controller lists read off files), `samplelibrary.h` (the stand-in library) |
 | A launch and a game in play | `launch.cpp` (the frame thread's half), `launch_routes.cpp` (the worker), `play.cpp` (in play, and leaving), `pace.cpp` (the game frame), `pausemenu.cpp`, `gamesession.h`, `romfile.cpp` (what to hand a core), `disc.cpp`, `discs.cpp`, `rewind.cpp`, `states.cpp`, `rumble.cpp` |
 | The libretro host | `core.h`, `core.cpp`, `core_state.h`, `core_*.cpp` (discs, hardware rendering, input, memory, options, picture, PS2), `vkhost.cpp`, `vkhost_state.h`, `vkbridge.cpp`, `libretro.h` and `libretro_vulkan.h` (the libretro API, the RetroArch team's), and the console's three option tables: `coreoptions.cpp` (set on purpose for every game), `quality.cpp` (Picture quality) and `sysopts.cpp` (a system's pause-menu options); `screenfx.cpp` (screen looks) |
-| PlayStation 2 | `ps2.cpp`, `ps2window.cpp`, `overlaywin.cpp`, and `frontend/ps2/` |
+| PlayStation 2 | `ps2.cpp`, `ps2window.cpp`, `overlaywin.cpp`, and `frontend/ps2/` (its `CabinetPS2Bios.cpp` chooses each game's BIOS by the game's region) |
 | Emulators run as programs | `standalone.h`, `standalone.cpp`, `standalone_play.cpp`, `standalone_eden.cpp`, `standalone_xemu.cpp`, `standalone_rpcs3.cpp`, `standalone_xenia.cpp`, `standalone_cemu.cpp`, `vpad.cpp`, `xtitles.cpp`, `xboxhdd.cpp`, `x360profile.cpp`, `dolphinprep.cpp` |
 | Saves and states | `savetable.cpp` (what each core writes, where, and its two tags on RomM: `emulatorTag` for states, `saveTag` for saves), `saves.cpp` (sending and restoring all three kinds of save: `syncSave`, `syncDirSave`, `syncFileSaves`), `dirsave.cpp` and `filesave.cpp` (their helpers), `states.cpp`, `savemirror.cpp`, `uploader.cpp` (the queue), `pending.cpp` (the markers), `offline_sync.cpp`, `playtime.cpp`, `favorites.cpp`; the requests themselves are in `romm_playdata.cpp` |
 | Storage | `storage.h` (where everything lives), `storage_internal.h`, `locations.cpp`, `cache.cpp`, `drives.cpp`, `drives_fs.cpp`, `udisks.cpp`, `users.cpp`, `accounts.cpp`, `accountremove.cpp`, `fileio.cpp`, `prefs.cpp` |
@@ -131,8 +131,9 @@ is in the file named for its feature, and
   `require-signed-updates.sh`). Nothing goes in `/var`, which an update never
   touches (lessons rule 9). The `require-*.sh` scripts fail the build rather
   than ship an image that cannot work.
-- **CI** builds, stages and promotes. The weekly jobs open pull requests and
-  never merge them.
+- **CI** builds, stages and promotes. The scheduled jobs (the base check
+  monthly, the controller list and Steam's spare weekly) open pull requests
+  and never merge them.
 
 ## 3. The main flows, step by step
 

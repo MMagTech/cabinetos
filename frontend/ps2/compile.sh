@@ -47,7 +47,7 @@ echo "host layer: compiling with $(echo "$FLAGS" | wc -w) flags from PCSX2's own
 
 # -I/src/cabinet-ps2 so the two files find their own header; everything else is
 # PCSX2's.
-for f in CabinetPS2Host CabinetPS2HostStubs CabinetPS2Pad CabinetPS2Audio CabinetPS2Bridge CabinetPS2Probe; do
+for f in CabinetPS2Host CabinetPS2Bios CabinetPS2HostStubs CabinetPS2Pad CabinetPS2Audio CabinetPS2Bridge CabinetPS2Probe; do
     # shellcheck disable=SC2086  # FLAGS is a deliberately word-split flag list
     clang++ $FLAGS -I/src/cabinet-ps2 -DCABINETOS_PS2_VERSION="\"$VERSION\"" \
         -c "/src/cabinet-ps2/$f.cpp" -o "$BUILD/$f.o"
@@ -89,6 +89,7 @@ for isa in sse4 avx avx2; do
     [ -f "$BUILD/pcsx2/libGS-$isa.a" ] && GS_ISA+=("$BUILD/pcsx2/libGS-$isa.a")
 done
 if [ ${#GS_ISA[@]} -eq 3 ]; then
+    # shellcheck disable=SC2054  # the commas are inside each linker flag
     PCSX2_LINK=(-Wl,--whole-archive "$BUILD/pcsx2/libpcsx2.a" "${GS_ISA[@]}" -Wl,--no-whole-archive)
 elif [ ${#GS_ISA[@]} -eq 0 ]; then
     PCSX2_LINK=("$BUILD/pcsx2/libpcsx2.a")
@@ -99,7 +100,7 @@ fi
 
 # shellcheck disable=SC2086  # SYS is a deliberately word-split flag list
 clang++ -o "$BUILD/cabinet-ps2-probe" \
-    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2HostStubs.o" "$BUILD/CabinetPS2Pad.o" \
+    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Bios.o" "$BUILD/CabinetPS2HostStubs.o" "$BUILD/CabinetPS2Pad.o" \
     "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Probe.o" \
     -Wl,--start-group \
     "${PCSX2_LINK[@]}" "$BUILD/common/libcommon.a" \
@@ -151,7 +152,7 @@ echo "host layer: linked $BUILD/cabinet-ps2-probe"
 # CabinetPS2Bridge.cpp says why and what it does instead.
 clang++ -shared -Wl,-z,defs -Wl,-rpath,'$ORIGIN' -Wl,--disable-new-dtags -o "$BUILD/cabinetos-ps2.so" \
     -Wl,--wrap=_ZN12InputManager24SetPadVibrationIntensityEjff \
-    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2HostStubs.o" "$BUILD/CabinetPS2Pad.o" \
+    "$BUILD/CabinetPS2Host.o" "$BUILD/CabinetPS2Bios.o" "$BUILD/CabinetPS2HostStubs.o" "$BUILD/CabinetPS2Pad.o" \
     "$BUILD/CabinetPS2Audio.o" "$BUILD/CabinetPS2Bridge.o" \
     -Wl,--start-group \
     "${PCSX2_LINK[@]}" "$BUILD/common/libcommon.a" \
@@ -230,7 +231,7 @@ done
 # manifest, and then it ships an emulator that cannot dlopen, with the failure
 # arriving when a person starts a game. Found 2026-09-21, before it shipped,
 # only because the file was looked at rather than trusted.
-ls "$BUILD"/lib*.so.* 2>/dev/null | xargs -r -n1 basename | sort -u \
+find "$BUILD" -maxdepth 1 -name 'lib*.so.*' -printf '%f\n' | sort -u \
     > "$BUILD/cabinetos-ps2.bundled"
 if [ -s "$BUILD/cabinetos-ps2.bundled" ]; then
     echo "host layer: carries $(tr '\n' ' ' < "$BUILD/cabinetos-ps2.bundled")"

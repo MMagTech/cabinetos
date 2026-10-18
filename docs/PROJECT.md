@@ -2427,8 +2427,8 @@ cost of that is somebody has to move the pin, and a pin nobody moves is how a
 project ends up two years behind its base with an unreviewable upgrade ahead of
 it.
 
-`.github/workflows/base-update.yml` runs weekly and opens a pull request when the
-pinned digest has moved.
+`.github/workflows/base-update.yml` runs on a schedule (monthly since
+2026-10-18, below) and opens a pull request when the pinned digest has moved.
 
 **Monthly from 2026-10-18** (MMagTech, on #503, "Bazzite base →
 44.20261012.1 (relevant)"): weekly was more than the project needs. Every
@@ -2449,10 +2449,9 @@ exceptions, taken by hand (`gh workflow run base-update.yml`):
 2. **A security hole that matters on a console.**
 
 A fix upstream that nobody reported waits for the month: "that's on them,
-not us." The schedule itself changes with the next pull request that goes
-through `testing` anyway (#416's), because a merge that touches only a
-workflow builds and publishes an image no console needs; until then the
-workflow still runs on Mondays.
+not us." The schedule changed with #416's pull request, which went through
+`testing` anyway, because a merge that touches only a workflow builds and
+publishes an image no console needs.
 
 > **It needs a repository setting to do the second half, and it did not have
 > it.** *Settings → Actions → General → "Allow GitHub Actions to create and
