@@ -11,15 +11,18 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-18:** `latest` and `testing` are **2026.10.18.3** (revision
-fe5a914, digest sha256:162f2063...cf80a), #501 ("Games kept as one file in
-a RomM folder start again (#400, #416)"), merged and installed on the A9: a
-game RomM keeps as one file inside its own folder, which RomM's own upload
-of a manual or soundtrack makes, downloads only the game file. #400 is
-closed. #416 stays open for its other half, decided by MMagTech and written
-on the issue: PS2's BIOS chosen by the game's region from the disc code
-RomM reads (PCSX2 today takes the first file in `bios/`). The A9 is on the
-testing channel; its
+**2026-10-18:** `latest` and `testing` are **2026.10.18.4** (revision
+8c443ec, digest sha256:49ac980b...5837f8), #503 ("Bazzite base →
+44.20261012.1 (relevant)"), merged and installed on the A9: the base moves
+from Bazzite 44.20261006.1 to 44.20261012.1 (Linux 7.2.9, Terra's Xwayland
+26.0.99.903, SDL3 3.4.18), every log check passing, merged on his go after
+the TV checks.
+It replaced #371 ("Bazzite base → 44.20261012 (relevant)"), closed. The
+image before it, 2026.10.18.3 (#501, "Games kept as one file in a RomM
+folder start again (#400, #416)"), closed #400. #416 stays open for its
+other half, decided by MMagTech and written on the issue: PS2's BIOS chosen
+by the game's region from the disc code RomM reads (PCSX2 today takes the
+first file in `bios/`). The A9 is on the testing channel; its
 PIN is off until he turns it back on. The machines' addresses are in his
 local notes, which CLAUDE.md loads; the test tools read them from the
 environment since #456 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`,
@@ -43,14 +46,20 @@ in the local notes).
 
 ## Next
 
-1. **The Bazzite base update, in a session of its own, first** (MMagTech,
-   2026-10-18): #371, "Bazzite base → 44.20261012 (relevant)", open since
-   2026-10-12; check first whether Bazzite has a newer one. Alone on
-   `testing`, so a fault is the base's. Checks only for the packages that
-   changed (log checks by the session, a few eye and hand checks by him).
-   It shows no checks because `BASE_UPDATE_TOKEN` is not set (#487,
-   SCRIPTS-13); a push to its branch by the session starts them. It needs
-   a changelog entry for players before merging.
+1. **#416's BIOS rule first** (#416, "PCSX2 loads the wrong bios for the
+   region of the game"; the rule is on the issue; the work is in `frontend/ps2`, which a pull request to `main`
+   does not compile, so it shows first at the testing push). **The same
+   pull request carries the monthly base check** (MMagTech, 2026-10-18;
+   PROJECT.md, "Staying current with Bazzite"): `base-update.yml`'s cron
+   from every Monday (`'0 9 * * 1'`) to the 1st of each month
+   (`'0 9 1 * *'`) and its comment, and the docs that say weekly:
+   docs/WORKING.md ("Weekly, on Mondays", which also holds the two jobs
+   that stay weekly), docs/ARCHITECTURE.md (the `base-manifest.txt` row),
+   docs/lessons/image-and-ci.md ("The weekly base bump"). Carried there,
+   not alone, because a workflow-only merge builds and publishes an image
+   no console needs. A base pull request the Monday run opens before then
+   waits for November's update; one that moves to Fedora 45 goes alone on
+   `testing`, as #503 did.
 2. **A priority list of every open issue, then work through it**
    (MMagTech, 2026-10-18). The Later milestone holds 65. For the faults
    step's 19 (#471 to #493), the view he was given: fix the 13 a player
@@ -59,10 +68,7 @@ in the local notes).
    code, races found by reading, "not now") with "found by reading, reopen
    on a report"; ask his decisions as one short list first and keep the TV
    checks for one sitting at the end. Not yet agreed: show him the list
-   before closing anything. Player reports and features come first,
-   starting with #416's BIOS rule (the rule is on the issue; the work is
-   in `frontend/ps2`, which a pull request to `main` does not compile, so
-   it shows first at the testing push).
+   before closing anything. Player reports and features come first.
 3. **Review the docs for Cabinet Go** (above).
 4. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: RomM paths outside the client, docs naming missing files, new
@@ -100,8 +106,7 @@ in the local notes).
   previous emulator when a PS2 game starts ("running Beetle Saturn")";
   #417, "The diagnostic report stops downloading at about 2.5 MB (its ten
   seconds are counted as 250 ms per wait)"; #422, "Primal Rage (PS1) will
-  not start: PCSX-ReARMed says its CHD is not a valid CD image"; the
-  Bazzite base update #371, "Bazzite base → 44.20261012 (relevant)".
+  not start: PCSX-ReARMed says its CHD is not a valid CD image".
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on

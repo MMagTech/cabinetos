@@ -2430,6 +2430,30 @@ it.
 `.github/workflows/base-update.yml` runs weekly and opens a pull request when the
 pinned digest has moved.
 
+**Monthly from 2026-10-18** (MMagTech, on #503, "Bazzite base →
+44.20261012.1 (relevant)"): weekly was more than the project needs. Every
+base move costs players about 3 GB (measured on #503: 3.09 GB of Bazzite's
+own layers, 67 of its 128, against 0.3 GB for one of CabinetOS's own
+updates; Bazzite regroups its packages into new layers every build, so a
+week's changes and a month's download about the same) and costs him one
+round of TV checks. The check moves to the 1st of each month. Two
+exceptions, taken by hand (`gh workflow run base-update.yml`):
+
+1. **A player reports a fault that could be the base** (the kernel,
+   graphics drivers, Bluetooth, sound). Look upstream first: Bazzite's
+   newer stable releases and their package changes, and the kernel's fixes.
+   A newer stable that fixes it is taken at once, out of the cycle; a fix
+   only in Bazzite's testing channel waits for stable unless the fault is
+   serious enough for a fallback of our own; CabinetOS writes its own fix
+   only when nobody upstream has.
+2. **A security hole that matters on a console.**
+
+A fix upstream that nobody reported waits for the month: "that's on them,
+not us." The schedule itself changes with the next pull request that goes
+through `testing` anyway (#416's), because a merge that touches only a
+workflow builds and publishes an image no console needs; until then the
+workflow still runs on Mondays.
+
 > **It needs a repository setting to do the second half, and it did not have
 > it.** *Settings → Actions → General → "Allow GitHub Actions to create and
 > approve pull requests"* is off by default, and with it off `gh pr create`
