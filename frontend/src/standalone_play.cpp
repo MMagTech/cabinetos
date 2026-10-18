@@ -129,6 +129,9 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     curtain.elapsed = curtain.duration;
     standaloneClearFrames = 30;
     standalonePaused = false;
+    // From here every press and release is the emulator's (takeStandaloneEvent),
+    // so nothing still held may stay held for this loop.
+    letGoOfHeld();
 }
 
 // AND WHEN IT ENDS, however it ends, the console is where it was: Home,
@@ -192,6 +195,7 @@ void App::finishStandalone() {
     overlayFade.from = overlayFade.to = 0.0f;
     overlayFade.elapsed = overlayFade.duration;
     dropPressesFromClosing();
+    letGoOfHeld();
     std::fprintf(stderr, "[standalone] back to Home\n");
 }
 
@@ -348,6 +352,9 @@ bool App::watchStandalone(float dt) {
             standalonePaused = false;
             for (auto& sh : standaloneShortcut) sh = {};
             standaloneRun.thaw();
+            // The menu is gone but a notice may still show (Screenshot
+            // saved): cleared, or its last frame stays over the game.
+            standaloneClearFrames = 30;
             std::fprintf(stderr, "[standalone] resumed\n");
         }
     }

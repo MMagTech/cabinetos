@@ -823,10 +823,12 @@ struct App {
     // the controllers, and the ordinary loop runs and draws the ordinary menu
     // over the frozen picture.
     bool standalonePaused = false;
-    // Frames still to clear to nothing after this window becomes the overlay.
-    // ONE WAS NOT ENOUGH: gamescope kept showing the launch page on top of the
-    // game until the next frame this window drew, which was the pause menu
-    // (2026-09-28, Metroid Prime 4 loading behind its own launch page).
+    // Frames still to clear to nothing after this window becomes the overlay,
+    // and again when the pause menu over the game closes, or a notice still
+    // showing stays frozen over the game (#398, PLAY-31). ONE WAS NOT ENOUGH:
+    // gamescope kept showing the launch page on top of the game until the
+    // next frame this window drew, which was the pause menu (2026-09-28,
+    // Metroid Prime 4 loading behind its own launch page).
     int standaloneClearFrames = 0;
     // The shortcut button's tap, per player, as the in-process path reads it:
     // down, and whether anything else was pressed while it was, and by which
@@ -1244,6 +1246,7 @@ struct App {
     float heldFor = 0.0f, nextRepeat = 0.0f;
     void holdNav(screens::Nav n);
     void releaseNav(screens::Nav n);
+    void letGoOfHeld();
 
     bool navigate(screens::Nav n);
     // Home's own keys, as one function, so that everything — Home, the Library,
