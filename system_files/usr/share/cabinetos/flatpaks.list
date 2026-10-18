@@ -36,7 +36,9 @@
 # Edit the commit here, in its own commit, and say why in the message. Nothing
 # else moves it: the flatpak auto-update timers are masked by strip-desktop.sh.
 #
-# FORMAT — four fields, whitespace separated. Blank lines and # are ignored.
+# FORMAT — four fields, whitespace separated. Blank lines and lines starting
+# with # are ignored. Nothing may follow the fields, not even a comment: the
+# console would read it into the commit, and the build refuses it.
 #
 #   <kind>    app or runtime
 #   <ref>     the flatpak ref, without the arch
