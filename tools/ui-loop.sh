@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # single-quoted commands are expanded by the remote shell
 #
 # Edit the UI, see it on the television, and get a picture back. One command.
 #
@@ -142,7 +143,9 @@ fi
 if [ "$BUILD" -eq 1 ]; then
     if [ "$VIA_VM" -eq 1 ]; then
         say "building on the VM"
-        rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/src/" "$VM:~/frontend/src/" || exit 1
+        # --delete: a source removed or renamed in git goes here too, or the
+        # Makefile's wildcard compiles it again beside its replacement.
+        rsync -az --delete -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/src/" "$VM:~/frontend/src/" || exit 1
         # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
         # otherwise a link error here that CI would never have.
         rsync -az -e "ssh -i $KEY -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$VM:~/frontend/Makefile" || exit 1
@@ -154,7 +157,9 @@ if [ "$BUILD" -eq 1 ]; then
         # itself — exactly the "stale binary looks like a change that did not
         # work" failure the checksum was added to catch. It happened on
         # 2026-09-21: one compile error and a full cycle showing the old screen.
-        "${SSH[@]}" "$VM" 'rm -f ~/frontend/build/cabinetos-frontend'
+        # The objects go too: rsync keeps the Mac's times, so a copied source
+        # can look no newer than its old object and make skips it.
+        "${SSH[@]}" "$VM" 'rm -f ~/frontend/build/cabinetos-frontend ~/frontend/src/*.o ~/frontend/src/*.d'
         "${SSH[@]}" "$VM" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'
         "${SSH[@]}" "$VM" 'test -f ~/frontend/build/cabinetos-frontend' || {
             echo "build failed — nothing was deployed, the console still runs what it had" >&2
@@ -162,15 +167,15 @@ if [ "$BUILD" -eq 1 ]; then
         }
     else
         say "building on the console"
-        rsync -az -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/src/" "$A9:~/frontend/src/" || exit 1
+        # --delete, as on the VM.
+        rsync -az --delete -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/src/" "$A9:~/frontend/src/" || exit 1
         # The Makefile too: a new library in it (libsystemd, 2026-09-22) is
         # otherwise a link error here that CI would never have.
         rsync -az -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/Makefile" "$A9:~/frontend/Makefile" || exit 1
         # And the vendored libraries (rcheevos, #74), which the Makefile builds.
         rsync -az --delete -e "ssh -i $KEY -p $A9_PORT -o ConnectTimeout=20" "$ROOT/frontend/third_party/" "$A9:~/frontend/third_party/" || exit 1
-        # Same rule as above, and for the same reason. The objects go too:
-        # rsync keeps the Mac's times, so a copied source can look no newer
-        # than its old object and make skips it (6.5 s for a clean build).
+        # Same rules as above, objects and all, for the same reasons (6.5 s
+        # for a clean build).
         "${A9SSH[@]}" "$A9" 'rm -f ~/frontend/build/cabinetos-frontend ~/frontend/src/*.o ~/frontend/src/*.d'
         "${A9SSH[@]}" "$A9" 'cd ~/frontend && podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make -j24 2>&1 | grep -E "error|Error|warning: unused|built " | head -20'
         "${A9SSH[@]}" "$A9" 'test -f ~/frontend/build/cabinetos-frontend' || {
