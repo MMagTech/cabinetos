@@ -3,7 +3,6 @@
 
 #include "app.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "catalog.h"
@@ -32,16 +31,8 @@ void App::drainGridPages() {
                     continue;
                 const int i = appendGame(lib, g);
                 added.push_back(i);
-                if (!t) continue;
-                // Playable before the greyed ones, as the first page.
-                if (cards[static_cast<size_t>(i)].unavailable.empty()) {
-                    auto at = std::find_if(t->cards.begin(), t->cards.end(), [&](int c) {
-                        return !cards[static_cast<size_t>(c)].unavailable.empty();
-                    });
-                    t->cards.insert(at, i);
-                } else {
-                    t->cards.push_back(i);
-                }
+                // In the server's order, as the first page (gridOrder).
+                if (t) t->cards.push_back(i);
             }
             gridScreen.append(added, cards);
         }
@@ -57,7 +48,9 @@ void App::openTile(const screens::Result& res) {
     // at all; a grid costs one request at the moment somebody
     // walks into it, and nothing at all for the systems they never
     // open. The second visit costs nothing: loadTileGames sees a
-    // membership it already filled and returns.
+    // membership it already filled and returns. Whether each game is
+    // greyed is asked again on every visit (gridOrder): pairing a Wii
+    // Remote or starting a stream changes it.
     const bool isCollection = libraryScreen.tab() != 0;
     const std::string tileQuery = tiles[res.value].query;
     auto& own = isCollection ? collectionTiles : platformTiles;
@@ -80,7 +73,7 @@ void App::openTile(const screens::Result& res) {
         sound::play(sound::Cue::Edge);
         return;
     }
-    gridScreen.open(t->title, t->cards, cards);
+    gridScreen.open(t->title, gridOrder(lib, *t), cards);
     gridScreen.setLoadingMore(more);
     // ONE FILLER AT A TIME. Walking into a second platform stops
     // the first: nobody is looking at it any more, and two of

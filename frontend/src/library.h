@@ -58,6 +58,7 @@ struct Library {
 int appendGame(Library& lib, const romm::Game& g);
 bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
                    bool* more = nullptr);
+std::vector<int> gridOrder(Library& lib, const screens::Tile& tile);
 Library loadLibrary(romm::Client& client);
 Library offlineLibrary();
 std::string gameRecordJson(const romm::Game& g);
