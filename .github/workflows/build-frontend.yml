@@ -60,8 +60,12 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # Two deep, so a pull request's base (the merge commit's first parent)
+      # is here for "New warnings" at the end.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 2
 
       # The same container the cores are built in and the same one the test VM
       # uses, so CI and the development loop are not two different builds
@@ -88,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
           podman run --rm -v "$PWD/frontend":/src:Z -w /src cabinetos-builder \
-            make -j"$(nproc)" 2>&1 | tee /tmp/build.log
+            make -j"$(nproc)" -O 2>&1 | tee /tmp/build.log
 
       # THE WII BRIDGE (#200, wiibridge/): its own program, GPL, in the same
       # container. Built here so the image carries it beside the frontend that
@@ -151,3 +155,12 @@ jobs:
               echo "No warnings."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
+
+      # NO NEW WARNINGS IN THE FILES A PULL REQUEST TOUCHES (CLAUDE.md rule 6,
+      # #398): the touched files' warnings against the same files compiled
+      # at the base, by ci/check-new-warnings.sh, which says how and what it
+      # costs. Pull requests only, because a push has no base to compare
+      # with. Report only until the date in the script, then a failure.
+      - name: New warnings
+        if: github.event_name == 'pull_request'
+        run: ci/check-new-warnings.sh /tmp/build.log
