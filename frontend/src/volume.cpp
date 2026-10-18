@@ -338,3 +338,9 @@ int test() {
 }
 
 }  // namespace volume
+
+// TRIAL (not for merge): nothing calls these.
+int gTrialDeadCounter = 1;
+namespace volume {
+int trialDeadFunction(int x) { return x + gTrialDeadCounter; }
+}  // namespace volume
