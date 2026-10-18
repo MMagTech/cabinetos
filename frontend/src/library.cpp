@@ -236,13 +236,14 @@ static std::map<int, romm::Platform> savedPlatforms() {
 // So boot is CONSTANT rather than proportional, which is the whole prize: the
 // person with twenty thousand games boots as fast as the person with two
 // hundred.
-Library loadLibrary(romm::Client& client) {
+Library loadLibrary(romm::Client& client, std::string* platformsErr) {
     Library lib;
     std::string err;
 
     std::vector<romm::Platform> platforms;
     if (!client.fetchPlatforms(&platforms, &err)) {
         std::fprintf(stderr, "[romm] platforms: %s\n", err.c_str());
+        if (platformsErr) *platformsErr = err;
         return lib;
     }
     savePlatforms(platforms);

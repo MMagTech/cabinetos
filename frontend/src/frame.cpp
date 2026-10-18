@@ -139,6 +139,7 @@ void App::runFrameLoop() {
         askReadyWhenFree();
         noticeLowBattery(dt);
         sayUpdatedTo();
+        sayStartProblem();
         noticeGalleryHook(dt);
         retryOwedUploads(dt);
         followServer(dt);
