@@ -84,6 +84,22 @@ void App::runSearch(const std::string& q) {
     searchScreen.setResults(q, std::move(idx), total);
 }
 
+// Search's keyboard, docked under the results, holding what was typed:
+// nothing on arriving (goToDestination clears it first), the last search
+// when Down from the results brings it back (apply, FocusKeyboard). That
+// is searchTyped itself, so pumpSearch sees nothing new and asks nothing.
+void App::openSearchKeyboard() {
+    ui::Keyboard::Config cfg;
+    cfg.title = "Search";
+    // "Game name" spelled out what the box was for (MMagTech,
+    // 2026-10-14: "we can do better than that"); a search box says
+    // Search, and the dots make it read as a place to type.
+    cfg.placeholder = "Search\xE2\x80\xA6";
+    cfg.dockedBottom = true;
+    cfg.initial = searchTyped;
+    keyboard.open(cfg);
+}
+
 // UP OUT OF THE KEYBOARD'S TOP ROW. It means nothing anywhere else — this
 // keyboard deliberately does not wrap — and on Search it is how a person
 // gets from what they typed to what it found.

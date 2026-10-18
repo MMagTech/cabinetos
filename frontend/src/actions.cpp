@@ -63,6 +63,19 @@ void App::apply(const screens::Result& res) {
         case screens::Action::FocusKeyboard:
             // Back into the keyboard under the results. Focus does not
             // leave the screen, it moves down within it.
+            //
+            // AND THE KEYBOARD COMES BACK IF IT IS GONE. Opening a game
+            // from the results closes it (OpenGame below), and so does
+            // Done; Down then took focus off the results with nothing to
+            // receive it (#398, HOME-10). It slides up from below, as it
+            // does when Search is arrived at (takePendingSwitch), holding
+            // what was typed.
+            if (!keyboard.isOpen()) {
+                openSearchKeyboard();
+                keyboardSlide.from = keyboardSlide.to = 1.0f;
+                keyboardSlide.elapsed = 0.0f;
+                keyboardSlide.retarget(0.0f, kKeyboardSlide);
+            }
             searchScreen.setFocused(false);
             sound::play(sound::Cue::Move);
             break;
