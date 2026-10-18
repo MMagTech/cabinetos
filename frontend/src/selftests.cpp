@@ -44,6 +44,11 @@ int firstRunWriteTest() {
         std::fprintf(stderr, "[first-run] could not make a scratch root\n");
         return 1;
     }
+    // AND NO REAL DRIVE. Sign out (6, below) empties roms/ and cache/ on every
+    // location, and a games drive plugged into this machine is one: the drive
+    // search points into the scratch root, where nothing is mounted, before
+    // anything asks where the games are (#398, FIRSTRUN-14).
+    setenv("CABINETOS_DRIVES", (std::string(root) + "/drives").c_str(), 1);
     storage::setRoot(root);
     std::string serr;
     if (!storage::ensureTree(&serr)) {
@@ -51,6 +56,8 @@ int firstRunWriteTest() {
         return 1;
     }
     std::printf("scratch root  %s\n\n", root);
+    check(storage::locations() == std::vector<std::string>{root},
+          "the scratch root is the only place for games");
 
     // 1. A machine with nothing on it has not been set up.
     //
