@@ -138,7 +138,8 @@ std::string imageAssetsDir();
 // show the games on the drive with no server: a game's folder name carries its
 // id, title and platform folder and nothing else a launch needs. Shared by
 // everyone, like `bios/`; a record whose game has left the drive is ignored,
-// so nothing has to tidy it.
+// so nothing has to tidy it. Sign out removes them all (server.h): RomM
+// numbers every server's games from 1.
 std::string gamesDir();
 
 // --- The per-user paths ------------------------------------------------------
