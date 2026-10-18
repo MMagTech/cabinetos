@@ -11,17 +11,27 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-18:** `testing` is **2026.10.18.2** (revision f2da5d3, digest
-sha256:a671a83b...1468), the `faults` branch: about 30 fixes for the #398
-audit's faults and seven automatic checks, proven on the A9 against main's
-frontend overnight (`faults-a9-results.md` in the audit folder) and
-installed on it through its own System update. The pull request from
-`faults` to main carries MMagTech's TV checklist; his merge promotes
-2026.10.18.2 to `latest`. `latest` is 2026.10.17.3 until then. The A9 is on
-the testing channel; its PIN is off until he turns it back on (the
-checklist's last item). The machines' addresses are in his local notes,
-which CLAUDE.md loads; the test tools read them from the environment since
-#456 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`).
+**2026-10-18:** `testing` is **2026.10.18.3** (revision fe5a914, digest
+sha256:162f2063...cf80a), #501 ("Games kept as one file in a RomM folder
+start again (#400, #416)"): a game RomM keeps as one file inside its own
+folder, which RomM's own upload of a manual or soundtrack makes, downloads
+only the game file. Proven on the A9 before and after through the
+read-only relay (the PR body). His merge promotes it. The faults step
+(#500, 2026.10.18.2) is merged. #416's other half, which BIOS PCSX2 starts
+(it takes the first file in `bios/`; RetroArch and Batocera do the same),
+waits for the player to try #501. The A9 is on the testing channel; its
+PIN is off until he turns it back on. The machines' addresses are in his
+local notes, which CLAUDE.md loads; the test tools read them from the
+environment since #456 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`,
+`CABINETOS_RELAY_UP`).
+
+**The ecosystem, from MMagTech 2026-10-18:** CabinetOS is the console at
+home; **Cabinet Go** (the old Cabinet iOS app, renamed, at
+github.com/MMagTech/cabinet-go) is the pocket version that plays only the
+handheld systems. It is not finished and follows at a later, unknown date.
+Every other Apple app is abandoned. The docs that call Cabinet "the Apple
+TV app" (CONTRIBUTING.md, docs/CABINET.md, PROJECT.md's banner, README.md,
+the site) need reviewing against this.
 
 **Steps 1 to 4 of the #398 plan are done** (#398, "Audit the code and
 restructure it for contributors (main.cpp is 20,000 lines)"): the guide
@@ -33,14 +43,22 @@ in the local notes).
 
 ## Next
 
-1. **Features and bug fixes resume.** What waits is in the Later milestone;
-   MMagTech chooses what comes first.
-2. **The automatic checks report only until 2026-10-25**, then fail a pull
+1. **A priority list of every open issue, then work through it**
+   (MMagTech, 2026-10-18). The Later milestone holds 65. For the faults
+   step's 19 (#471 to #493), the view he was given: fix the 13 a player
+   could hit (about 60 small fixes, 3 or 4 sessions side by side), close the
+   developer-only ones (CI and bots, developer tools, stale comments, dead
+   code, races found by reading, "not now") with "found by reading, reopen
+   on a report"; ask his decisions as one short list first and keep the TV
+   checks for one sitting at the end. Not yet agreed: show him the list
+   before closing anything. Player reports and features come first.
+2. **Review the docs for Cabinet Go** (above).
+3. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: RomM paths outside the client, docs naming missing files, new
    compiler warnings in touched files, the self-tests. Read their first
    week's reports before that date and fix what they find, so nothing turns
    red by surprise (CONTRIBUTING.md, "What CI checks").
-3. **The monthly health check** (step 5) starts after that: the checks'
+4. **The monthly health check** (step 5) starts after that: the checks'
    reports (warnings, long files, unused code, PROJECT.md's index) and the
    Later milestone, once a month.
 
@@ -60,9 +78,6 @@ in the local notes).
 - #487, "CI, the bots and the tools: faults left", needs one thing only
   MMagTech can do: the BASE_UPDATE_TOKEN secret, without which bot pull
   requests start no checks.
-- Two player reports with no milestone yet: #400, "Folderized games (due to
-  soundtrack or otherwise) will not launch", and #416, "PCSX2 loads the
-  wrong bios for the region of the game".
 - #329, "Release notes for every update, and a way to see them from the
   console"; #381, "Remote Play: stream with no screen connected"; #387, "A
   cover fixed on RomM shows only after the console restarts"; #390,

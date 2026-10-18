@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.18.3 {#v2026-10-18-3}
+
+*18 October 2026*
 
 - **Fixed:** a game kept on your RomM server as one file inside its own
   folder now starts. RomM makes such a folder when you upload a manual, a
