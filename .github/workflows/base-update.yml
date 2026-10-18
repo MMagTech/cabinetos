@@ -19,10 +19,13 @@ name: Check Bazzite base update
 
 on:
   schedule:
-    # Weekly, Monday 09:00 UTC. Bazzite builds daily, but CabinetOS has no
-    # reason to chase every one — a weekly bump carries a week of changes in a
-    # single reviewable diff. Change to daily if that turns out to be too coarse.
-    - cron: '0 9 * * 1'
+    # Monthly, the 1st at 09:00 UTC (MMagTech, 2026-10-18; docs/PROJECT.md,
+    # "Staying current with Bazzite"). Bazzite builds daily, but every base
+    # move costs players about 3 GB and one round of TV checks, and a month
+    # of changes downloads about the same as a week of them. A player's fault
+    # that a newer Bazzite fixes, or a security hole, is taken by hand in
+    # between (workflow_dispatch).
+    - cron: '0 9 1 * *'
   workflow_dispatch:
     inputs:
       channel:

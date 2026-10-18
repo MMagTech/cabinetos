@@ -19,6 +19,7 @@
 // mistyped one is a link error at best and an ODR violation at worst.
 
 #include "CabinetPS2Host.h"
+#include "CabinetPS2Bios.h"
 #include "CabinetPS2Pad.h"
 
 #include <atomic>
@@ -755,6 +756,12 @@ static bool RunOnCPUThread(const CabinetPS2::Config& config, std::string* error)
 	}
 
 	s_settings.SetBoolValue("EmuCore", "EnableFastBoot", config.fast_boot);
+
+	// THE BIOS, BY THE GAME'S REGION (#416). With no name PCSX2 takes the
+	// first BIOS in the folder, whatever the game. The layer was cleared
+	// above, so one game's choice never carries into the next.
+	if (const std::string bios = CabinetPS2::ChooseBios(config.bios_dir, config.disc_code); !bios.empty())
+		s_settings.SetStringValue("Filenames", "BIOS", bios.c_str());
 
 	VMManager::Internal::LoadStartupSettings();
 

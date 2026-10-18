@@ -184,7 +184,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
             core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
                         gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
                         gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy,
-                        ps2::widescreenOn(game.id));
+                        ps2::widescreenOn(game.id), game.titleId);
         }
 
         if (!core.load(job.corePath)) {

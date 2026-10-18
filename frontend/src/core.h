@@ -347,8 +347,10 @@ public:
     //   upscale       1.0 is the PlayStation 2's own resolution.
     //   widescreen    PCSX2's "Widescreen 16:9" patch, where the game has one
     //                 (ps2::widescreenOn).
+    //   discCode      RomM's `title_id`, `SLUS-21090`, empty for none: the
+    //                 BIOS is chosen by the game's region from it (#416).
     void setPs2(const std::string& resourcesDir, float upscale, int anisotropy,
-                bool widescreen);
+                bool widescreen, const std::string& discCode);
 
     // Freezes the emulated machine. A NO-OP FOR EVERY LIBRETRO CORE, which
     // stops simply because the frame loop stops stepping it — and not optional

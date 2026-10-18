@@ -62,6 +62,7 @@ extern std::string gPs2ResourcesDir;
 extern float gPs2Upscale;
 extern int gPs2Anisotropy;
 extern bool gPs2Widescreen;
+extern std::string gPs2DiscCode;
 
 // Defined in core_options.cpp.
 void resetOptions();

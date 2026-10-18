@@ -53,10 +53,15 @@ std::string version();
 // `memoryCard` is a bare filename inside `memcardsDir`. The caller names it the
 // way catalog::saveFiles already says a PlayStation 2 card is named, so the
 // whole existing save machinery works on it unchanged.
+//
+// `discCode` is RomM's `title_id` for the game, `SLUS-21090`, empty when RomM
+// has none: the library picks the BIOS in `biosDir` by the game's region from
+// it (#416, frontend/ps2/CabinetPS2Bios.h).
 bool startGame(const std::string& discPath, const std::string& biosDir,
                const std::string& memcardsDir, const std::string& memoryCard,
                const std::string& scratchDir, const std::string& resourcesDir,
-               float upscale, int anisotropy, bool widescreen);
+               float upscale, int anisotropy, bool widescreen,
+               const std::string& discCode);
 
 // Asks the game to stop and WAITS. Blocking is the point: PCSX2 flushes the
 // memory card during shutdown, so a card captured before this returns is the

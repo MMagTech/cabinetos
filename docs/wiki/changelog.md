@@ -4,6 +4,15 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** with more than one PS2 BIOS on your server, every game started
+  on whichever BIOS the emulator found first. Each game now starts on a BIOS
+  for its own region (USA, Europe or Japan), going by the disc code RomM
+  reads from the game, whatever the files are called. A game with no BIOS
+  for its region uses your USA one.
+  ([#416](https://github.com/MMagTech/cabinetos/issues/416))
+
 ## 2026.10.18.4 {#v2026-10-18-4}
 
 *18 October 2026*

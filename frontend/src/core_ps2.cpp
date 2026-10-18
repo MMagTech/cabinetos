@@ -42,10 +42,11 @@ bool Core::startPs2Game(const std::string& romPath, const std::string& systemDir
     // this game's; the scratch is throwaway. Three places, deliberately.
     //
     // PCSX2 IS HANDED `bios/` ITSELF (#153), which is where the firmware
-    // step puts whatever RomM serves, under RomM's own names. PCSX2 does
-    // not want a name: it looks at every file of 4 to 8 MB in the folder
-    // it is given, not in subfolders, and takes the first whose header is
-    // a PS2 BIOS, so no other system's firmware can be mistaken for one.
+    // step puts whatever RomM serves, under RomM's own names. No name is
+    // needed: the library looks at every file of 4 to 8 MB in the folder,
+    // not in subfolders, keeps those whose contents are a PS2 BIOS, so no
+    // other system's firmware can be mistaken for one, and picks one by
+    // the game's region from its disc code (#416, CabinetPS2Bios.h).
     // It was `bios/pcsx2/bios` until 2026-09-27, which nothing filled:
     // PS2 played only on the one console where the files were copied
     // there by hand, and on a fresh install `bios/pcsx2` is the image's
@@ -56,7 +57,8 @@ bool Core::startPs2Game(const std::string& romPath, const std::string& systemDir
     const std::string scratchDir = saveDir + "/pcsx2-scratch";
 
     if (!ps2::startGame(romPath, biosDir, saveDir, stem + ".ps2", scratchDir,
-                        gPs2ResourcesDir, gPs2Upscale, gPs2Anisotropy, gPs2Widescreen)) {
+                        gPs2ResourcesDir, gPs2Upscale, gPs2Anisotropy, gPs2Widescreen,
+                        gPs2DiscCode)) {
         error_ = ps2::error();
         return false;
     }
@@ -74,11 +76,12 @@ bool Core::startPs2Game(const std::string& romPath, const std::string& systemDir
 }
 
 void Core::setPs2(const std::string& resourcesDir, float upscale, int anisotropy,
-                  bool widescreen) {
+                  bool widescreen, const std::string& discCode) {
     gPs2ResourcesDir = resourcesDir;
     gPs2Upscale = upscale > 0.0f ? upscale : 1.0f;
     gPs2Anisotropy = anisotropy;
     gPs2Widescreen = widescreen;
+    gPs2DiscCode = discCode;
 }
 
 void Core::setPaused(bool paused) {

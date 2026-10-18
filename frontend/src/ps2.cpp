@@ -50,6 +50,9 @@ struct Api {
     // keeps every patched game widescreen and the row never shows.
     void     (*setWidescreen)(int) = nullptr;
     int      (*hasWidescreenPatch)() = nullptr;
+    // Optional: the BIOS by the game's region (#416). A library without it
+    // takes the first BIOS it finds, as it always did.
+    void     (*setDiscCode)(const char*) = nullptr;
 } gApi;
 
 bool gWindowed = false;
@@ -110,6 +113,8 @@ bool ps2::load(const std::string& soPath) {
         reinterpret_cast<decltype(gApi.setWidescreen)>(dlsym(gHandle, "cps2_set_widescreen"));
     gApi.hasWidescreenPatch = reinterpret_cast<decltype(gApi.hasWidescreenPatch)>(
         dlsym(gHandle, "cps2_has_widescreen_patch"));
+    gApi.setDiscCode =
+        reinterpret_cast<decltype(gApi.setDiscCode)>(dlsym(gHandle, "cps2_set_disc_code"));
 
     if (!ok) {
         dlclose(gHandle);
@@ -140,11 +145,13 @@ std::string ps2::version() {
 bool ps2::startGame(const std::string& discPath, const std::string& biosDir,
                     const std::string& memcardsDir, const std::string& memoryCard,
                     const std::string& scratchDir, const std::string& resourcesDir,
-                    float upscale, int anisotropy, bool widescreen) {
+                    float upscale, int anisotropy, bool widescreen,
+                    const std::string& discCode) {
     if (!gHandle) { gError = "no PlayStation 2 emulator is loaded"; return false; }
 
     gFrameSerial = 0;
     if (gApi.setWidescreen) gApi.setWidescreen(widescreen ? 1 : 0);
+    if (gApi.setDiscCode) gApi.setDiscCode(discCode.c_str());
     if (!gApi.start(discPath.c_str(), biosDir.c_str(), memcardsDir.c_str(), memoryCard.c_str(),
                     scratchDir.c_str(), resourcesDir.c_str(), upscale, anisotropy, 1)) {
         gError = gApi.error();
