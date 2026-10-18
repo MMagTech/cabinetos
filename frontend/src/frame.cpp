@@ -58,8 +58,9 @@ void App::runFrameLoop() {
             playtime::checkpoint(storage::currentUser(), playClock.now(playtime::wallMs()));
         }
         // Held seats for pads that went off last only as long as the game
-        // (players.h). The pause menu is still the game.
-        players::setInGame(playing);
+        // (players.h). The pause menu is still the game, over an emulator of
+        // its own too.
+        players::setInGame(playing || standaloneRun.active());
         if (playing) cab::Core::shared().setPlayers(players::count());
         if (here() == Screen::Settings && players::generation() != settingsPadsSeen)
             buildSettings();
