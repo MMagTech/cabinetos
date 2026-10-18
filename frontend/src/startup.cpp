@@ -585,6 +585,8 @@ std::optional<int> App::connectToServer(char** argv) {
             // cover IS the cover. Keeping the field filled rather than empty
             // means the drawing code never has to ask which library it is in.
             c.coverLarge = c.cover;
+            // On Recent, which shows the shelf and nothing else.
+            shelf.push_back(static_cast<int>(cards.size()));
             cards.push_back(std::move(c));
         }
     }
@@ -673,6 +675,8 @@ std::optional<int> App::startDeveloperLaunch() {
 }
 
 void App::settleScreensAtStart() {
+    // Favorites when nothing has been played, as homeFromTheStart.
+    focusRow = homeTopRow();
     // --focus N still means "start on card N of Recent", which is what every
     // existing capture script passes it for.
     if (initialFocus >= 0) {
@@ -681,7 +685,7 @@ void App::settleScreensAtStart() {
     }
     if (initialRow >= 0) {
         focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
-        if (!rowExists(focusRow)) focusRow = RowRecent;
+        if (!rowExists(focusRow)) focusRow = homeTopRow();
         focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
     }
     scrollY.from = scrollY.to = 0.0f;

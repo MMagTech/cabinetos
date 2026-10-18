@@ -1,10 +1,8 @@
 // The parts more than one screen draws: the press prompt, and the caption,
-// focus, kept-mark and cover helpers the screens' files share. Moved out of
-// main.cpp and screens.cpp in the restructure (#398). choice.cpp keeps its own
-// near-copy of the prompt (another button letter, no fade), as it was, and
-// Home (home.cpp) its own copy of the cover and the kept mark, which has
-// drifted from these (it scales the mark with focus and has no unavailable
-// dim), as it was.
+// focus, kept-mark and cover helpers the screens' files and Home (home.cpp)
+// share. Moved out of main.cpp and screens.cpp in the restructure (#398).
+// choice.cpp keeps its own near-copy of the prompt (another button letter, no
+// fade), as it was.
 
 #pragma once
 

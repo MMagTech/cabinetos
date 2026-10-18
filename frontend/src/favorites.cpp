@@ -88,11 +88,12 @@ void App::toggleFavorite(const screens::Result& res) {
     if (on && it == favorites.end() && card >= 0) favorites.insert(favorites.begin(), card);
     if (!on && it != favorites.end()) favorites.erase(it);
     // Home's place on the Favorites shelf, which just changed
-    // under it: kept in range, or Recent if the shelf is gone.
+    // under it: kept in range, or the top row if its shelf is gone
+    // or Favorites is now the only one (nothing played yet).
     slotFocus[RowFavorites].clear();
     slotPress[RowFavorites].clear();
-    if (focusRow == RowFavorites) {
-        if (favorites.empty()) { focusRow = RowRecent; focusSlot = 0; }
+    if (focusRow == RowFavorites || !rowExists(focusRow)) {
+        if (!rowExists(focusRow)) { focusRow = homeTopRow(); focusSlot = 0; }
         else focusSlot = std::clamp(focusSlot, 0, static_cast<int>(favorites.size()) - 1);
         if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
     }
