@@ -247,17 +247,18 @@ something besides `.md` files and `docs/`):
   compiler's warnings, and fails a new one (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
 
-**No new warnings in the files you touch** (`ci/check-new-warnings.sh`, the
-last step of `build-frontend.yml`, on every pull request it runs on): each
-warning in a file the pull request changes is compared with the same file
-compiled at the base, by file and text, so moved code is not new. Only what
-can put a warning in a touched file is compiled again at the base: a
-touched `.cpp` costs seconds, a header that nearly every file includes
-(`app.h`) about a second compile, some two minutes. The run's summary lists
-each touched file's count at the base and now, and every new warning. **It
-reports only until 2026-10-25:** until that day a new warning is listed and
-annotated and the job passes; from that day (UTC) it fails the job. The date
-is `FAIL_FROM` at the top of the script.
+**No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
+after the Warnings step of `build-frontend.yml`, on every pull request it
+runs on): each warning in a file the pull request changes is compared with
+the same file compiled at the base, by file and text, so moved code is not
+new. Only what can put a warning in a touched file is compiled again at the
+base: one touched `.cpp` took 6 seconds, and `app.h`, which 53 files
+include, 38 seconds against 80 for the whole compile in the same run
+(2026-10-18). The run's summary lists each touched file's count at the base
+and now, and every new warning. **It reports only until 2026-10-25:** until
+that day a new warning is listed and annotated and the job passes; from
+that day (UTC) it fails the job. The date is `FAIL_FROM` at the top of the
+script.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
