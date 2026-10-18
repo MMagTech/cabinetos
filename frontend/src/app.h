@@ -459,6 +459,9 @@ struct App {
 
     setup::Deps waitDeps;
     bool startupShown = false;
+    // Why Home started empty although the server answered: a refused
+    // sign-in, or no system this console plays. Said once Home is up.
+    std::string startProblem;
     // HOME IS THE DRIVE'S GAMES (#88): the console started with no server, or
     // the server went away while it was on, or a person was switched offline.
     // The frame loop loads the library properly once the server answers.
@@ -1928,6 +1931,7 @@ struct App {
     void recoverPowerCutSaves();
     void applyStartColour();
     void noticeAppliedUpdate();
+    void sayStartProblem();
     void settleTabsAtStart();
     int shutDown(char** argv);
     // serverwait.cpp

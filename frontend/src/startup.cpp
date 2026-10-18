@@ -502,7 +502,8 @@ std::optional<int> App::connectToServer(char** argv) {
         // coming back after a power cut is not something this can make faster.
         setup::showWaiting(waitDeps, kLoadingLine);
         startupShown = true;
-        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient);
+        std::string platformsErr;
+        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient, &platformsErr);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
 
@@ -513,9 +514,27 @@ std::optional<int> App::connectToServer(char** argv) {
         // been told its library came back empty and refused to start. The
         // question worth asking is whether the SERVER answered, and the
         // platform list is what answers it.
+        //
+        // AND A SERVER THAT ANSWERS "NO" STARTS TO HOME (#398, FIRSTRUN-23).
+        // This exited for a refused sign-in (a token that expired, say) and
+        // for a RomM with no system this console plays, and the session
+        // started it again two seconds later, for ever, with nothing on the
+        // screen: Settings, where Sign out and Add account are, was never
+        // reached. Home starts empty instead and says which. Anything else
+        // (the server gone again, an HTTP error) still exits, so the next
+        // start waits for the server.
         if (platformTiles.empty() && !libFromDrive) {
-            std::fprintf(stderr, "[romm] the library came back empty\n");
-            return 1;
+            const bool refused = platformsErr.rfind("not authorised", 0) == 0;
+            if (!refused && !platformsErr.empty()) {
+                std::fprintf(stderr, "[romm] the library did not load: %s\n",
+                             platformsErr.c_str());
+                return 1;
+            }
+            std::fprintf(stderr, "[romm] %s; starting to an empty Home\n",
+                         refused ? "the server refused this console's sign-in"
+                                 : "the server has no system this console plays");
+            startProblem = refused ? "RomM refused this console's sign-in"
+                                   : "RomM has no systems this console plays";
         }
         // Covers come from the server, authenticated. The cache never learns
         // what a server is — it was built to take exactly this.
@@ -813,6 +832,16 @@ void App::applyStartColour() {
     if (lookColour) look::setColour(look::colourFromWord(lookColour), true);
     if (lookDark) appearance = look::Appearance::Dark;
     look::setDark(wantDark(), true);
+}
+
+// WHY HOME IS EMPTY (connectToServer), said once Home is up and after
+// "Updated to", since one notice shows at a time.
+void App::sayStartProblem() {
+    if (!startProblem.empty() && updStartNotice.empty() && menuNotice.life <= 0.0f &&
+        !playing && here() == Screen::Home && curtain.value() < 0.01f) {
+        menuNotice.say(startProblem, Tone::Problem);
+        startProblem.clear();
+    }
 }
 
 // AFTERWARDS: the first start after a restart compares the version the

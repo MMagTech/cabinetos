@@ -59,6 +59,8 @@ int appendGame(Library& lib, const romm::Game& g);
 bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
                    bool* more = nullptr);
 std::vector<int> gridOrder(Library& lib, const screens::Tile& tile);
-Library loadLibrary(romm::Client& client);
+// `platformsErr`, when given, is why the platform list did not come: empty
+// when it came, even with nothing in it.
+Library loadLibrary(romm::Client& client, std::string* platformsErr = nullptr);
 Library offlineLibrary();
 std::string gameRecordJson(const romm::Game& g);
