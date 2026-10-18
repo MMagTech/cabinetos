@@ -13,9 +13,9 @@
 #
 # What this asserts is modest and worth having: the tree compiles from a bare
 # checkout, in the same Fedora 44 container the cores and the VM use, with the
-# warnings the Makefile asks for. It does not run anything. The frontend needs a
-# Wayland display and a GPU to do anything interesting, and the test machine
-# remains where that happens.
+# warnings the Makefile asks for. It runs only what needs no screen: the option
+# tables and the self-tests (ci/run-self-tests.sh). The rest needs a Wayland
+# display and a GPU, and the test machine remains where that happens.
 #
 # ON EVERY PULL REQUEST AIMED AT ANYTHING **BUT** MAIN. This asked for
 # `branches: [main]` until 2026-09-16, and that day four branches were stacked
@@ -121,6 +121,14 @@ jobs:
           set -euo pipefail
           podman run --rm -v "$PWD":/repo:Z -w /repo cabinetos-builder \
             frontend/build/cabinetos-frontend --check-option-tables cores/options
+
+      # THE SELF-TESTS THAT NEED NO SCREEN, SERVER OR CONSOLE (#398): the
+      # table in CONTRIBUTING.md, "Running and testing", each in a scratch
+      # storage root, HOME and drive search. ci/run-self-tests.sh lists them
+      # and the ones that cannot run here. Report only until
+      # REPORT_ONLY_UNTIL, then a failure.
+      - name: Self-tests
+        run: ci/run-self-tests.sh
 
       # The image build downloads this. Uploaded on every run and not only
       # when called, because a binary you can fetch off a finished run is how
