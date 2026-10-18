@@ -296,7 +296,7 @@ below.
 **The worked example, a change to the Wii bridge** (#398, Part 4 section 34):
 `wiibridge/Makefile` builds it; `build-frontend.yml` compiles it and puts it
 in the `frontend-linux-x86_64` artifact; `ci/stage-image-payload.sh` refuses
-to go on without it and checks it is a 64-bit Linux program;
+to go on without it and checks it is an x86-64 Linux program;
 `build_files/install-frontend.sh` installs it at
 `/usr/libexec/cabinetos-wii-bridge` and checks its libraries; the frontend
 starts it from there (`frontend/src/wiiremote.cpp`). Each file names the next
