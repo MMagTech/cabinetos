@@ -239,7 +239,8 @@ something besides `.md` files and `docs/`):
   first line).
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
   Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
-  summarises the compiler's warnings, and fails a new one (below).
+  summarises the compiler's warnings, fails a new one, and lists the code
+  nothing calls (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
 
 **No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
@@ -264,6 +265,13 @@ result and time. `--romm-race-test` and the tests that need a screen, a core
 or a server do not run; the script's header names them. **It reports only
 until 2026-10-25,** the same way: a failing test is annotated and the job
 passes until that day, and fails it from then.
+
+**The unused code** (`ci/report-unused-code.sh`, the job's last step, on
+pull requests): every function and variable nothing reachable from `main`
+uses, by file, in the run's summary. It comes from a second build of the
+frontend in a scratch folder at `-O0`, with a section for each function and
+variable, linked with `--gc-sections --print-gc-sections`; the binary that
+ships is not that one. A report only: it never fails the job.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
