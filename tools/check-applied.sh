@@ -28,9 +28,9 @@
 #
 set -uo pipefail
 
-HOST="${CABINETOS_HOST:-192.168.1.212}"
+A9="${CABINETOS_A9:?set it to cabinet@<your console> (CLAUDE.local.example.md)}"
 KEY="${CABINETOS_KEY:-$HOME/.ssh/cabinetos}"
-SSH=(ssh -p 2222 -i "$KEY" -o ConnectTimeout=8 "cabinet@$HOST")
+SSH=(ssh -p 2222 -i "$KEY" -o ConnectTimeout=8 "$A9")
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ONLY_LISTS=0
 [[ "${1:-}" == "--lists" ]] && ONLY_LISTS=1
@@ -44,10 +44,10 @@ note() { printf 'note  %s\n' "$*"; }
 # --- 1. Dolphin and FBNeo, listed with real games ----------------------------
 say "== option lists that need a real game"
 rsync -az -e "ssh -p 2222 -i $KEY" "$ROOT/tools/core-options.c" "$ROOT/frontend/src/libretro.h" \
-    "cabinet@$HOST:/tmp/check-applied/" >/dev/null 2>&1 || {
+    "$A9:/tmp/check-applied/" >/dev/null 2>&1 || {
     "${SSH[@]}" 'mkdir -p /tmp/check-applied' &&
         rsync -az -e "ssh -p 2222 -i $KEY" "$ROOT/tools/core-options.c" \
-            "$ROOT/frontend/src/libretro.h" "cabinet@$HOST:/tmp/check-applied/"
+            "$ROOT/frontend/src/libretro.h" "$A9:/tmp/check-applied/"
 }
 "${SSH[@]}" 'cd /tmp/check-applied && sed -i "s#../frontend/src/libretro.h#libretro.h#" core-options.c &&
     podman run --rm -v /tmp/check-applied:/w:Z -w /w localhost/cabinetos-builder \

@@ -52,11 +52,12 @@
 # itself sees everything the frontend drew. docs/PROJECT.md, open question 24.
 set -uo pipefail
 
-VM=cabinet@192.168.1.250
-# The A9 by its cable address unless told otherwise: CABINETOS_A9=cabinet@<ip>
-# when it is on Wi-Fi elsewhere (at the LG C1 since 2026-10-05, 192.168.1.109).
-A9=${CABINETOS_A9:-cabinet@192.168.1.212}
-KEY=~/.ssh/cabinetos
+# The machines come from the environment, so no address is written here
+# (CLAUDE.local.example.md says what to set). The VM is needed only for
+# --via-vm.
+A9=${CABINETOS_A9:?set it to cabinet@<your console> (CLAUDE.local.example.md)}
+KEY=${CABINETOS_KEY:-$HOME/.ssh/cabinetos}
+VM=${CABINETOS_VM:-}
 SSH=(ssh -i "$KEY" -o ConnectTimeout=20 -o StrictHostKeyChecking=no)
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # TRANSIENT, IN /run, AND THAT IS THE SAFETY PROPERTY. This used to live in
@@ -112,6 +113,10 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+if [ "$VIA_VM" -eq 1 ] && [ -z "$VM" ]; then
+    echo "CABINETOS_VM: set it to cabinet@<your build VM> for --via-vm (CLAUDE.local.example.md)" >&2
+    exit 1
+fi
 
 say() { printf '\n== %s\n' "$*"; }
 

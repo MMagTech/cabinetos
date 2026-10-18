@@ -153,7 +153,7 @@ void App::buildSettings() {
                                                                     : st.connection);
             else netValue = "Connected";
             if (!st.ipv4.empty()) {
-                // "192.168.1.212/24" -> the address a person would type.
+                // "192.168.0.20/24" -> the address a person would type.
                 netDetail = "Address " + st.ipv4.substr(0, st.ipv4.find('/'));
             }
         }

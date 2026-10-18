@@ -204,12 +204,18 @@ in: run it on a console already signed in to your server (the tokens are
 outside the storage root, above), copy the console's `config/*.json` into
 the scratch root's `config/`, and write `[]` to its `config/drives.json`,
 or downloads go to the real games drive (docs/lessons/testing.md, the
-bullet on the read-only relay). **Its upstream server is a constant near
-the top of the
-file (`UP`), set to the maintainer's server: change it to yours before you
-run it, and do not commit the change.** `tools/offline-relay.py` has the same constant. The test tools in
-`tools/` are written for the maintainer's machines (docs/ARCHITECTURE.md,
-"Known gaps").
+bullet on the read-only relay). **Its upstream server comes from
+`CABINETOS_RELAY_UP`** (`http://<your server>:<port>`), and so does
+`tools/offline-relay.py`'s.
+
+**The tools in `tools/` take their machines from the environment;** none
+has an address written in. `CABINETOS_A9` is the test console, as
+`cabinet@<address>` (`ui-loop.sh`, `base-checks.sh`, `check-applied.sh`,
+`installer-vm.sh`); `CABINETOS_KEY` is the SSH key (`~/.ssh/cabinetos`
+when unset); `CABINETOS_VM` is the build machine for
+`ui-loop.sh --via-vm`; `CABINETOS_RELAY_UP` is the relays' server. A tool
+stops at once, naming the variable, when one it needs is unset.
+CLAUDE.local.example.md has the lines to fill in.
 
 **What only a television can judge:** anything you see or hear. An
 offscreen capture has looked right while the television showed nothing
@@ -222,9 +228,9 @@ seven times and a Developer access row appears. Switching it on starts SSH
 on port 2222 and shows the password on the television; it needs the
 console's PIN (docs/SETTINGS.md, "Developer access"). The image itself is
 read-only. `tools/ui-loop.sh` is how the maintainer runs a test build on his
-console without an image build; it is written for his machines and for
-state he set up on them by hand, so read it for the steps rather than run
-it. A signed image of your own needs a fork with its own key and image name
+console without an image build; it leans on state he set up on his console
+by hand (a folder of cores and the builder image), so read it for the steps
+rather than run it. A signed image of your own needs a fork with its own key and image name
 ("Generate a signing key", below); running your own build on your own
 console is not written down yet (docs/ARCHITECTURE.md, "Known gaps").
 
