@@ -43,7 +43,8 @@ instead.
 2. Approve **CabinetOS** in RomM.
 3. The TV says *Approved* and moves on.
 
-If the code expires before it is approved, press **Start again**.
+A code that expires or is refused in RomM is replaced by a new one by itself.
+**Start again** makes a new one at any time.
 
 The console asks RomM only for what it needs: to read your games, platforms,
 covers, collections and firmware, and to write your saves, states, screenshots,

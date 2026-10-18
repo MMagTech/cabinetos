@@ -108,6 +108,14 @@ struct ServerProbe {
     std::string version;
 };
 
+// A pairing poll's answer (romm::Client::pollPairing) and the code it was
+// asked about, so an answer for a code "Start again" has replaced is not
+// read as the new one's.
+struct PairPoll {
+    int state = 0;
+    std::string deviceCode;
+};
+
 class Flow {
 public:
     Flow(const Deps& d, const Options& o) : d_(d), o_(o) {}
@@ -227,7 +235,7 @@ private:
     qr::Code code_;
     ui::QrTexture qrTex_;
     Job<romm::Pairing> pairBeginJob_;
-    Job<int> pairPollJob_;
+    Job<PairPoll> pairPollJob_;
 
     // Controller
     std::vector<bt::Device> devices_;
@@ -767,7 +775,9 @@ void Flow::pollPairing() {
     const romm::Pairing p = pairing_;
     const std::string address = address_.empty() ? firstrun::serverAddress() : address_;
     const bool dryRun = o_.dryRun;
-    pairPollJob_.start([p, address, dryRun](int& out, std::string& err) {
+    pairPollJob_.start([p, address, dryRun](PairPoll& poll, std::string& err) {
+        poll.deviceCode = p.deviceCode;
+        int& out = poll.state;
         // THE INTERVAL IS SLEPT ON THE WORKER, not counted on the frame loop.
         // RomM asks to be polled on its own interval and a console that ignored
         // it would be hammering somebody's server from a screen that is
@@ -1038,7 +1048,8 @@ void Flow::pumpJobs() {
         changed = true;
     }
 
-    if (int state = 0; pairPollJob_.take(&state, &err, &ok)) {
+    if (PairPoll poll; pairPollJob_.take(&poll, &err, &ok)) {
+        const int state = poll.state;
         if (state == 1) {
             facts_.havePairedToken = true;
             machine_.update(facts_);
@@ -1057,8 +1068,20 @@ void Flow::pumpJobs() {
                                   "/.config/cabinetos/romm.json");
                 storage::resolveCurrentUser(client_, &serr);
             }
+        } else if (poll.deviceCode != pairing_.deviceCode) {
+            // Anything but an approval, about a code "Start again" has
+            // replaced: ask about the one on screen instead. An approval of
+            // the old code is still an approval, and its account is written.
+            pollPairing();
         } else if (state == 0) {
             pollPairing();      // still waiting; ask again on its interval
+        } else if (state == -2) {
+            // THE CODE IS OVER ON THE SERVER: ten minutes went by, or somebody
+            // pressed Deny on the phone. Its QR now opens a page refusing it,
+            // and polling it was waiting for ever, so a new one, as "Start
+            // again" makes.
+            std::fprintf(stderr, "[first-run] %s; a new code\n", err.c_str());
+            startPairing();
         } else {
             pairingLive_ = false;
             notice_ = err.empty() ? "The pairing expired." : err;
