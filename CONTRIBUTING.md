@@ -267,11 +267,15 @@ until 2026-10-25,** the same way: a failing test is annotated and the job
 passes until that day, and fails it from then.
 
 **The unused code** (`ci/report-unused-code.sh`, the job's last step, on
-pull requests): every function and variable nothing reachable from `main`
-uses, by file, in the run's summary. It comes from a second build of the
-frontend in a scratch folder at `-O0`, with a section for each function and
-variable, linked with `--gc-sections --print-gc-sections`; the binary that
-ships is not that one. A report only: it never fails the job.
+pull requests): every function, and every variable that can change, that
+nothing reachable from `main` uses, by file, in the run's summary. It comes
+from a second build of the frontend in a scratch folder at `-O0`, with a
+section for each function and variable, linked with `--gc-sections
+--print-gc-sections`; a name is listed only when no copy of it is left in
+the linked program, so a header's function that one file never calls is
+not. Constants are not listed (a `constexpr` is folded where it is used),
+nor the C++ library or vendored rcheevos. The binary that ships is not that
+one. A report only: it never fails the job.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the

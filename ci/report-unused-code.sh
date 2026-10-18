@@ -13,13 +13,20 @@
 # The binary that ships is not this one and is not touched: this builds under
 # $RUNNER_TEMP, after the upload.
 #
-# What the list means: a function or variable listed is not reached from
-# main by any call, pointer or table, so it can go, or something that should
-# reach it does not. A function used only by another listed one is listed
-# too. Not listed: the C++ library's own templates (std::, __gnu_cxx::),
-# vendored rcheevos (counted only), and static functions nobody calls, which
-# the compiler drops before the linker sees them (-Wunused-function names
-# those in the Warnings step).
+# A SECTION DROPPED IN ONE FILE IS NOT YET UNUSED. A header's inline
+# function, or its constant, is compiled into every file that includes it,
+# and the copies a file never calls are dropped one by one. So a name is
+# listed only when no copy of it is left in the linked program (its symbol
+# table, read with nm). One name dropped from several files is a header's,
+# and is listed once with the count.
+#
+# What is listed: functions, and variables that can change (.data, .bss).
+# Constants are not: a constexpr is folded where it is used and never
+# referenced, so it would be listed though it is used. Nor the C++
+# library's templates, vendored rcheevos (counted only), or static functions
+# nobody calls, which the compiler drops before the linker sees them
+# (-Wunused-function names those in the Warnings step). A function used
+# only by another listed one is listed too.
 #
 # Usage: ci/report-unused-code.sh
 #
@@ -59,51 +66,70 @@ git archive HEAD frontend/Makefile frontend/src frontend/third_party | tar -x -C
 SECONDS=0
 if ! podman run --rm -v "$WORK/frontend":/src:Z -w /src \
         -e CXXFLAGS="$cxxflags" -e CFLAGS="$cflags" cabinetos-builder \
-        make -j"$(nproc)" LDFLAGS="-Wl,--gc-sections -Wl,--print-gc-sections" \
-        > "$WORK/build.log" 2>&1; then
-    tail -n 40 "$WORK/build.log"
+        sh -c "make -j$(nproc) LDFLAGS='-Wl,--gc-sections -Wl,--print-gc-sections' > build.log 2>&1 &&
+               nm --defined-only build/cabinetos-frontend > kept.nm"; then
+    tail -n 40 "$WORK/frontend/build.log"
     done_with "No report: the scratch build did not link (its log is in this step's output)."
 fi
 seconds=$SECONDS
 
 # "ld: removing unused section '.text._ZN4cache4findEi' in file 'src/cache.o'"
-# becomes "<function or variable> TAB <object> TAB <symbol>". A variable's
-# section is named for where it lives (.data.rel.ro.local. for a vtable,
-# say); the merged constants and strings have no symbol and are left out.
+# becomes "<function or variable> TAB <object> TAB <symbol>". A section in a
+# group carries the group's name in brackets after its own.
 awk -v q="'" '
     /removing unused section/ {
         split($0, part, q)
-        sec = part[2]; kind = ""
+        sec = part[2]; sub(/\[.*$/, "", sec); kind = ""
         if (sub(/^[.]text[.]/, "", sec)) kind = "function"
-        else if (sub(/^[.](data[.]rel[.]ro[.]local|data[.]rel[.]ro|data[.]rel[.]local|data[.]rel|data|rodata|bss|tdata|tbss)[.]/, "", sec)) kind = "variable"
-        if (kind == "" || sec ~ /^(str|cst)[0-9]/ || sec ~ /^(startup|unlikely|hot|exit)$/) next
+        else if (sub(/^[.](data|bss|tdata|tbss)[.]/, "", sec)) kind = "variable"
+        if (kind == "" || sec ~ /^(startup|unlikely|hot|exit)$/ || sec ~ /^rel[.]ro[.]/) next
+        sub(/^rel([.]local)?[.]/, "", sec)
         print kind "\t" part[4] "\t" sec
-    }' "$WORK/build.log" > "$WORK/raw"
-cut -f3 "$WORK/raw" | c++filt > "$WORK/names"
-cut -f1,2 "$WORK/raw" | paste - "$WORK/names" > "$WORK/all"
+    }' "$WORK/frontend/build.log" > "$WORK/dropped"
+awk '{ print $NF }' "$WORK/frontend/kept.nm" | sort -u > "$WORK/kept"
+awk -F'\t' 'NR == FNR { kept[$0] = 1; next } !($3 in kept)' "$WORK/kept" "$WORK/dropped" > "$WORK/gone"
 
-vendored=$(awk -F'\t' '$1 == "function" && $2 ~ /^third_party\//' "$WORK/all" | wc -l)
-# Ours: "<file> TAB <kind> TAB <name>", by file. The C++ library's templates
-# and the type information that goes with every vtable are left out.
-awk -F'\t' '$2 !~ /^third_party\// && $3 !~ /^((vtable|VTT|construction vtable) for )?(std|__gnu_cxx)::/ && $3 !~ /^typeinfo /' "$WORK/all" \
-    | awk -F'\t' '{ file = $2; sub(/[.]o$/, ".cpp", file); print "frontend/" file "\t" $1 "\t" $3 }' \
-    | sort -u > "$WORK/ours"
+# Names, by the builder's c++filt: Ubuntu's is too old for C++20's.
+cut -f3 "$WORK/gone" | podman run --rm -i cabinetos-builder c++filt > "$WORK/names"
+cut -f1,2 "$WORK/gone" | paste - "$WORK/names" > "$WORK/all"
+
+vendored=$(awk -F'\t' '$2 ~ /^third_party\// { n[$3] = 1 } END { c = 0; for (x in n) c++; print c }' "$WORK/all")
+# Ours, one line per name: "<file> TAB <kind> TAB <name>", where a name
+# dropped from several files goes under "~" (sorted last) with its count.
+awk -F'\t' '
+    $2 ~ /^third_party\// { next }
+    $3 ~ /^((vtable|VTT|construction vtable) for )?(std|__gnu_cxx)::/ { next }
+    $3 ~ /^(typeinfo |operator (new|delete)|_ZN?K?St|_ZN9__gnu_cxx)/ { next }
+    {
+        k = $1 FS $3; n[k]++
+        if (!(k in f)) { f[k] = $2; sub(/[.]o$/, ".cpp", f[k]); f[k] = "frontend/" f[k] }
+    }
+    END {
+        for (k in n) {
+            split(k, p, FS)
+            if (n[k] == 1) print f[k] "\t" p[1] "\t" p[2]
+            else print "~\t" p[1] "\t" p[2] " (" n[k] " files)"
+        }
+    }' "$WORK/all" | sort > "$WORK/ours"
 functions=$(awk -F'\t' '$2 == "function"' "$WORK/ours" | wc -l)
 variables=$(awk -F'\t' '$2 == "variable"' "$WORK/ours" | wc -l)
-files=$(cut -f1 "$WORK/ours" | sort -u | wc -l)
 
 {
-    echo "The linker found $functions function(s) and $variables variable(s) in $files" \
-        "file(s) that nothing reachable from \`main\` uses (and $vendored function(s)" \
-        "in vendored rcheevos, not listed). A scratch build at -O0, ${seconds}s;" \
-        "the binary that ships is not this one."
+    echo "The linker found $functions function(s) and $variables variable(s) that" \
+        "nothing reachable from \`main\` uses (and $vendored in vendored rcheevos," \
+        "not listed). A scratch build at -O0, ${seconds}s; the binary that ships" \
+        "is not this one."
     echo
     if [[ -s "$WORK/ours" ]]; then
         echo "<details><summary>The list, by file</summary>"
         echo
         echo '```'
-        awk -F'\t' '$1 != last { print $1; last = $1 } { print "    " $3 ($2 == "variable" ? "  (variable)" : "") }' \
-            "$WORK/ours"
+        awk -F'\t' '
+            $1 != last {
+                print ($1 == "~" ? "In a header, or the same name in several files" : $1)
+                last = $1
+            }
+            { print "    " $3 ($2 == "variable" ? "  (variable)" : "") }' "$WORK/ours"
         echo '```'
         echo "</details>"
     fi
