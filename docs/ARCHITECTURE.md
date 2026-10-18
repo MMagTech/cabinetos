@@ -180,7 +180,10 @@ is in the file named for its feature, and
 3. Each frame, `pumpLaunch` (`launch.cpp`) reads the job. A failed job is
    undone (the keep record comes out; the bytes stay, to be evicted). A
    Download that was not a Play stops when the game is on disk. A game the
-   person walked away from finishes quietly and does not start.
+   person walked away from finishes quietly and does not start. A launch
+   that loads no game here (these three, a core that refuses the game, an
+   emulator run as a program) forgets what its press asked for: a picked
+   state, Home's Resume, a start disc (`forgetLaunchAsks`).
 4. The curtain comes down before the rest of the blocking work (restoring
    the saves from RomM and loading the game, both on the frame thread), so
    the person sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
