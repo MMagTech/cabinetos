@@ -20,8 +20,9 @@
 #      exist in the base, which means a strip script has silently become a
 #      no-op and a desktop application may be creeping back in.
 #   4. Checks the new gamescope still takes every flag cabinetos-session
-#      passes it (ci/check-gamescope-flags.sh, #227). One gone makes the
-#      update RELEVANT and says which, before it can reach a television.
+#      and Steam's first download (cabinetos-steam-download) pass it
+#      (ci/check-gamescope-flags.sh, #227). One gone makes the update
+#      RELEVANT and says which, before it can reach a television.
 #
 # Writes to the working directory:
 #   base-manifest.txt   the new base's package list (committed with the bump)
@@ -132,7 +133,7 @@ podman run --rm "${BASE_REPO}@${new_digest}" \
     > /tmp/gamescope-help.txt 2>&1 || true
 gamescope_check=ok
 if ci/check-gamescope-flags.sh /tmp/gamescope-help.txt > /tmp/gamescope-missing.txt; then
-    say "gamescope takes every flag the session passes"
+    say "gamescope takes every flag the session and Steam's download pass"
 else
     rc=$?
     if (( rc == 1 )); then
@@ -231,7 +232,7 @@ if [[ "${first_run}" == true ]]; then
     summary="Baseline manifest recorded — no comparison was possible."
 elif [[ "${gamescope_check}" == missing ]]; then
     verdict="RELEVANT"
-    summary="gamescope no longer takes a flag the session passes; the console would lose 4K and VRR."
+    summary="gamescope no longer takes a flag we pass it; the console would lose 4K and VRR, or Install Steam would fail."
 elif (( relevant_count > 0 )); then
     verdict="RELEVANT"
     summary="${relevant_count} change(s) to packages CabinetOS depends on, in: ${areas}."
@@ -268,12 +269,14 @@ emit summary "${summary}"
     fi
 
     if [[ "${gamescope_check}" == missing ]]; then
-        echo "### ⛔ gamescope no longer takes what the session passes"
+        echo "### ⛔ gamescope no longer takes what we pass it"
         echo
-        echo "\`cabinetos-session\` starts gamescope with these, and the new"
+        echo "The scripts named below start gamescope with these, and the new"
         echo "gamescope's \`--help\` no longer lists them. gamescope would refuse to"
-        echo "start and the console would fall to a lower rung: no 4K, no VRR,"
-        echo "software drawing. **Fix the session before merging.**"
+        echo "start: from \`cabinetos-session\`, the console would fall to a lower"
+        echo "rung (no 4K, no VRR, software drawing); from"
+        echo "\`cabinetos-steam-download\`, Install Steam would fail at once."
+        echo "**Fix the script before merging.**"
         echo
         echo '```'; cat /tmp/gamescope-missing.txt; echo '```'
         echo
@@ -281,7 +284,8 @@ emit summary "${summary}"
         echo "### gamescope's flags could not be checked"
         echo
         echo "\`gamescope --help\` did not run in the new base, so nobody has"
-        echo "confirmed it still takes what \`cabinetos-session\` passes. Check by"
+        echo "confirmed it still takes what \`cabinetos-session\` and"
+        echo "\`cabinetos-steam-download\` pass. Check by"
         echo "hand before merging (\`ci/check-gamescope-flags.sh\`)."
         echo
     fi
