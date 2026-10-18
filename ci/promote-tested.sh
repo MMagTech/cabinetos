@@ -40,6 +40,16 @@ rev=$(jq -r '.Labels["org.opencontainers.image.revision"] // empty' <<<"${info}"
 version=$(jq -r '.Labels["org.opencontainers.image.version"] // empty' <<<"${info}")
 digest=$(jq -r '.Digest' <<<"${info}")
 
+# AN UNSIGNED IMAGE IS NEVER PROMOTED: every console made by the installer
+# refuses it (#135). build.yml moves `testing` only to a digest it signed and
+# checked (#398, SCRIPTS-02); this covers a `testing` published before that.
+# cosign keeps the signature beside the image under sha256-<hex>.sig, the tag
+# the consoles read, whatever tags name the image.
+if ! skopeo inspect --raw "docker://${IMAGE}:${digest/:/-}.sig" >/dev/null 2>&1; then
+    echo "testing (${digest}) has no signature; building"
+    out false; exit 0
+fi
+
 if [[ -z "${rev}" ]] || ! git cat-file -e "${rev}^{commit}" 2>/dev/null; then
     echo "testing was built from '${rev:-nothing recorded}', which this checkout does not have; building"
     out false; exit 0

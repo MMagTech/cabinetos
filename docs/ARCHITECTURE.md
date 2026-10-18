@@ -332,9 +332,7 @@ Each with where it is recorded.
   longer carry them (2026-10-17). All of these go in the faults step.
 - **A fork's image carries the project's key and image name until the fork
   edits them:** they are written into tracked files (CONTRIBUTING.md,
-  "Generate a signing key", lists them). `build.yml`'s
-  warning for an unsigned image still points to a README section; the
-  section is in CONTRIBUTING.md.
+  "Generate a signing key", lists them).
 - **Two test stand-ins are not in the repository:** the frame-time tool many
   comments cite as `frames.py`, and `racemock.py`, which `--romm-race-test`
   needs (`romm_racetest.cpp`).
@@ -393,9 +391,7 @@ comments, which the faults step fixes. Until then, trust the code:
 - **More code comments the docs tidy found:** Developer access placed in
   "Settings, System" (`system_files/etc/ssh/sshd_config.d/30-cabinetos.conf`,
   `cabinetos-developer.service`, `enable-ssh.sh`, `app.h`; it is the last row
-  of About); `build.yml`'s warning for an unsigned image points to a README
-  section that is CONTRIBUTING.md, "Generate a signing key";
-  `frontend/Makefile` points to README.md for the loop, which is
+  of About); `frontend/Makefile` points to README.md for the loop, which is
   CONTRIBUTING.md, "Running and testing"; `frontend/ps2/CabinetPS2Host.cpp`
   and `.h` cite docs/PCSX2-HOST-SURFACE.md, now in `docs/history/` (a stub
   keeps the old path); `storage.h`'s layout comment, which

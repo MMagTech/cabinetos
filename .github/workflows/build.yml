@@ -351,6 +351,32 @@ jobs:
       # here, having proved the image builds, and so does a manual run on any
       # other branch: until 2026-10-12 one would have published that branch
       # as `latest`, since every branch but testing takes that tag.
+      #
+      # A CHANNEL TAG ONLY EVER NAMES A SIGNED IMAGE (#398, SCRIPTS-02).
+      # Every console made by the installer refuses an unsigned update (#135,
+      # build_files/require-signed-updates.sh). So the image goes up under
+      # every tag but the channel's, that digest is signed, the signature is
+      # checked the way a console checks it, and only then do `testing` or
+      # `latest` move to it. A run that stops before the last step (a
+      # Sigstore outage, a cosign error, a cancel) leaves the channel where
+      # it was. Its version tag stays up, perhaps unsigned, and nothing
+      # follows it; the next run takes the next number.
+      - name: Check for a signing key
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        env:
+          SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+        run: |
+          if [[ -z "${SIGNING_SECRET}" ]]; then
+            echo "::error::No SIGNING_SECRET: consoles refuse an unsigned image (#135), so nothing is published. CONTRIBUTING.md, \"Generate a signing key\"."
+            exit 1
+          fi
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
       - name: Login to GHCR
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
@@ -359,8 +385,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Read BEFORE the push overwrites the tag, so the report below says what
-      # a console on the previous image downloads to take this one.
+      # Read before the channel moves, so the report below says what a
+      # console on the previous image downloads to take this one.
       - name: Remember the previous image
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         run: |
@@ -383,42 +409,25 @@ jobs:
             echo "::error::${CABINETOS_VERSION} was published by another build while this one ran. Re-run this workflow for the next number."
             exit 1
           fi
+          rm -f /tmp/digestfile
           for tag in ${ALIAS_TAGS}; do
+            # The channel's tag moves in the last step, once this is signed.
+            if [[ "${tag}" == "${DEFAULT_TAG}" ]]; then continue; fi
             podman push --digestfile=/tmp/digestfile \
               "${IMAGE_NAME}:${tag}" \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${tag}"
           done
-          echo "digest=$(< /tmp/digestfile)" >> "${GITHUB_OUTPUT}"
-
-      # Signing is what lets an installed machine verify that an update really
-      # came from this repository before it reboots into it. Phase 7 depends on
-      # it, so it is wired up now rather than retrofitted.
-      #
-      # It is optional, and deliberately so: the image builds and publishes
-      # without a signing key, so the first build can go green before anyone has
-      # generated one. The job summary says loudly when an image went out
-      # unsigned. Set the SIGNING_SECRET repository secret to turn it on.
-      - name: Check for a signing key
-        id: signing
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
-        env:
-          SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
-        run: |
-          if [[ -n "${SIGNING_SECRET}" ]]; then
-            echo "enabled=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "::warning::No SIGNING_SECRET set — this image is UNSIGNED. See README, 'Generate a signing key'."
+          digest=$(< /tmp/digestfile)
+          if [[ "${digest}" != sha256:* ]]; then
+            echo "::error::The push gave no digest to sign (tags: ${ALIAS_TAGS})"
+            exit 1
           fi
-
-      - name: Install cosign
-        if: steps.signing.outputs.enabled == 'true'
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
-        with:
-          cosign-release: 'v3.1.2'
+          echo "Pushed ${digest}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
 
       - name: Sign image
-        if: steps.signing.outputs.enabled == 'true'
+        id: sign
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
@@ -432,27 +441,83 @@ jobs:
             --key env://COSIGN_PRIVATE_KEY \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
 
+      # THE CONSOLES' OWN CHECK, before any console can see the image
+      # (#398, SCRIPTS-48): a signature on this digest, in the old format
+      # they read (the `sha256-<hex>.sig` tag, which --new-bundle-format=false
+      # makes cosign read and nothing else), made by the key whose public
+      # half the image ships. A SIGNING_SECRET that does not match
+      # system_files/etc/pki/containers/cabinetos.pub fails here, with the
+      # channel unmoved. The transparency log is not checked because the
+      # consoles' policy does not check it (require-signed-updates.sh gives
+      # it no rekorPublicKeyPath). cosign marks --new-bundle-format
+      # deprecated; the version that drops it fails this step, loudly,
+      # before the channel moves.
+      - name: Check the signature as a console does
+        id: verify
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        env:
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+        run: |
+          cosign verify \
+            --new-bundle-format=false \
+            --insecure-ignore-tlog=true \
+            --key system_files/etc/pki/containers/cabinetos.pub \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+
+      # Copied by digest inside the registry, not pushed again, so the
+      # channel names exactly the bytes that were signed and checked. Read
+      # back, not assumed, as ci/promote-tested.sh does for `latest`.
+      - name: Point the channel at the signed image
+        id: channel
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        env:
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          skopeo copy --preserve-digests \
+            --dest-creds "${REGISTRY_USER}:${REGISTRY_TOKEN}" \
+            "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}" \
+            "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          now=$(skopeo inspect "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" | jq -r '.Digest')
+          if [[ "${now}" != "${DIGEST}" ]]; then
+            echo "::error::${DEFAULT_TAG} is ${now}, not the signed ${DIGEST}"
+            exit 1
+          fi
+          echo "${DEFAULT_TAG} is ${DIGEST}, signed and checked"
+
       - name: Summary
         if: always() && github.event_name != 'pull_request'
+        env:
+          PUBLISHES: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing' }}
+          DIGEST: ${{ steps.push-image.outputs.digest }}
+          SIGNED: ${{ steps.sign.outcome }}
+          CHECKED: ${{ steps.verify.outcome }}
+          MOVED: ${{ steps.channel.outcome }}
         run: |
           {
             echo "## CabinetOS image"
             echo
             echo "- Image: \`${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}\`"
             echo "- Version: \`${CABINETOS_VERSION}\`"
-            if [[ "${{ steps.signing.outputs.enabled }}" == "true" ]]; then
-              echo "- Signed: yes"
+            if [[ "${PUBLISHES}" != "true" ]]; then
+              echo "- Published: no, only main and testing publish"
+            elif [[ "${MOVED}" == "success" ]]; then
+              echo "- Published: \`${DEFAULT_TAG}\` is \`${DIGEST}\`, signed and checked against cabinetos.pub"
             else
-              echo "- Signed: **no — set the \`SIGNING_SECRET\` secret**"
+              echo "- Published: **no, \`${DEFAULT_TAG}\` still names the previous image** (pushed: ${DIGEST:-nothing}; signed: ${SIGNED:-not run}; checked: ${CHECKED:-not run}; moved: ${MOVED:-not run})"
             fi
             echo
             echo "### What a console on the previous image downloads"
             echo '```'
-            if [[ -f /tmp/previous.json ]]; then
+            if [[ -f /tmp/previous.json && -n "${DIGEST}" ]]; then
               ci/compare-images.sh /tmp/previous.json \
-                "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" || true
-            else
+                "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${DIGEST}" || true
+            elif [[ -n "${DIGEST}" ]]; then
               echo "no previous image to compare against"
+            else
+              echo "nothing was pushed"
             fi
             echo '```'
             echo
