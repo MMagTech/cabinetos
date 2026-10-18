@@ -15,8 +15,8 @@
 # head's build just wrote (-MMD). Those are the base's own includes too,
 # unless an include line changed, and a file whose include line changed is
 # itself touched, so the .cpp at the top of that chain is compiled anyway.
-# A pull request that touches only a .cpp costs seconds; one that touches
-# app.h, which nearly everything includes, costs about a whole compile.
+# A pull request that touches only a .cpp compiles that one file again; one
+# that touches app.h compiles the 53 files that include it.
 # The Wii bridge is three files and is built whole, at the base and again
 # here at the head, when any of it is touched.
 #
