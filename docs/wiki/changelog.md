@@ -4,6 +4,17 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** a game kept on your RomM server as one file inside its own
+  folder now starts. RomM makes such a folder when you upload a manual, a
+  soundtrack or screenshots to a game. The console used to hand the
+  emulator the soundtrack or the manual instead of the game, and a PS2 game
+  alone in its folder showed the red "not a PlayStation or PlayStation 2
+  format disc" screen with every BIOS. Now only the game file downloads.
+  ([#400](https://github.com/MMagTech/cabinetos/issues/400),
+  [#416](https://github.com/MMagTech/cabinetos/issues/416))
+
 ## 2026.10.18.2 {#v2026-10-18-2}
 
 *18 October 2026*

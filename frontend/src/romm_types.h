@@ -102,10 +102,11 @@ struct Game {
     std::string coverPath;
     std::string coverLargePath;
     int64_t sizeBytes = 0;
-    // RomM's `has_multiple_files`: the game is a folder of several files (a
-    // .cue and its tracks, a Switch game with `update/` and `dlc/`). RomM
-    // serves such a folder as a zip it makes, larger than `sizeBytes`, so it
-    // is fetched file by file instead (main.cpp).
+    // RomM's `has_multiple_files` or `has_nested_single_file`: the game is a
+    // folder (a .cue and its tracks, a Switch game with `update/` and `dlc/`,
+    // one game file with `manual/` or `soundtrack/` beside it). RomM serves
+    // a folder as a zip it makes, larger than `sizeBytes`, so it is fetched
+    // file by file instead (launch_routes.cpp).
     bool multiFile = false;
     // RomM's `title_id`, as it sends it: hex, read off the file by RomM. Only
     // Wii uses it so far, to look the game up in GameTDB's controller list

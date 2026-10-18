@@ -12,6 +12,12 @@
 #   * folder:<romId> shows a one-file game as a folder game with an update
 #     beside it (has_multiple_files, and a made-up `update` file that RomM
 #     would refuse to serve), for the folder download fix (#181's notes).
+#   * nested:<romId> shows a one-file game as RomM 5 shows a game alone in
+#     its own folder (#416): has_nested_single_file, and fs_name the
+#     folder's name, with no file ending. media:<romId> adds a made-up
+#     manual beside it (#400), as RomM's own upload makes: a request with no
+#     file id then gets a zip of the game and the manual, as RomM serves a
+#     folder, and the manual's own id gets 404 (the console never needs it).
 #   * `people` adds four made-up people with public collections (#352, the
 #     Collections tab's "From <name>" groups), so a household of five can be
 #     tried with two real accounts. Each one opens onto a real platform's
@@ -47,6 +53,8 @@ FORMATS = False   # `formats`
 NOSMALL = False   # `nosmall`
 JUNK = False      # `junk`
 FOLDERS = set()   # folder:<romId>
+NESTED = set()    # nested:<romId>
+MEDIA = set()     # media:<romId>, also in NESTED
 NAMES = {}        # name:<romId>=<name>
 TAGS = {}         # tags:<romId>=<regions>;<languages>;<revision>;<tags>
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
@@ -75,6 +83,11 @@ for a in sys.argv[2:]:
         continue
     if a.startswith("folder:"):
         FOLDERS.add(int(a[7:]))
+        continue
+    if a.startswith(("nested:", "media:")):
+        kind, rid = a.split(":", 1)
+        NESTED.add(int(rid))
+        if kind == "media": MEDIA.add(int(rid))
         continue
     if a.startswith("name:"):
         rid, name = a[5:].split("=", 1)
@@ -118,6 +131,15 @@ def rewrite(obj):
                 fake.update(id=990000 + obj["id"], file_name="Made-up update v9.nsp",
                             file_size_bytes=1234, category="update", is_top_level=False)
                 obj["files"] = obj["files"] + [fake]
+        if obj.get("id") in NESTED and "fs_name" in obj and "platform_id" in obj:
+            obj.update(has_multiple_files=False, has_simple_single_file=False,
+                       has_nested_single_file=True,
+                       fs_name=obj.get("fs_name_no_ext") or obj["fs_name"].rsplit(".", 1)[0])
+            if obj["id"] in MEDIA and isinstance(obj.get("files"), list) and obj["files"]:
+                fake = dict(obj["files"][0])
+                fake.update(id=MANUAL_ID + obj["id"], file_name=obj["fs_name"] + ".pdf",
+                            file_size_bytes=len(MANUAL), category="manual", is_top_level=False)
+                obj["files"] = obj["files"] + [fake]
         if "file_name" in obj and obj.get("id") in FILES and "file_size_bytes" in obj:
             obj["file_name"] = FILES[obj["id"]]
         if "fs_slug" in obj and obj.get("id") in MAP and "rom_count" in obj:
@@ -130,6 +152,28 @@ def rewrite(obj):
             if name: obj["platform_display_name"] = name; obj["platform_custom_name"] = name
         return obj
     return obj
+
+# The made-up manual (media:<romId>): larger than most cartridge games, as a
+# real one is, so a console that takes the biggest file takes this.
+MANUAL_ID = 980000
+MANUAL = b"%PDF-1.4\n% made up by the relay (#400)\n" + b"\0" * (2 * 1024 * 1024)
+
+def folder_zip(rid, hdrs):
+    """RomM's zip of a media:<romId> game's folder: the game file and the
+    manual in manual/, for a request with no file id."""
+    import io, zipfile
+    hdrs = {k: v for k, v in hdrs.items() if k.lower() != "range"}
+    get = lambda path: urllib.request.urlopen(
+        urllib.request.Request(UP + path, headers=hdrs), timeout=600).read()
+    f = json.loads(get("/api/roms/%d" % rid))["files"][0]
+    game = get("/api/roms/%d/content/%s?file_ids=%d"
+               % (rid, urllib.parse.quote(f["file_name"]), f["id"]))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(f["file_name"], game)
+        z.writestr("manual/" + f["file_name"].rsplit(".", 1)[0] + ".pdf", MANUAL)
+    sys.stderr.write(f"media: game {rid} served as a zip of its folder ({out.tell()} bytes)\n")
+    return out.getvalue()
 
 FIRST = {}   # platform id -> (rom ids, first cover), asked once with the caller's token
 
@@ -227,6 +271,20 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body))); self.end_headers()
             if not head: self.wfile.write(body)
             return
+        content = _re.match(r"/api/roms/(\d+)/content/[^?]*(?:\?(.*))?$", self.path)
+        if content and int(content.group(1)) in MEDIA:
+            rid = int(content.group(1))
+            ids = dict(urllib.parse.parse_qsl(content.group(2) or "")).get("file_ids", "")
+            if ids == str(MANUAL_ID + rid):
+                sys.stderr.write(f"media: game {rid}'s made-up manual asked for; 404\n")
+                self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
+                return
+            if not ids:
+                body = folder_zip(rid, hdrs)
+                self.send_response(200); self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(len(body))); self.end_headers()
+                if not head: self.wfile.write(body)
+                return
         path = mock_path(self.path) if PEOPLE else self.path
         req = urllib.request.Request(UP + path, headers=hdrs, method=self.command)
         try:
@@ -235,7 +293,7 @@ class H(BaseHTTPRequestHandler):
             r = e
         body = r.read() if not head else b""
         ctype = r.headers.get("Content-Type", "")
-        if (MAP or FILES or FOLDERS or NAMES or TAGS) and "json" in ctype and body:
+        if (MAP or FILES or FOLDERS or NESTED or NAMES or TAGS) and "json" in ctype and body:
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
         listing = urllib.parse.urlsplit(self.path).path

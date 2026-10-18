@@ -62,8 +62,19 @@ bool parseGame(json_object* o, Game* g) {
     g->fsName = jstr(o, "fs_name");
     g->sortKey = jstr(o, "name_sort_key");
     g->sizeBytes = jint(o, "fs_size_bytes");
+    // A FOLDER BY EITHER OF RomM's NAMES FOR ONE (#400). Since RomM 5.0
+    // `has_multiple_files` counts only the files at the top of the folder,
+    // so one game file with `manual/` or `soundtrack/` beside it, which
+    // RomM's own upload makes, is `has_nested_single_file`. Fetched as one
+    // file, that came down as RomM's zip of the whole folder, and a core was
+    // handed the soundtrack; or, alone in its folder, as the one file named
+    // after the folder, without its ending, which PCSX2 cannot read (#416).
+    bool multiple = false, nested = false;
     if (json_object* m = nullptr; json_object_object_get_ex(o, "has_multiple_files", &m) && m)
-        g->multiFile = json_object_get_boolean(m);
+        multiple = json_object_get_boolean(m);
+    if (json_object* m = nullptr; json_object_object_get_ex(o, "has_nested_single_file", &m) && m)
+        nested = json_object_get_boolean(m);
+    g->multiFile = multiple || nested;
     g->titleId = jstr(o, "title_id");
     g->raHash = jstr(o, "ra_hash");
     // BOTH SIZES, because they are for different jobs. See romm_types.h:
