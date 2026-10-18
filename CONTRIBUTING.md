@@ -278,9 +278,16 @@ images that day, numbered from the tags already published
 (`ci/next-version.sh`). Every image keeps its version tag, and the console
 reads its own from `/usr/share/cabinetos/version`.
 
-**Signed updates.** Each build signs the image by its digest with cosign
-when the `SIGNING_SECRET` repository secret is set (`build.yml`, "Sign
-image"). The image carries the
+**Signed updates.** Each build that publishes pushes the image under every
+tag but the channel's (the version, the sha, and on `main` the date), signs
+it by its digest with cosign (`build.yml`, "Sign image"), checks that
+signature against
+`system_files/etc/pki/containers/cabinetos.pub` the way a console does, and
+only then moves `testing` or `latest` to it. A run that stops before that
+last step leaves the channel where it was; its version tag stays up,
+perhaps unsigned, and nothing follows it. Without the `SIGNING_SECRET` repository
+secret, a push to `main` or `testing` fails before anything is published.
+The image carries the
 public key and a policy that refuses an unsigned update, which bites on any
 console installed with the installer (`build_files/require-signed-updates.sh`).
 A fork signs its own images with a key of its own: "Generate a signing key",
@@ -308,9 +315,11 @@ signed with MMagTech's key, whose secret half is never in the repository
 2. **Put all of `cosign.key` in the fork's `SIGNING_SECRET` repository
    secret** (`gh secret set SIGNING_SECRET < cosign.key`). `build.yml` then
    signs every image it publishes from `main` or `testing`; without the
-   secret it publishes them unsigned, and the run's summary says so.
+   secret a push there fails and publishes nothing.
 3. **Replace `system_files/etc/pki/containers/cabinetos.pub`** with
-   `cosign.pub`.
+   `cosign.pub`, in the same push: `build.yml` checks each signature against
+   that file and will not move `testing` or `latest` to an image it does not
+   match.
 4. **Change `ghcr.io/mmagtech/cabinetos` to the fork's image** in the three
    files that use it for updates: `build_files/require-signed-updates.sh`
    (`REPO`, the policy's rule),
