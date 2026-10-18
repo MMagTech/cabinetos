@@ -65,6 +65,8 @@ void App::openFilesPanel() {
                                         filesPanelWhenOn = true;
                                         filesSaidAt = std::time(nullptr);
                                     });
+                          // B goes back to the panel, as Cancel does.
+                          choiceBack = [&]() { openFilesPanel(); };
                       });
                   }
               });
@@ -120,6 +122,7 @@ void App::openDevPanel() {
                                         }
                                         devNewPassAt = std::time(nullptr);
                                     });
+                          choiceBack = [&]() { openDevPanel(); };
                       });
                   }
               });

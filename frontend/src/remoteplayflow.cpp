@@ -86,7 +86,10 @@ void App::openPairedPanel(int focus) {
                     openPairedPanel(i);
                 });
             });
+            choiceBack = [&, i]() { openPairedPanel(i); };
         });
+        // B goes back to the list, as Cancel does.
+        choiceBack = [&, i]() { openPairedPanel(i); };
     });
     choiceScreen.setStaysOpen(true);
 }
