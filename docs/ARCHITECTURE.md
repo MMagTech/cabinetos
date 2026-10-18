@@ -23,7 +23,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `system_files/` | Files copied over the image as they are: the session script, systemd units, the root helpers in `usr/libexec/`, polkit rules, udev rules, the diagnostic report, and a few files in `etc/` (the SSH settings, the update signing key) | `/usr` and `/etc` |
 | `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base | GitHub Actions |
 | `.github/` | The workflows, the issue form for players, and the pull request template | GitHub |
-| `tools/` | Test and maintenance tools, run by hand; most are written for the maintainer's machines | nowhere |
+| `tools/` | Test and maintenance tools, run by hand; they take their machines from the environment (CONTRIBUTING.md, "Running and testing") | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
 | `licences/` | The full licence texts the image ships, and `SOURCES`, where each comes from | `/usr/share/licenses/` |
 | `docs/` | The specification, the decisions, the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
@@ -319,16 +319,15 @@ Each with where it is recorded.
 - **No test framework and no single local check command:** a test is a flag
   in the shipped program. The compiler's warnings are listed, not counted
   against a baseline.
-- **The test tools are written for the maintainer's machines.**
-  `tools/ui-loop.sh`, `tools/base-checks.sh`, `tools/check-applied.sh` and
-  `tools/installer-vm.sh` default to his console (`CABINETOS_A9` or
-  `CABINETOS_HOST` overrides it; `ui-loop.sh`'s test VM and the key paths in
-  `ui-loop.sh` and `installer-vm.sh` have no override) and need state he set up by hand on it;
-  `tools/romm-readonly-relay.py` and `tools/offline-relay.py` have his server
-  built in. The empty server address field on first run shows his server's
-  address as its example (`setup.cpp`). His addresses are in comments too
-  (`cabinetos-session`, `romm.h`, `net.h`, `settingsflow.cpp`); the docs no
-  longer carry them (2026-10-17). All of these go in the faults step.
+- **Some test tools lean on state the maintainer set up by hand** on his
+  console: `tools/ui-loop.sh` (a folder of cores and the builder image),
+  `tools/check-applied.sh` (the builder image) and the disc rig
+  (`tools/disc-rig/README.md`). Their machines come from the environment
+  (CONTRIBUTING.md, "Running and testing").
+- **Some of the maintainer's own details are still in the code:** the empty server
+  address field on first run shows his server's address as its example
+  (`setup.cpp`), and comments carry his controllers' Bluetooth addresses
+  (`bluetooth.cpp`, `bluetooth.h`, `players.cpp`, `players.h`).
 - **A fork's image carries the project's key and image name until the fork
   edits them:** they are written into tracked files (CONTRIBUTING.md,
   "Generate a signing key", lists them).

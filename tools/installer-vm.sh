@@ -38,8 +38,8 @@
 # name ("QEMU NVMe Ctrl") and a size, the two things its question must name.
 set -uo pipefail
 
-A9=${CABINETOS_A9:-cabinet@192.168.1.109}
-KEY=~/.ssh/cabinetos
+A9=${CABINETOS_A9:?set it to cabinet@<your console> (CLAUDE.local.example.md)}
+KEY=${CABINETOS_KEY:-$HOME/.ssh/cabinetos}
 SSH=(ssh -i "$KEY" -p 2222 -o ConnectTimeout=20 -o StrictHostKeyChecking=no "$A9")
 DIR=installer-vm             # under the A9's home
 NAME=installer-vm            # container and image name

@@ -29,10 +29,15 @@
 #     tags:<romId>=<regions>;<languages>;<revision>;<tags> (each a comma list,
 #     any part empty) gives it RomM's four fields, for the same-name heading
 #     (#383): twins on a Home shelf and long labels, without renaming files.
-import json, sys, urllib.parse, urllib.request
+import json, os, sys, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-UP = "http://192.168.1.10:6005"
+# The RomM server it reads from, from the environment, so no address is
+# written here: CABINETOS_RELAY_UP=http://<host>:<port> (offline-relay.py
+# takes the same).
+UP = os.environ.get("CABINETOS_RELAY_UP") or sys.exit(
+    "CABINETOS_RELAY_UP: set it to http://<your RomM server>:<port>")
+UP = (UP if "://" in UP else "http://" + UP).rstrip("/")
 PORT = int(sys.argv[1])
 MAP = {}
 # file:<fileId>=<name> shows a game's file under another name (#162, odd names).

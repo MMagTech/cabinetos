@@ -53,7 +53,7 @@ public:
     Client();
     ~Client();
 
-    // Accepts "romm.local:8080", "192.168.1.10:6005", "http://host", "host".
+    // Accepts "romm.local:8080", "192.168.0.20:8080", "http://host", "host".
     // With no scheme it tries both and keeps whichever answers, preferring
     // http for an address that is obviously local. Returns false and fills
     // `err` if neither answers.

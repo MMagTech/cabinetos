@@ -80,7 +80,7 @@ struct Status {
     Link link = Link::None;      // what is carrying it, when something is
     std::string device;          // "enp197s0"
     std::string connection;      // NetworkManager's name for it
-    std::string ipv4;            // "192.168.1.212/24", or empty
+    std::string ipv4;            // "192.168.0.20/24", or empty
 
     // A wired port exists on this machine. Distinct from `ethernetUp`, because
     // the two lead to different sentences: a console with no port must never

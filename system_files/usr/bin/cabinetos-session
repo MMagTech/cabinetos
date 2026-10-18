@@ -19,7 +19,7 @@ set -uo pipefail
 # The image is the same on every machine; this file is not. It holds the things
 # only this machine can know, and today that is one line:
 #
-#   CABINETOS_ROMM=192.168.1.10:6005
+#   CABINETOS_ROMM=192.168.0.20:8080
 #
 # The address is NOT baked into the image. This repository is public and
 # somebody's LAN address does not belong in it, and an image with one server's

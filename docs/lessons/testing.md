@@ -416,7 +416,7 @@ minute and guessing at it for twenty.
   For the server COMING BACK, point the console at a
   relay on the A9 itself, `CABINETOS_ROMM=127.0.0.1:16005` with
   `tools/offline-relay.py` copied to the A9 (it forwards to the RomM server
-  named at its top): relay off is no server, relay
+  in `CABINETOS_RELAY_UP`): relay off is no server, relay
   on is the server back. Covers are filed by address, so link
   `covers/<that address>` to the real server's folder
   (`covers/<server host>_<port>`) for the test and remove the link after.
@@ -424,7 +424,8 @@ minute and guessing at it for twenty.
 - **A server layout nobody has is tested through `tools/romm-readonly-relay.py`,
   never by changing RomM.** It forwards reads only (any write gets 403 and is
   logged) and can show a platform under another folder name:
-  `romm-readonly-relay.py 16006 45=arcade:Arcade`, then
+  `CABINETOS_RELAY_UP=http://<server>:<port> romm-readonly-relay.py 16006
+  45=arcade:Arcade`, then
   `CABINETOS_ROMM=127.0.0.1:16006` headless with a scratch `--storage-root`
   (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
   to the real games drive). #310 ("Arcade games in any RomM arcade folder

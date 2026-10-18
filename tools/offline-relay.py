@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 # A TCP relay for testing offline play: 127.0.0.1:16005 -> the RomM server.
 # Off = nothing answers at the console's address; on = the server is back.
-import asyncio, sys
-UP = ("192.168.1.10", 6005)
+import asyncio, os, sys, urllib.parse
+# The server, from the environment as for romm-readonly-relay.py:
+# CABINETOS_RELAY_UP=http://<host>:<port>.
+UP = os.environ.get("CABINETOS_RELAY_UP") or sys.exit(
+    "CABINETOS_RELAY_UP: set it to http://<your RomM server>:<port>")
+UP = urllib.parse.urlsplit(UP if "://" in UP else "http://" + UP)
+UP = (UP.hostname, UP.port or 80)
 async def pipe(r, w):
     try:
         while (d := await r.read(65536)):
