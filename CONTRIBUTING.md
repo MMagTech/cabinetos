@@ -167,7 +167,7 @@ its RomM id once Home is up, and `--unkeep <id>` removes its download
 without asking (`testhooks.cpp`).
 
 **Self-tests that need no network, server, controller or screen.** Each exits
-with 0 when it passes:
+with 0 when it passes, and CI runs every one ("What CI checks"):
 
 | Flag | What it checks |
 |---|---|
@@ -237,8 +237,8 @@ something besides `.md` files and `docs/`):
   `cores/`, and over every shell script in `system_files/` (picked by its
   first line).
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
-  Wii bridge in the builder, runs `--check-option-tables`, summarises the
-  compiler's warnings, and fails a new one (below).
+  Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
+  summarises the compiler's warnings, and fails a new one (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
 
 **No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
@@ -254,6 +254,16 @@ that day a new warning is listed and annotated and the job passes; from
 that day (UTC) it fails the job. The date is `FAIL_FROM` at the top of the
 script.
 
+**The self-tests** (`ci/run-self-tests.sh`, after the option tables, on
+every run of `build-frontend.yml`, pushes included): each one in the table
+in "Running and testing", in the builder container, with a scratch storage
+root, a scratch `HOME` and `CABINETOS_DRIVES` at an empty folder, so no run
+can reach a real sign-in or games drive. The run's summary has each test's
+result and time. `--romm-race-test` and the tests that need a screen, a core
+or a server do not run; the script's header names them. **It reports only
+until 2026-10-25,** the same way: a failing test is annotated and the job
+passes until that day, and fails it from then.
+
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
 maintainer pushes to `testing`. A pull request into any other branch runs
@@ -261,10 +271,10 @@ maintainer pushes to `testing`. A pull request into any other branch runs
 and `build-sunshine.yml` when it touches their paths (each workflow's
 `paths:` list).
 
-**Not checked by CI:** the frontend's other self-tests, the shell scripts
-under `tools/` and `disk_config/`, any Python (including the diagnostic
-report's privacy scrubber), and the workflows themselves. Run what your
-change touches yourself and say so.
+**Not checked by CI:** the frontend's tests that need a screen, a core or a
+server, the shell scripts under `tools/` and `disk_config/`, any Python
+(including the diagnostic report's privacy scrubber), and the workflows
+themselves. Run what your change touches yourself and say so.
 
 **The proof of a change is its testing image**, judged on the reference
 console. That step is the maintainer's.
