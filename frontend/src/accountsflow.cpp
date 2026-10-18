@@ -154,13 +154,17 @@ auto App::switchAccount(int id, std::string* why) -> bool {
 }
 
 void App::startAddAccount() {
+    // ABOVE THE RUNNING TEST (SETTINGS-05): back out and come in again while
+    // the code is live, and open() has just cleared the screen while the
+    // poll runs on. The code is shown again from the running job, rather
+    // than "Getting a code" until it expires.
+    shownPairCode = false;
     if (addJob->running.load()) return;
     if (!rommAddress) {
         accountScreen.setNotice("This console has no server address.");
         return;
     }
     addJob->running = true;
-    shownPairCode = false;
     { std::lock_guard<std::mutex> lk(addJob->m);
       addJob->haveCode = addJob->finished = addJob->ok = false;
       addJob->err.clear(); }
