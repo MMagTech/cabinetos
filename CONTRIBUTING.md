@@ -254,6 +254,24 @@ maintainer pushes to `testing`. A pull request into any other branch runs
 and `build-sunshine.yml` when it touches their paths (each workflow's
 `paths:` list).
 
+**Every pull request**, whatever it is aimed at and whatever it changes,
+runs `checks.yml`, a few seconds each:
+
+- **RomM paths** (`ci/check-romm-paths.sh`): a line the pull request adds
+  that spells a RomM path in code (`/api/`, `/assets/`, `/resources/roms/`,
+  `/cover/`) outside the RomM client's files (`romm.h`, `romm_*`) fails. Ask
+  the client for it instead. Comments, `.md` files, `docs/` and `tools/` are
+  not read, nor is Sunshine's client (`remoteplay.cpp`), whose `/api/` is
+  Sunshine's. The paths spelled outside the client today are listed in the
+  script (`KNOWN`), so editing one of those lines does not fail; moving one
+  into the client takes it off the list.
+
+**A check's first week is report only.** Until the end of the date in
+`checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC), a check that can fail
+marks what it finds as warnings on the pull request and passes; from the
+next day it fails. A new check that can fail starts the same way, with that
+date set a week ahead in its pull request.
+
 **Not checked by CI:** the frontend's other self-tests, the shell scripts
 under `tools/` and `disk_config/`, any Python (including the diagnostic
 report's privacy scrubber), and the workflows themselves. Run what your
