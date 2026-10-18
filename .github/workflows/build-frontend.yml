@@ -180,3 +180,13 @@ jobs:
       - name: New warnings
         if: github.event_name == 'pull_request'
         run: ci/check-new-warnings.sh /tmp/build.log
+
+      # THE CODE NOTHING CALLS, AS THE LINKER SEES IT (#398): a scratch build
+      # at -O0 with a section per function, linked with --gc-sections
+      # --print-gc-sections, by ci/report-unused-code.sh. A report in the
+      # summary, never a failure, and never the binary that ships, which is
+      # uploaded above. Pull requests only, so an image build never waits for
+      # it; not skipped when "New warnings" fails.
+      - name: Unused code
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: ci/report-unused-code.sh
