@@ -71,11 +71,12 @@ int run(const std::string& dir) {
         for (const std::string& slug : slugs) {
             for (int l = 0; l < quality::kLevelCount; ++l)
                 for (bool vk : {true, false})
-                    for (const auto& kv : quality::coreOptions(
-                             core, slug, static_cast<quality::Level>(l), vk))
-                        sets.push_back({kv, std::string("quality ") +
-                                                quality::levelWord(
-                                                    static_cast<quality::Level>(l))});
+                    for (bool desktopGL : {true, false})
+                        for (const auto& kv : quality::coreOptions(
+                                 core, slug, static_cast<quality::Level>(l), vk, desktopGL))
+                            sets.push_back({kv, std::string("quality ") +
+                                                    quality::levelWord(
+                                                        static_cast<quality::Level>(l))});
             for (const sysopts::Option& o : sysopts::forSystem(slug))
                 for (const sysopts::Choice& c : o.choices)
                     for (const auto& kv : c.sets)

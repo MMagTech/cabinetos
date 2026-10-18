@@ -651,13 +651,23 @@ void App::restoreBeforeLoad(LaunchContext& c) {
         copyMiisInto(liveClient, launchJob.platformId, launchJob.platformFsSlug,
                      launchJob.coreName, c.saveDir);
     if (launchJob.coreName == "dolphin") shareDolphinCache(c.saveDir);
-    // What each player's port holds. Only Wii says anything but a joypad:
-    // a Classic Controller, or a GameCube pad for a game that takes only
+    // What each player's port holds. A joypad, but on two systems. Wii: a
+    // Classic Controller, or a GameCube pad for a game that takes only
     // that, in the pads' ports; and, while a Wii Remote is paired, a real
     // Remote in every port after them (#200). A game that takes neither
     // pad gets Remotes only: pads have no player in it, and it is greyed
     // out while no Remote is paired (coverageFor).
+    //
+    // PlayStation: a DualShock in every player's port, for every game
+    // (#345), so the sticks and rumble work. It starts in digital mode, as
+    // the real pad powers on, and answers as the original pad until a game
+    // asks for the DualShock's commands, so a game made for the old pad
+    // plays as before; PCSX ReARMed's L1+R1+Select is its ANALOG button.
+    // Any pad with two sticks drives it; one without rumble just does not
+    // rumble. RetroArch and Batocera plug in the old pad and leave the
+    // DualShock to the player; DuckStation plugs in a DualShock.
     sessionNeedsRemote = false;
+    if (launchJob.coreName == "pcsx_rearmed") c.core.setPadDevice(cab::Core::kPs1DualShock);
     if (launchJob.platformSlug == "wii") {
         const unsigned device = wii::padDevice(wii::codeFromTitleId(launchJob.titleId));
         sessionNeedsRemote = device == 0;

@@ -22,9 +22,14 @@ render. The console starts on the level its graphics chip suits.
 | Wii | 1x | 3x | 5x |
 | Nintendo 64 | 1x | 2x | 4x |
 | Dreamcast | 640x480 | 1440x1080 | 2880x2160 |
+| Nintendo DS | 1x (original) | 3x | 6x |
 | Switch | 1x | 1x | 2x |
 | PS3 | 100% | 150% | 150% |
 | Xbox | 1x | 2x | 4x |
+
+On the Nintendo DS, Balanced and Quality use melonDS's OpenGL renderer, which
+draws the 3D larger; the 2D stays at the DS's own pixels. A DS game that looks
+wrong with it plays as before at Performance.
 
 A single game can have its own level: **Picture** in the
 [pause menu](pause-menu.md), from the next start. With a PIN set, only the owner

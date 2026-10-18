@@ -76,6 +76,7 @@ bool Core::saveState(std::vector<uint8_t>& out) {
     const size_t n = g.serialize_size();
     if (n == 0) return false;  // some cores genuinely cannot; that is not an error
     out.resize(n);
+    CoreContext in;
     return g.serialize(out.data(), n);
 }
 
@@ -111,6 +112,7 @@ bool Core::writeSaveRam(const std::vector<uint8_t>& data) {
 
 bool Core::loadState(const std::vector<uint8_t>& data) {
     if (!gameLoaded_ || !g.unserialize || data.empty()) return false;
+    CoreContext in;
     return g.unserialize(data.data(), data.size());
 }
 

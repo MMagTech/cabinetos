@@ -255,14 +255,16 @@ melonds)
     # cache. melonDS's own comment says why — "we still want JIT save states to
     # be loaded while running the interpreter". See docs/PROJECT.md, question 13.
     #
-    # HAVE_OPENGL is not a recompiler and is the easy half: the unix branch
-    # turns it on for x86 and x86-64 because a desktop Linux frontend can hand
-    # the core a GL context. This one cannot yet — the core host refuses
-    # RETRO_ENVIRONMENT_SET_HW_RENDER — and Cabinet's Apple builds leave it off,
-    # so turning it off is matching rather than diverging. Turn it back on when
-    # the frontend can host a hardware-rendered core, and check the objects
-    # again when that happens.
-    MAKEARGS=("JIT_ARCH=${CABINETOS_MELONDS_JIT-x64}" "HAVE_OPENGL=0")
+    # HAVE_OPENGL is not a recompiler: it compiles in melonDS's OpenGL
+    # renderer, the only one that draws the DS's 3D above its own 256x192, and
+    # its four options (melonds_opengl_*). The unix branch turns it on for x86
+    # and x86-64, as RetroArch's and Batocera's x86-64 builds have it (#219).
+    # It is desktop OpenGL 3.1 and nothing else, no GLES and no Vulkan, so the
+    # core host gives it a desktop GL context of its own beside the UI's
+    # (core_hwrender.cpp). The renderer is still off unless the console turns
+    # it on: picture quality does, at Balanced and Quality, where that context
+    # can be made (quality.cpp). Cabinet's Apple builds leave it off.
+    MAKEARGS=("JIT_ARCH=${CABINETOS_MELONDS_JIT-x64}" "HAVE_OPENGL=1")
     ;;
 picodrive)
     REPO=https://github.com/libretro/picodrive.git

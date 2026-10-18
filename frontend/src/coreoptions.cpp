@@ -132,9 +132,21 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
 
     // DS: THE SOFTWARE RENDERER ON ITS OWN THREAD (#89 audit), as Cabinet
     // has it. It changes how the drawing work is split, not what a save or
-    // state holds, and it is the headroom a weaker machine needs.
+    // state holds, and it is the headroom a weaker machine needs. melonDS
+    // turns it off by itself under its OpenGL renderer (picture quality's,
+    // #219).
+    //
+    // THE TOUCH SCREEN ON THE RIGHT STICK (#374): the stick moves a pointer
+    // on the bottom screen and R3 touches, as Batocera ships it. The core's
+    // default, Mouse, reads only a mouse, which this console never answers,
+    // so the touch screen did nothing in any DS game. The DS has no sticks,
+    // so nothing else wants the right one. A PlayStation pad's touchpad as
+    // the touch screen is #288.
     if (coreName == "melonds") {
-        return {{"melonds_threaded_renderer", "enabled"}};
+        return {
+            {"melonds_threaded_renderer", "enabled"},
+            {"melonds_touch_mode", "Joystick"},
+        };
     }
 
     // Beetle Saturn, and this one also decides where the save is. "libretro"

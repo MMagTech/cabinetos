@@ -101,8 +101,28 @@ extern GLuint gHWFBO, gHWColor;
 extern unsigned gHWTargetW, gHWTargetH;
 extern bool gHWFrame;
 extern std::string gHWContextName;
+extern bool gHWDesktop;
+// The framebuffer the core draws into, in its own context for a desktop GL
+// core (gHWFBO otherwise).
+uintptr_t currentFramebuffer(void);
+bool desktopGLServable();
+void closeDesktopContext();
 void destroyHWTarget();
 bool ensureHWTarget(unsigned w, unsigned h);
+// A desktop GL core's context is current for as long as one of these lives,
+// and the UI's again after, with what the core drew finished first. Around
+// every call into a core that can touch GL; nothing at all for any other
+// core. See core_hwrender.cpp.
+class CoreContext {
+public:
+    CoreContext();
+    ~CoreContext();
+    CoreContext(const CoreContext&) = delete;
+    CoreContext& operator=(const CoreContext&) = delete;
+
+private:
+    bool switched_;
+};
 void restoreGLState();
 std::optional<bool> environmentHWRender(unsigned cmd, void* data);
 

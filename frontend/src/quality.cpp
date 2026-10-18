@@ -8,6 +8,7 @@
 
 #include <json-c/json.h>
 
+#include "core.h"
 #include "gpu.h"
 #include "prefs.h"
 #include "storage.h"
@@ -172,6 +173,7 @@ Level forGame(int romId) {
 }
 
 bool hasLevels(const std::string& core) {
+    if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "eden",
                           "rpcs3", "xemu"})
         if (core == c) return true;
@@ -180,12 +182,13 @@ bool hasLevels(const std::string& core) {
 
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l) {
-    return coreOptions(core, platformSlug, l, cab::gpu::vulkan().available);
+    return coreOptions(core, platformSlug, l, cab::gpu::vulkan().available,
+                       core == "melonds" && cab::Core::canServeDesktopGL());
 }
 
 std::map<std::string, std::string> coreOptions(const std::string& core,
                                                const std::string& platformSlug, Level l,
-                                               bool vulkan) {
+                                               bool vulkan, bool desktopGL) {
     // GameCube and Wii: internal resolution, and shaders built in the
     // background (2, Async UberShaders) above Performance, when first needed
     // (0, Synchronous) at it. Anisotropic filtering 16x is `4` in Dolphin's
@@ -224,6 +227,26 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
         }
         static const char* const kSize[] = {"320x240", "640x480", "1280x960"};
         return {{"mupen64plus-43screensize", pick(l, kSize)}};
+    }
+    // Nintendo DS (#219): the software renderer at Performance, which is the
+    // DS's own 256x192 a screen and how DS always looked here; melonDS's
+    // OpenGL renderer above it, at 3x (the two screens 768x1152, about 1080
+    // lines) and 6x (1536x2304, about 4K). Only the 3D is drawn larger; the
+    // 2D layers stay the DS's own pixels, enlarged. RetroArch and Batocera
+    // ship the OpenGL renderer off and leave it to the player: melonDS's
+    // software renderer is the accurate one, and a game the OpenGL renderer
+    // gets wrong plays at Performance from its pause menu. No desktop OpenGL
+    // here (Core::canServeDesktopGL), no OpenGL renderer: melonDS draws
+    // nothing at all when it is on and its context is refused.
+    if (core == "melonds") {
+        if (l == Level::Performance || !desktopGL)
+            return {{"melonds_opengl_renderer", "disabled"}};
+        static const char* const kRes[] = {"1x native (256x192)", "3x native (768x576)",
+                                           "6x native (1536x1152)"};
+        return {
+            {"melonds_opengl_renderer", "enabled"},
+            {"melonds_opengl_resolution", pick(l, kRes)},
+        };
     }
     // Dreamcast and Naomi: 640x480, 1440x1080, 2880x2160. Anisotropic
     // filtering from Flycast's 4x to 16x.

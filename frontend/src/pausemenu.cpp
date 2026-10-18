@@ -177,8 +177,8 @@ void App::toggleOverlay() {
             (session.discChange == disc::Change::Insert ||
              session.discChange == disc::Change::StartOver))
             pauseItems.push_back(OvDisc);
-        // PICTURE QUALITY, on the nine systems where a level changes
-        // something, and with a PIN set only for the owner, as in
+        // PICTURE QUALITY, on the systems where a level changes something
+        // (quality::hasLevels), and with a PIN set only for the owner, as in
         // Settings (MMagTech, 2026-10-02).
         pauseChoices.clear();
         if (quality::hasLevels(session.core) &&

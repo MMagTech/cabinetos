@@ -59,6 +59,16 @@ and **A** steps through it.
 
 The Home (Guide) button is never passed to a game.
 
+## On two systems
+
+| System | Button | Does |
+|---|---|---|
+| Nintendo DS | Right stick, **R3** | The right stick moves a pointer on the touch screen; **R3** (press the stick) touches |
+| PlayStation (PS1) | **L1 + R1 + Select** | The DualShock's ANALOG button, for the few games that need it pressed |
+
+PS1 games get a DualShock: sticks and rumble work in the games made
+for it, and games made for the original pad play as they always did.
+
 ## In-game shortcuts
 
 Off to start with: Settings, Controllers, **In-game shortcuts**. The shortcut

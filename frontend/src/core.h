@@ -141,6 +141,12 @@ public:
     // host" apart from "this core cannot run in this host at all".
     static void setRefuseHWRender(bool on);
 
+    // Whether a core that asks for desktop OpenGL can have it, in a context
+    // of its own beside the UI's (#219; melonDS's renderer is the one). Found
+    // out by making one, once, the first time it is asked with a window up;
+    // false, and asked again later, before that. On the frame thread.
+    static bool canServeDesktopGL();
+
     // Deliberate choices, keyed by option. Set BEFORE load(): a core may read
     // its options during retro_init, and several do.
     //
@@ -318,10 +324,14 @@ public:
 
     // What each player's port holds, as a libretro device id, set before
     // loadGame and kept until the game unloads. A plain joypad unless a
-    // platform says otherwise, and only Wii does: Dolphin reads the joypad as
-    // an upright Wii Remote, so a Wii game that takes a Classic Controller is
-    // told one is plugged in (wii.h).
+    // platform says otherwise, and two do: Dolphin reads the joypad as an
+    // upright Wii Remote, so a Wii game that takes a Classic Controller is
+    // told one is plugged in (wii.h); and every PlayStation game gets a
+    // DualShock (kPs1DualShock, #345; launch.cpp says why).
     void setPadDevice(unsigned device);
+    // PCSX ReARMed's DualShock, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 1),
+    // 517 (RETRO_DEVICE_PSE_DUALSHOCK in its frontend/libretro.c).
+    static constexpr unsigned kPs1DualShock = (2u << 8) | 5u;
 
     // REAL WII REMOTES IN THE PORTS AFTER THE PADS (#200). Set before loadGame
     // with the number of ports the pads take (0 for a game that needs a Remote:
