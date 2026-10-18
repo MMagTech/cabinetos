@@ -4,6 +4,15 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Changed:** the system CabinetOS is built on moves to Bazzite
+  44.20261012.1, with Linux 7.2.9. The new kernel has fixes for Radeon
+  graphics, Bluetooth and sound, and the libraries that draw the screen,
+  download games from RomM and run the Original Xbox and Switch emulators
+  are newer versions.
+  ([#503](https://github.com/MMagTech/cabinetos/pull/503))
+
 ## 2026.10.18.3 {#v2026-10-18-3}
 
 *18 October 2026*
