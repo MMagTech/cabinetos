@@ -78,10 +78,10 @@ void GridScreen::append(const std::vector<int>& more,
     for (int idx : more) {
         if (idx < 0 || idx >= static_cast<int>(all.size())) continue;
         // A GREYED GAME GOES ON THE END; a playable one goes before the first
-        // greyed one, so playable games stay first as pages arrive (main.cpp
-        // keeps the tile's own list the same way). Everything after that
-        // point moves down one, so focus there moves with its card; the
-        // letter index only ever points before it.
+        // greyed one, so playable games stay first as pages arrive, as
+        // gridOrder (library.cpp) put them when the grid opened. Everything
+        // after that point moves down one, so focus there moves with its
+        // card; the letter index only ever points before it.
         if (!all[static_cast<size_t>(idx)].unavailable.empty()) {
             cards_.push_back(idx);
             continue;
