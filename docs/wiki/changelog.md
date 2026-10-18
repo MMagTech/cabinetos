@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.18.5 {#v2026-10-18-5}
+
+*18 October 2026*
 
 - **Fixed:** with more than one PS2 BIOS on your server, every game started
   on whichever BIOS the emulator found first. Each game now starts on a BIOS
