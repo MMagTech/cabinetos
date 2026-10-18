@@ -1,7 +1,8 @@
 # Working on CabinetOS
 
-How this project is worked on: the machines, the build and test loop, and how
-MMagTech wants it done. This changes rarely. What to work on next is
+How MMagTech works on this project: the loop, the testing branch, merges,
+and how he wants it done. This changes rarely. New here? Start at
+[CONTRIBUTING.md](../CONTRIBUTING.md). What to work on next is
 `docs/NEXT-SESSION.md`; what cost hours before is `docs/lessons/`.
 
 ## The loop
@@ -43,52 +44,22 @@ MMagTech wants it done. This changes rarely. What to work on next is
 - **The TV**: say every step and what success looks like, then wait for "go".
 - **Logs**: `sudo journalctl -o cat --since "-40 min" | grep -aE "\[launch\]|\[core\]"`;
   `-u cabinetos-session` shows almost nothing.
-- **Never run `~/fb/sweep.sh` while MMagTech is testing on the TV.**
 
 ## Machines
 
-| | | |
-|---|---|---|
-| **A9 Max** | `ssh -p 2222 -i ~/.ssh/cabinetos cabinet@192.168.1.212` | The reference console: Radeon 890M, gamescope/drm, 3840x2160. Judge anything visual here only. sudo's password: `cat /var/lib/cabinetos-files/password`. |
-| **Test VM** | `ssh -p 2222 -i ~/.ssh/cabinetos cabinet@192.168.1.250` | Unraid, no Vulkan, llvmpipe. Headless checks only. sudo `cabinet`. |
-| **RomM** | `192.168.1.10:6005` | MMagTech's server. |
+The reference console (the A9 Max), the test VM and MMagTech's RomM server,
+their addresses, and the hand-made state on them are kept off this public
+repository (#398, 2026-10-17): they are in a notes file in his home folder
+that CLAUDE.md loads. CLAUDE.local.example.md shows what it holds.
 
-Recovery if port 2222 on the A9 ever fails: at the TV with a keyboard,
+Recovery if port 2222 on a console ever fails: at the TV with a keyboard,
 Ctrl+Alt+F3, log in as `cabinet`, `sudo bootc rollback`, `sudo reboot`.
-
-**Hand-made state on the A9, not in git:** `~/cores-dev/` (the image's cores
-linked, plus a hand-built `cabinetos-ps2.so`; `--core-dir` for the loop),
-`~/assets-dev/` (PCSX2's resources, `CABINETOS_ASSETS`), `~/fb/` (scratch
-scripts: `speed.sh`, `xstate.sh`, `govtest.sh`, `fetch.sh`, `sweep.sh`),
-`~/pcsx2-clean/` (PCSX2 checkout, a cache), `~/cabinetos-repo/` (an rsync of
-this repo for builds that need podman). `ydotoold` is not started at boot.
-
-**On the VM:** `~/frontend/` is a dev build and storage root, separate from
-the session's `/var/lib/cabinetos`. Two 8 GB test disks: `vdc` (exFAT
-"Games"), `vdd` (a Windows layout).
 
 ## Going back to an earlier version
 
-Every release image stays on GHCR under its version tag, signed by digest,
-so any of them can be put back (#398, Part 6 section 26). The last image
-before the restructure is 2026.10.14.5, tagged in git on 72c0c4b.
-
-- **The normal way, no token:** revert the merge on main. main then differs
-  from the testing image, build.yml builds the next version, and consoles
-  take it as an ordinary update. During the restructure a batch is reverted
-  on the `restructure` branch instead, which ships nothing.
-- **Fast, with a token that can write packages:** point `latest` back at a
-  version. Consoles take it as an update, because the check compares
-  digests, not "newer", and the signature is on the digest:
-  ```
-  skopeo copy --preserve-digests --dest-creds "USER:TOKEN" \
-    docker://ghcr.io/mmagtech/cabinetos:2026.10.14.5 docker://ghcr.io/mmagtech/cabinetos:latest
-  ```
-  The Mac has no skopeo; the A9 has it but no token.
-- **One console:** `sudo bootc rollback && sudo systemctl reboot` boots the
-  deployment before the current one; `sudo bootc switch
-  ghcr.io/mmagtech/cabinetos:<version>` pins it to a version until it is
-  switched back to `:testing` or `:latest`.
+Moved to CONTRIBUTING.md, "Going back to an earlier version" (#398,
+2026-10-17). The last image before the restructure is 2026.10.14.5, tagged
+in git on 72c0c4b.
 
 ## How MMagTech wants this done
 
@@ -100,35 +71,11 @@ name**: the repo is public.
 
 ## The image, the build and CI
 
-Moved here from the README on 2026-10-09 (#190), checked against the
-workflows and `Containerfile` that day. The README is now for people the
-console is shown to.
-
-**The image.** CabinetOS is a [bootc](https://bootc-dev.github.io/bootc/)
-image. `Containerfile` pins the Bazzite base by digest (`44.20261006.1` at the
-time of writing) and runs `build_files/build.sh`, which calls the other scripts
-in `build_files/`: removing the PC-gaming storefronts (Steam itself stays, for
-its one entry) and the desktop, the session,
-the frontend and its libraries, Sunshine, Steam's session, RPCS3, Xenia, Cemu,
-xemu's drive, the Flathub emulators' pins and the branding. `system_files/` is
-overlaid onto the image.
-
-**What the image carries that this repository does not hold.** The frontend
-(`build-frontend.yml`), the twenty-two libretro cores at pinned commits
-(`build-core.yml`, cached per revision), PCSX2 (`build-pcsx2.yml`) and Cemu
-(`build-cemu.yml`). `ci/stage-image-payload.sh` collects them into
-`image_payload/` before `podman build`, and refuses if anything is missing.
-Eden and xemu come from Flathub on a console's first boot with a network, at
-the versions `system_files/usr/share/cabinetos/flatpaks.list` names.
-
-**`build.yml`.** Lint (shellcheck over `build_files/`, `ci/` and `cores/`), the
-frontend and cores, the image build, then a push to
-`ghcr.io/mmagtech/cabinetos`. A push to `testing` publishes `cabinetos:testing`;
-a merge to `main` promotes the tested image to `latest` rather than building
-(the "Promote the tested image" job). The image is signed with cosign only when
-the `SIGNING_SECRET` secret is set; consoles do not verify signatures yet
-(#135). Pull requests build and never publish. The path filter skips `**.md`
-and `docs/**`, except `docs/LICENCES.md`, which is in the image.
+How the image is built, what it carries and what CI checks on a pull
+request are in CONTRIBUTING.md ("Building", "What CI checks on your pull
+request", "How a change reaches a console") and docs/ARCHITECTURE.md (the
+map), corrected against the workflows on 2026-10-17 (#398). What stays here
+is what only the maintainer runs.
 
 **Weekly, on Mondays.** `base-update.yml` checks for a new Bazzite base and
 opens a pull request listing what moved; `pad-db-update.yml` refreshes the

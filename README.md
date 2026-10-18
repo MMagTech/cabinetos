@@ -132,8 +132,12 @@ from the [Universal Blue image template](https://github.com/ublue-os/image-templ
 
 ## Working on CabinetOS
 
-- [`docs/WORKING.md`](docs/WORKING.md): the machines, the build and test loop,
-  how the image is built and how CI works.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): start here. Building, testing, what
+  CI checks, how a change reaches a console, and the rules.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the map of the code and
+  how its parts fit.
+- [`docs/WORKING.md`](docs/WORKING.md): how the maintainer works: the loop,
+  the testing branch, merges.
 - [`docs/PROJECT.md`](docs/PROJECT.md): the specification.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): the order of work.
 - [`docs/lessons/`](docs/lessons/README.md): what cost hours before.
