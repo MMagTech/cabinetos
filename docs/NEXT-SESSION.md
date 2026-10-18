@@ -69,9 +69,10 @@ in the local notes).
    (MMagTech, 2026-10-18). The Later milestone holds 66, including
    the three found at the TV on 2026-10-18, ranked with the rest and no
    sooner: #509, "A mouse arrow shows over Home and games (a PS5 pad's
-   touchpad moves it); hide it, as question 16 decided"; #510, "No sound
-   after the TV comes back from standby: the console's stream misses every
-   PipeWire cycle (not #228)"; #511, "Every update downloads about 310 MB
+   touchpad moves it); hide it, as question 16 decided"; #228, "Sound can
+   die until a restart (the chip power fix of #280 is in; it came back
+   2026-10-18)", reopened with the day's findings (#510 folded into it);
+   #511, "Every update downloads about 310 MB
    that did not change (the boot splash and OS layers differ in every
    image)". For the
    faults step's 21 (#471 to #493), the view he was given: fix the ones a
