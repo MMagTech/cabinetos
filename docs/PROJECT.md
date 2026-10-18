@@ -259,7 +259,8 @@ down. "Look now at" is where the code or a later decision moved on.
 - **34. Xbox 360, and whether this machine can play it.** Decided
   2026-09-29, built 2026-09-30 (#192, "New systems 4: Xbox 360 (Xenia
   Edge)"). Edge's Sign In box stays, a known gap: the upstream ask
-  (has207/xenia-edge#286) closed 2026-10-06 without the option. Look now at:
+  (has207/xenia-edge#286) closed 2026-10-06 without the option. FSR for the
+  720p picture was tried on the TV 2026-10-18 and not shipped. Look now at:
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
@@ -15674,6 +15675,88 @@ MMagTech, "looks the same to me". It is the game as Xenia draws it. The
 console stays on `performance`. Not done, and only worth doing if anything
 else ever looks off: a black-level pattern through a core, which would show
 a range or TV setting affecting everything.
+
+#### DECIDED, MMagTech 2026-10-18: FSR for the Xbox 360 picture, tried on the TV and not shipped
+
+Xbox 360 draws at 720p at every Picture level (the A9 holds no more,
+2026-10-04 above), and Edge presents its own picture, so the stretch to the
+TV is Edge's: a plain bilinear one, 3x on a 4K screen. MMagTech asked for an
+experiment with Edge's own FSR, CAS and sharpness settings, "researched so
+we implement the feature correctly", then a before and after on the TV.
+
+**Edge's settings at the pin (a7c39fa), from its source** (all flags in
+its Display group, `emulator_window.cc` and `presenter.cc`):
+
+| Flag | Values | Default | What it does |
+|---|---|---|---|
+| `postprocess_scaling_and_sharpening` | bilinear, cas, fsr | bilinear | `fsr`: FidelityFX Super Resolution 1.0, each EASU pass up to 2x (720p to 1440p to 2160p on a 4K screen), then RCAS sharpening. `cas`: sharpening with its own resample up to 2x, then bilinear for the rest, so at 3x it loses to FSR |
+| `postprocess_ffx_fsr_sharpness_reduction` | 0 to 2 stops | 0.2 | lower is sharper (AMD's default) |
+| `postprocess_ffx_fsr_max_upsampling_passes` | 1 to 4 | 4 | two are used at 4K |
+| `postprocess_ffx_cas_additional_sharpness` | 0 to 1 | 0 | CAS only |
+| `postprocess_dither` | on, off | on | Edge's author: banding shows with FSR on an 8-bit output without it |
+| `postprocess_antialiasing` | none, fxaa, fxaa_extreme | none | at 720p before scaling; Edge's author "heavily recommends" it with CAS or FSR |
+
+Left alone: `draw_resolution_scale` (3x measured at 7.5 fps, above) and
+`internal_display_resolution`, the screen size the emulated dashboard reports
+to the game (720p; 1080p works only in games that support it, a per-game
+gamble at over twice the pixels). **Other setups:** Xenia Canary and Edge
+default to bilinear; Batocera offers every one of these in its Xbox 360 menu
+and defaults to bilinear and no anti-aliasing. There is no RetroArch core
+for Xbox 360.
+
+**Measured on the A9 with MMagTech at the TV** (frames.py, 50 s each,
+Forza Horizon 2 driven; the chip's `gpu_busy_percent` sampled each second):
+
+| Launch | Frames a second | Median | Worst | Chip busy |
+|---|---|---|---|---|
+| today, bilinear | 30 once in | 33.3 ms | its load stall | 44% |
+| FSR | 30.0 | 33.2 ms | 40.8 ms | 54% |
+| FSR plus FXAA | 30.0 | 33.3 ms | 41.6 ms | 50% |
+
+So FSR costs about ten points of the chip at 4K and no frames; FXAA on top
+costs nothing measurable. The cost scales with the screen, not the game
+(three full-screen passes), so a 1080p TV pays about a quarter of it.
+
+**Judged on the TV, Forza back to back and Gears of War 2:** "I think it
+looks a little better, but I honestly don't think it does much of a
+difference. The whole point of the OS is focusing on gameplay, and if this
+could introduce issues, and the outcome is not that great, I say leave it as
+is. With it off." **Decided: off, as every other setup ships it.** Nothing
+changed in the code; the flag is not passed. Not to be re-run without a new
+reason; the same answer is expected for RPCS3's and Eden's output filters.
+
+**Found on the way, not filed** (MMagTech, 2026-10-18: no issue for a
+thing seen once while testing; issues are opened only when he asks for one,
+the rest is recorded here):
+
+- **Black patches on character models in Gears of War 2** (and on record
+  for Gears of War 1): Unreal Engine 3's MSAA tiling under Xenia. Fixed in
+  Xenia Canary on 2026-10-06 (xenia-canary/xenia-canary#1271, "Xenos sample
+  positions; UE3 tiling fix"; the tracker's note on
+  xenia-canary/game-compatibility#46 and #44: `window_offset_in_edram =
+  false` with `xenos_sample_positions = true`). Neither flag exists in Edge
+  at our pin (checked in its source), and Edge's commits to 2026-10-18 have
+  not merged it. The per-game "Black Shading Fix" in Xenia's patch set is
+  not taken, by the rule; Edge ships no patch files and Batocera applies
+  none by default. The fix is the next Edge pin that carries Canary's
+  change, with the two flags passed for every game if they are not its
+  defaults by then.
+- **Gears of War and Gears of War 2 each hung once on the A9**, about three
+  minutes and about 95 seconds in: Xenia alive, two emulated CPU threads at
+  100%, the graphics thread idle; the pause menu worked and Exit to Home
+  closed Xenia cleanly. Later runs of both games did not hang. The hangs
+  were on the hand-built frontend with the FSR and FXAA flags; one run
+  without them did not hang, which proves nothing either way, and those
+  flags touch only the finished picture. The lead is Edge's own cooperative
+  guest-thread scheduler (`guest_scheduler`, on by default since 2026-08-01,
+  `kernel_flags.cc`), whose open regression list, has207/xenia-edge#234, is
+  games that freeze going in game, each resolved there by
+  `guest_scheduler = false`. The console's Xenia log holds none of Xenia's
+  own lines, only gamescope's swapchain messages, so before any
+  reproduction find where Xenia's logger writes with the `--log_file` the
+  console passes. Upstream first if it comes back from a player; our
+  fallback would be `--guest_scheduler=false` for every game, measured on
+  the A9 first.
 
 ### 35. Wii (Dolphin), issue #173
 **Researched and decided with MMagTech 2026-09-30.** Research only; no code.
