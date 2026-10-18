@@ -24,24 +24,32 @@ it for contributors (main.cpp is 20,000 lines)"), step 1 of the plan
 MMagTech approved on 2026-10-17 at 7:04 PM (recorded on #398):
 `CONTRIBUTING.md`, `docs/ARCHITECTURE.md` (the map of the code first),
 `CLAUDE.md` (his six rules, for this code) and `CLAUDE.local.example.md`.
-One Opus agent read it cold and its findings were fixed (step 2). Its record
-is `guide-log.md` and `verifiers/guide-coldread.json` in the audit folder
-(the folder's path is in the local notes).
+Two Opus agents read it cold, one after the other, and their findings were
+fixed (step 2). Its record is `guide-log.md`, `verifiers/guide-coldread.json`
+and `verifiers/guide-coldread-2.json` in the audit folder (the folder's path
+is in the local notes).
 
 ## Next
 
-1. **The docs tidy** (step 3; one or two pull requests, docs only,
-   "Changelog: none"): the PROJECT.md index, the three history files into
+Two sessions at once, both starting as soon as MMagTech merges the guide
+(MMagTech, 2026-10-17, about 8:20 PM: "go" to running them in parallel):
+
+1. **The docs tidy** (step 3; docs only, "Changelog: none", aimed at a few
+   hours): the PROJECT.md index, the three history files into
    docs/history/ with their citations fixed, frontend/README.md cut down to
-   the build, and the stale lines docs/ARCHITECTURE.md section 7 lists; the
-   machine details still in the other docs only on MMagTech's yes (asked
-   once, at the start). Prompt: `docs-tidy-prompt.md`
+   the build, the stale lines docs/ARCHITECTURE.md section 7 lists, a pull
+   request template; the machine details still in the other docs only on
+   MMagTech's yes, asked once at the start. Prompt: `docs-tidy-prompt.md`
    in the audit folder.
-2. **The faults and the automatic checks** (step 4; each its own pull
-   request): every fault the audit recorded on #398 (Parts 3 to 5, and the
-   ones the moves left) is fixed or gets its own issue, no question to
-   MMagTech; then the checks. Prompt: `faults-prompt.md` in the audit
-   folder.
+2. **The faults and the automatic checks** (step 4): first one list of
+   every recorded fault (#398, Parts 3 to 5, and what the moves left);
+   fixed now only what a player can meet and the checks that do not check
+   (about 8 to 12 pull requests), the rest filed as issues grouped by area
+   (about 15 to 20), no question per fault; MMagTech answers the one list.
+   Fixes are coded in parallel sessions, go into a `faults` branch and are
+   tested in three or four batches, with one checklist for him at the TV
+   for the few that change the screen. It edits no doc until the docs tidy
+   has merged. Prompt: `faults-prompt.md` in the audit folder.
 3. Then features and bug fixes resume. The monthly health check (step 5)
    starts after that.
 

@@ -2,7 +2,8 @@
 
 This is for people who can program and want to find their way around
 CabinetOS, build it, test it, and change one thing safely without having to
-ask first. It is written from what the code does today. Where an older doc
+ask first (a new kind of part is the one thing to raise on an issue
+before building it). It is written from what the code does today. Where an older doc
 describes the code differently, the code wins; docs/PROJECT.md stays the
 record of what was decided. The known disagreements are listed at the end of
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -55,14 +56,15 @@ the top of `frontend/src/main.cpp`.
 
 **Nothing builds on a Mac, and the console has no compiler.** Everything is
 built in podman containers on Linux x86-64, or by GitHub Actions. Any Linux
-machine with podman and git will do. The project's own builds run in CI
+machine with podman and git will do, and so will a CabinetOS console over
+Developer access, which has podman (the maintainer's loop builds that way).
+The project's own builds run in CI
 (docs/PROJECT.md, "Constraints and principles", 6); building locally is how
 you check a change before you push it, and it is optional: CI compiles every
 pull request to `main`, so without Linux you can open the pull request and
 read the "Compile" job of `build-frontend.yml`.
 
-**The frontend**, from the `frontend/` folder (this is the one recipe that
-is written down and works on any such machine; it is also in
+**The frontend**, from the `frontend/` folder (the same recipe is in
 `frontend/README.md`, "Building"):
 
 ```bash
@@ -92,9 +94,11 @@ where `<core>` is the name of one of its `case` arms (the same 22 names as
 `cabinetos-builder`, so build that first. Each arm holds the core's
 upstream, pinned commit and make arguments. The result lands in
 `cores/build/`, and a frontend started from the repository root uses that
-folder by itself (`--core-dir` points it anywhere else). The script then
-checks the core's options against `cores/options/<core>.txt` and prints any
-difference. **PCSX2, Cemu and Sunshine** (Remote Play's
+folder by itself (`--core-dir` points it anywhere else; with neither, it
+uses the image's `/usr/lib/cabinetos/cores`). The script then checks the
+core's options against `cores/options/<core>.txt` and prints any
+difference; for a new core, that printed list (from `tools/core-options.c`)
+is what the file is made from. **PCSX2, Cemu and Sunshine** (Remote Play's
 streaming host) each have a script beside it, `cores/build-pcsx2.sh`,
 `cores/build-cemu.sh` and `cores/build-sunshine.sh`, which builds its own
 container from `cores/<name>-builder/` the first time. Each script's header
@@ -103,8 +107,10 @@ says how to run it.
 **The whole image** is normally built only by CI (`build.yml`). On a Linux
 box it is `ci/stage-image-payload.sh` with no arguments, which collects and
 checks your local builds into `image_payload/`, then `just build`. It needs
-every piece built first: the frontend, the Wii bridge, all 22 cores, and
-PCSX2, Cemu and Sunshine under `cores/build/`. That path is not walked
+every piece built first: the frontend, the Wii bridge, all 22 cores,
+PCSX2, Cemu and Sunshine under `cores/build/`, the two arcade cores' set
+lists (`cores/arcade-sets.sh`) and PPSSPP's and Dolphin's files in
+`cores/system/`. That path is not walked
 through here; read the Justfile's `build` recipe first.
 
 ## Running and testing
@@ -113,9 +119,15 @@ through here; read the Justfile's `build` recipe first.
 needs no compositor, no controller and no window, and can photograph what it
 drew. It needs the libraries it was built against, so run it on a CabinetOS
 console (over Developer access, below), where they match; inside the
-builder container may work too, but nobody has tried it. Always give it a
-scratch `--storage-root`: otherwise it writes into `/var/lib/cabinetos`
-when it can, or into the folder it was started in.
+builder container may work too, but nobody has tried it, and off a console
+it needs environment variables written down nowhere yet
+(docs/ARCHITECTURE.md, "Known gaps"). Always give it a scratch
+`--storage-root`: otherwise it writes into `/var/lib/cabinetos` when it
+can, or into the folder it was started in. On a console a scratch root
+does not separate the sign-in: the tokens and the PIN are in
+`~/.config/cabinetos/`, so the run acts as that console's signed-in
+person. Run it from `frontend/` (the stand-in library's covers are found
+from there; the cores then come from the image):
 
 ```bash
 SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --no-setup \
@@ -144,7 +156,7 @@ with 0 when it passes:
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
-| `--check-option-tables cores/options` | that every option in the console's three option tables (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`) exists in the core it is set on (this one CI runs) |
+| `--check-option-tables cores/options` | that every option in the console's three option tables (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`) exists in the core it is set on, for each core with a list in `cores/options/` (this one CI runs) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
 under load, but only against a stand-in server that is not in the
@@ -163,13 +175,15 @@ sends the battery save and sends the file saves when it quits.
 `tools/romm-readonly-relay.py <port>` forwards reads only and answers every
 write with 403, which is the safe way to test against a real library; point
 the console at it with `CABINETOS_ROMM=127.0.0.1:<port>` and a scratch
-`--storage-root`. Pairing needs writes, so the relay cannot sign a scratch
-root in: copy `config/*.json` from a console that is signed in, and write
-`[]` to the scratch root's `drives.json`, or downloads go to the real games
-drive (docs/lessons/testing.md, the bullet on the read-only relay). **Its
-upstream server is a constant near the top of the
+`--storage-root`. Pairing needs writes, so the relay cannot sign anybody
+in: run it on a console already signed in to your server (the tokens are
+outside the storage root, above), copy the console's `config/*.json` into
+the scratch root's `config/`, and write `[]` to its `config/drives.json`,
+or downloads go to the real games drive (docs/lessons/testing.md, the
+bullet on the read-only relay). **Its upstream server is a constant near
+the top of the
 file (`UP`), set to the maintainer's server: change it to yours before you
-run it.** `tools/offline-relay.py` has the same constant. The test tools in
+run it, and do not commit the change.** `tools/offline-relay.py` has the same constant. The test tools in
 `tools/` are written for the maintainer's machines (docs/ARCHITECTURE.md,
 "Known gaps").
 
@@ -191,7 +205,8 @@ it. A contributor cannot yet make a signed test image for their own console
 
 ## What CI checks on your pull request
 
-**A pull request to `main`** runs:
+**A pull request to `main`** runs these (the first two only when it changes
+something besides `.md` files and `docs/`):
 
 - **Lint**: shellcheck over every `.sh` in `build_files/`, `ci/` and
   `cores/`, and over every shell script in `system_files/` (picked by its
@@ -247,7 +262,7 @@ console installed with the installer (`build_files/require-signed-updates.sh`).
 **The worked example, a change to the Wii bridge** (#398, Part 4 section 34):
 `wiibridge/Makefile` builds it; `build-frontend.yml` compiles it and puts it
 in the `frontend-linux-x86_64` artifact; `ci/stage-image-payload.sh` refuses
-to go on without it and checks it is an x86-64 program;
+to go on without it and checks it is a 64-bit Linux program;
 `build_files/install-frontend.sh` installs it at
 `/usr/libexec/cabinetos-wii-bridge` and checks its libraries; the frontend
 starts it from there (`frontend/src/wiiremote.cpp`). Each file names the next
@@ -288,27 +303,31 @@ here, not reworded; follow the link for the full text.
   docs/PROJECT.md, "Licensing, and the constraint it puts on the project").
 - **RomM is the single source of truth for the library** (docs/PROJECT.md,
   "The backend model"). For anything on RomM's data: "RomM's documentation
-  together with RomM's behaviour is the source of truth" (docs/NEXT-SESSION.md).
+  together with RomM's behaviour is the source of truth" (MMagTech; it
+  stands in docs/NEXT-SESSION.md's first paragraph, and is quoted here so it
+  stays when that file is rewritten).
 - **The controller is the input the design assumes.** A keyboard is the
   guaranteed input at first run, and a mouse "moves focus and clicks the
   focused thing, and nothing else" (docs/PROJECT.md, open question 16,
   answered 2026-09-19).
 - **One rule for every game: no per-game fixes, and Eden as it ships**
   (docs/PROJECT.md, "ONE RULE FOR EVERY GAME, AND EDEN AS IT SHIPS").
-- **Fixes are general.** "Match Cabinet only where a setting decides whether
-  a save or state loads on the other device; choose for a TV console
-  everywhere else; say for every fix what it does on hardware that is not
-  the A9; and when RetroArch, Batocera or EmuDeck play something out of the
-  box, find the setting or behaviour we are missing rather than invent a
-  fix" (docs/PROJECT.md, "Dreamcast, PSP and N64 draw right", 2026-09-27).
-  The A9 is the reference console.
+- **Fixes are general**: "choose for a TV console everywhere else; say for
+  every fix what it does on hardware that is not the A9; and when
+  RetroArch, Batocera or EmuDeck play something out of the box, find the
+  setting or behaviour we are missing rather than invent a fix"
+  (docs/PROJECT.md, "Dreamcast, PSP and N64 draw right", 2026-09-27). The A9
+  is the reference console. The same rule opens with a Cabinet clause that
+  the next point overtakes.
 - **Cabinet, the Apple TV app CabinetOS came from, is a reference, not a
   constraint.** PROJECT.md's banner says to read docs/CABINET.md before
   designing anything. Since 2026-10-11 "Cabinet on Apple platforms is no
   longer a constraint" (docs/PROJECT.md, open question 12b, the GameCube save
   decision, #344, "GameCube: a save restored from RomM never reaches Dolphin
-  (card.raw vs card.USA.raw)"); it is newer than the rule above, whose
-  Cabinet clause it overtakes. docs/CABINET.md is worth reading for how a problem was solved
+  (card.raw vs card.USA.raw)"); it is newer than the rule above. One thing
+  stays: the save tags already on RomM (`savetable.cpp`, many in Cabinet's
+  spelling) are what existing saves are filed under, so changing one hides
+  those saves from the console. docs/CABINET.md is worth reading for how a problem was solved
   before; Cabinet's own source is not required reading.
 - **Emulators favour stability over the newest version**: a pin moves only
   for something a player gets, and the question is asked out loud on the
@@ -373,7 +392,9 @@ follows any web address in RomM's data, with the RomM sign-in attached").
   credits in `frontend/src/credits.h` change together (credits.h's header).
 - **Adding to the App** (`frontend/src/app.h`): member order is destruction
   order, and threads hold `this`; read app.h's header first. The RomM
-  client is called from many threads at once (romm.h's header).
+  client is called from many threads at once (romm.h's header). Two more
+  things are positional: `Uploader::Job`'s fields (uploader.h's header) and
+  the rows of catalog.cpp's table (its struct's comment).
 - **What counts as "in the image"** is written four times and all four
   must stay the same: `build.yml`'s `paths`, once for pull requests and once
   for pushes; `ci/promote-tested.sh`'s `in_image`; and `changelog.yml`'s
@@ -390,12 +411,13 @@ follows any web address in RomM's data, with the RomM sign-in attached").
   players to `docs/wiki/changelog.md` in the same pull request; one a player
   cannot notice says `Changelog: none` on its own line in the body. The rule
   is docs/WORKING.md, "Every change that reaches consoles goes in the
-  changelog", and `changelog.yml` enforces it. Entries sit under a heading
-  named for the testing image's version, which exists only after the
-  maintainer's testing push: put yours at the top of the file under
-  `## Next`, and he renames the heading.
+  changelog", and `changelog.yml` enforces it. The rule files entries under
+  a heading named for the testing image's version, which exists only after
+  the maintainer's testing push: put yours at the top under a placeholder
+  heading such as `## Next`, and when that image is built he gives it the
+  version heading.
 - **Name an issue or pull request by its title as well as its number**, every
-  time (docs/NEXT-SESSION.md, first paragraph).
+  time (MMagTech; it stands in docs/NEXT-SESSION.md's first paragraph).
 - **The maintainer merges**, after judging the testing image.
 - **Bug reports** come through the issue form, which asks for the console's
   diagnostic report (Settings, System, Diagnostic report).

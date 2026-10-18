@@ -7,6 +7,9 @@ player's RomM server.
 
 ## Read first
 
+For a session working with MMagTech; an outside contributor needs only the
+first three.
+
 1. [CONTRIBUTING.md](CONTRIBUTING.md): building, testing, what CI checks,
    how a change reaches a console, and the project's rules.
 2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the map of the code, what
@@ -25,7 +28,8 @@ player's RomM server.
   reference console in the maintainer's loop (`tools/ui-loop.sh`).
 - Headless runs and the self-tests: CONTRIBUTING.md, "Running and testing".
 - Never write to a RomM server you do not own. Test through
-  `tools/romm-readonly-relay.py`.
+  `tools/romm-readonly-relay.py` (its server address is a constant: change
+  it locally, never commit it).
 
 ## Rules for every change
 
@@ -41,7 +45,7 @@ MMagTech's six, for this code:
    self-contained job gets a file of its own, named for the job, never a few
    hundred lines added to a file that does something else. A new kind of
    place (a folder, a program, a part ARCHITECTURE.md does not name) is
-   asked about before it is made.
+   asked about before it is made: ask MMagTech, or on an issue.
 3. **Remove what you replace**, in the same change: the old function, its
    declaration, its callers, its flag, its comment. If it must stay, say why
    in the pull request.
@@ -52,15 +56,17 @@ MMagTech's six, for this code:
    is updated when that thing moves: a stale comment reads exactly like a
    current one (lessons rule 8).
 6. **Before saying it is done:** the frontend builds in the builder with no
-   more warnings than `main` has (`build-frontend.yml` lists them);
+   new warnings in the files you touched (CI lists every warning in the
+   Compile job's summary; there is no count to compare yet);
    shellcheck passes on every script you touched;
    `cabinetos-frontend --check-option-tables cores/options` passes if you
    touched a core or an option; the self-tests your change touches pass.
    List every file created, deleted or moved, and check the docs still
    match. If a check fails, say so; never work around it.
 
-The project's own rules (RomM only, no em dashes on screen, never rely on
-Steam, Vulkan first, one rule for every game, and the rest) are in
+The project's own rules (the console connects only to fixed places, no em
+dashes on screen, never rely on Steam, Vulkan first, one rule for every
+game, and the rest) are in
 CONTRIBUTING.md, "The rules". MMagTech's working rules for sessions are in
 docs/WORKING.md and docs/NEXT-SESSION.md.
 

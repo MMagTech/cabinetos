@@ -44,9 +44,10 @@ is in the file named for its feature, and
 
 | Area | Files |
 |---|---|
-| Start and the frame | `main.cpp` (main() and App::run, the start-up in order), `cli.cpp` (every flag), `startup.cpp` (start-up and shutdown steps), `frame.cpp` (the frame loop; its order is the behaviour), `input.cpp` (every event, in the order that decides who gets it), `nav.cpp`, `bar.cpp` (the top bar), `curtain.cpp` |
+| Start and the frame | `main.cpp` (main() and App::run, the start-up in order), `cli.cpp` (every flag but `--check-option-tables`, which `main()` answers before the App exists), `startup.cpp` (start-up and shutdown steps), `frame.cpp` (the frame loop; its order is the behaviour), `input.cpp` (every event, in the order that decides who gets it), `nav.cpp`, `bar.cpp` (the top bar), `curtain.cpp` |
 | The App | `app.h` (everything the program holds, as one struct), `actions.cpp` (the one place a screen's request is answered) |
-| Screens | `screens.h` (what they share), `home.cpp`, `libraryscreen.cpp`, `grid.cpp`, `searchscreen.cpp`, `detailscreen.cpp` (a game's page), `settings.cpp`, `accountpanel.cpp`, `qrlink.cpp`, `choice.cpp`, `pin.cpp`, `keyboard.cpp`, `downloads.cpp`, `manualview.cpp`, `achlist.cpp`, `setup.cpp` (first run; its rules are `firstrun.cpp`, with `firstrun_internal.h`), `startscreen.cpp`, `serverwait.cpp` |
+| Screens | `screens.h` (what they share), `libraryscreen.cpp`, `grid.cpp`, `searchscreen.cpp`, `detailscreen.cpp` (a game's page), `settings.cpp`, `accountpanel.cpp`, `qrlink.cpp`, `choice.cpp`, `pin.cpp`, `keyboard.cpp`, `downloads.cpp`, `manualview.cpp`, `achlist.cpp`, `startscreen.cpp` |
+| App code that draws its own screen | `home.cpp` (Home), `setup.cpp` (first run; its rules are `firstrun.cpp`, with `firstrun_internal.h`), `serverwait.cpp` (the wait for the server at start). These act as well as draw: first run pairs and joins networks, the wait talks to the server |
 | Drawing | `ui.h`/`ui.cpp` (the primitives), `design.h` (the design system's numbers), `motion.h`, `text.cpp`, `image.cpp` (covers), `imagecodec.cpp`, `card.h`, `panels.h`, `screenparts.cpp`, `look.cpp` (the menus' colour), `looks.cpp` (a system's screen looks), `backdrop.cpp`, `notice.cpp` and `noticegallery.h` (the short messages), `qr.cpp` and `qrtexture.h`, `timewords.cpp`, `capture.h` (the SIGUSR1 picture), `shaders.inc` |
 | The RomM client | `romm.h` (its face and its rules), `romm_types.h` (what it hands back), `romm_internal.h`, `romm_http.cpp` (every request goes out here), `romm_pairing.cpp`, `romm_library.cpp`, `romm_playdata.cpp`, `romm_codes.cpp`, `romm_racetest.cpp` |
 | Library data | `library.cpp` (the store of cards, the shelves), `catalog.cpp` and `catalog_internal.h` (which platforms play, on which core), `covercache.cpp`, `coverfill.cpp`, `gridfill.cpp`, `search.cpp`, `codecache.cpp` and `gametdb.cpp` (game codes and controller lists read off files), `samplelibrary.h` (the stand-in library) |
@@ -61,7 +62,7 @@ is in the file named for its feature, and
 | RetroAchievements | `achievements.cpp` (the sign-in and rcheevos' client; its console table names every system), `achievements_ui.cpp`, `ra_list.cpp`, `ra_net.cpp`, `ra_state.h` |
 | Settings features | `settingsflow.cpp` (the rows and their dispatch), `settingsids.h`, `about.cpp`, `credits.h`, `access.cpp` (File access and Developer access), `wikiqrview.cpp` and `wikiqr.h` (made by `tools/make-wiki-qr.py`), and one `*flow.cpp` per feature: `accountsflow.cpp`, `downloadsflow.cpp`, `drivesflow.cpp`, `pinflow.cpp`, `serveraddressflow.cpp`, `remoteplayflow.cpp`, `tailscaleflow.cpp`, `steamflow.cpp`, `updateflow.cpp`, `reportflow.cpp`; `choiceflow.cpp` asks a question over any screen |
 | Remote Play, Steam, the report | `remoteplay.cpp`, `sunshinelog.cpp`, `tailscale.cpp`, `steam.cpp`, `report.cpp`, `samenames.cpp` |
-| Test instruments | `probes.cpp` (runs the probes and calls the self-tests), `selftests.cpp`, `coretests.cpp`, `testhooks.cpp`, `discrig.cpp`, `optcheck.cpp` (the option-table check CI runs). Most self-tests live in their feature's own file (`players::test` in `players.cpp`, and so on). They ship in the program and run only from a flag |
+| Test instruments | `probes.cpp` (runs the probes and calls most self-tests; `--same-names-test` and `--romm-race-test` run from `cli.cpp`), `selftests.cpp`, `coretests.cpp`, `testhooks.cpp`, `discrig.cpp`, `optcheck.cpp` (the option-table check CI runs). Most self-tests live in their feature's own file (`players::test` in `players.cpp`, and so on). They ship in the program and run only from a flag |
 
 ### Where it starts
 
@@ -78,7 +79,9 @@ is in the file named for its feature, and
 ## 2. What each part owns, and must never do
 
 - **A screen draws, owns its own focus and scroll, and returns an Action.**
-  It never touches the network, the disk or a core. `App::apply`
+  It never touches the network, the disk or a core. (This is the rule for
+  the screens past Home in screens.h; Home, first run and the server wait
+  are App code, section 1.) `App::apply`
   (`actions.cpp`) is the one place a request is answered, so a screen cannot
   start a download by accident and can be drawn in a test (screens.h's
   header).
@@ -91,8 +94,8 @@ is in the file named for its feature, and
   NEVER BLOCK THE FRAME LOOP"). Downloads, uploads, cover loads and most RomM
   requests run on workers; the frame loop reads their state once a frame
   (`job.h`, `launch.h`). **Not yet true everywhere:** a launch loads the core
-  and restores the game's saves from RomM on the frame thread, behind the
-  curtain (section 6).
+  on the frame thread at the press, and later restores the game's saves from
+  RomM on the frame thread behind the curtain (section 6).
 - **The RomM client is the only code that talks to RomM.** It is synchronous
   and owns no thread; callers run it on workers. No password ever reaches it
   (RomM's device pairing gives it a token). Plain HTTP must work. It is
@@ -119,8 +122,9 @@ is in the file named for its feature, and
   console's user may do, and anything else is refused.
 - **Running another program goes through `proc.h`, never a shell.**
   Exceptions today: the `--first-run-writes` and `--playtime-test` self-tests
-  remove their scratch folders with `std::system`, and the Wii bridge is
-  started with `fork` and `execl` (`wiiremote.cpp`).
+  remove their scratch folders with `std::system`; the Wii bridge is started
+  with `fork` and `execl` (`wiiremote.cpp`); and the frontend restarts itself
+  with `execv("/proc/self/exe")` (`startup.cpp`).
 - **The image** (`Containerfile`, `build_files/`) puts what it installs in
   `/usr`, which every update replaces, and a few settings files in `/etc`
   (`system_files/etc/`, and the signing policy written by
@@ -164,8 +168,10 @@ is in the file named for its feature, and
 
 1. The game's page returns an Action; `App::apply` (`actions.cpp`) calls
    `launchById`, which calls `beginLaunch` (`launch.cpp`). On the frame
-   thread, `beginLaunch` decides where the game goes, sets the core's options
-   and loads the core, then starts the launch worker.
+   thread and with no curtain, `beginLaunch` sets the core's options and
+   loads the core (not for an emulator run as a program), records the keep
+   for a Download, decides where the game goes, and starts the launch
+   worker.
 2. The worker (`launch_routes.cpp`) fetches the platform's firmware from RomM
    first, then takes one of four routes, in this order: a game on several
    discs, a game installed before it runs (PS3), a folder of files, one file.
@@ -175,16 +181,19 @@ is in the file named for its feature, and
    undone (the keep record comes out; the bytes stay, to be evicted). A
    Download that was not a Play stops when the game is on disk. A game the
    person walked away from finishes quietly and does not start.
-4. The curtain comes down before the blocking work (loading the game, and
-   restoring its saves from RomM, both on the frame thread), so the person
-   sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
+4. The curtain comes down before the rest of the blocking work (restoring
+   the saves from RomM and loading the game, both on the frame thread), so
+   the person sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
    (`standalone_play.cpp`) and ends this flow.
 5. For a core: this person's save folder for this game and core is made, a
-   folder save is restored before the load, and the starting disc is chosen
-   (`prepareSaveDirAndDiscs`, `restoreBeforeLoad`).
-6. The core loads the game (`loadLaunchedGame`), then the battery save is
-   restored, the options it was given are logged, sound and pacing open, and
-   play starts (`startPlaying`).
+   folder save is restored and the starting disc chosen
+   (`prepareSaveDirAndDiscs`); then the file saves (most saves) are restored
+   and Dolphin's settings and the Miis written, all before the load
+   (`restoreBeforeLoad`).
+6. The core loads the game (`loadLaunchedGame`); `setUpLoadedGame` sets up
+   the session; then the battery save is restored, the options the core was
+   given are logged, sound and pacing open, and play starts
+   (`startPlaying`).
 
 ### Leaving a game
 
@@ -210,7 +219,8 @@ power cut).
    tag are kept on RomM.
 3. Each core's saves, where it writes them and the tag they carry on RomM are
    one table, `savetable.cpp`. A launch restores the newest row under its
-   tag.
+   tag, except that this console's own copy wins while it is still owed to
+   RomM, and is used when RomM has none (`saves.cpp`).
 4. Offline, the console uses its copy of RomM's rows as last seen
    (`savemirror.h`), so a launch decides as it would online. What offline
    will need is fetched while online, and the server is tried in the
@@ -245,7 +255,7 @@ reaches a console".
 | What a button does, or where it goes | `input.cpp` (who gets the event), `nav.cpp`, `actions.cpp`; then About, How to, and `docs/wiki/navigation.md` |
 | Which core plays a platform | `catalog.cpp` (the platform table), `savetable.cpp` (its saves' tag) |
 | An option the console sets on a core | `coreoptions.cpp`, `quality.cpp`, `sysopts.cpp` (the three tables `--check-option-tables` checks against `cores/options/`); `launch.cpp` also sets one by hand (Dolphin's rumble for Wii), which the check does not see |
-| A new libretro core | `cores/build-core.sh` (a `case` arm; its name there is the core's name everywhere, and the file is `<name>_libretro.so`), `build-core.yml`'s list, the two counts of 22 (`ci/stage-image-payload.sh`'s `EXPECTED` and `build_files/install-frontend.sh`), `cores/options/<core>.txt`, `catalog.cpp` (the platform's row, and `hwRender` for a core that draws with the GPU), `savetable.cpp` (its two tags), `coreoptions.cpp`, `achievements.cpp`'s console table for a new system, `docs/wiki/systems.md`, and the licences (CONTRIBUTING.md, "Duties") |
+| A new libretro core | `cores/build-core.sh` (a `case` arm; its name there is the core's name everywhere, and the file is that name without a trailing `_libretro`, plus `_libretro.so`), `build-core.yml`'s list, the two counts of 22 (`ci/stage-image-payload.sh`'s `EXPECTED` and `build_files/install-frontend.sh`), `cores/options/<core>.txt` (made from what `tools/core-options.c` prints for the built core; `cores/check-options.sh` runs it), `catalog.cpp` (the platform's row; the table is positional, read its struct first), `savetable.cpp` (its two tags), `coreoptions.cpp`, `achievements.cpp`'s console table for a new system, `docs/wiki/systems.md`, and the licences (CONTRIBUTING.md, "Duties") |
 | Moving a core's pin | its `COMMIT` in `cores/build-core.sh`; in the same commit `cores/options/<core>.txt`, and the same commit in `licences/SOURCES` (then `tools/fetch-licences.py`) and `docs/LICENCES.md` |
 | An emulator run as a program | `standalone.h`, its `standalone_<name>.cpp`, its `build_files/install-*.sh` or `system_files/usr/share/cabinetos/flatpaks.list`, its row in `catalog.cpp` |
 | A RomM request or field | the client (`romm.h`, `romm_*.cpp`, `romm_types.h`); RomM's documentation and behaviour decide; the map of every request is #398's Part 5, section 48 (the audit's comments on #398 each start "Audit, Part N", and sections are numbered across the parts) |
@@ -313,13 +323,14 @@ Each with where it is recorded.
 - **The test tools are written for the maintainer's machines.**
   `tools/ui-loop.sh`, `tools/base-checks.sh`, `tools/check-applied.sh` and
   `tools/installer-vm.sh` default to his console (`CABINETOS_A9` or
-  `CABINETOS_HOST` overrides it; `ui-loop.sh`'s test VM and key path have no
-  override) and need state he set up by hand on it;
+  `CABINETOS_HOST` overrides it; `ui-loop.sh`'s test VM and the key paths in
+  `ui-loop.sh` and `installer-vm.sh` have no override) and need state he set up by hand on it;
   `tools/romm-readonly-relay.py` and `tools/offline-relay.py` have his server
   built in. The empty server address field on first run shows his server's
   address as its example (`setup.cpp`). His addresses are still in a few
   older docs too (PROJECT.md, SETTINGS.md, docs/lessons/testing.md,
-  frontend/README.md, a comment in `cabinetos-session`). All of these go in
+  frontend/README.md) and in comments (`cabinetos-session`, `romm.h`, `net.h`,
+  `settingsflow.cpp`). All of these go in
   the steps after this file.
 - **A contributor cannot make a test image for their own console:** an image
   built from a fork still carries the project's signing key and the policy
@@ -332,6 +343,19 @@ Each with where it is recorded.
 - **Not built yet:** choosing a different core for a game, and exporting
   (`detailscreen.cpp`'s note).
 - **The test instruments ship in the program**, run only by a flag.
+- **A scratch `--storage-root` does not isolate a run on a console:** the
+  sign-in tokens and the PIN live in `~/.config/cabinetos/` and Remote
+  Play's files in `/var/lib/cabinetos`, whatever the storage root
+  (`accounts.cpp`, `remoteplay.cpp`), so a headless test on a signed-in
+  console acts as that console's person.
+- **No documented way to run your own build on your own console**, and the
+  environment variables a run off a console needs (`CABINETOS_SHADERS`,
+  `CABINETOS_PAD_DB`, `CABINETOS_ASSETS`, `CABINETOS_STORAGE`,
+  `CABINETOS_DRIVES` and others; `grep -n 'getenv("CABINETOS_' frontend/src/*.cpp`)
+  are written down nowhere.
+- **Positional data that an ordinary edit can break silently:** the App's
+  member order (app.h), `Uploader::Job`'s field order (uploader.h), and the
+  rows of catalog.cpp's table.
 - **Building leaves files in the tree:** the Makefile writes `.o` and `.d`
   files beside the sources, and the `.d` files are not ignored by git.
 - **The faults the audit recorded** are on #398, Parts 3 to 5, and become
@@ -374,7 +398,9 @@ docs tidy that follows this file. Until then, trust the code:
   not exist; `selftests.cpp` says `--first-run-rules` runs in CI (it does
   not); `samplelibrary.h` says main.cpp is its only user (startup.cpp is);
   `cores/check-options.sh` names catalog.cpp for what is now
-  `coreoptions.cpp`; `cores/build-core.sh` says core pins follow Cabinet's
+  `coreoptions.cpp`; `catalog.cpp` says Cabinet's manifest is the source of
+  truth for its table; `ci/stage-image-payload.sh` says it checks for an
+  x86-64 program and accepts any 64-bit one; `cores/build-core.sh` says core pins follow Cabinet's
   manifest and "are not to be updated here", which predates both Cabinet
   ceasing to be a constraint (2026-10-11) and the stability rule for moving
   pins (docs/PROJECT.md, "Constraints and principles", 8, 2026-10-14), which
