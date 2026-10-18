@@ -76,8 +76,10 @@ Read before working on a screen, the network, Bluetooth, pairing or first run.
   reads `ldd`, so a strip pass that removed NetworkManager or polkit would leave
   a green build, a binary that links perfectly, and a console that cannot see a
   Wi-Fi network or say why. `net.cpp` needs `/usr/bin/nmcli` and
-  `/usr/bin/pkcheck`; `build.sh` now asserts both. **Anything else that shells
-  out needs the same treatment.**
+  `/usr/bin/pkcheck`; `build.sh` asserts both. **Anything else that shells
+  out needs the same treatment.** **And the check goes after the strip:** until
+  2026-10-17 it ran before it, green on every build and blind to the very
+  removal it was written for (#398, SCRIPTS-12).
 
 - **`pkcheck` PRINTS SEVERAL `key=value` LINES, NOT ONE.** Taking the last `=`
   in its output reports `1` — the value of
