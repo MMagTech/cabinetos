@@ -304,6 +304,12 @@ auto App::launchById(int romId) -> bool {
     std::string lerr;
     if (!beginLaunch(launchJob, liveClient, *g, coreDir, &lerr)) {
         std::fprintf(stderr, "[launch] %s\n", lerr.c_str());
+        // A CORE THAT WILL NOT LOAD AT THE PRESS SAYS SO, where every other
+        // launch refusal does (#398); it said nothing anywhere. Not a game
+        // this console cannot play: beginLaunch refuses that before it
+        // touches the job, so refuseLaunch would name the last game.
+        const catalog::Coverage cov = catalog::coverageFor(*g);
+        if (cov.support == catalog::Support::Playable && cov.core) refuseLaunch(lerr);
         return false;
     }
     launchJob.startedOn = static_cast<int>(here());
@@ -407,16 +413,23 @@ bool App::takeFinishedJob() {
         if (launchJob.keepWhenReady)
             cache::unkeep(storage::currentUser(), launchJob.romId,
                           /*keepTheBytes=*/true);
+        // A PLAY THAT FAILED SAYS WHY WHERE THE PERSON IS, as a core that
+        // will not load the game does (refuseLaunch): pressed on Home's
+        // Resume, it said nothing anywhere (#398). A Download, a Play the
+        // person walked away from and a cancel keep the page's notice.
+        const bool sayIt = launchJob.playWhenReady && !launchJob.cancel.load() &&
+                           launchJob.startedOn == static_cast<int>(here());
         if (here() == Screen::Detail &&
             detailScreen.game().romId == launchJob.romId) {
             detailScreen.setKept(
                 cache::isKeptBy(storage::currentUser(), launchJob.romId));
-            detailScreen.setNotice(launchJob.message);
+            if (!sayIt) detailScreen.setNotice(launchJob.message);
         }
         refreshKeeps();
         forgetLaunchAsks();
         launchJob.stop();
         launchJob.stage = LaunchJob::Stage::Idle;
+        if (sayIt) refuseLaunch(launchJob.message);
         return false;
     }
     if (st != LaunchJob::Stage::Ready) return false;
