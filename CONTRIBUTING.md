@@ -265,6 +265,14 @@ runs `checks.yml`, a few seconds each:
   Sunshine's. The paths spelled outside the client today are listed in the
   script (`KNOWN`), so editing one of those lines does not fail; moving one
   into the client takes it off the list.
+- **Doc paths** (`ci/check-doc-paths.py`): a `.md` file that names a file
+  or folder of this repository that is not there fails, so a pull request
+  that moves or deletes a file also puts right the docs that name it. It
+  reads every link, and every path in backticks that starts with one of the
+  repository's top-level folders (`frontend/src/app.h`); not code blocks,
+  `docs/history/` or `frontend/third_party/`. A path `.gitignore` covers (a
+  build output) is there, and so is a file of Cabinet's own repository on
+  the script's list.
 
 **A check's first week is report only.** Until the end of the date in
 `checks.yml`'s `REPORT_ONLY_UNTIL` (2026-10-25, UTC), a check that can fail

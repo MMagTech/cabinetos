@@ -21,7 +21,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `cores/` | How every emulator the image carries is built: `build-core.sh` (the 22 libretro cores, each pinned by commit in its `case` arm), `build-pcsx2.sh`, `build-cemu.sh`, `build-sunshine.sh` and their builder containers; `options/<core>.txt`, every option each core declares at its pin | `/usr/lib/cabinetos/cores/` and the emulators' folders |
 | `build_files/` | The image build's scripts: `build.sh` and the scripts it calls (remove the desktop and the storefronts, set up the session, the branding), `install-*.sh` (one per piece the image carries), `require-*.sh` (checks that fail the build) | run once, inside the image build |
 | `system_files/` | Files copied over the image as they are: the session script, systemd units, the root helpers in `usr/libexec/`, polkit rules, udev rules, the diagnostic report, and a few files in `etc/` (the SSH settings, the update signing key) | `/usr` and `/etc` |
-| `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base, and the checks every pull request runs (`checks.yml`: `check-romm-paths.sh`) | GitHub Actions |
+| `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), version numbers, promoting the tested image, watching the Bazzite base, and the checks every pull request runs (`checks.yml`: `check-romm-paths.sh`, `check-doc-paths.py`) | GitHub Actions |
 | `.github/` | The workflows, the issue form for players, and the pull request template | GitHub |
 | `tools/` | Test and maintenance tools, run by hand; they take their machines from the environment (CONTRIBUTING.md, "Running and testing") | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
@@ -384,8 +384,8 @@ comments, which the faults step fixes. Until then, trust the code:
   one); `build_files/build.sh` and `build_files/require-cec.sh` call HDMI-CEC
   a hard requirement, though it was shelved on 2026-09-24; several workflow
   headers say pull requests to `main` build the image, which they do not.
-  Others: `frontend/Containerfile` cites `frontend/src/archive.h`, which does
-  not exist; `selftests.cpp` says `--first-run-rules` runs in CI (it does
+  Others: `frontend/Containerfile` cites an `archive.h` that `frontend/src/`
+  does not have; `selftests.cpp` says `--first-run-rules` runs in CI (it does
   not); `samplelibrary.h` says main.cpp is its only user (startup.cpp is);
   `cores/check-options.sh` names catalog.cpp for what is now
   `coreoptions.cpp`; `catalog.cpp` says Cabinet's manifest is the source of
