@@ -736,43 +736,8 @@ void App::recoverPowerCutSaves() {
         for (const std::string& loc : storage::locations()) {
             for (const std::string& half : {storage::cacheDir(loc), storage::romsDir(loc)}) {
                 for (const std::string& platform : listNames(half)) {
-                    for (const std::string& entry : listNames(half + "/" + platform)) {
-                        const std::string path = half + "/" + platform + "/" + entry;
-                        if (!cab::standalone::hasPlayingNote(path)) continue;
-                        std::istringstream note(cab::standalone::playingNote(path));
-                        std::string id, dir, title, tag;
-                        std::getline(note, id);
-                        std::getline(note, dir);
-                        std::getline(note, title);
-                        std::getline(note, tag);
-                        // ONLY THIS PERSON'S. The upload goes as whoever the
-                        // console acts as, so somebody else's stays on the
-                        // drive, still protected, until they are the one here.
-                        const std::string mine =
-                            storage::userDir(storage::currentUser()) + "/";
-                        if (dir.compare(0, mine.size(), mine) != 0) {
-                            std::fprintf(stderr, "[xbox] %s holds another person's saves; "
-                                         "left for them\n", path.c_str());
-                            continue;
-                        }
-                        GameSession owed;
-                        owed.romId = std::atoi(id.c_str());
-                        owed.title = title;
-                        owed.saveDir = dir;
-                        owed.saveTag = tag;
-                        owed.dirSaveRoot = cab::standalone::saveRoot(*xemu, dir);
-                        owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
-                        std::string aerr;
-                        if (dir.empty() ||
-                            !cab::standalone::afterEnd(*xemu, path, dir, &aerr)) {
-                            std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(),
-                                         aerr.c_str());
-                            continue;
-                        }
-                        std::fprintf(stderr, "[xbox] finished what a stop left on %s\n",
-                                     path.c_str());
-                        syncDirSave(owed, uploader);
-                    }
+                    for (const std::string& entry : listNames(half + "/" + platform))
+                        recoverDriveSaves(*xemu, half + "/" + platform + "/" + entry);
                 }
             }
         }
@@ -791,6 +756,45 @@ void App::recoverPowerCutSaves() {
                     finishInterruptedSave(*emu, dir, uploader);
             }
     }
+}
+
+// ONE XBOX GAME'S FOLDER, as above: true when it holds no note, or its
+// saves came off. False while they stay on the drive (somebody else's, or
+// the drive would not give them up): nothing may write that drive until
+// they are off. A launch of the game runs it too, before beforeStart would
+// put this person's older copy over them (#398, EMU-12).
+bool App::recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::string& path) {
+    if (!cab::standalone::hasPlayingNote(path)) return true;
+    std::istringstream note(cab::standalone::playingNote(path));
+    std::string id, dir, title, tag;
+    std::getline(note, id);
+    std::getline(note, dir);
+    std::getline(note, title);
+    std::getline(note, tag);
+    // ONLY THIS PERSON'S. The upload goes as whoever the console acts as,
+    // so somebody else's stays on the drive, still protected, until they
+    // are the one here.
+    const std::string mine = storage::userDir(storage::currentUser()) + "/";
+    if (dir.compare(0, mine.size(), mine) != 0) {
+        std::fprintf(stderr, "[xbox] %s holds another person's saves; left for them\n",
+                     path.c_str());
+        return false;
+    }
+    GameSession owed;
+    owed.romId = std::atoi(id.c_str());
+    owed.title = title;
+    owed.saveDir = dir;
+    owed.saveTag = tag;
+    owed.dirSaveRoot = cab::standalone::saveRoot(xemu, dir);
+    owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
+    std::string aerr;
+    if (dir.empty() || !cab::standalone::afterEnd(xemu, path, dir, &aerr)) {
+        std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(), aerr.c_str());
+        return false;
+    }
+    std::fprintf(stderr, "[xbox] finished what a stop left on %s\n", path.c_str());
+    syncDirSave(owed, uploader);
+    return true;
 }
 
 // WHAT THE MENUS ARE DRAWN IN — #75 and #129, 2026-09-27. The colour is

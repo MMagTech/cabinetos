@@ -1919,6 +1919,7 @@ struct App {
     void settleScreensAtStart();
     void startBrowsing();
     void startSync();
+    bool recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::string& path);
     void recoverPowerCutSaves();
     void applyStartColour();
     void noticeAppliedUpdate();

@@ -160,7 +160,9 @@ is in the file named for its feature, and
 8. `startBrowsing`; `startSync`, which starts the upload queue and sends
    first whatever an earlier run still owed (`uploader.resendOwed`);
    `recoverPowerCutSaves`, which finishes the saves a power cut left in an
-   emulator run as a program; then the rest of the start-up steps.
+   emulator run as a program (an Xbox game's drive through
+   `recoverDriveSaves`, which that game's launch also runs); then the rest
+   of the start-up steps.
 9. `runFrameLoop` (`frame.cpp`) until the console exits or restarts; then the
    game is left, the emulators closed, the core unloaded, and `shutDown`.
 
@@ -187,7 +189,9 @@ is in the file named for its feature, and
 4. The curtain comes down before the rest of the blocking work (restoring
    the saves from RomM and loading the game, both on the frame thread), so
    the person sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
-   (`standalone_play.cpp`) and ends this flow.
+   (`standalone_play.cpp`) and ends this flow; an Xbox game whose last saves
+   are still on its drive has them taken off first (`recoverDriveSaves`,
+   `startup.cpp`), or does not start.
 5. For a core: this person's save folder for this game and core is made, a
    folder save is restored and the starting disc chosen
    (`prepareSaveDirAndDiscs`); then the file saves (most saves) are restored
