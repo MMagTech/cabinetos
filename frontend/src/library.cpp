@@ -597,6 +597,9 @@ std::string gameRecordJson(const romm::Game& g) {
     json_object_object_add(o, "path_cover_small", json_object_new_string(g.coverPath.c_str()));
     json_object_object_add(o, "path_cover_large", json_object_new_string(g.coverLargePath.c_str()));
     json_object_object_add(o, "title_id", json_object_new_string(g.titleId.c_str()));
+    // Not RomM's: read off a Wii U game's file online, and needed offline to
+    // tell which controllers it takes (romm::gameFromJson).
+    json_object_object_add(o, "product_code", json_object_new_string(g.productCode.c_str()));
     json_object_object_add(o, "ra_hash", json_object_new_string(g.raHash.c_str()));
     json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
