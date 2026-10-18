@@ -407,7 +407,8 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         return;
     }
 
-    // A GAME KEPT AS A FOLDER OF SEVERAL FILES, FETCHED FILE BY FILE.
+    // A GAME KEPT AS A FOLDER, FETCHED FILE BY FILE: several files, or one
+    // game file with media beside it or alone (romm_types.h, multiFile).
     // RomM serves such a folder as a zip it makes, a little larger than
     // the game's `fs_size_bytes` (Star Ocean: 7,832,230,048 against
     // 7,832,229,235), so the size check below never matched and the whole
@@ -426,12 +427,15 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         const bool listed =
             !romm::serverAway() && client.fetchRomFiles(id, &files, &lerr);
         // A GAME THAT WAS ONE FILE AND IS NOW A FOLDER: somebody added an
-        // `update/` beside it on the server after it was downloaded. Its
-        // entry here is still that one file. Offline it still plays as it
-        // is; online the file moves into the game's new folder under the
-        // name of the game file its size matches, rather than coming
-        // down again, and the folder takes the entry's name without the
-        // file's extension.
+        // `update/` beside it on the server after it was downloaded, or it
+        // was one file in a folder, downloaded before such a game counted
+        // as a folder (#416). Its entry here is still that one file.
+        // Offline it still plays as it is; online the file moves into the
+        // game's new folder under the name of the game file its size
+        // matches, rather than coming down again, and the folder takes the
+        // name a new download would (storage::entryName), which the entry's
+        // own name, cut at its last dot, was not when that name had no
+        // ending: `.00)` from "(v2.00)".
         std::string entry = entryPath;
         struct stat est;
         if (::lstat(entry.c_str(), &est) == 0 && S_ISREG(est.st_mode)) {
@@ -443,18 +447,22 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 return;
             }
             const size_t slash = entry.find_last_of('/');
-            const size_t dot = entry.find_last_of('.');
             const std::string folder =
-                dot != std::string::npos && (slash == std::string::npos || dot > slash)
-                    ? entry.substr(0, dot) : entry + ".folder";
+                entry.substr(0, slash == std::string::npos ? 0 : slash + 1) +
+                storage::entryName(id, job.title);
             std::string as;
             for (const romm::RomFile& f : disc::plan(files).fetch)
                 if (f.sizeBytes == est.st_size) { as = storage::safeSegment(f.fileName); break; }
+            // An entry collapsed from a name with no ending already has the
+            // folder's name, so the file steps aside first.
+            std::string from = entry;
+            if (folder == entry && ::rename(entry.c_str(), (entry + ".moving").c_str()) == 0)
+                from = entry + ".moving";
             storage::makeDirs(folder);
-            if (!as.empty() && ::rename(entry.c_str(), (folder + "/" + as).c_str()) == 0)
+            if (!as.empty() && ::rename(from.c_str(), (folder + "/" + as).c_str()) == 0)
                 std::fprintf(stderr, "[launch] %s is a folder on the server now; moved "
                                      "into %s\n", entry.c_str(), folder.c_str());
-            else if (::unlink(entry.c_str()) == 0)
+            else if (::unlink(from.c_str()) == 0)
                 std::fprintf(stderr, "[launch] %s is a folder on the server now and "
                                      "matches none of its files; removed\n", entry.c_str());
             entry = folder;
