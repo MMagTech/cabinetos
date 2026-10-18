@@ -43,7 +43,15 @@ in the local notes).
 
 ## Next
 
-1. **A priority list of every open issue, then work through it**
+1. **The Bazzite base update, in a session of its own, first** (MMagTech,
+   2026-10-18): #371, "Bazzite base → 44.20261012 (relevant)", open since
+   2026-10-12; check first whether Bazzite has a newer one. Alone on
+   `testing`, so a fault is the base's. Checks only for the packages that
+   changed (log checks by the session, a few eye and hand checks by him).
+   It shows no checks because `BASE_UPDATE_TOKEN` is not set (#487,
+   SCRIPTS-13); a push to its branch by the session starts them. It needs
+   a changelog entry for players before merging.
+2. **A priority list of every open issue, then work through it**
    (MMagTech, 2026-10-18). The Later milestone holds 65. For the faults
    step's 19 (#471 to #493), the view he was given: fix the 13 a player
    could hit (about 60 small fixes, 3 or 4 sessions side by side), close the
@@ -52,13 +60,13 @@ in the local notes).
    on a report"; ask his decisions as one short list first and keep the TV
    checks for one sitting at the end. Not yet agreed: show him the list
    before closing anything. Player reports and features come first.
-2. **Review the docs for Cabinet Go** (above).
-3. **The automatic checks report only until 2026-10-25**, then fail a pull
+3. **Review the docs for Cabinet Go** (above).
+4. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: RomM paths outside the client, docs naming missing files, new
    compiler warnings in touched files, the self-tests. Read their first
    week's reports before that date and fix what they find, so nothing turns
    red by surprise (CONTRIBUTING.md, "What CI checks").
-4. **The monthly health check** (step 5) starts after that: the checks'
+5. **The monthly health check** (step 5) starts after that: the checks'
    reports (warnings, long files, unused code, PROJECT.md's index) and the
    Later milestone, once a month.
 
