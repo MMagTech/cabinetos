@@ -192,8 +192,15 @@ void App::startAddAccount() {
         // approved is not an error worth blocking on.
         const int tries = p.expiresIn > 0 ? (p.expiresIn / (p.intervalSeconds > 0 ? p.intervalSeconds : 5)) + 1 : 60;
         for (int i = 0; i < tries; ++i) {
-            std::this_thread::sleep_for(
-                std::chrono::seconds(p.intervalSeconds > 0 ? p.intervalSeconds : 5));
+            {
+                std::unique_lock<std::mutex> lk(addJob->m);
+                if (addJob->wake.wait_for(
+                        lk, std::chrono::seconds(p.intervalSeconds > 0 ? p.intervalSeconds : 5),
+                        [&] { return addJob->stop; })) {
+                    addJob->running = false;
+                    return;
+                }
+            }
             const int state = c.pollPairing(p, &err);
             if (state == 0) continue;
             if (state < 0) break;
