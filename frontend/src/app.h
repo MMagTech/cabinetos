@@ -479,6 +479,19 @@ struct App {
     int paceCount = 0;
     double paceScreenHz = 0.0;   // as SDL reports it, for the [pace] line
     float paceRatio = 1.0f;      // the sound's speed now, for the [pace] line
+    // WHAT THE [pace] AND [audio] LINES COUNT, since the last line said it.
+    // Set back at each launch with the lock (openSoundAndPace): kept from
+    // the last game, a game's first line was that game's last seconds,
+    // and its sound per game frame read +0.00%, a silent game's (#398).
+    // Members, not a frame's locals: they add up across frames.
+    struct PaceTally {
+        uint64_t shown = 0, repeated = 0, held = 0, skipped = 0;
+        double dtSum = 0.0;
+        uint64_t audioLogAt = 0;              // when the next lines are due
+        uint64_t lastAudio = 0, lastFrames = 0;   // the core's counts then
+        uint64_t droppedBytes = 0, droppedLogAt = 0;
+    };
+    PaceTally pace;
 
     // ---- Focus -------------------------------------------------------------
     //
