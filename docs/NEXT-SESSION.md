@@ -11,15 +11,15 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-18:** `testing` is **2026.10.18.3** (revision fe5a914, digest
-sha256:162f2063...cf80a), #501 ("Games kept as one file in a RomM folder
-start again (#400, #416)"): a game RomM keeps as one file inside its own
-folder, which RomM's own upload of a manual or soundtrack makes, downloads
-only the game file. Proven on the A9 before and after through the
-read-only relay (the PR body). His merge promotes it. The faults step
-(#500, 2026.10.18.2) is merged. #416's other half, which BIOS PCSX2 starts
-(it takes the first file in `bios/`; RetroArch and Batocera do the same),
-waits for the player to try #501. The A9 is on the testing channel; its
+**2026-10-18:** `latest` and `testing` are **2026.10.18.3** (revision
+fe5a914, digest sha256:162f2063...cf80a), #501 ("Games kept as one file in
+a RomM folder start again (#400, #416)"), merged and installed on the A9: a
+game RomM keeps as one file inside its own folder, which RomM's own upload
+of a manual or soundtrack makes, downloads only the game file. #400 is
+closed. #416 stays open for its other half, decided by MMagTech and written
+on the issue: PS2's BIOS chosen by the game's region from the disc code
+RomM reads (PCSX2 today takes the first file in `bios/`). The A9 is on the
+testing channel; its
 PIN is off until he turns it back on. The machines' addresses are in his
 local notes, which CLAUDE.md loads; the test tools read them from the
 environment since #456 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`,
@@ -59,7 +59,10 @@ in the local notes).
    code, races found by reading, "not now") with "found by reading, reopen
    on a report"; ask his decisions as one short list first and keep the TV
    checks for one sitting at the end. Not yet agreed: show him the list
-   before closing anything. Player reports and features come first.
+   before closing anything. Player reports and features come first,
+   starting with #416's BIOS rule (the rule is on the issue; the work is
+   in `frontend/ps2`, which a pull request to `main` does not compile, so
+   it shows first at the testing push).
 3. **Review the docs for Cabinet Go** (above).
 4. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: RomM paths outside the client, docs naming missing files, new
