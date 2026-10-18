@@ -317,8 +317,7 @@ Each with where it is recorded.
   testing push, including a core's options list that no longer matches
   (`cores/check-options.sh` runs inside the core build).
 - **No test framework and no single local check command:** a test is a flag
-  in the shipped program; `just lint` does not lint the `system_files/`
-  scripts that CI lints. The compiler's warnings are listed, not counted
+  in the shipped program. The compiler's warnings are listed, not counted
   against a baseline.
 - **The test tools are written for the maintainer's machines.**
   `tools/ui-loop.sh`, `tools/base-checks.sh`, `tools/check-applied.sh` and
