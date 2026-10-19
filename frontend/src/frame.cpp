@@ -48,11 +48,16 @@ void App::runFrameLoop() {
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
-        idleFrame(dt, playing && !overlayOpen && !stateHold, kScreenOff[screenOffIndex].seconds);
+        // A GAME ON SCREEN is one running: not under the menu, not held on
+        // its state's "Press A to continue", and not frozen waiting for a
+        // state picked on its page to arrive (#484, PLAY-16), which is when
+        // the game itself stands still (pace.cpp).
+        const bool gameOnScreen = playing && !overlayOpen && !stateHold && !stateHoldWaiting;
+        idleFrame(dt, gameOnScreen, kScreenOff[screenOffIndex].seconds);
         // TIME PLAYED (#128): the same test the dim uses for "a game is on
         // screen". Written down once a minute, so a power cut loses at most
         // one.
-        playClock.tick(dt, playing && !overlayOpen && !stateHold);
+        playClock.tick(dt, gameOnScreen);
         if (playClock.active() && (playCheckpointClock += dt) >= 60.0f) {
             playCheckpointClock = 0.0f;
             playtime::checkpoint(storage::currentUser(), playClock.now(playtime::wallMs()));

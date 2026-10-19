@@ -161,7 +161,10 @@ void App::toggleOverlay() {
         powerMenu = false;
         pauseItems.clear();
         if (!remoteOnlyHere()) pauseItems.push_back(OvResume);
-        if (session.snapshots) {
+        // NOT WHILE A STATE PICKED ON THE GAME'S PAGE IS ON ITS WAY (#484,
+        // PLAY-33): saved then, the newest state on RomM was the game's
+        // first frames, and the next Resume started there.
+        if (session.snapshots && !stateHoldWaiting) {
             pauseItems.push_back(OvSaveState);
             pauseItems.push_back(OvLoadState);
         }
