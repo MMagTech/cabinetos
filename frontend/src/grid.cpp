@@ -171,13 +171,9 @@ void GridScreen::tick(float dt, Ctx& c) {
         indexHold_ -= dt;
         if (indexHold_ <= 0.0f) index_.retarget(0.0f, 0.600f);
     }
-    if (!c.cards) return;
-    for (int i : cards_) {
-        if (i >= 0 && i < static_cast<int>(c.cards->size())) {
-            (*c.cards)[i].focus.tick(dt);
-            (*c.cards)[i].press.tick(dt);
-        }
-    }
+    // The covers' own lift and press are not ticked here: the frame loop
+    // ticks every card once (frame.cpp). Ticked here too, a grid's lift
+    // took about 90 ms where design.h says 180 (#484, HOME-06).
 }
 
 Result GridScreen::key(Nav n) {

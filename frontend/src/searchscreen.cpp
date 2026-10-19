@@ -82,13 +82,8 @@ void SearchScreen::setResults(const std::string& forQuery, std::vector<int> resu
 
 void SearchScreen::tick(float dt, Ctx& c) {
     scroll_.tick(dt);
-    if (!c.cards) return;
-    for (int i : results_) {
-        if (i >= 0 && i < static_cast<int>(c.cards->size())) {
-            (*c.cards)[i].focus.tick(dt);
-            (*c.cards)[i].press.tick(dt);
-        }
-    }
+    // The results' lift and press: the frame loop ticks every card once
+    // (frame.cpp, #484, HOME-06), as GridScreen::tick says.
 }
 
 Result SearchScreen::key(Nav n) {
