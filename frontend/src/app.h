@@ -1398,6 +1398,16 @@ struct App {
     std::map<int, size_t> ejectFormats;
     // Format, from a drive's row. Set once buildSettings exists.
     void askFormat(const drives::Drive& d);
+    // WHAT IS ON THE DRIVE, counted on a worker after the PIN (#481,
+    // FILES-21): a drive holding many files took the frame thread for up to
+    // half a second. followDrives opens the confirm when the count arrives
+    // (openFormatConfirm), for the drive it was counting.
+    cab::Job<drives::Contents> formatCount;
+    drives::Drive formatCounting;
+    std::string formatCountingWhat;   // the confirm's first line: kind, model, size
+    int formatCountFrame = 0;         // the frame the count began on, for the log
+    uint64_t formatCountAt = 0;       // and the clock then
+    void openFormatConfirm(const drives::Contents& c);
     std::map<std::string, std::string> locationNames(const std::vector<std::string>& locs,
                                                      const std::vector<drives::Unusable>& unusable);
     int screenOffIndex = 0;
