@@ -310,8 +310,10 @@ std::optional<int> App::runFirstRun() {
             // Back from Sign out: the network is set up and stays, so the
             // server step (docs/SETTINGS.md, Network).
             opts.startStep = setupStep ? setupStep
-                             : done.why == firstrun::Why::SignedOut ? "server"
-                                                                    : nullptr;
+                             : done.why == firstrun::Why::SignedOut ||
+                                       done.why == firstrun::Why::NoServer
+                                 ? "server"
+                                 : nullptr;
             opts.signedOut = done.why == firstrun::Why::SignedOut;
             // A capture of a setup screen must never write a marker or an
             // address: it is a photograph, and the machine it is taken on is
@@ -321,16 +323,29 @@ std::optional<int> App::runFirstRun() {
             opts.frames = shotAfterFrames;
             opts.renderWidth = renderW;
             opts.renderHeight = renderH;
-            const setup::Outcome outcome = setup::run(deps, opts);
-            if (outcome != setup::Outcome::Completed) {
-                renderer.shutdown();
-                SDL_Quit();
-                return 0;
+            if (done.why == firstrun::Why::NoServer)
+                std::fprintf(stderr, "[first-run] set up, but no server address is set: "
+                                     "asking for one\n");
+            for (;;) {
+                const setup::Outcome outcome = setup::run(deps, opts);
+                if (outcome != setup::Outcome::Completed) {
+                    renderer.shutdown();
+                    SDL_Quit();
+                    return 0;
+                }
+                // Setup writes the address; pick it up, because the resolution
+                // done before SDL started ran on a console that had none.
+                resolvedAddress = firstrun::serverAddress();
+                rommAddress = resolvedAddress.empty() ? nullptr : resolvedAddress.c_str();
+                // NOT LEFT WITH NONE (#485, FIRSTRUN-06): an address that
+                // could not be saved at the server step is asked for again,
+                // rather than starting on the stand-in library. A capture
+                // writes nothing, so it is let through.
+                if (rommAddress || opts.dryRun) break;
+                std::fprintf(stderr, "[first-run] finished with no server address saved: "
+                                     "asking again\n");
+                opts.startStep = "server";
             }
-            // Setup writes the address; pick it up, because the resolution done
-            // before SDL started ran on a console that had none.
-            resolvedAddress = firstrun::serverAddress();
-            rommAddress = resolvedAddress.empty() ? nullptr : resolvedAddress.c_str();
         } else if (done.why == firstrun::Why::AdoptedExisting && done.when.empty()) {
             // Adopted, and no marker on disk yet — so write one. An empty
             // `when` is exactly the case where the answer came from looking at

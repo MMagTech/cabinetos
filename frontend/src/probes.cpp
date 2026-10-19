@@ -297,6 +297,8 @@ static int firstRunProbe(romm::Client& client, const char* startAt, bool tryServ
                 done.why == firstrun::Why::SignedOut
                       ? (done.clearing ? "NEEDED, signed out; games and accounts not cleared yet"
                                        : "NEEDED, signed out")
+                : done.why == firstrun::Why::NoServer
+                      ? "NEEDED, set up but no server address is set; opens at the server"
                 : !done.done             ? "NEEDED — this console is not set up"
                 : done.why == firstrun::Why::AdoptedExisting
                       ? "not needed — this machine is already configured, so it "

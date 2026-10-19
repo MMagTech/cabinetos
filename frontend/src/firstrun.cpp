@@ -143,8 +143,17 @@ Completion completion() {
         return c;
     }
     if (!body.empty()) {
-        c.done = true;
         c.when = jsonString(body, "completed");
+        // DONE NEEDS A SERVER TOO (#485, FIRSTRUN-06). With the marker there
+        // and no address anywhere (session.env gone, server.json not
+        // written at the server step), the console started on the stand-in
+        // library of six made-up games, which must never appear on a
+        // console (the header), with nothing saying what was missing.
+        if (serverAddress().empty()) {
+            c.why = Why::NoServer;
+            return c;
+        }
+        c.done = true;
         c.why = jsonString(body, "how") == "adopted" ? Why::AdoptedExisting
                                                      : Why::Completed;
         return c;
