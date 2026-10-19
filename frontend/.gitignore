@@ -1,5 +1,6 @@
 build/
 *.o
+*.d
 cores/build/
 roms/
 saves/

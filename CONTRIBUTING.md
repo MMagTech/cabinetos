@@ -242,8 +242,10 @@ console is not written down yet (docs/ARCHITECTURE.md, "Known gaps").
 something besides `.md` files and `docs/`):
 
 - **Lint**: shellcheck over every `.sh` in `build_files/`, `ci/` and
-  `cores/`, and over every shell script in `system_files/` (picked by its
-  first line). `just lint` runs the same two commands.
+  `cores/`, over every shell script in `system_files/` (picked by its
+  first line), and over the installer's `%pre` and `%post` in
+  `disk_config/iso.toml`; and every Python file, the ones that ship
+  included, is parsed. `just lint` runs the first two commands.
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
   Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
   summarises the compiler's warnings, fails a new one, and lists the code

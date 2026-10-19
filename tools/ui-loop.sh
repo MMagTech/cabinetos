@@ -107,7 +107,7 @@ while [ $# -gt 0 ]; do
         --shot)     SHOT="$2"; shift ;;
         --args)     EXTRA="$2"; shift ;;
         --env)      ENVS="$ENVS $2"; shift ;;
-        --session-env) SESSION_ENV="$SESSION_ENV\nEnvironment=\"$2\""; shift ;;
+        --session-env) SESSION_ENV="$SESSION_ENV\nEnvironment=\"${2//\%/%%}\""; shift ;;
         --session-script) SESSION_SCRIPT=1 ;;
         --restore)  RESTORE=1 ;;
         *) echo "unknown argument: $1" >&2; exit 1 ;;
@@ -238,6 +238,9 @@ if [ "$SESSION_SCRIPT" -eq 1 ]; then
     echo "session script: the repository's"
 fi
 
+# Both go into printf's format, so a % in an argument is doubled to stay a %
+# (SESSION_ENV's when it is read, above; its \n are printf's on purpose).
+APP=${APP//\%/%%}
 "${A9SSH[@]}" "$A9" "printf '[Service]\nEnvironment=\"CABINETOS_APP=$APP\"$SESSION_ENV\n' > /tmp/50-ui-loop.conf
                    $SUDO mkdir -p $DROPIN_DIR >/dev/null 2>&1
                    $SUDO cp /tmp/50-ui-loop.conf $DROPIN >/dev/null 2>&1

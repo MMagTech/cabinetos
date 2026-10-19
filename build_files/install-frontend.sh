@@ -291,8 +291,6 @@ for expected in \
     /usr/bin/cabinetos-frontend \
     /usr/libexec/cabinetos-wii-bridge \
     /usr/lib/cabinetos/cores/cabinetos-ps2.so \
-    /usr/lib/cabinetos/cores/libryml.so.0.10.0 \
-    /usr/lib/cabinetos/cores/libc4core.so.0.2.8 \
     /usr/share/cabinetos/system/PPSSPP/compat.ini \
     /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml
 do

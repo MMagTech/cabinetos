@@ -147,6 +147,40 @@ jobs:
             sh -c 'head -1 "$1" | grep -q "^#!.*sh" && echo "$1"' _ {} \; \
             | xargs -r shellcheck -e SC1091
 
+      # The Python that ships (the diagnostic report and its privacy scrubber,
+      # cabinetos-steam-libraries) and the Python in the tree: parsed, so a
+      # syntax slip fails here and not on a console making a report (#487,
+      # SCRIPTS-21). Shipped files are picked by their shebang, as above.
+      - name: Python syntax
+        run: |
+          {
+            find build_files ci cores tools -name '*.py'
+            find system_files -type f -exec \
+              sh -c 'head -1 "$1" | grep -q "^#!.*python" && echo "$1"' _ {} \;
+          } | xargs python3 -c 'import ast, sys
+          for p in sys.argv[1:]:
+              ast.parse(open(p, encoding="utf-8").read(), p)
+          print(len(sys.argv) - 1, "files parse")'
+
+      # The installer's own scripts, %pre and %post in disk_config/iso.toml,
+      # run only when somebody installs. Cut out and checked like the rest.
+      # SC2094: %pre reads and writes the same terminal on purpose.
+      - name: Shellcheck the installer's scripts
+        run: |
+          mkdir -p "${RUNNER_TEMP}/ks"
+          python3 - "${RUNNER_TEMP}/ks" <<'PY'
+          import pathlib, re, sys, tomllib
+          ks = tomllib.load(open("disk_config/iso.toml", "rb"))
+          text = ks["customizations"]["installer"]["kickstart"]["contents"]
+          out = pathlib.Path(sys.argv[1])
+          parts = re.findall(r"^%(pre|post)\b[^\n]*\n(.*?)^%end$", text, re.S | re.M)
+          assert parts, "no %pre or %post found in disk_config/iso.toml"
+          for i, (kind, body) in enumerate(parts, 1):
+              (out / f"{i}-{kind}.sh").write_text("#!/usr/bin/bash\n" + body)
+          print(len(parts), "installer scripts")
+          PY
+          shellcheck -e SC2094 "${RUNNER_TEMP}"/ks/*.sh
+
   # THE CONSOLE ITSELF, WHICH THE IMAGE DID NOT CONTAIN UNTIL 2026-09-19.
   #
   # Both of these are CALLS to the workflows that already build these things

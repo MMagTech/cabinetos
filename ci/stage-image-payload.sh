@@ -244,6 +244,12 @@ fi
     echo "Expected $OUT/system/pcsx2/resources/GameIndex.yaml" >&2
     exit 1
 }
+# And its patches, which install-frontend.sh requires: missing, the image
+# build would fail eight minutes in rather than here (#487, SCRIPTS-15).
+[ -s "$OUT/system/pcsx2/resources/patches.zip" ] || {
+    echo "PCSX2's patches.zip is not staged" >&2
+    exit 1
+}
 
 # NOT SHIPPED: cabinet-ps2-probe. It is the headless harness for measuring
 # without a television, it is 28 MB, and nothing on a console runs it.

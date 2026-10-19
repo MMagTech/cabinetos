@@ -95,5 +95,21 @@ jobs:
           fi
           # Needs Settings -> Actions -> General -> "Allow GitHub Actions to
           # create and approve pull requests", as base-update.yml explains.
-          gh pr create --title "Controller list → ${SHORT}" --body-file /tmp/pr-body.md \
-            --base "${{ github.event.repository.default_branch }}" --head "${BRANCH}"
+          # A failure says so in the run's summary, as base-update.yml's does.
+          if ! gh pr create --title "Controller list → ${SHORT}" --body-file /tmp/pr-body.md \
+              --base "${{ github.event.repository.default_branch }}" --head "${BRANCH}"; then
+            {
+              echo "### Could not open the pull request"
+              echo
+              echo "The branch \`${BRANCH}\` is pushed and the update is in it."
+              echo "If the error mentions \`createPullRequest\`, turn on"
+              echo "**Settings → Actions → General → Allow GitHub Actions to"
+              echo "create and approve pull requests**, then re-run this job."
+              echo
+              echo "Open it by hand meanwhile:"
+              echo '```'
+              echo "gh pr create --base main --head ${BRANCH}"
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
+          fi
