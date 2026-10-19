@@ -252,6 +252,9 @@ bool listen(int seconds, std::vector<Device>* out, std::string* err,
     const proc::Result r = proc::run(
         {"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"}, seconds + 15,
         cancel, onLine);
+    // CUT SHORT: whoever cut it is waiting (a window closing, a pairing
+    // asked for), and every device heard was told to onHeard already.
+    if (cancel && cancel->load()) return true;
     // Every line about a device names it: "[NEW] Device E4:17:D8:3D:DB:BE
     // 8BitDo Lite 2", "[CHG] Device 63:95:E1:A8:D2:1C RSSI: ...", with
     // colour codes around the tag. The address after "Device " is the thing.

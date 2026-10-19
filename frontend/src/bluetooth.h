@@ -94,7 +94,9 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err,
 // heard during it, described. `bt::scan` returns everything bluez has ever
 // seen, and on the A9 that listed an 8BitDo under the identity of a mode it
 // was no longer in, which could never answer (2026-09-26). Stopped early by
-// `cancel`, keeping what was heard until then. `onHeard`, if given, is told
+// `cancel`, it returns at once with `out` empty: what was heard until then
+// was told to `onHeard`, and describing it would cost a `bluetoothctl info`
+// per device while somebody waits on the cut (#481). `onHeard`, if given, is told
 // about each device the moment it is heard (and again when its name
 // arrives), so a list can fill while the round is still running: a window
 // that showed nothing for ten seconds looked stalled (MMagTech, 2026-09-26). False only when there is no
