@@ -173,11 +173,15 @@ EOF
 EOF
         ;;
     started|ended)
-        sock=$(newest_socket)
-        [ -n "$sock" ] || exit 0
+        # THE SESSION'S MARKER FIRST, whether or not a gamescope is there
+        # to tell (#485, SCRIPTS-09): an `ended` with no socket (the cage or
+        # headless rung) left it, and the next gamescope started composed,
+        # a measured frame cost, until a later stream ended.
         on=0; [ "$1" = started ] && on=1
         if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
         else rm -f "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"; fi
+        sock=$(newest_socket)
+        [ -n "$sock" ] || exit 0
         # Woken before composing, and only when asleep (above). No
         # screen connected at all is left alone: there is nothing to wake.
         if [ "$on" = 1 ] && connected_screen && ! screen_lit; then
