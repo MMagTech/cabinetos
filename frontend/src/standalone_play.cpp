@@ -57,13 +57,17 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     const std::string root = cab::standalone::saveRoot(emu, saveDir);
     const char* tag = catalog::saveTag(launchJob.coreName.c_str());
     // A LAST GAME HERE THAT NEVER GOT ITS SAVES ZIPPED goes up first, so
-    // the restore below keeps it (finishInterruptedSave).
+    // the restore below keeps it (finishInterruptedSave); for an Xbox game
+    // that is saves another person's start brought off the drive for this
+    // person (recoverDriveSaves).
     if (cab::standalone::hasPlayingNote(saveDir))
         finishInterruptedSave(emu, saveDir, uploader);
     // AN XBOX GAME WHOSE LAST SAVES NEVER CAME OFF ITS DRIVE (the note in
-    // the game's own folder): off now, as a start-up would take them, or the
-    // game does not start, since beforeStart writes this person's older copy
-    // over the drive's (recoverDriveSaves).
+    // the game's own folder): off now, as a start-up would take them, to this
+    // person's folder and the server or to the folder of whoever they belong
+    // to (recoverDriveSaves), since beforeStart writes this person's older
+    // copy over the drive's. Only a drive that will not give them up stops
+    // the game.
     if (!recoverDriveSaves(emu, launchJob.entryPath)) {
         cab::vpad::close();
         std::fprintf(stderr, "[standalone] %s still holds saves from its last game; "
