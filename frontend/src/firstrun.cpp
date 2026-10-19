@@ -13,6 +13,7 @@
 #include "net.h"
 #include "romm.h"
 #include "accounts.h"
+#include "fileio.h"
 #include "storage.h"
 #include "firstrun_internal.h"
 
@@ -52,32 +53,12 @@ std::string readAll(const std::string& path) {
 }
 
 bool writeAll(const std::string& path, const std::string& body, std::string* err) {
-    // Written through a temporary and renamed, because the alternative is a
-    // console that loses its server address to a power cut halfway through a
-    // 40-byte write and comes up on the stand-in library with nobody able to
-    // say why. A rename within one directory is atomic; a truncating write is
-    // not.
-    const std::string tmp = path + ".tmp";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) {
-        if (err) *err = std::string("cannot write ") + tmp + ": " + std::strerror(errno);
-        return false;
-    }
-    const bool wrote = std::fwrite(body.data(), 1, body.size(), f) == body.size();
-    const bool flushed = std::fflush(f) == 0;
-    const bool synced = ::fsync(fileno(f)) == 0;
-    std::fclose(f);
-    if (!wrote || !flushed || !synced) {
-        ::unlink(tmp.c_str());
-        if (err) *err = std::string("cannot write ") + tmp + ": " + std::strerror(errno);
-        return false;
-    }
-    if (::rename(tmp.c_str(), path.c_str()) != 0) {
-        ::unlink(tmp.c_str());
-        if (err) *err = std::string("cannot replace ") + path + ": " + std::strerror(errno);
-        return false;
-    }
-    return true;
+    // Through cab::writeBytes (a temporary, synced, then renamed), because the
+    // alternative is a console that loses its server address to a power cut
+    // halfway through a 40-byte write and nobody able to say why.
+    if (cab::writeBytes(path, body)) return true;
+    if (err) *err = "cannot write " + path + ": " + std::strerror(errno);
+    return false;
 }
 
 std::string isoNow() {

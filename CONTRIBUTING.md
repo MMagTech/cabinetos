@@ -195,7 +195,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
-| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, and two settings changed at once both stick |
+| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, and the cover sweeps spare the tile map, a cover being written and what a link points at |
 | `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, and the Wii's rumble in `wii.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (CI runs it as a step of its own) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
