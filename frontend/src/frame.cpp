@@ -46,7 +46,10 @@ void App::runFrameLoop() {
 
         // THE SCREENSHOT gamescope is writing, whenever there is one.
         pumpStandaloneShot();
-        if (watchStandalone(dt)) continue;
+        if (watchStandalone(dt)) {
+            refuseCaptureOverAnotherWindow("the emulator's");
+            continue;
+        }
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
@@ -193,7 +196,10 @@ void App::runFrameLoop() {
         }
         retargetHomePress();
 
-        if (frameOverPs2Window()) continue;
+        if (frameOverPs2Window()) {
+            refuseCaptureOverAnotherWindow("PCSX2's");
+            continue;
+        }
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);

@@ -2140,6 +2140,7 @@ struct App {
     void stateHooks();
     void noticeGalleryHook(float dt);
     void captureFrame(int dw, int dh);
+    void refuseCaptureOverAnotherWindow(const char* whose);
     // discrig.cpp
     void parseDiscScript();
     void runDiscScript();
