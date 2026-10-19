@@ -63,17 +63,23 @@ bool looksLocal(const std::string& host) {
         int second = atoi(h.c_str() + 4);
         if (second >= 16 && second <= 31) return true;
     }
+    // 100.64.0.0/10, Tailscale's addresses (#479): a RomM on a tailnet is
+    // the person's own, and speaks http as one on the LAN does.
+    if (h.compare(0, 4, "100.") == 0) {
+        int second = atoi(h.c_str() + 4);
+        if (second >= 64 && second <= 127) return true;
+    }
     return false;
 }
 
 // THE CANDIDATE IS ASKED WITHOUT BECOMING THE ADDRESS, and is made the
 // address only once it has answered, so a request on another thread never
 // goes to a candidate that is about to be put back (#398, batch i).
-bool Client::probe(const std::string& candidate) {
+bool Client::probe(const std::string& candidate, bool report) {
     Where at = where();
     at.base = candidate;
     std::string body;
-    if (!getAt(at, "/api/heartbeat", &body, nullptr)) return false;
+    if (!getAt(at, "/api/heartbeat", &body, nullptr, report)) return false;
 
     json_object* root = json_tokener_parse(body.c_str());
     if (!root) return false;
@@ -103,10 +109,16 @@ bool Client::setAddress(const std::string& address, std::string* err) {
     // No scheme. Try the likelier one first — http for a LAN address, because
     // that is what a self-hosted RomM usually speaks, and refusing it is the
     // exact bug Phase 4 exists to not have.
+    //
+    // THE FIRST TRY SAYS NOTHING ABOUT THE SERVER (#479). A scheme the server
+    // does not speak refuses, or is dropped until the timeout, and that used
+    // to mark the whole console's server away until the second answered: the
+    // Offline chip at every start, every minute's heartbeat and every
+    // reconnect. Only the second try, which settles it, reports.
     const bool local = looksLocal(a);
     const std::string first  = (local ? "http://" : "https://") + a;
     const std::string second = (local ? "https://" : "http://") + a;
-    if (probe(first)) return true;
+    if (probe(first, /*report=*/false)) return true;
     if (probe(second)) return true;
     if (err) *err = "nothing answered at " + a + " over http or https";
     return false;

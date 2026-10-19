@@ -294,7 +294,9 @@ private:
     // collection calls.
     bool sendJson(const char* method, const std::string& path, const std::string& json,
                   std::string* body, long* status, std::string* err) const;
-    bool probe(const std::string& candidate);
+    // `report` false: a failure to connect is not told to serverAway, for
+    // the first of setAddress's two schemes (#479); an answer still is.
+    bool probe(const std::string& candidate, bool report = true);
 
     // What a request is sent with, the address and the token, copied
     // together under the lock (romm_http.cpp).
@@ -304,9 +306,10 @@ private:
     };
     Where where() const;
     // get, sent to whatever `at` names. probe asks a candidate this way
-    // without making it the address until it has answered.
+    // without making it the address until it has answered, and says whether
+    // what it met is reported (`report`, as probe's).
     bool getAt(const Where& at, const std::string& path, std::string* body,
-               std::string* err) const;
+               std::string* err, bool report = true) const;
 
     // GUARDS THE THREE BELOW. Nothing is done while holding it but a copy or
     // an assignment, never a request (see the head of this file).
@@ -330,7 +333,8 @@ void noteTransport(void* curlHandle, int curlCode);
 
 // True for addresses that are obviously on a local network, which decides
 // whether http or https is tried first. A hostname with no dots is local by
-// construction, and so is anything in the private ranges or .local/.lan.
+// construction, and so is anything in the private ranges, Tailscale's
+// 100.64.0.0/10, or .local/.lan.
 bool looksLocal(const std::string& host);
 
 // One path SEGMENT, a file name RomM gave us, escaped whole: everything but

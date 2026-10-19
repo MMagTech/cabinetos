@@ -136,7 +136,7 @@ bool Client::get(const std::string& path, std::string* body, std::string* err) c
 }
 
 bool Client::getAt(const Where& at, const std::string& path, std::string* body,
-                   std::string* err) const {
+                   std::string* err, bool report) const {
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
     const std::string url = at.base + path;
@@ -154,7 +154,7 @@ bool Client::getAt(const Where& at, const std::string& path, std::string* body,
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
     CURLcode rc = curl_easy_perform(c);
-    noteTransport(c, rc);
+    if (report || rc == CURLE_OK) noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     if (hdrs) curl_slist_free_all(hdrs);
