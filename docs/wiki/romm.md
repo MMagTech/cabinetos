@@ -48,8 +48,8 @@ It never changes or deletes your games, platforms, firmware or users.
 
 ## Saves made elsewhere
 
-- **Cabinet** ([the Apple TV app](https://github.com/MMagTech/cabinet)) and
-  CabinetOS share saves: progress made in one carries on in the other.
+- Saves made in **Cabinet**, the retired Apple TV app, carry on here: they
+  use the same names.
 - Saves made in RomM's web player or in other apps are not read, and the
   console leaves them alone on the server.
 
