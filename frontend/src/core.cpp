@@ -426,6 +426,10 @@ void Core::unload() {
     dlclose(handle_);
     handle_ = nullptr;
     g = {};
+    // The name and version go with the core: a later game on another path
+    // must not read as this one (#412).
+    coreName_.clear();
+    coreVersion_.clear();
     gDisk = {};
     gDiskSet = false;
     gInitialDisc = -1;

@@ -164,8 +164,12 @@ public:
     bool postPlaySessions(const std::vector<PlaySession>& list, std::vector<int>* outcome,
                           std::string* err) const;
     // The sum of this person's sessions for a game, as this console's device
-    // sees them (playtime.h, "whose time RomM returns").
+    // sees them (playtime.h, "whose time RomM returns"). The request names
+    // that device (deviceId), which RomM 5.4.0 requires (#401).
     bool fetchPlayedMs(int romId, int64_t* ms, std::string* err) const;
+    // The device this token is, RomM's `current_device_id` from
+    // /api/users/me, asked once per token and kept.
+    bool deviceId(std::string* out, std::string* err) const;
 
     // A value going INTO a query fragment, percent-encoded strictly. A search
     // term is whatever somebody typed on a television keyboard, so it can hold
@@ -303,6 +307,7 @@ private:
     mutable std::mutex mu_;
     std::string base_;
     std::string token_;
+    mutable std::string deviceId_;   // the token's device, once asked (deviceId)
     std::string serverVersion_;
 };
 
@@ -321,6 +326,13 @@ void noteTransport(void* curlHandle, int curlCode);
 // whether http or https is tried first. A hostname with no dots is local by
 // construction, and so is anything in the private ranges or .local/.lan.
 bool looksLocal(const std::string& host);
+
+// One path SEGMENT, a file name RomM gave us, escaped whole: everything but
+// the unreserved characters becomes %XX, so `#`, `?`, `&`, `%2F` and a space
+// in a name are the name and never a delimiter (#402: a one-file game whose
+// name began with # or ? was cut off before the server saw it). Every
+// download URL that carries a file name uses this.
+std::string encodeSegment(const std::string& name);
 
 // `--romm-race-test <address> <seconds>`: one client called from many threads
 // while its address and its token are written, against a stand-in server at

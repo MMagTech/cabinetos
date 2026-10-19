@@ -128,6 +128,7 @@ bool Client::loadToken(const std::string& path) {
     if (t.empty()) return false;
     std::lock_guard<std::mutex> lock(mu_);
     token_ = std::move(t);
+    deviceId_.clear();   // a device belongs to a token
     return true;
 }
 
@@ -147,7 +148,7 @@ bool Client::beginPairing(Pairing* out, std::string* err) {
     std::string body;
     long status = 0;
     if (!postJson("/api/auth/device/init", payload, &body, &status, err)) return false;
-    if (status >= 400) {
+    if (status < 200 || status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + " starting pairing";
         return false;
     }
@@ -205,7 +206,7 @@ int Client::pollPairing(const Pairing& p, std::string* err) {
         if (err) *err = "the pairing expired before it was approved";
         return -1;
     }
-    if (status >= 400) {
+    if (status < 200 || status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + " while pairing";
         return -1;
     }
@@ -217,6 +218,7 @@ int Client::pollPairing(const Pairing& p, std::string* err) {
     if (t.empty()) return 0;   // approved-but-empty should not happen; treat as pending
     std::lock_guard<std::mutex> lock(mu_);
     token_ = std::move(t);
+    deviceId_.clear();   // a device belongs to a token
     return 1;
 }
 
@@ -236,6 +238,13 @@ bool Client::fetchCurrentUser(User* out, std::string* err) {
     // preferences, and none of them are this console's business.
     out->id = static_cast<int>(jint(root, "id"));
     out->username = jstr(root, "username");
+    // The device this token is (5.3.1 and 5.4.0 both say), kept for the
+    // play-session list so it need not be asked again (#401, deviceId).
+    out->deviceId = jstr(root, "current_device_id");
+    if (!out->deviceId.empty()) {
+        std::lock_guard<std::mutex> lock(mu_);
+        deviceId_ = out->deviceId;
+    }
     // `avatar_path` is used only as a FLAG — it says whether this person has a
     // picture at all. Its value is a path into RomM's asset tree that nothing
     // serves; see the note on User::avatarPath. The endpoint is built from the
@@ -247,6 +256,26 @@ bool Client::fetchCurrentUser(User* out, std::string* err) {
         if (err) *err = "users/me carried no id";
         return false;
     }
+    return true;
+}
+
+bool Client::deviceId(std::string* out, std::string* err) const {
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        if (!deviceId_.empty()) { *out = deviceId_; return true; }
+    }
+    std::string body;
+    if (!get("/api/users/me", &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    const std::string id = root ? jstr(root, "current_device_id") : std::string();
+    if (root) json_object_put(root);
+    if (id.empty()) {
+        if (err) *err = "users/me named no device";
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(mu_);
+    deviceId_ = id;
+    *out = id;
     return true;
 }
 

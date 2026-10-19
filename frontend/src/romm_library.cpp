@@ -466,22 +466,10 @@ bool Client::fetchRomFiles(int romId, std::vector<RomFile>* out, std::string* er
 }
 
 std::string Client::romFilePath(int romId, const RomFile& f) {
-    // THE NAME IS ESCAPED WHOLE, here, because encodeUrl leaves `#`, `&` and
-    // `?` alone as delimiters, and a file name is not a place for them to
-    // mean anything.
-    static const char* kHex = "0123456789ABCDEF";
-    std::string name;
-    for (const unsigned char c : f.fileName) {
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-            c == '-' || c == '.' || c == '_' || c == '~') {
-            name.push_back(static_cast<char>(c));
-        } else {
-            name.push_back('%');
-            name.push_back(kHex[c >> 4]);
-            name.push_back(kHex[c & 0x0F]);
-        }
-    }
-    return "/api/roms/" + std::to_string(romId) + "/content/" + name +
+    // THE NAME IS ESCAPED WHOLE (encodeSegment), because encodeUrl leaves
+    // `#`, `&` and `?` alone as delimiters, and a file name is not a place for
+    // them to mean anything.
+    return "/api/roms/" + std::to_string(romId) + "/content/" + encodeSegment(f.fileName) +
            "?file_ids=" + std::to_string(f.id);
 }
 

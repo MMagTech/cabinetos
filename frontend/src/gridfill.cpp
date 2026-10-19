@@ -3,6 +3,7 @@
 
 #include "app.h"
 
+#include <cstdio>
 #include <utility>
 
 #include "catalog.h"
@@ -58,6 +59,28 @@ void App::openTile(const screens::Result& res) {
     for (auto& x : own) if (x.query == tileQuery) { t = &x; break; }
     if (!t) return;
     bool more = false;
+    // READ AGAIN WHEN REOPENED A MINUTE OR MORE LATER (#387). A cover fixed on
+    // RomM showed only after a restart, because a grid was read once a run.
+    // RomM moves a game's `updated_at` when it is matched but not its
+    // platform's (checked on the reference server, 2026-10-18), so the
+    // platform list cannot say a grid changed: time is the only signal. The
+    // cost is the first open's, one page, and nothing while the server is
+    // away. A read that fails keeps the list there was.
+    constexpr unsigned long long kRereadAfterMs = 60 * 1000;
+    if (!t->cards.empty() && !romm::serverAway() &&
+        SDL_GetTicks() - t->loadedAtMs >= kRereadAfterMs) {
+        gridFill.stop();
+        std::vector<int> before;
+        before.swap(t->cards);
+        if (loadTileGames(liveClient, lib, *t, &more)) {
+            libraryScreen.learnedTile(tileQuery, t->detail, t->cover);
+            std::fprintf(stderr, "[library] %s: read again, %zu game(s)\n",
+                         t->title.c_str(), t->cards.size());
+        } else {
+            t->cards.swap(before);
+            more = false;
+        }
+    }
     if (t->cards.empty()) {
         // ONE PAGE, AND IT BLOCKS FOR THAT. The person has chosen
         // a system and is waiting for one request rather than for
