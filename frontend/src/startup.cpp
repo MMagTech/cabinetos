@@ -489,13 +489,16 @@ std::optional<int> App::connectToServer(char** argv) {
         if (const std::optional<int> rc = waitForServer(argv)) return rc;
         // WHOEVER PLAYED LAST. The active account's token is what this console
         // starts as — open question 26, decision 2. No account means a machine
-        // that has not been paired, which is first run's job and not something
-        // to paper over here.
-        if (!accounts::loadActiveToken(liveClient)) {
-            std::fprintf(stderr,
-                         "[romm] no account on this console — pair first with "
-                         "--romm-probe --romm-pair\n");
-            return 1;
+        // that has not been paired, which is first run's job; one that got
+        // past it (its accounts emptied by hand, a token file lost) STARTS TO
+        // AN EMPTY HOME AND SAYS SO (#485), as a refused sign-in does
+        // (FIRSTRUN-23, below). It exited, and the session started it again
+        // two seconds later, for ever, with nothing on the screen; Settings'
+        // Add an account, the way back, was never reached.
+        const bool noAccount = !accounts::loadActiveToken(liveClient);
+        if (noAccount) {
+            std::fprintf(stderr, "[romm] no account on this console; starting to an empty Home\n");
+            startProblem = "No account on this console";
         }
         // THE LIST IS HELD IN A NAMED LOCAL AND IT HAS TO BE. `accounts::find`
         // returns a pointer INTO the vector it is given — which is why it takes
@@ -526,7 +529,9 @@ std::optional<int> App::connectToServer(char** argv) {
         setup::showWaiting(waitDeps, kLoadingLine);
         startupShown = true;
         std::string platformsErr;
-        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient, &platformsErr);
+        lib = libFromDrive ? offlineLibrary()
+              : noAccount  ? Library{}
+                           : loadLibrary(liveClient, &platformsErr);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
 
@@ -546,7 +551,7 @@ std::optional<int> App::connectToServer(char** argv) {
         // reached. Home starts empty instead and says which. Anything else
         // (the server gone again, an HTTP error) still exits, so the next
         // start waits for the server.
-        if (platformTiles.empty() && !libFromDrive) {
+        if (platformTiles.empty() && !libFromDrive && !noAccount) {
             const bool refused = platformsErr.rfind("not authorised", 0) == 0;
             if (!refused && !platformsErr.empty()) {
                 std::fprintf(stderr, "[romm] the library did not load: %s\n",
