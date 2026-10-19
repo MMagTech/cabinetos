@@ -232,6 +232,14 @@ Read before working on a core, an emulator, input, saves or states.
   could not hash it either (no `ra_hash`). A single-disc game (Mad Dog
   McCree) booted the same way was the control. Check Redump before blaming
   the feature.
+  And the file can be another console's game: RomM's PlayStation "Primal
+  Rage (USA).chd" (#422, "Primal Rage (PS1) will not start", 2026-10-18)
+  has a Mode 1 data track of 55,251 sectors, 129,950,352 bytes, exactly
+  Redump's **Saturn** Primal Rage (USA) Track 01 (the PlayStation one is
+  222,614,448 bytes and Mode 2, as every PlayStation disc is), and the
+  console's Saturn core plays it. PCSX-ReARMed's "unsupported/invalid CD
+  image" was right. Read the CHD's track list (its CHT2 metadata) and the
+  track sizes against Redump before reading the core.
 
 ## PS2 and GameCube
 
