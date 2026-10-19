@@ -11,60 +11,44 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-19, morning.** `latest` is **2026.10.18.7** (#516, "Ready for RomM
-5.4, and six small fixes a player can meet", merged and promoted on his go
-2026-10-18). `testing` is **2026.10.19.2** (revision a760620): #517, "Overnight
-batch", built unattended overnight by nine sessions on separate files and
-combined on branch `overnight-2026-10-19`. Not merged. The A9 is on the
-testing channel and still runs 2026.10.18.7; its PIN is off. His server can
-move to RomM 5.4 now that #516 is out (database backup first; #401 was not
-run against a 5.4 server). The machines' addresses are in his local notes,
+**2026-10-19.** `latest` and `testing` are **2026.10.19.2** (revision
+a760620, digest sha256:b49fd4925ef5...), #517, "Overnight batch", merged on
+his go after his TV check and promoted. Built unattended overnight by nine
+sessions; it closed 22 issues. #473 and #222 were reopened with what is
+left on each. Judged on the TV: Genesis 4:3, the grid's cover lift, the PS2
+"Disc can't be read" ending, the Restart fade, achievement progress after a
+state load, PS3 "VSync Mode: Full" (his call: stays on, revisit only on a
+report), N64 without the hitch. 39 issues are open. His server can move to
+RomM 5.4 (#516 is out; database backup first). The A9 is on the testing
+channel; its PIN is off. The machines' addresses are in his local notes,
 which CLAUDE.md loads; the tools read them from the environment
 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`).
 
 **His rules from 2026-10-18:** no issue is opened unless he asks for one
 (findings go in the pull request or PROJECT.md); FSR for Xbox 360 stays off
-(PROJECT.md, question 34). His decisions that night, with the items still
-open, are in #517's body.
+(PROJECT.md, question 34). His decisions of that night are in #517's body.
 
 ## Next
 
-1. **Finish #517.** He installs 2026.10.19.2 on the A9 (Settings, System, System
-   update), then the TV check, one step at a time, waiting for "go":
-   - A Genesis game (Sonic) fills a 4:3 shape, not stretched wide (#220).
-   - Open a system's grid: covers lift a little slower, 180 ms (HOME-06).
-   - Destroy All Humans! 2's page says "Disc can't be read" (#506).
-   - Start a game, open the Power menu, choose Restart: the picture fades
-     to black over about a second, silently, then restarts (#393).
-   - Super Mario Land signed in to RetroAchievements: save a state, play
-     on, load it; the log says "[ra] the state's achievement progress
-     restored" (#279).
-   - A PS3 game plays; RPCS3's log says "VSync Mode: Full" (read it, no TV).
-   - An N64 game plays without a hitch twice a second (#254).
-   - The usual: a game with sound.
-   Then merge on his go. It closes 22 issues (listed in #517); two commits
-   say "Fixes #473" and "Fixes #222" though both are only partly done, so
-   GitHub closes them too: reopen both at once with what is left (#473: the
-   power button while an emulator of its own has the screen; #222: the
-   retry fallback). Then strike from #485's list the "Add an account code
-   approved while closed" item (his call: works as is). #422 closes as not
-   a console fault: his server's PS1 Primal Rage file is the Saturn disc.
-   **#511, measured:** the 254 MB splash layer came out identical between
-   the two overnight images (19308fe, a760620), where it used to change
-   every time. The 70 MB OS layer changed, as it must: two scripts in
-   system_files/ changed between them. Its proof is the next image built
-   with no change under build_files/ or system_files/ (method in #517).
-2. **The priority list** of the 37 still open, as one short list for his
-   yes or no (drafted in the 2026-10-19 morning message): fix next, needs
-   the TV, waiting on others, needs his decision, close.
-3. **The automatic checks report only until 2026-10-25**, then fail a pull
+1. **The priority list of the 39 open**, as one short list for his yes or
+   no, grouped as in the 2026-10-19 morning message: ready for the next
+   overnight batch with no decision (#480, the rest of #481, #482, #487,
+   #488, #203, #305); needs the TV or a device; waiting on others; needs
+   his decision; suggested to close (#288, #339, #493, #398, and #490/#492's
+   build-script items). Then run the "no decision" group as the next
+   overnight batch, the same way as #517.
+2. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: read their first week's reports and fix what they find
    (CONTRIBUTING.md, "What CI checks").
+3. **#511's last proof:** the next image built with no change under
+   build_files/ or system_files/ must keep the 70 MB OS layer's digest (the
+   254 MB splash layer already held between 19308fe and a760620; method in
+   #517).
 4. **Review the docs for Cabinet Go**: Cabinet is now the pocket version
    for handhelds, unfinished; the docs that call it "the Apple TV app"
    (CONTRIBUTING.md, docs/CABINET.md, PROJECT.md's banner, README.md, the
    site) need reviewing.
-5. **The monthly health check** starts after item 3.
+5. **The monthly health check** starts after item 2.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
