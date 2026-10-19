@@ -135,7 +135,13 @@ void App::finishExit() {
     detailStates.stale = true;   // Continue from may have changed
     playing = false;
     overlayOpen = false;
-    overlayFade.retarget(0.0f, overlayFadeSeconds);
+    // THE MENU GOES WITH THE GAME, as it does for an emulator of its own
+    // (finishStandalone): faded out, its scrim and panel went on fading
+    // over Home after the game had gone (MMagTech on the TV, 2026-10-19).
+    // exitToHome's wait for a booting core still fades it, since the game
+    // is on screen then.
+    overlayFade.from = overlayFade.to = 0.0f;
+    overlayFade.elapsed = overlayFade.duration;
     dropPressesFromClosing();
     std::fprintf(stderr, "[overlay] exited to Home\n");
 }
