@@ -919,7 +919,11 @@ struct App {
         bool leaving = false;
     };
     std::vector<BatterySlot> batterySlots;
-    Uint64 batteryRowAt = 0;   // when the bar last drew it (SDL ticks, ms)
+    // Whether the bar laid the row out this frame, and the frame before: a
+    // row that was not on screen a frame ago arrives in place. Counted in
+    // frames, not 200 ms, so a slow frame is not taken for the bar having
+    // been away (#484, PLAY-07).
+    bool batteryRowNow = false, batteryRowBefore = false;
     AchievementToast raToast;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game

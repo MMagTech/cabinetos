@@ -21,6 +21,8 @@ using namespace design;   // NOLINT, as main.cpp names them
 // recorded in the audit (Part 2, 3.14 item 12), not changed here.
 void App::runFrameLoop() {
     while (running) {
+        batteryRowBefore = batteryRowNow;   // settleBatteryRow (PLAY-07)
+        batteryRowNow = false;
         // Full speed while any game runs, balanced on Home (powerprofile.h).
         powerprofile::update(playing || standaloneRun.active());
         // RetroAchievements' network answers, on this thread (achievements.h).

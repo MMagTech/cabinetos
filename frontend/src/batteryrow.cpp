@@ -48,10 +48,9 @@ float App::settleBatteryRow(float sc, float dt) {
     };
     constexpr float kFade = 0.2f, kSlide = 0.25f;
     {
-        // Fresh: the bar was not on screen a moment ago (a game or a
+        // Fresh: the bar was not on screen the frame before (a game or a
         // game's page); moving along the bar is not a change.
-        const Uint64 nowMs = SDL_GetTicks();
-        const bool fresh = nowMs - batteryRowAt > 200;
+        const bool fresh = !batteryRowBefore;
         if (fresh) {
             batterySlots.clear();
             for (const BatteryEntry& e : row) {
@@ -139,7 +138,7 @@ float App::settleBatteryRow(float sc, float dt) {
             sl.offset.tick(dt);
             sl.alpha.tick(dt);
         }
-        batteryRowAt = nowMs;
+        batteryRowNow = true;
     }
     float rowW = 0.0f;
     for (const BatterySlot& sl : batterySlots) rowW = std::max(rowW, sl.offset.value());
