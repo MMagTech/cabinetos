@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -80,7 +81,7 @@ extern uint32_t gQueueFamily;
 extern VkCommandBuffer gCmd;
 extern VkFence gFence;
 extern std::mutex gQueueLock;
-extern uint32_t gSyncIndex;
+extern std::atomic<uint32_t> gSyncIndex;
 
 // Defined in vkbridge.cpp.
 extern std::mutex gImageLock;

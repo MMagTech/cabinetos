@@ -59,7 +59,9 @@ std::mutex gQueueLock;
 
 // Which of the kSyncIndices (vkhost_state.h) the core is on this frame;
 // present moves it on.
-uint32_t gSyncIndex = 0;
+// Atomic: the cores' render threads read it (getSyncIndex) while present
+// moves it on the GL thread (#483, EMU-03).
+std::atomic<uint32_t> gSyncIndex{0};
 
 retro_hw_render_interface_vulkan gInterface{};
 const retro_hw_render_context_negotiation_interface_vulkan* gNegotiation = nullptr;

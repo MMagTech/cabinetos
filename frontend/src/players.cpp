@@ -3,12 +3,14 @@
 #include "battery.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
+#include <mutex>
 
 namespace players {
 
@@ -90,8 +92,12 @@ namespace {
 
 Seats gSeats;     // the console's own pads
 Seats gRemote;    // pads that came through a stream (setStreaming)
-bool gStreaming = false;
+std::atomic<bool> gStreaming{false};   // read by setAside, on that thread too
 std::map<SDL_JoystickID, bool> gIsRemote;
+// gIsRemote IS READ ON ANOTHER THREAD (#483, EMU-11): SDL runs the event
+// filter, and so setAside, on the thread that pushes the event, which for
+// a Wii Remote is its reader. Held only around the map, never an SDL call.
+std::mutex gIsRemoteLock;
 std::map<SDL_JoystickID, SDL_Gamepad*> gOpen;
 std::map<SDL_JoystickID, std::string> gDir;   // its HID device, for its battery
 
@@ -236,7 +242,10 @@ void added(SDL_JoystickID id) {
     }
     gOpen[id] = gp;
     const bool remote = isRemote(gp);
-    gIsRemote[id] = remote;
+    {
+        std::lock_guard<std::mutex> lk(gIsRemoteLock);
+        gIsRemote[id] = remote;
+    }
     gDir[id] = battery::deviceDir(SDL_GetGamepadPath(gp));
     (remote ? gRemote : gSeats).add(id, keyOf(gp));
     std::fprintf(stderr, "[players] pad %u is %s%s%s%s\n", static_cast<unsigned>(id),
@@ -252,7 +261,10 @@ void removed(SDL_JoystickID id) {
     gOpen.erase(it);
     gSeats.remove(id);
     gRemote.remove(id);
-    gIsRemote.erase(id);
+    {
+        std::lock_guard<std::mutex> lk(gIsRemoteLock);
+        gIsRemote.erase(id);
+    }
     gDir.erase(id);
     changed("disconnected", id);
 }
@@ -279,6 +291,7 @@ void setStreaming(bool on) {
 bool streaming() { return gStreaming; }
 
 bool setAside(SDL_JoystickID id) {
+    std::lock_guard<std::mutex> lk(gIsRemoteLock);
     auto it = gIsRemote.find(id);
     return it != gIsRemote.end() && it->second != gStreaming;
 }
@@ -321,7 +334,10 @@ std::vector<Held> held() {
         h.key = s.key;
         h.dir = gDir[s.id];
         h.gp = it->second;
-        h.stream = gIsRemote[s.id];
+        {
+            std::lock_guard<std::mutex> lk(gIsRemoteLock);
+            h.stream = gIsRemote[s.id];
+        }
         out.push_back(std::move(h));
     }
     return out;

@@ -52,7 +52,7 @@ constexpr uint32_t kWarningId = 101000001;
 
 // Defined in achievements.cpp.
 std::string str(const char* s);
-void keepAnswer(const std::string& name, const std::string& body);
+void keepAnswer(const std::string& name, const std::string& body, int account = gAccount);
 GameList sampleList();
 
 // The game's page's list (ra_list.cpp).

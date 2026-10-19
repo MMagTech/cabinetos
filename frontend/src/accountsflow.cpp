@@ -79,6 +79,15 @@ auto App::switchAccount(int id, std::string* why) -> bool {
             *why = owed == 1 ? "A save is still uploading" : "Saves are still uploading";
         return false;
     }
+    // NOR WHILE THE LIBRARY IS RELOADING after an offline start (#483,
+    // FILES-10): its worker asks who the person is when it writes their
+    // favourites, so a switch in between wrote the last person's into the
+    // new person's favorites.json. It takes seconds; the chip is pressed
+    // again after.
+    if (onlineLoad.running.load()) {
+        if (why) *why = "The library is still loading";
+        return false;
+    }
 
     // A REFUSED SWITCH PUTS THE LAST PERSON BACK (#398, SETTINGS-01).
     // `activate` writes the new id into accounts.json before anything below
@@ -284,6 +293,14 @@ void App::startRemove(const accounts::Account& who) {
 // so anybody else's would otherwise be lost to a sign out.
 void App::startSignOut() {
     if (removeJob->running.load()) return;
+    // NOT WHILE AN UPLOAD IS GOING (#483, FILES-11), as a switch is not:
+    // the send below covers the signed-in person too, so the same file
+    // could go to RomM twice at once.
+    if (const int owed = uploader.pending(); owed > 0) {
+        menuNotice.say(owed == 1 ? "A save is still uploading" : "Saves are still uploading",
+                       Tone::Info);
+        return;
+    }
     removeJob->running = true;
     { std::lock_guard<std::mutex> lk(removeJob->m);
       removeJob->finished = false; removeJob->left = 0;

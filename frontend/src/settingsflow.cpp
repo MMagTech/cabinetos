@@ -323,6 +323,7 @@ void App::buildSettings() {
     const std::vector<drives::Drive> found = drives::found();
     formatable.clear();
     ejectFormats.clear();
+    ejectPaths.clear();
     auto formatValue = [] {
         return std::string(drives::formatting() ? "Formatting\xE2\x80\xA6" : "Format");
     };
@@ -360,6 +361,7 @@ void App::buildSettings() {
         }
         store.push_back({id ? K::Action : K::Info, id, name, space, value});
         if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
+        if (external) ejectPaths[kSetEject + static_cast<int>(i)] = locs[i];
         // STEAM'S SHARE, under the main drive, once it is set up (#223):
         // the main drive's own row leaves it out, and this says where it
         // went. The one place to grow it or remove Steam. MMagTech,

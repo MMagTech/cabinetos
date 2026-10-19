@@ -1356,6 +1356,7 @@ struct App {
     Uint64 shortcutTakenAt = 0;
     std::vector<drives::Drive> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
+    std::map<int, std::string> ejectPaths;   // an Eject row's id -> its location
     // An Eject row's id -> its drive in `formatable`, when Format is offered
     // beside Eject.
     std::map<int, size_t> ejectFormats;
