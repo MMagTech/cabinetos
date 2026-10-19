@@ -306,7 +306,13 @@ is not that one. A report only: it never fails the job.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
-maintainer pushes to `testing`. A pull request into any other branch runs
+maintainer pushes to `testing`. That includes the check of each core's
+options against `cores/options/` (`cores/check-options.sh`, which
+`cores/build-core.sh` runs on every core it builds or takes from the
+cache): a pull request to `main` that moves a core's pin passes, and a
+difference in its options shows at the testing push. Dolphin's and FBNeo's
+lists need a game loaded, so `tools/check-applied.sh` compares them on the
+reference console. A pull request into any other branch runs
 `build-frontend.yml`, `build-core.yml`, `build-pcsx2.yml`, `build-cemu.yml`
 and `build-sunshine.yml` when it touches their paths (each workflow's
 `paths:` list).
@@ -352,9 +358,9 @@ day it fails. A new check that can fail starts the same way, with that
 date set a week ahead in its pull request.
 
 **Not checked by CI:** the frontend's tests that need a screen, a core or a
-server, the shell scripts under `tools/` and `disk_config/`, any Python
-(including the diagnostic report's privacy scrubber), and the workflows
-themselves. Run what your change touches yourself and say so.
+server, the shell scripts under `tools/`, what any Python does (Lint only
+parses it, so the diagnostic report's privacy scrubber is never run), and
+the workflows themselves. Run what your change touches yourself and say so.
 
 **The proof of a change is its testing image**, judged on the reference
 console. That step is the maintainer's.
