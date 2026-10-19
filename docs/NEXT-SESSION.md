@@ -14,11 +14,11 @@ source of truth for anything on RomM's data.
 **2026-10-19.** `latest` and `testing` are **2026.10.19.2** (revision
 a760620, digest sha256:b49fd4925ef5...), #517, "Overnight batch", merged on
 his go after his TV check and promoted. Built unattended overnight by nine
-sessions; it closed 22 issues. #473 and #222 were reopened with what is
+sessions; it closed 22 issues. #473, #222 and #490 were reopened with what is
 left on each. Judged on the TV: Genesis 4:3, the grid's cover lift, the PS2
 "Disc can't be read" ending, the Restart fade, achievement progress after a
 state load, PS3 "VSync Mode: Full" (his call: stays on, revisit only on a
-report), N64 without the hitch. 39 issues are open. His server can move to
+report), N64 without the hitch. 37 issues are open. His server can move to
 RomM 5.4 (#516 is out; database backup first). The A9 is on the testing
 channel; its PIN is off. The machines' addresses are in his local notes,
 which CLAUDE.md loads; the tools read them from the environment
@@ -30,7 +30,7 @@ which CLAUDE.md loads; the tools read them from the environment
 
 ## Next
 
-1. **The priority list of the 39 open**, as one short list for his yes or
+1. **The priority list of the 37 open**, as one short list for his yes or
    no, grouped as in the 2026-10-19 morning message: ready for the next
    overnight batch with no decision (#480, the rest of #481, #482, #487,
    #488, #203, #305); needs the TV or a device; waiting on others; needs
