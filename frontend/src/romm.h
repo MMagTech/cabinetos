@@ -186,8 +186,10 @@ public:
     // makes a hero possible on a machine that has never launched anything.
     bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
-    // The games marked favourite, newest first. Home's second shelf, and only
-    // drawn when there are any — an empty Favorites row is worse than none.
+    // The games marked favourite, in RomM's title order: RomM keeps no date
+    // for a favourite. Home's second shelf, in the console's own order
+    // (favorites.cpp, keepFavorites), and only drawn when there are any — an
+    // empty Favorites row is worse than none.
     bool fetchFavorites(int limit, std::vector<Game>* out, std::string* err);
 
     // Every firmware file a platform carries. Empty is a normal answer: most

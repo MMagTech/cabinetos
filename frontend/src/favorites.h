@@ -20,7 +20,8 @@ std::map<int, bool> favOwed(const storage::User& u);
 std::vector<int> favoriteList(const storage::User& u);
 // A heart pressed: the list and what is owed change together.
 void pressFavorite(const storage::User& u, int romId, bool on);
-// The list as the server has it, written with every press not yet sent
-// applied on top (loadLibrary).
-void keepFavorites(const storage::User& u, std::vector<int> ids);
+// The list made from the server's (loadLibrary), with every press not yet
+// sent applied on top, newest first as this console knows it; written, and
+// returned.
+std::vector<int> keepFavorites(const storage::User& u, const std::vector<int>& onServer);
 bool sendFavoritesAs(romm::Client& c, const storage::User& who, std::string* err);

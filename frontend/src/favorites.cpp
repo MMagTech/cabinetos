@@ -103,16 +103,36 @@ void pressFavorite(const storage::User& u, int romId, bool on) {
     putFavOwedLocked(u, m);
 }
 
-void keepFavorites(const storage::User& u, std::vector<int> ids) {
+// NEWEST FIRST, AS FAR AS THIS CONSOLE CAN KNOW (#476). RomM keeps no date
+// for a favourite and lists them by title, so the order is the console's
+// own: a heart pressed here goes first (pressFavorite), a favourite RomM has
+// that this list has never held was made elsewhere since it was last read
+// and comes next, in RomM's order, and the rest keep their places. One
+// RomM no longer has goes, unless a press here not yet sent says otherwise.
+//
+// What is owed is read here, under the lock, rather than when the caller
+// fetched: a press made since then wins (#405).
+std::vector<int> keepFavorites(const storage::User& u, const std::vector<int>& onServer) {
     std::lock_guard<std::mutex> lock(gFavMutex);
-    // What is owed is read again here, under the lock, rather than trusted
-    // from when the caller fetched: a press since then wins.
-    for (const auto& [id, on] : favOwedLocked(u)) {
-        auto it = std::find(ids.begin(), ids.end(), id);
-        if (!on && it != ids.end()) ids.erase(it);
-        if (on && it == ids.end()) ids.insert(ids.begin(), id);
-    }
+    const std::vector<int> old = listLocked(u);
+    const std::map<int, bool> owed = favOwedLocked(u);
+    auto has = [](const std::vector<int>& v, int id) {
+        return std::find(v.begin(), v.end(), id) != v.end();
+    };
+    auto wanted = [&](int id) {
+        if (auto it = owed.find(id); it != owed.end()) return it->second;
+        return has(onServer, id);
+    };
+    std::vector<int> ids;
+    // Owed but missing from the list: only if the list was lost.
+    for (const auto& [id, on] : owed)
+        if (on && !has(old, id)) ids.push_back(id);
+    for (int id : onServer)
+        if (!has(old, id) && wanted(id) && !has(ids, id)) ids.push_back(id);
+    for (int id : old)
+        if (wanted(id) && !has(ids, id)) ids.push_back(id);
     putListLocked(u, ids);
+    return ids;
 }
 
 // Every favourite `who` owes, sent; each stops being owed once the server has
