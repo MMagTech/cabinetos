@@ -75,7 +75,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 51 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 52 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -315,6 +315,11 @@ down. "Look now at" is where the code or a later decision moved on.
 - **48. Same-name games, regions and versions, issue #383** ("Same-name
   games: show RomM's tags in the heading"). Decided 2026-10-14, built and
   judged on the TV the same day.
+- **49. PS Vita (Vita3K), issue #198** ("Research: PS Vita through Vita3K,
+  and whether touch rules it out"). Researched 2026-10-19, not decided: the
+  first four tests pass on paper; recommended no for now, because Sony's
+  PS TV list assumes a touch pointer Vita3K lacks (Vita3K/Vita3K#3707), and
+  no gyro. The A9 hand test waits for a time he names.
 
 ---
 
@@ -17638,3 +17643,249 @@ read cannot be told from one the console showed wrong (MMagTech, 2026-10-14:
 "if we think we need to include it to better help troubleshoot ... include
 it"). He tells his Discord users it is there; if they push back, it is
 discussed again.
+
+### 49. PS Vita (Vita3K), issue #198
+
+**Researched 2026-10-19; research only, no code; not decided.** The brief
+is MMagTech's comment on #198 of the same day: five tests, a failure on any
+of the first four a plain no, the fifth his call on the numbers; then which
+games are unique, whether touch was play or navigation (Sony's PS TV list as
+the pad rule), gyro, controls, start and stop, pin and licence, and the Game
+Boy motion games. Read: Vita3K's source at master `7428ca0` (2026-10-19,
+numbered build 4202), its compatibility tracker and Xenia Canary's, Sony's
+PS TV user's guide, Wikipedia's Vita lists (their PS TV column cites Sony),
+No-Intro's Vita DATs (libretro-database `12c21cf`), the pinned mGBA and
+Gambatte, SDL 3.4.16, and his RomM read-only with the Mac token. Nothing ran
+on the A9 or the VM. The sources, linked, are in the comment on #198.
+
+#### What his server holds
+
+- **26 games, not 27.** The 27th entry, `psvita`, is a folder of 26
+  `.psvita` text files (each holds a title ID, ES-DE's launch format) and
+  the `vita.py` that wrote them. Not a game.
+- **Each game is one zip** (`Dragon's Crown [PCSE00019] [USA] [NoNpDRM].zip`),
+  stored without compression, holding only `app/<title ID>/`: `eboot.bin`,
+  `sce_sys/param.sfo`, `sce_pfs/`, and the licence
+  `sce_sys/package/work.bin` (512 bytes). Read from all 26 central
+  directories. No patch or DLC folders; every `param.sfo` says `APP_VER
+  01.00`.
+- **Every licence is No-Intro's:** each `work.bin`'s SHA-1 matches No-Intro's
+  "Sony - PlayStation Vita (PSN)" DAT (2026-10-07) for that USA release.
+  There is no Redump Vita DAT: Vita games are cards and downloads, No-Intro's
+  domain ("Sony - PlayStation Vita", cards as `.vpk`; "(PSN)", one
+  `work.bin` per title).
+- **The game files are encrypted** (Sony's PFS layer): the manual pages in
+  `sce_sys/manual/` are not readable images in any of the 26. Only
+  `param.sfo` and the licence are plain.
+- **RomM 5.4.0 leaves `title_id` empty** for all 26; the zip's first 128
+  bytes name it (`app/PCSE00655/`).
+- **No Vita firmware** on the server (`/api/firmware?platform_id=29` is
+  empty).
+
+#### The five tests
+
+| Test | Answer | Why |
+|---|---|---|
+| 1. What it needs from RomM | **passes, once he uploads two firmware files** | A game is one zip with its licence inside. Firmware: Sony's system software and its font package, which Sony names `PSP2UPDAT.PUP` alike, so they need two names in RomM's Vita `bios/` folder. Vita3K installs each without a window (`--firmware`, one per run, `main.cpp:139-145`), as RPCS3's `--installfw` installs `PS3UPDAT*.PUP` (`standalone_rpcs3.cpp`). Vita3K's quickstart makes both step 3 of 5; it decrypts games without them, but system modules and fonts come from them |
+| 2. No user interaction | **passes on paper** | `--frontend sdl` (b852ad972, 2026-10-09): "a plain window that runs the app given by -r and quits with it". That frontend shows no dialog; the welcome, the update check and the compatibility download belong to the Qt window. User `00` is made by itself. To set: `discord-rich-presence: false` (on by default), `http-enable: false` (games may use HTTP by default), `show-compile-shaders: false`, a log level. Traps: `-F` does nothing there and the window opens at 960x544, so gamescope must fill the screen; `-r` checks the title against the default config's `pref-path` before `-c` is read, so the console writes Vita3K's own `config.yml` before each start, as it deletes Edge's |
+| 3. The cache model | **passes, the way PS3 packages do** | A Vita game is installed before it runs: Vita3K extracts the zip, then decrypts it with `work.bin`, deleting the copy if that fails (`interface.cpp:96-111, 190-252`). So the cached thing is the installed folder, made once on the download worker in the game's folder and removed with it, as PS3 packages are (`standalone_rpcs3.cpp:1-46`); the zip goes after. Costs: about twice the game's size on disk during the install (Killzone: Mercenary is 3.2 GB); install time unmeasured. Installing from a path reinstalls every time (`interface.cpp:196-204`), so starts use `-r`. Outside the folder: the shader and pipeline cache (`~/.cache/Vita3K/shaders/<ID>`), console-wide as Xenia's is |
+| 4. Saves | **passes** | One folder per game, `ux0/user/00/savedata/<dir>`, zipped and sent as PSP's and Xbox 360's are, kept in the person's folder as Xenia's content root is. Vita3K has no save states at all. A real Vita's saves are sealed to that Vita and will not load, as a real 360's do not |
+| 5. Playability | **his call; on the labels, not more experimental than Xbox 360** | below |
+
+**Playability, counted 2026-10-19** (open reports per label):
+
+| | Playable to the end | Reaches play | Reports |
+|---|---|---|---|
+| Vita3K (Vita3K/compatibility) | 1,900 (56.9%) | 2,834 (84.9%): Playable, "Ingame +" 532, "Ingame -" 402 | 3,340 |
+| Xenia Canary (xenia-canary/game-compatibility) | 289 (25.8%) | 1,056 (94.4%): playable, "gameplay" 767 | 1,119 |
+
+The scales differ: Xenia's "gameplay" is any working gameplay, Vita3K
+splits it in two. Both are players' reports on any hardware, some years
+old, and the console runs Edge, not Canary. **His 26:** 23 Playable;
+Killzone: Mercenary "Menu" (Vita3K/compatibility#278), MotorStorm RC
+"Intro" (#3112, Windows, build 3725), Skullgirls 2nd Encore "Intro" (#4039,
+Linux on a Radeon RX 6600, build 4058, 2026-06: a grey screen after the
+logo). His eight Xbox 360 games for comparison: five labelled playable (both
+Forzas, both Gears, Left 4 Dead 2), three unlisted, all eight played on the
+A9 (question 34).
+
+#### Touch: Sony's PS TV list is a pad rule with a pointer
+
+Sony's PS TV user's guide, "Using the touch pointer": in the games Sony
+allowed, a controller does touch through a pointer. L3 shows it for the
+screen, R3 for the rear touch pad, both together for both; the left stick
+(or a DUALSHOCK 4's touch pad) moves it and L2 taps; the right stick brings a
+second pointer, tapped with R2. So a game on Sony's list may still need a
+tap: Sony judged it playable with the pointer. Wikipedia's Vita lists carry
+Sony's list as a PS TV column, sourced to Sony Japan's software search and
+the US store's "PS Vita Games (for PS TV)": 1,075 Yes, 569 No, 16 Partial of
+1,664 rows. By name, not title ID.
+
+**What reaches Vita3K today: no touch at all.** Every emulator of its own
+gets the console's virtual pads, which carry neither a touch pad nor motion
+(`vpad.h`); SDL 3.4.16's Linux joystick code has no touch pad support for
+such a device (`SDL_sysjoystick.c`). Vita3K takes a real DUALSHOCK 4 or
+DualSense touch pad as the front screen (`touch.cpp:251-290`); only its Qt
+window switches it to the rear pad, and no frontend has a stick pointer. The PS TV pointer is an open request upstream,
+Vita3K/Vita3K#3707 ("PSTV 'touch pointer' function", 2025-12-22, no reply).
+**So Sony's list can be the one rule only once Vita3K has the pointer;**
+without it, a listed game that needs a tap stops at that tap.
+
+#### His 26 games
+
+"Elsewhere here" is a version on a system this console plays (PS4, Xbox
+One, PC, 3DS and phones are not). "Not found": no source read mentions it.
+Touch and motion are for the Vita version, from reviews, the PlayStation
+Blog and Wikipedia (the game's own manuals are encrypted, above).
+
+| Game (title ID) | Elsewhere here | Touch | PS TV list | Motion | Vita3K |
+|---|---|---|---|---|---|
+| Dragon's Crown (PCSE00019) | PS3 | optional (the right stick does it too) | yes | not found | Playable |
+| Geometry Wars 3: Dimensions (PCSE00655) | PS3, Xbox 360 | not found | yes | not found | Playable |
+| Gravity Rush (PCSA00011) | **unique** (PS4 remaster) | **required** (dodge by swipe; Gravity Slide) | **no** | **required** (Gravity Slide) | Playable |
+| Guacamelee! (PCSE00033) | PS3; Xbox 360, Wii U, Switch as Super Turbo Championship Edition | probably required (chicken form by swipe) | yes | not found | Playable |
+| Hotline Miami 2: Wrong Number (PCSE00402) | PS3, Switch | not found | yes | not found | Playable |
+| Killzone: Mercenary (PCSA00107) | **unique** | **required** at 1.00 (melee, hacking); update 1.11 reworked it for the PS TV | yes | optional | Menu |
+| MotorStorm RC (PCSA00027) | PS3 | menus only | yes | not found | Intro |
+| Muramasa Rebirth (PCSE00240) | Wii (The Demon Blade) | none | yes | none | Playable |
+| Ninja Gaiden Sigma Plus (PCSE00021) | PS3 (Sigma) | optional, can be turned off | yes | optional | Playable |
+| Odin Sphere Leifthrasir (PCSE00899) | PS3; PS2 original | not found | yes | not found | Playable |
+| Pumped BMX+ (PCSE00702) | PS3, Wii U | **required** (rear pad switches trick sets) | **no** | not found | Playable |
+| Riddled Corpses EX (PCSE01251) | Switch | not found | yes | not found | Playable |
+| Salt and Sanctuary (PCSE01023) | Switch | not found | yes | not found | Playable |
+| Severed (PCSE00589) | Wii U, Switch (touch there too) | **required** (every attack a swipe) | **no** | not found | Playable |
+| Shovel Knight (PCSE00640) | PS3, Wii U, Switch | menus only (rear-pad extras) | yes | not found | Playable |
+| Skullgirls 2nd Encore (PCSE00606) | Switch; PS3, Xbox 360 as Encore | optional (macro buttons) | yes (1 to 2 players) | not found | Intro |
+| Super Monkey Ball: Banana Splitz (PCSE00017) | **unique** | **required** (menus, two modes) | **no** | optional in the main game; camera modes | Playable |
+| Surge Deluxe (PCSE00370) | **unique** | **required** (touch only) | **no** | not found | Playable |
+| Table Top Racing (PCSE00323) | **unique** (PC, phones, PS4, Xbox One) | **main menu touch only**; rear touch in races | yes | not found | Playable (Europe's ID; none for the USA one) |
+| Tales from Space: Mutant Blobs Attack (PCSE00034) | PS3, Xbox 360, Switch | **required** (drag platforms) | **no** | **required** for one bonus level | Playable |
+| Thomas Was Alone (PCSE00258) | PS3, Wii U, Switch | optional | yes | not found | Playable |
+| TxK (PCSE00397) | **unique** | probably required (tap for the smart bomb) | yes | tilt in the warp tunnel, unclear | Playable |
+| Unit 13 (PCSA00014) | **unique** | **required** (objectives, mines) | **no** | none | Playable |
+| Velocity 2X (PCSE00374) | Switch | optional (teleport by cursor too) | yes | not found | Playable |
+| Windjammers (PCSE01032) | Switch | not found | yes | not found | Playable |
+| WipEout 2048 (PCSA00015) | **unique** (PS4 Omega Collection) | optional | **no** | optional | Playable |
+
+**What the table says.**
+
+- **8 of the 26 play nowhere else on this console:** Gravity Rush, Killzone:
+  Mercenary, Super Monkey Ball: Banana Splitz, Surge Deluxe, Table Top
+  Racing, TxK, Unit 13, WipEout 2048.
+- **18 are on Sony's list, 8 are not.** The 14 listed games with no touch
+  needed (or none found) all play here already, on PS3, Switch, Wii U, Wii or Xbox 360, most
+  as the same game. The four listed games that need a tap are Guacamelee!
+  (also here) and three unique ones: Killzone: Mercenary, Table Top Racing
+  and TxK. Killzone was made ready for the PS TV by update 1.11 ("reworked
+  all the touch mechanics", PlayStation Blog, 2014-10-13); his copy is 1.00,
+  and updates wait on #181 ("Updates and DLC as separate files in RomM
+  (Switch, PS3, Xbox 360)").
+- **So without a pointer, the Vita adds no game to his library that does
+  not already play here; with it, two (three once updates come).** The other
+  five unique games are off Sony's list: four need touch, and WipEout 2048
+  is off it although its touch and tilt are optional.
+
+#### Gyro
+
+- **His 26:** motion is required only in Gravity Rush (the Gravity Slide)
+  and Mutant Blobs Attack (one bonus level); both are off Sony's list and
+  need touch anyway. Optional in Killzone, Ninja Gaiden Sigma Plus, Banana
+  Splitz and WipEout 2048; unclear in TxK. **A gyro would unlock none of
+  his games.**
+- **Across the Vita:** no public list of games that need motion was found.
+  Vita3K's tracker has 4 open reports labelled "motion missing" and 2
+  "sensor missing".
+- **A Wii-style greying rule needs data,** as GameTDB is for Wii; nothing
+  says which Vita games need motion, so "needs motion" could not be told
+  from "needs touch". Sony's list leaves the motion games out already.
+- **Could a DualSense unlock them?** Vita3K takes motion from any SDL pad
+  reporting both sensors (`ctrl.cpp:102-108`, Vita3K PR #2628, 2023-09-02),
+  and a DualSense does. But the virtual pads carry none, and SDL 3.4.16 pairs
+  a pad with its motion device by matching their UNIQ strings
+  (`SDL_sysjoystick.c:1530-1584`), which uinput cannot set (no such ioctl in
+  `uinput.h`): one player at best, unproven. The other way, handing Vita3K
+  the real pads, is open because Vita3K's SDL is 3.4.16 as the console's is,
+  so the numbering fault `vpad.h` guards against does not arise; it would
+  give up the console's player order and the pause menu's hold on the pads,
+  for one system.
+- **Recommended: no gyro for the Vita.** It unlocks nothing on his library,
+  there is no data to grey by, and it is a second input path.
+
+#### The Game Boy motion games
+
+- **mGBA at the pin** (`e31759b`) asks for libretro's sensor interface
+  (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`, `libretro.c:1089-1114`) and
+  feeds the accelerometer's X and Y to tilt carts and the gyroscope's Z to
+  gyro carts (`:2552-2565`). Its own table marks them: WarioWare: Twisted!
+  (`RZWE`, gyro and rumble), Yoshi Topsy-Turvy (`KYGE`, tilt), and Japan's
+  Korokoro Puzzle (`KHPJ`, tilt) (`src/gba/overrides.c`). The console's core
+  host never answers that call (question 35: "the frontend does not offer it
+  yet"), and mGBA has no stick stand-in, so these games get no motion.
+- **Gambatte at the pin** (`d9d6cd0`) refuses MBC7 carts ("MBC7 ROM not
+  supported", `cartridge.cpp:905`). His Kirby Tilt 'n' Tumble is cart type
+  0x22, MBC7 (read from his file), so it does not start at all today. mGBA's
+  Game Boy core runs MBC7 from the same motion source (`src/gb/mbc.c`).
+- **His server has two:** WarioWare: Twisted! (its header says `RZWE`) and
+  Kirby Tilt 'n' Tumble.
+- **3DS:** there is no 3DS core on the console. Azahar's libretro core
+  (master `987f184`, 2026-10-17) takes gyro and accelerometer through the
+  same interface (`src/citra_libretro/input/input_factory.cpp:99-125`).
+- **So one piece serves the cores** (answer the sensor interface from the
+  player's own pad, in process, where the console already reads the real
+  pads), **but not Vita3K**, a separate program behind virtual pads: two
+  pieces, not one. A greying rule by cart hardware is possible from data
+  (mGBA's table for GBA; header byte 0x147 = 0x22 for Game Boy), and Kirby
+  would also need MBC7 carts sent to mGBA, a choice of core by cart type. If
+  any motion is built, this is the cheapest; whether it is wanted is his
+  call.
+
+#### Controls, start and stop, pin and licence (for when it is built)
+
+- **Controls:** the Vita has L and R only, no stick clicks. Vita3K gives L2,
+  R2, L3 and R3 only to games that ask for the PS TV's extended pad
+  (`ctrl.cpp:199-219`). With `pstv-mode` each pad is its own port and the
+  game sees a PS TV; without it every pad is merged into port 1 and ports
+  above answer "no device" (`ctrl.cpp:263-287`). So two players need
+  `pstv-mode`, which is also Sony's convention for the listed games.
+- **Start and stop:** silent start as in test 2. A failed load logs an error
+  and exits -1 (255 to the shell); an unknown `-r` exits 4. SIGTERM becomes
+  SDL's quit event, which the SDL frontend handles like a window close
+  (`session.cpp:295-296`), stopping the session and exiting; a game's own
+  exit ends Vita3K with the game's code (`:374-375`). Batocera's patch says
+  stopping "can hang" on guest threads, so a kill after a wait, as for the
+  others. The log is `~/.cache/Vita3K/vita3k.log`, emptied at each start,
+  TRACE by default. Whether a save written just before a close survives is
+  for the hand test.
+- **Pin and licence:** GPL-2.0. Upstream's own release is a moving
+  `continuous`, but every master build is also a numbered release in
+  Vita3K/Vita3K-builds (4202 is `7428ca0`, 2026-10-19) with an x86-64
+  AppImage: pinned by tag and checksum, built into the image as Xenia's
+  AppImage is, fetched from GitHub at build time only. 92 numbered builds in
+  the last 90 days. The SDL frontend is ten days old.
+
+#### The A9 hand test (step 3 of #198), when he names a time
+
+Needs: the A9 free and him at the TV; the two Sony firmware files on RomM
+(his upload, a write to his server); a numbered Vita3K build run by hand in
+a scratch folder, as `~/x360/t360.sh` was; his DualSense only if the touch
+pad is still wanted. To see: both firmware files install without a window;
+three installs, with time and peak disk (Killzone the largest); `--frontend
+sdl -r <ID>` starting with no dialog and the picture filling the TV; frames
+(frames.py) in one 2D and one 3D game (Shovel Knight; WipEout 2048 or Gravity
+Rush) at 1x and 2x resolution; Killzone and Skullgirls, to see whether their
+labels hold here; a close by SIGTERM (time, exit code) and a save made just
+before it; two pads with `pstv-mode` in Skullgirls; a game's own exit.
+
+#### Recommendation, 2026-10-19 (not decided)
+
+**No, for now.** None of the first four tests fails, and on the labels
+Vita3K is no further from finished than Xbox 360. But Sony's own pad rule
+assumes the PS TV's touch pointer, which Vita3K lacks; without it Sony's
+list over-promises on the games that need a tap, and the only honest rule
+left is a judgement per game, which the project does not make. On his
+library the Vita adds nothing that does not already play here unless the
+pointer comes, and then two games. **It becomes a go with conditions** when
+(1) Vita3K ships the pointer (upstream first, on his go: support for
+Vita3K/Vita3K#3707), (2) Sony's list is in hand by title ID to ship as data,
+and (3) the hand test passes. **No gyro for the Vita** in any case. Game Boy
+motion is a separate, smaller question for him.
