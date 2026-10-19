@@ -28,6 +28,7 @@ cores/system/
 frontend/build/
 # The Wii bridge, built the same way (wiibridge/Makefile).
 wiibridge/cabinetos-wii-bridge
+wiibridge/pacing-test
 
 # What the image build copies in that is not in this repository: everything
 # ci/stage-image-payload.sh collects (the frontend, the cores, the other

@@ -6,7 +6,14 @@ CXXFLAGS += -std=c++20 -Wall -Wextra
 cabinetos-wii-bridge: bridge.cpp mii.cpp bridge.h encryption.cpp encryption.h
 	$(CXX) $(CXXFLAGS) -o $@ bridge.cpp mii.cpp encryption.cpp
 
-clean:
-	rm -f cabinetos-wii-bridge
+# The pacing test (#480): two Remotes on socket pairs, no hardware.
+pacing-test: pacing-test.cpp bridge.cpp mii.cpp bridge.h encryption.cpp encryption.h
+	$(CXX) $(CXXFLAGS) -pthread -o $@ pacing-test.cpp mii.cpp encryption.cpp
 
-.PHONY: clean
+test: pacing-test
+	./pacing-test
+
+clean:
+	rm -f cabinetos-wii-bridge pacing-test
+
+.PHONY: clean test
