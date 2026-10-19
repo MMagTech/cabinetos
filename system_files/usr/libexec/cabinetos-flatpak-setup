@@ -20,22 +20,10 @@
 
 set -uo pipefail   # deliberately NOT -e: see above, no single failure aborts
 
-# Overridable so this can be exercised by hand against a scratch installation
-# rather than the machine's own: a test hook kept on purpose, with no test in
-# the repository that sets them (#492). The service sets none of them and
-# gets the defaults; nothing but a test by hand should ever pass these.
-MANIFEST="${CABINETOS_FLATPAK_MANIFEST:-/usr/share/cabinetos/flatpaks.list}"
-STATE_DIR="${CABINETOS_FLATPAK_STATE:-/var/lib/cabinetos}"
+MANIFEST=/usr/share/cabinetos/flatpaks.list
+STATE_DIR=/var/lib/cabinetos
 STAMP="${STATE_DIR}/flatpaks-installed"
-REMOTE="${CABINETOS_FLATPAK_REMOTE:-flathub}"
-
-# `--system` everywhere below, except when a test points us at its own
-# installation directory.
-SCOPE=(--system)
-if [[ -n "${CABINETOS_FLATPAK_INSTALLATION:-}" ]]; then
-    export FLATPAK_USER_DIR="${CABINETOS_FLATPAK_INSTALLATION}"
-    SCOPE=(--user)
-fi
+REMOTE=flathub
 
 log() { echo "[cabinetos-flatpak] $*"; }
 
@@ -72,9 +60,9 @@ log "  manifest ${manifest_hash:0:12}  image ${image_id:0:19}"
 # filter, so this only has to make sure it exists and is enabled rather than
 # define it. `|| true` throughout: a machine that cannot reach Flathub should
 # fall through to the install loop, fail there, and be retried by the timer.
-flatpak remote-modify "${SCOPE[@]}" --enable "${REMOTE}" 2>/dev/null || true
+flatpak remote-modify --system --enable "${REMOTE}" 2>/dev/null || true
 
-if ! flatpak remotes "${SCOPE[@]}" --columns=name 2>/dev/null | grep -qx "${REMOTE}"; then
+if ! flatpak remotes --system --columns=name 2>/dev/null | grep -qx "${REMOTE}"; then
     log "  ERROR: no '${REMOTE}' remote on this system; cannot install"
     log "  leaving the stamp unwritten so the timer retries"
     exit 0
@@ -109,7 +97,7 @@ while read -r kind ref branch commit; do
 
     full="${kind}/${ref}/$(uname -m)/${branch}"
 
-    have=$(flatpak info "${SCOPE[@]}" --show-commit "${ref}//${branch}" 2>/dev/null || true)
+    have=$(flatpak info --system --show-commit "${ref}//${branch}" 2>/dev/null || true)
     if [[ "${have}" == "${commit}" ]]; then
         log "  ok: ${ref} already at ${commit:0:12}"
         installed=$((installed + 1))
@@ -120,7 +108,7 @@ while read -r kind ref branch commit; do
         log "  ${ref}: at ${have:0:12}, want ${commit:0:12}"
     else
         log "  ${ref}: not installed, want ${commit:0:12}"
-        if ! flatpak install "${SCOPE[@]}" --noninteractive --or-update \
+        if ! flatpak install --system --noninteractive --or-update \
                 "${REMOTE}" "${full}" 2>&1 | sed 's/^/      /'; then
             log "  ERROR: install failed for ${ref}"
             failures=$((failures + 1))
@@ -130,7 +118,7 @@ while read -r kind ref branch commit; do
 
     # The pin. Without this the machine has whatever Flathub served today, which
     # is the thing this whole file exists to prevent.
-    if ! flatpak update "${SCOPE[@]}" --noninteractive --commit="${commit}" \
+    if ! flatpak update --system --noninteractive --commit="${commit}" \
             "${ref}" 2>&1 | sed 's/^/      /'; then
         log "  ERROR: could not pin ${ref} to ${commit:0:12}"
         failures=$((failures + 1))
@@ -139,7 +127,7 @@ while read -r kind ref branch commit; do
 
     # Read it back. A pin that did not take is exactly the silent failure this
     # repository keeps finding, so it is checked rather than assumed.
-    now=$(flatpak info "${SCOPE[@]}" --show-commit "${ref}//${branch}" 2>/dev/null || true)
+    now=$(flatpak info --system --show-commit "${ref}//${branch}" 2>/dev/null || true)
     if [[ "${now}" == "${commit}" ]]; then
         log "  pinned: ${ref} at ${commit:0:12}"
         installed=$((installed + 1))
@@ -163,11 +151,11 @@ while read -r app; do
     [[ -z "${app}" ]] && continue
     grep -qxF "${app}" <<<"${listed}" && continue
     log "  ${app}: no longer in the manifest; removing"
-    if ! flatpak uninstall "${SCOPE[@]}" --noninteractive "${app}" 2>&1 | sed 's/^/      /'; then
+    if ! flatpak uninstall --system --noninteractive "${app}" 2>&1 | sed 's/^/      /'; then
         log "  ERROR: could not remove ${app}"
         failures=$((failures + 1))
     fi
-done < <(flatpak list "${SCOPE[@]}" --app --columns=application 2>/dev/null)
+done < <(flatpak list --system --app --columns=application 2>/dev/null)
 
 # ---------------------------------------------------------------------------
 # Record the outcome.
