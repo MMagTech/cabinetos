@@ -1121,6 +1121,11 @@ again**, because the display path is different.
 Applied to every core the governor made things worse (it slowed N64 down). It is
 Flycast-only, by measurement.
 
+**Removed, 2026-10-19** (#492, "Code nothing runs: the dead code the audit
+found", MMagTech's decision): the governor had been off for every core since
+2026-09-27, when the speaker began pacing every core (RetroArch's audio sync,
+`pace.cpp`), and nothing could turn it on. Its switch, clock and log line went.
+
 ### Video: two paths, and one of them is free on Linux
 
 **Software-rendered cores** (most of them) hand the frontend a pixel buffer in
@@ -7701,6 +7706,11 @@ to **disabled**, which is the DualShock's analog mode off — the sticks do
 nothing. Exactly the class of silent fault *An unanswered core option is not
 the default* exists for.
 
+**Removed, 2026-10-19** (#492): the three `pcsx2_*` answers in
+`catalog::optionOverrides` were for the libretro core. The console's own PCSX2
+host reads no core options; it is handed one card per game, named from the rom
+(`core_ps2.cpp`), and sets the pads' analogue mode itself (`CabinetPS2Host.cpp`).
+
 #### Game & Watch will not be built — decided 2026-09-20
 
 171 games, and **the largest excluded row in the library by a distance.**
@@ -8525,6 +8535,11 @@ today. PPSSPP is the one core left unbuilt and is the next one to find out
 about — and `catalog.cpp`'s `hwRender` flag is kept in place for it, also
 because that table is positional and removing a field silently re-assigns every
 row below it.
+
+**Removed, 2026-10-19** (#492, MMagTech's decision): `NeedsHardwareRender` and
+the `hwRender` flag both went, with nothing answering or reading either. A core
+asking for a context this machine cannot serve is refused as it loads
+(`core_hwrender.cpp`), and the launch says so as for any core that will not load.
 
 **What running them found that building them could not**, again:
 

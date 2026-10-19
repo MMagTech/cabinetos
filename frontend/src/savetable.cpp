@@ -3,12 +3,12 @@
 // firmware a core can find. Moved out of catalog.cpp in the restructure
 // (#398).
 //
-// THREE FACTS HERE ARE HALF OF A PAIR, AND CHANGE WITH THE OTHER HALF IN
+// TWO FACTS HERE ARE HALF OF A PAIR, AND CHANGE WITH THE OTHER HALF IN
 // coreoptions.cpp (optionOverrides):
 // saveFiles' one fixed 3DO save path (opera/shared/nvram.0.srm) needs
-// opera_nvram_storage=shared; its PS2 card, one per game, needs
-// pcsx2_shared_memory_cards disabled; and the name firmwareAliases stages the
-// 3DO's firmware under (panafz10.bin) is the one opera_bios names.
+// opera_nvram_storage=shared, and the name firmwareAliases stages the 3DO's
+// firmware under (panafz10.bin) is the one opera_bios names. The PS2 card's
+// name, `<stem>.ps2`, pairs with core_ps2.cpp's startPs2Game instead.
 
 #include "savetable.h"
 
@@ -446,13 +446,11 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
         return {};
     }
 
-    // PlayStation 2. LRPS2 keeps the card in the SAVE directory once shared
-    // cards are turned off — measured, not assumed: with
-    // `pcsx2_shared_memory_cards` at its default it writes `Mcd001.ps2` into
-    // the system directory, which is the arrangement Cabinet for Mac rejects
-    // in as many words ("a shared card belongs to no rom in particular").
-    // With it off the file is `<stem>.ps2` in the save directory, which is
-    // already per game, so per-game separation costs nothing extra.
+    // PlayStation 2. The console's PCSX2 host is handed one card, `<stem>.ps2`
+    // in the save directory (core_ps2.cpp, startPs2Game), which is already
+    // per game. Never a shared `Mcd001.ps2`, the arrangement Cabinet for Mac
+    // rejects in as many words ("a shared card belongs to no rom in
+    // particular").
     //
     // NAMED THE MAC'S WAY on the server, because the whole point is that the
     // card travels — see SaveFile::macRowName.

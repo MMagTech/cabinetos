@@ -147,9 +147,10 @@ SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --no-setup \
 
 Headless frames are not paced: 1,500 of them are about a second, so a
 test that waits for a game to print something needs 20,000 or more.
-`--nav` presses are dropped while the start-up screen is still down unless
-the run is a capture (`--screenshot`), and `--nav` does not reach first
-run's screens.
+`--nav <presses>` walks the screens after start-up through the same door a
+pad uses; it skips the start-up screen's lift as a capture does, or its
+presses would land on a Home nobody can see yet and be dropped. It does not
+reach first run's screens, which run before it.
 
 `--no-setup` skips first run; on a machine with no server address it shows
 a stand-in library of six made-up games. The server is the first of
@@ -165,8 +166,9 @@ television size, so a small machine can check a 4K layout. `--setup` shows
 first run on a console that is already set up, and saves no server address,
 sign-in or finish marker (`setup.h`, `dryRun`), though its pairing step asks
 the server for a real code, which expires by itself: `--setup` walked to
-the pairing step reaches your real server, so point it at the read-only
-relay. `--setup-step <name>`
+the pairing step, or `--setup --setup-step pair`, reaches your real server,
+so point it at the read-only relay, which refuses that request (a POST), unless
+a real code is what you are checking. `--setup-step <name>`
 opens it at `network`, `server`, `pair`, `controller` or `done`; Wi-Fi is
 part of `network`.
 
@@ -198,7 +200,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
-| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, and the cover sweeps spare the tile map, a cover being written and what a link points at |
+| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, the cover sweeps spare the tile map, a cover being written and what a link points at, and a game's archive keeps its folders and refuses a name outside them or one that comes twice |
 | `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, and the Wii's rumble in `wii.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (CI runs it as a step of its own) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule

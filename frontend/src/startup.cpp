@@ -725,15 +725,18 @@ void App::settleScreensAtStart() {
     // Favorites when nothing has been played, as homeFromTheStart.
     focusRow = homeTopRow();
     // --focus N still means "start on card N of Recent", which is what every
-    // existing capture script passes it for.
+    // existing capture script passes it for. On an empty row the high bound
+    // is held at 0, not -1, which std::clamp leaves undefined (#488,
+    // HOME-21); slot 0 of an empty row is no card, as -1 was.
     if (initialFocus >= 0) {
         focusRow = RowRecent;
-        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots()) - 1);
+        focusSlot = std::clamp(initialFocus, 0, std::max(0, static_cast<int>(shelfSlots()) - 1));
     }
     if (initialRow >= 0) {
         focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
         if (!rowExists(focusRow)) focusRow = homeTopRow();
-        focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
+        focusSlot =
+            std::clamp(focusSlot, 0, std::max(0, static_cast<int>(rowSlots(focusRow)) - 1));
     }
     scrollY.from = scrollY.to = 0.0f;
     backdropMix.from = backdropMix.to = 1.0f;

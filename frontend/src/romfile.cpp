@@ -4,7 +4,12 @@
 #include <archive_entry.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
+#include <set>
+
+#include "dirsave.h"
+#include "storage.h"
 
 namespace romfile {
 namespace {
@@ -230,20 +235,61 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
     int64_t biggestSize = -1;
     bool wroteAny = false;
 
+    // Every name written so far, lowercased, so a name that comes twice fails
+    // the unpacking rather than writing over the first: a games drive is
+    // usually exFAT, where two names differing only in case are one file. The
+    // archive itself is in the list when it sits in outDir, so no member can
+    // be written over the file being read.
+    auto folded = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return s;
+    };
+    std::set<std::string> names;
+    if (downloadedPath.compare(0, outDir.size() + 1, outDir + "/") == 0)
+        names.insert(folded(downloadedPath.substr(outDir.size() + 1)));
+
     struct archive_entry* entry = nullptr;
     while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
         if (archive_entry_filetype(entry) != AE_IFREG) continue;
         const char* raw = archive_entry_pathname(entry);
         if (!raw) continue;
-        std::string name = raw;
 
-        // An archive is untrusted input. A member named "../../etc/thing" must
-        // land inside outDir or nowhere: keep the last path component only.
-        const size_t slash = name.find_last_of("/\\");
-        if (slash != std::string::npos) name = name.substr(slash + 1);
-        if (name.empty() || name == "." || name == "..") continue;
+        // EACH MEMBER KEEPS ITS FOLDERS (#482, FILES-07). Only the file name
+        // was kept until 2026-10-19, so two discs' `track 1.bin` in two
+        // folders overwrote each other, and a cue sheet naming its tracks in
+        // a folder beside it found none. An archive is untrusted input, so a
+        // name that is absolute or has a ".." part refuses the whole archive
+        // (cab::safeRelPath, the rule a folder save is unpacked by), and
+        // "a//x" and "./a/x" are written as the "a/x" they mean.
+        if (!cab::safeRelPath(raw)) {
+            if (err) *err = std::string("refusing member ") + raw;
+            archive_read_free(a);
+            return false;
+        }
+        const std::string name = raw;
+        std::string rel;
+        for (size_t start = 0; start <= name.size();) {
+            const size_t slash = name.find('/', start);
+            const size_t end = slash == std::string::npos ? name.size() : slash;
+            const std::string part = name.substr(start, end - start);
+            if (!part.empty() && part != ".") rel += (rel.empty() ? "" : "/") + part;
+            if (slash == std::string::npos) break;
+            start = slash + 1;
+        }
+        if (rel.empty()) continue;
+        if (!names.insert(folded(rel)).second) {
+            if (err) *err = std::string("the ") + kindName(k) + " holds " + rel + " twice";
+            archive_read_free(a);
+            return false;
+        }
 
-        const std::string out = outDir + "/" + name;
+        const std::string out = outDir + "/" + rel;
+        if (!storage::makeDirs(out.substr(0, out.find_last_of('/')))) {
+            if (err) *err = "cannot make the folder for " + out;
+            archive_read_free(a);
+            return false;
+        }
         FILE* f = std::fopen(out.c_str(), "wb");
         if (!f) { if (err) *err = "cannot write " + out; archive_read_free(a); return false; }
 
@@ -276,7 +322,10 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
         std::fclose(f);
         wroteAny = true;
 
-        if (best.empty() && coreAccepts(validExtensions, extensionOf(name))) best = out;
+        // By the file's own name: a dot in a folder's name is not an extension.
+        if (best.empty() &&
+            coreAccepts(validExtensions, extensionOf(rel.substr(rel.find_last_of('/') + 1))))
+            best = out;
         if (written > biggestSize) { biggestSize = written; biggest = out; }
     }
     archive_read_free(a);

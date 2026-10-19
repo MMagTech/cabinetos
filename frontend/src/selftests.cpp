@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -16,10 +17,12 @@
 
 #include "accounts.h"
 #include "covercache.h"
+#include "dirsave.h"
 #include "fileio.h"
 #include "firstrun.h"
 #include "pending.h"
 #include "prefs.h"
+#include "romfile.h"
 #include "romm.h"
 #include "server.h"
 #include "storage.h"
@@ -427,7 +430,8 @@ int firstRunRules() {
 // What a full disk or a cut write leaves behind (#482). Every file the
 // console replaces goes through cab::writeBytes; this proves the rules it
 // promises in fileio.h, and the callers with rules of their own on top:
-// pending markers, prefs::set and the cover cache's sweeps. A full disk is a
+// pending markers, prefs::set, the cover cache's sweeps and a game's archive
+// unpacked (romfile::prepareFile). A full disk is a
 // file size limit here (RLIMIT_FSIZE, with SIGXFSZ ignored so the write
 // fails rather than the process). A power cut cannot be made headless; the fsync is read, not run.
 int filesTest() {
@@ -544,6 +548,48 @@ int filesTest() {
           "a platform the server lost goes, though its folder is a link");
     check(exists(outside + "/keep.txt") && exists(covers + "/1/new.png"),
           "and what the link pointed at, and a live platform, stay");
+
+    // 6. A game's archive keeps its folders (FILES-07): two members with one
+    // name in two folders both come out whole, a member named outside the
+    // game's folder refuses the archive, and so does a name that comes twice.
+    const std::string src = std::string(root) + "/zipsrc";
+    cab::writeBytes(src + "/a/x.bin", std::string("first\n"));
+    cab::writeBytes(src + "/b/x.bin", std::string("second\n"));
+    cab::writeBytes(src + "/A/X.bin", std::string("third\n"));
+    cab::writeBytes(src + "/x", std::string("outside\n"));
+    storage::makeDirs(src + "/in");
+    auto unpack = [&](const std::string& game, const std::string& from,
+                      const std::vector<std::string>& members, std::string* primary,
+                      std::string* why) {
+        std::vector<uint8_t> zip;
+        if (!cab::zipTree(from, members, &zip, why)) return false;
+        const std::string dir = std::string(root) + "/" + game;
+        const std::string file = dir + "/" + game + ".zip";
+        cab::writeBytes(file, zip);
+        romfile::Kind kind = romfile::Kind::Plain;
+        const std::atomic<bool> cancel{false};
+        return romfile::prepareFile(file, dir, "bin", false, primary, &kind, why, cancel);
+    };
+    auto text = [](const std::string& p) {
+        const std::vector<uint8_t> b = cab::readBytes(p);
+        return std::string(b.begin(), b.end());
+    };
+    std::string primary, why;
+    const std::string twoDirs = std::string(root) + "/twodirs";
+    const bool unpacked = unpack("twodirs", src, {"a/x.bin", "b/x.bin"}, &primary, &why);
+    check(unpacked && text(twoDirs + "/a/x.bin") == "first\n" &&
+              text(twoDirs + "/b/x.bin") == "second\n",
+          "a zip holding a/x.bin and b/x.bin comes out whole in both places");
+    check(primary == twoDirs + "/a/x.bin", "and the core is handed the first, in its folder");
+    check(!unpack("escapes", src + "/in", {"../x"}, &primary, &why) &&
+              !exists(std::string(root) + "/x") && !exists(std::string(root) + "/escapes/x"),
+          "a member named ../x is refused, and nothing is written for it");
+    check(!unpack("twice", src, {"a/x.bin", "a/x.bin"}, &primary, &why),
+          "a name that comes twice fails the unpacking");
+    const bool cased = unpack("cased", src, {"a/x.bin", "A/X.bin"}, &primary, &why);
+    check(!cased && text(std::string(root) + "/cased/a/x.bin") == "first\n",
+          "and so does one differing only in case (one file on exFAT), the first not "
+          "written over");
 
     storage::removeEntry(root);
     std::printf("\nfiles: %d failure%s\n", failures, failures == 1 ? "" : "s");

@@ -102,13 +102,6 @@ bool prepare(const std::vector<uint8_t>& downloaded, const std::string& validExt
 // arcade set, and nothing about it should ever be resident.
 Kind sniffFile(const std::string& path, std::string* err = nullptr);
 
-// Unpacks an archive into `outDir`, streaming each member through a buffer, and
-// reports which file the core should be pointed at. Every member is written —
-// a .cue is useless without its .bin.
-//
-// Returns the path to hand the core in `primaryPath`. When the file is not a
-// container, or the core reads it as it stands, `primaryPath` is the input and
-// nothing is written.
 // What this archive will become on disk, read from its own index rather than
 // estimated. Zero when nothing will be written — a plain ROM, a .chd, a core
 // that opens its own archives — and also when the format declines to say, which
@@ -122,6 +115,16 @@ Kind sniffFile(const std::string& path, std::string* err = nullptr);
 int64_t unpackedSize(const std::string& path, const std::string& validExtensions,
                      bool blockExtract);
 
+// Unpacks an archive into `outDir`, streaming each member through a buffer, and
+// reports which file the core should be pointed at. Every member is written,
+// in the folders the archive gives it: a .cue is useless without its .bin
+// beside it. A member named outside `outDir` (absolute, or with a ".." part)
+// or a name that comes twice fails the whole unpacking (#482, FILES-07).
+//
+// Returns the path to hand the core in `primaryPath`. When the file is not a
+// container, or the core reads it as it stands, `primaryPath` is the input and
+// nothing is written.
+//
 // `cancel` is the launch's (#472): set, the unpacking stops between two
 // blocks and returns false, and what was written so far stays for the
 // launch's own clean-up, as after a failed read.
