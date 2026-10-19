@@ -76,7 +76,8 @@ void cemuArgs(std::vector<std::string>& full, const std::string& dir, const std:
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,
                  quality::Level level, bool* missing, std::string* err);
-bool installXbox(const std::string& entryPath, std::string* romPath, std::string* message);
+bool installXbox(const std::string& entryPath, const std::atomic<bool>& cancel,
+                 std::string* romPath, std::string* message);
 bool xemuBeforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
                      const std::string& note, std::string* err);
 bool xemuAfterEnd(const Emulator& e, const std::string& entryPath, const std::string& saveDir,

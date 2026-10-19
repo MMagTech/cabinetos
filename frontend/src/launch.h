@@ -123,6 +123,13 @@ struct LaunchJob {
         return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking ||
                st == Stage::Installing;
     }
+    // Finished, and not yet taken by the frame loop (takeFinishedJob): a
+    // Ready game waits there while the curtain comes down. No new launch
+    // replaces it (#472).
+    bool waiting() const {
+        const Stage st = stage.load();
+        return st == Stage::Ready || st == Stage::Failed;
+    }
 };
 
 // Starts one; the comment above it in launch.cpp says what it decides. The
