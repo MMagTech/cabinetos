@@ -349,7 +349,8 @@ int64_t evictUntilFree(const std::string& location, int64_t needBytes,
     int64_t freed = 0;
     for (const Entry& e : candidates(location)) {
         if (have + freed >= target) break;
-        // The running game. Its file is open, and deleting it would be the one
+        // The game being launched or running. Its file is open or about to
+        // be, and deleting it would be the one
         // eviction a person could actually notice.
         if (protectRomId != 0 && e.romId == protectRomId) continue;
         if (!removeTree(e.path)) continue;

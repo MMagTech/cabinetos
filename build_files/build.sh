@@ -3,7 +3,7 @@
 # CabinetOS image build.
 #
 # Called from the Containerfile with build_files/ mounted at /ctx and
-# system_files/ mounted at /system_files.
+# system_files/ inside it, at /ctx/system_files.
 #
 # The gaming stack comes from Bazzite and is kept as-is; the desktop and Steam
 # are stripped out, and the session is wired in. The console itself, the
@@ -40,8 +40,6 @@ log "packages installed here are stamped ${SOURCE_DATE_EPOCH}, the base's newest
 # Overlay any files from system_files/ onto the image.
 # ---------------------------------------------------------------------------
 #
-# Empty in Phase 1. Phase 2 uses this for the session units and autologin
-# configuration.
 # NOTE THE PATH. The Containerfile's ctx stage does `COPY system_files
 # /system_files`, and that whole stage is bind-mounted at /ctx — so the files
 # land at /ctx/system_files, not /system_files.
@@ -176,8 +174,9 @@ grep -q 'non-commercial' /usr/share/licenses/cabinetos/LICENCES.md || {
 # invisible when it is missing. Wi-Fi configuration works on the reference
 # machine today WITHOUT it — the session user is in `wheel` and Bazzite grants
 # the action to that group — so a build that silently dropped this file would
-# ship a console that works until the day Phase 6 tightens developer mode and
-# takes the session user out of `wheel`. Then Wi-Fi stops being configurable,
+# ship a console that works until the session user leaves `wheel` (installed
+# consoles have it: disk_config/iso.toml) or Bazzite drops its rule. Then
+# Wi-Fi stops being configurable,
 # with no error anywhere near the cause. See docs/PROJECT.md open question 17.
 POLKIT_RULE=/usr/share/polkit-1/rules.d/60-cabinetos-network.rules
 if [[ -s "${POLKIT_RULE}" ]]; then
@@ -232,8 +231,8 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # ---------------------------------------------------------------------------
 #
 # Runs after the strip scripts, so it can assert that nothing they removed took
-# openssh-server with it. See the warning at the top of enable-ssh.sh: this is a
-# development affordance that Phase 6 must take away again.
+# openssh-server with it. See enable-ssh.sh: sshd is installed, and nothing
+# listens until someone at the TV turns File access or Developer access on.
 /ctx/enable-ssh.sh
 
 # ---------------------------------------------------------------------------
@@ -248,7 +247,8 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # Repair repository definitions.
 # ---------------------------------------------------------------------------
 #
-# Last, so it sees the final state. A repo whose GPG key was never shipped
+# After everything that adds or removes a repository, so it sees the final
+# state. A repo whose GPG key was never shipped
 # breaks any operation that reads all repos — which is what building an
 # installer ISO does. See the script for the full reasoning.
 /ctx/fix-repos.sh
@@ -275,16 +275,18 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # HDMI-CEC.
 # ---------------------------------------------------------------------------
 #
-# Runs last, after everything that could remove a package. CEC is a hard
-# requirement and every package it needs looks like cruft in a package list —
-# this fails the build rather than letting one quietly disappear.
+# After everything that could remove a package. HDMI-CEC is shelved
+# (docs/PROJECT.md open question 31, 2026-09-24), but its packages are
+# kept installable for the day it comes back, and every one looks like cruft
+# in a package list: this reinstalls one that went, and fails the build if it
+# cannot.
 /ctx/require-cec.sh
 
 # ---------------------------------------------------------------------------
 # Frontend runtime libraries.
 # ---------------------------------------------------------------------------
 #
-# Same reasoning and the same position in the order: last, after anything that
+# Same reasoning and the same position in the order: after anything that
 # could have removed a package. The frontend links against these, and they are
 # in the base image incidentally rather than by declared dependency.
 /ctx/require-frontend-libs.sh
@@ -298,7 +300,8 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # these ran before the strip, where they could not see what it removed.
 #
 # NOTHING ELSE WOULD CATCH THESE GOING MISSING. ci/base-watch.txt watches shared
-# LIBRARIES, and require-frontend-libs.sh reads `ldd` — so a strip pass that took
+# LIBRARIES, require-frontend-libs.sh checks libraries by name and
+# install-frontend.sh reads `ldd`; none sees a command. So a strip pass that took
 # NetworkManager or polkit out would leave a green build, a binary that links
 # perfectly, and a console that cannot see a Wi-Fi network or say why. They are
 # a real dependency of frontend/src/net.cpp and they are invisible to every
@@ -330,9 +333,9 @@ done
 # frontend/src/gpu.cpp opens libvulkan.so.1 by hand rather than linking it, so
 # that the binary still starts on a machine with no Vulkan and says so. That is
 # the right behaviour and it costs the one check that would have caught its
-# absence: `ldd` on the frontend does not name it, so
-# require-frontend-libs.sh cannot see it and ci/base-watch.txt has nothing to
-# watch.
+# absence: `ldd` on the frontend does not name it, so install-frontend.sh's
+# sweep cannot see it (require-frontend-libs.sh could list it by name, and
+# this check is where it is named instead).
 #
 # WITHOUT IT, PLAYSTATION 2 AND GAMECUBE SIMPLY DO NOT PLAY, and the console
 # says only "this core wants Vulkan and no libvulkan.so.1 on this machine" —

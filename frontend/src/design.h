@@ -552,7 +552,7 @@ constexpr float kSettingsListGap = 8.0f;
 constexpr float kSettingsPaneGap = 60.0f;
 // Between a row's title and its detail line.
 constexpr float kSettingsDetailGap = 4.0f;
-// A row whose control is not built yet. Legible, clearly not live.
+// A Disabled row: built, nothing to do right now. Legible, clearly not live.
 constexpr float kSettingsUnbuiltAlpha = 0.38f;
 // The backdrop under a full-screen cover: the artwork itself, filled and
 // blurred, because the leftovers should be the art's own colours rather than

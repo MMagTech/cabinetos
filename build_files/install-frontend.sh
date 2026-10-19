@@ -25,7 +25,7 @@
 #                                      /usr/lib and not /usr/share. The
 #                                      frontend falls back to this path when
 #                                      there is no cores/build beside it — see
-#                                      the resolution block in main.cpp — and
+#                                      resolveCoresAndServer in cli.cpp — and
 #                                      --core-dir still overrides both.
 #
 #   /usr/share/cabinetos/system/       PPSSPP's fonts, VFPU tables and per-game
@@ -202,7 +202,8 @@ install -D -m 0644 /ctx/frontend-data/gamecontrollerdb.txt /usr/share/cabinetos/
 log "installed the controller list ($(grep -c 'platform:Linux' /usr/share/cabinetos/gamecontrollerdb.txt) Linux entries)"
 # Which controllers each Wii game accepts, from GameTDB (tools/wii-controls.py):
 # a Wii game plays on a pad only when it takes a Classic Controller or a
-# GameCube pad (catalog::wiiControls; docs/PROJECT.md open question 35).
+# GameCube pad (wii::padDevice, frontend/src/wii.cpp; the rule is
+# catalog::coverageFor; docs/PROJECT.md open question 35).
 install -D -m 0644 /ctx/frontend-data/wii-controls.txt /usr/share/cabinetos/wii-controls.txt
 log "installed the Wii controller list ($(grep -vc '^#' /usr/share/cabinetos/wii-controls.txt) games)"
 # And each Wii U game (tools/wiiu-controls.py): it plays on a pad only when it
@@ -238,7 +239,7 @@ group_end
 #
 # The frontend is compiled in a Fedora 44 container to match Bazzite 44, so the
 # two SHOULD agree. They agree by construction and not by declaration, though:
-# build_files/require-frontend-libs.sh names three libraries that are in the
+# build_files/require-frontend-libs.sh names the libraries that are in the
 # base incidentally, with nothing depending on them, and a Bazzite bump is free
 # to drop any of them. This catches that, and it catches the same thing for the
 # cores — whose dependencies nobody has ever written down. Flycast alone wants
@@ -268,7 +269,7 @@ done
 
 if [[ "${unresolved}" -ne 0 ]]; then
     log "ERROR: something in the image cannot find a library it links against."
-    log "Install the package explicitly in Containerfile and add it to"
+    log "Install the package in a script build.sh runs and add it to"
     log "build_files/require-frontend-libs.sh with the reason. Do not delete"
     log "this check: a console that cannot start its own frontend is not a"
     log "console."

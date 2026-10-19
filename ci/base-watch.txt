@@ -140,8 +140,8 @@ plymouth*
 # firmware package moving in either direction — and backwards especially — is a
 # "read this" event.
 #
-# Kernel modules were already watched through kmod-*; firmware is a different
-# kind of thing and matched none of the patterns here.
+# Kernel modules are watched by name (below); firmware is a different kind of
+# thing and matched none of the patterns here.
 area: Firmware
 log: No firmware failed to load :: out=$(journalctl -b -k -o cat | grep -aiE 'direct firmware load .*failed|failed to load .*firmware|firmware .*(load|request).*fail'); [ -z "$out" ] || { echo "$out"; exit 1; }
 log: The GPU started :: journalctl -b -k -o cat | grep -qE '\[drm\] Initialized (amdgpu|i915|xe|nouveau|nvidia-drm|radeon) '
@@ -212,7 +212,7 @@ inputplumber
 ds-inhibit
 bluez
 bluez-*
-libratbag
+libratbag*
 
 # --- The frontend's own runtime ---------------------------------------------
 # Phase 3 links against these and the OS image is the only place they come
@@ -249,8 +249,8 @@ google-noto-sans-cjk-fonts
 google-noto-fonts-common
 
 # --- The CORES' runtime, added 2026-09-19 ----------------------------------
-# The image carries twenty-two emulator cores from that day. Their library
-# dependencies had never been written down anywhere, and three of the
+# The image carries the emulator cores since that day. Their library
+# dependencies had never been written down anywhere, and some of the
 # frontend's own — named in build_files/require-frontend-libs.sh with a reason
 # each — were not on this list either, which is precisely the gap the header
 # above warns about.
@@ -285,7 +285,8 @@ json-c
 libX11
 libXext
 libxkbcommon*
-libudev*
+# libudev lives in systemd-libs (a "libudev*" pattern matched no package).
+systemd-libs
 
 # --- Audio -----------------------------------------------------------------
 area: Sound
@@ -352,15 +353,16 @@ openssh-server
 openssh-clients
 
 # --- The Steam entry (#223) -------------------------------------------------
-# Kept for the one Steam tile, and its Big Picture session (terra). A change to
-# any of these can stop the tile reaching Steam or coming back from it. The
-# 32-bit Mesa and Vulkan libraries are already watched under Graphics.
+# Kept for the one Steam tile. steam is the base's; Steam's session
+# (gamescope-session, gamescope-session-steam) comes from terra at build time
+# (install-steam-session.sh) and is not in the base, so it is not listed
+# here. A change to steam can stop the tile reaching Steam or coming back
+# from it. The 32-bit Mesa and Vulkan libraries are already watched under
+# Graphics.
 area: Steam
 log: Steam and its session are in the image :: command -v steam >/dev/null && [ -e /usr/share/gamescope-session-plus/sessions.d/steam ]
 tv: Steam: its tile opens Big Picture, a game starts, and leaving Steam returns to Home
 steam
-gamescope-session
-gamescope-session-steam
 
 # --- Things CabinetOS removes ----------------------------------------------
 # Listed so that a base bump which renames, splits or drops a removal target

@@ -4,19 +4,18 @@
 # Derived from the Universal Blue image-template (Apache-2.0):
 #   https://github.com/ublue-os/image-template
 #
-# Pull requests build the image but do not push or sign it, so a PR from anyone
-# can never publish a package under your account.
+# Pull requests run the lint and the frontend compile; the image is built and
+# published only from main and testing, so a PR from anyone can never
+# publish a package under your account.
 
 name: Build CabinetOS image
 
-# DELIBERATELY STILL ONLY THE PULL REQUESTS AIMED AT MAIN, unlike
-# build-frontend.yml and build-core.yml, which were widened on 2026-09-16 after
-# a stack of branches slipped past them. A run is 7 to 9 minutes of wall
-# clock with the cores cached (build-core.yml keys the cache on each pinned
-# revision; measured off `gh run list`, 2026-09-25, `testing` pushes), and
-# the question it answers is "does the image that ships build",
-# which is a question about what reaches main. The cheap checks are the ones
-# worth running everywhere.
+# PULL REQUESTS AIMED AT MAIN run the cheap checks here (lint, the frontend
+# compile); build-frontend.yml and build-core.yml also trigger themselves on
+# pull requests to other branches, widened on 2026-09-16 after a stack of
+# branches slipped past them. The image itself is built by a push to
+# testing or main (the jobs below say so), because the question it answers
+# is "does the image that ships build".
 on:
   pull_request:
     branches:
@@ -193,8 +192,8 @@ jobs:
   # What it costs: about ten minutes of wall clock on every image build, in
   # parallel with nothing, because the image cannot start until the cores are
   # there. That is the honest price of the image containing what it claims to.
-  # It also means every image build now proves all twenty-one cores are at
-  # their pinned revisions, which is more than was true yesterday.
+  # It also means every image build proves every core is at its pinned
+  # revision.
   # Everything below runs unless the tested image was promoted. The
   # `!cancelled() && !failure()` is GitHub's way of saying "and do not skip
   # me just because promote was skipped", which it otherwise would.
@@ -215,14 +214,14 @@ jobs:
     # The builder container is published to GHCR by the called workflow and
     # reused whenever frontend/Containerfile has not changed. A called
     # workflow cannot have more permission than its caller gives it, so
-    # without this line the twenty-one core builds fail at the login step.
+    # without this line the core builds fail at the login step.
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/build-core.yml
 
   # PLAYSTATION 2 IS NOT A CORE, which is why it is a separate workflow rather
-  # than a twenty-second arm of the matrix — see the header of build-pcsx2.yml.
+  # than another arm of the matrix — see the header of build-pcsx2.yml.
   # It produces an artifact of the same shape, so the download below needs no
   # special case, and ci/stage-image-payload.sh REFUSES TO BUILD AN IMAGE
   # WITHOUT IT. That refusal is the point: a missing emulator does not break
@@ -232,9 +231,6 @@ jobs:
     name: PlayStation 2
     needs: [lint, promote]
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
-    permissions:
-      contents: read
-      packages: write
     uses: ./.github/workflows/build-pcsx2.yml
 
   # WII U, Cemu built from source at a pin (build-cemu.yml), for the same
@@ -264,7 +260,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
 
     steps:
       - name: Checkout
@@ -277,12 +272,14 @@ jobs:
         with:
           remove-codeql: true
 
-      # The frontend, the twenty-one cores and PlayStation 2, from the jobs
-      # above. Merged into one directory, which works because each artifact was
-      # staged into the same three folders and no two of them hold a file of
+      # The frontend and the Wii bridge, the cores, PlayStation 2, Wii U and
+      # Sunshine, from the jobs above. Merged into one directory, which works
+      # because each artifact was staged into the payload's own folders (bin/,
+      # cores/, system/, cemu/, sunshine/) and no two of them hold a file of
       # the same name: bin/ comes from the frontend, cores/ has one .so per
-      # core plus the PS2 emulator and its two libraries, and system/ has
-      # PPSSPP's files and PCSX2's resources under different directories.
+      # core plus the PS2 emulator and its libraries, system/ has PPSSPP's,
+      # Dolphin's and PCSX2's files under different directories, cemu/ and
+      # sunshine/ one emulator each.
       - name: Fetch the frontend and the cores
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
@@ -340,11 +337,8 @@ jobs:
             DEFAULT_TAG=testing
           fi
           # The version, 2026.09.28, numbered by the tags already published.
-          # A build that publishes must be able to read them; a pull request
-          # build publishes nothing and may guess.
-          strict=--strict
-          if [[ "${GITHUB_EVENT_NAME}" == pull_request ]]; then strict=""; fi
-          CABINETOS_VERSION=$(ci/next-version.sh ${strict} "${IMAGE_REGISTRY,,}/${IMAGE_NAME,,}")
+          # A build that publishes must be able to read them.
+          CABINETOS_VERSION=$(ci/next-version.sh --strict "${IMAGE_REGISTRY,,}/${IMAGE_NAME,,}")
           echo "Version: ${CABINETOS_VERSION}, tag: ${DEFAULT_TAG}"
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
           echo "DEFAULT_TAG=${DEFAULT_TAG}" >> "${GITHUB_ENV}"
@@ -352,7 +346,6 @@ jobs:
           echo "CABINETOS_VERSION=${CABINETOS_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Build image
-        id: build-image
         run: just build "${IMAGE_NAME}" "${DEFAULT_TAG}"
 
       # NO RECHUNK, as of 2026-09-23. It was here from the first commit, copied
@@ -399,7 +392,7 @@ jobs:
       # it was. Its version tag stays up, perhaps unsigned, and nothing
       # follows it; the next run takes the next number.
       - name: Check for a signing key
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         env:
           SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
         run: |
@@ -409,13 +402,13 @@ jobs:
           fi
 
       - name: Install cosign
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
         with:
           cosign-release: 'v3.1.2'
 
       - name: Login to GHCR
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
         with:
           registry: ghcr.io
@@ -425,13 +418,13 @@ jobs:
       # Read before the channel moves, so the report below says what a
       # console on the previous image downloads to take this one.
       - name: Remember the previous image
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         run: |
           skopeo inspect --raw "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" \
             > /tmp/previous.json || rm -f /tmp/previous.json
 
       - name: Push to GHCR
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         id: push-image
         env:
           ALIAS_TAGS: ${{ steps.gen-build-tags.outputs.alias_tags }}
@@ -464,7 +457,7 @@ jobs:
 
       - name: Sign image
         id: sign
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
@@ -491,7 +484,7 @@ jobs:
       # before the channel moves.
       - name: Check the signature as a console does
         id: verify
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         env:
           DIGEST: ${{ steps.push-image.outputs.digest }}
         run: |
@@ -506,7 +499,7 @@ jobs:
       # back, not assumed, as ci/promote-tested.sh does for `latest`.
       - name: Point the channel at the signed image
         id: channel
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing')
         env:
           DIGEST: ${{ steps.push-image.outputs.digest }}
           REGISTRY_USER: ${{ github.actor }}
@@ -525,7 +518,7 @@ jobs:
           echo "${DEFAULT_TAG} is ${DIGEST}, signed and checked"
 
       - name: Summary
-        if: always() && github.event_name != 'pull_request'
+        if: always()
         env:
           PUBLISHES: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/testing' }}
           DIGEST: ${{ steps.push-image.outputs.digest }}

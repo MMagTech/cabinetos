@@ -73,9 +73,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # than for ever.
 DROPIN=/run/systemd/system/cabinetos-session.service.d/50-ui-loop.conf
 DROPIN_DIR=/run/systemd/system/cabinetos-session.service.d
-# The old location, removed on restore too, so a console that still has one
-# from before this change is cleaned up rather than left behind.
-DROPIN_OLD=/etc/systemd/system/cabinetos-session.service.d/50-ui-loop.conf
 # THE DEVELOPMENT SHELL IS ON PORT 2222 as of 2026-09-25 (File access took
 # 22; see /etc/ssh/sshd_config.d/30-cabinetos.conf). Asked, not assumed, so
 # a console still on an older image, where it is 22, keeps working.
@@ -125,12 +122,12 @@ say() { printf '\n== %s\n' "$*"; }
 # docs/NEXT-SESSION.md says it should be left in.
 if [ "$RESTORE" -eq 1 ]; then
     say "restoring the console to the image"
-    "${A9SSH[@]}" "$A9" "$SUDO rm -f $DROPIN $DROPIN_OLD >/dev/null 2>&1
+    "${A9SSH[@]}" "$A9" "$SUDO rm -f $DROPIN >/dev/null 2>&1
                        $SUDO systemctl daemon-reload >/dev/null 2>&1
                        $SUDO systemctl restart cabinetos-session >/dev/null 2>&1
                        sleep 14
                        echo \"session: \$(systemctl is-active cabinetos-session)\"
-                       echo \"drop-ins: \$(ls /etc/systemd/system/cabinetos-session.service.d/ 2>/dev/null | wc -l)\"
+                       echo \"drop-ins: \$(ls $DROPIN_DIR/ 2>/dev/null | wc -l)\"
                        ps -eo args | grep '[c]abinetos-frontend' | grep -v gamescope | head -1"
     exit 0
 fi

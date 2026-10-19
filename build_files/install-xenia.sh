@@ -59,7 +59,7 @@ mkdir -p "${DEST}"
 # usr/ is the program and its libraries. The AppImage's launcher is not
 # needed. Nothing else goes beside the program: Xenia writes its log there
 # unless told otherwise, and the console always tells it otherwise
-# (standalone.cpp, `--log_file`), because /usr is read-only.
+# (standalone_xenia.cpp, `--log_file`), because /usr is read-only.
 cp -a "${root}/usr" "${DEST}/"
 rm -f "${DEST}/usr/bin/"*.log
 printf '%s\n' "${XENIA_VERSION}" > "${DEST}/VERSION"

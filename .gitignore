@@ -29,9 +29,9 @@ frontend/build/
 # The Wii bridge, built the same way (wiibridge/Makefile).
 wiibridge/cabinetos-wii-bridge
 
-# What the image build copies in that is not in this repository: the frontend
-# binary, the twenty-one cores and PPSSPP's system files, collected by
-# ci/stage-image-payload.sh.
+# What the image build copies in that is not in this repository: everything
+# ci/stage-image-payload.sh collects (the frontend, the cores, the other
+# emulators and their files).
 #
 # IGNORED RATHER THAN MERELY UNTRACKED, and that matters. The Justfile decides
 # whether to stamp the image with a revision and a git-sha tag by asking

@@ -249,7 +249,7 @@ bool Core::load(const std::string& soPath) {
             return false;
         }
         gIsPs2 = true;
-        handle_ = reinterpret_cast<void*>(1); // loaded() is asked about by name everywhere
+        handle_ = reinterpret_cast<void*>(1); // unload() and loadGame() test handle_
         return true;
     }
     gIsPs2 = false;

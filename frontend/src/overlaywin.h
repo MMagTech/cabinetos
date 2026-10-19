@@ -5,7 +5,7 @@
 // Switch, Xbox and Wii U — makes its own graphics device and presents its own
 // picture. gamescope composites our menu on top of a window the emulator owns,
 // so the picture is never copied off the GPU and back for us to draw over it.
-// PCSX2 was copied that way until #226 (main.cpp, openPs2Window).
+// PCSX2 was copied that way until #226 (ps2window.cpp, openPs2Window).
 // docs/PROJECT.md, open question 24, has the measurements and the decision.
 //
 // THE SLOT IS NOT THE OBVIOUS ONE. `GAMESCOPE_EXTERNAL_OVERLAY` composites and
@@ -17,7 +17,8 @@
 //
 // It is a SEPARATE FILE because X11's headers typedef `Screen`, `Window` and
 // `Font`, and this codebase has an `enum class Screen`. Including Xlib.h in
-// main.cpp turns every `Screen::Grid` into a compile error.
+// any file that includes app.h turns every `Screen::Grid` into a compile
+// error.
 
 #pragma once
 

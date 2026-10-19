@@ -69,7 +69,7 @@ bool powerOn(std::string* err);
 // --- What is in range -------------------------------------------------------
 
 struct Device {
-    std::string address;      // "E4:17:D8:71:F1:ED" — the identity
+    std::string address;      // "AA:BB:CC:DD:EE:01" — the identity
     std::string name;         // "Pro Controller" — decoration, and untrusted
     bool paired = false;
     bool connected = false;

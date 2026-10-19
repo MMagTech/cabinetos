@@ -3,7 +3,7 @@
 #
 # WHY THIS IS NOT A JOB IN build-core.yml. That workflow builds libretro cores:
 # one upstream, one `make`, one .so that already implements a frontend contract,
-# all twenty-one sharing a container and a script. PCSX2 is not a libretro core
+# all of them sharing a container and a script. PCSX2 is not a libretro core
 # and has no retro_run. It is a whole emulator, built with CMake as a static
 # library, with CabinetOS's own host layer — 55 `Host::` functions — compiled
 # against it and linked into `cabinetos-ps2.so`. Different upstream, different
@@ -68,7 +68,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout
@@ -132,8 +131,9 @@ jobs:
           done < "$out/cabinetos-ps2.bundled"
           exit $fail
 
-      # THE SAME THREE FOLDERS EVERY OTHER PAYLOAD JOB PRODUCES, so build.yml's
-      # download can merge them all with `merge-multiple` and no special case.
+      # THE PAYLOAD'S OWN FOLDERS (cores/ and system/), as every other payload
+      # job uses, so build.yml's download can merge them all with
+      # `merge-multiple` and no special case.
       # ci/stage-image-payload.sh takes exactly this layout.
       - name: Stage it
         run: |

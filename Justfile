@@ -3,10 +3,10 @@
 # Derived from the Universal Blue image-template (Apache-2.0):
 #   https://github.com/ublue-os/image-template
 #
-# None of this runs on macOS. `build` needs podman on Linux; the VM recipes need
-# KVM. In practice these are called by .github/workflows/build.yml. They are
-# kept in the repo so the CI steps are readable and so the build can be run on a
-# Linux box later without reverse-engineering the workflow.
+# None of this runs on macOS. `build` needs podman on Linux. These are called
+# by .github/workflows/build.yml (check, image_name, generate-default-tag,
+# build, generate-build-tags, tag-images); `lint` is for running the lint by
+# hand. Disk images are build-disk.yml's, which runs bootc-image-builder itself.
 
 set dotenv-filename := "cabinetos.env"
 set dotenv-load
@@ -15,7 +15,6 @@ export image_name := env_var("IMAGE_NAME")
 export repo_organization := env_var("REPO_ORGANIZATION")
 export image_desc := env_var("IMAGE_DESC")
 export default_tag := env_var("DEFAULT_TAG")
-export bib_image := env_var("BIB_IMAGE")
 
 [private]
 default:
@@ -25,27 +24,13 @@ default:
 #
 # This is a syntax check, not a format check. Upstream's template runs
 # `just --fmt --check`, which fails on formatting differences — a needless way
-# to break a build. Formatting is available as `just fmt` if you want it.
+# to break a build.
 [group('Just')]
 check:
     #!/usr/bin/env bash
     set -eou pipefail
     just --summary > /dev/null
     echo "Justfile parses"
-
-# Reformat the Justfile in place.
-[group('Just')]
-fmt:
-    #!/usr/bin/env bash
-    just --unstable --fmt -f Justfile
-
-# Remove build output.
-[group('Utility')]
-clean:
-    #!/usr/bin/env bash
-    set -eou pipefail
-    rm -rf output/
-    rm -f previous.manifest.json changelog.md output.env
 
 [group('Utility')]
 [private]
@@ -71,7 +56,7 @@ build $target_image=image_name $tag=default_tag:
         set +x
         echo "image_payload/ is missing." >&2
         echo >&2
-        echo "The image carries the frontend and the twenty-one cores, and" >&2
+        echo "The image carries the frontend, the cores and the other emulators, and" >&2
         echo "neither is in this repository. Build them and collect them:" >&2
         echo >&2
         echo "    ci/stage-image-payload.sh              from this tree" >&2
@@ -161,40 +146,8 @@ tag-images $target_image=image_name $tag=default_tag tags="":
 
     podman images
 
-# Build a bootable disk image locally. Linux only, needs root and KVM.
-[group('Disk')]
-[private]
-_build-bib $target_image $tag $type $config:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    BUILDTMP=$(mktemp -p "${PWD}" -d -t _build-bib.XXXXXXXXXX)
-
-    sudo podman run \
-      --rm -it --privileged --pull=newer --net=host \
-      --security-opt label=type:unconfined_t \
-      -v $(pwd)/${config}:/config.toml:ro \
-      -v $BUILDTMP:/output \
-      -v /var/lib/containers/storage:/var/lib/containers/storage \
-      "${bib_image}" \
-      --type ${type} --use-librepo=True --rootfs=btrfs \
-      "${target_image}:${tag}"
-
-    mkdir -p output
-    sudo mv -f $BUILDTMP/* output/
-    sudo rmdir $BUILDTMP
-    sudo chown -R $USER:$USER output/
-
-# Build a qcow2 for VM testing.
-[group('Disk')]
-build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "disk_config/disk.toml")
-
-# Build the installer ISO.
-[group('Disk')]
-build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "anaconda-iso" "disk_config/iso.toml")
-
-# Shellcheck every script CI lints: the same two commands as build.yml's lint
-# job, so a script that fails there fails here.
+# Shellcheck the scripts CI lints: the same two shellcheck commands as
+# build.yml's lint job, so a script that fails there fails here.
 [group('Lint')]
 lint:
     #!/usr/bin/env bash

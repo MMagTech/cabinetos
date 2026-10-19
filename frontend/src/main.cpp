@@ -34,7 +34,6 @@
 #include "app.h"
 #include "capture.h"
 #include "covercache.h"
-#include "design.h"
 #include "optcheck.h"
 #include "probes.h"
 #include "steam.h"
@@ -42,16 +41,6 @@
 // The SIGUSR1 capture (capture.h).
 volatile std::sig_atomic_t gCaptureRequested = 0;
 void requestCapture(int) { gCaptureRequested = 1; }
-
-namespace {
-
-// The design system's numbers live in design.h, the animation primitive in
-// motion.h and the card in card.h, because the screens are separate
-// translation units and two copies of a focus scale is how a shelf and a grid
-// end up disagreeing about what focus looks like.
-using namespace design;   // NOLINT — every name in it is a design-system value
-
-}  // namespace
 
 // --ps2-copy: PCSX2 without a window of its own, every frame copied back for
 // this window to draw, as before #226. For measuring the two side by side.
@@ -150,9 +139,9 @@ int App::run(int argc, char** argv) {
     startAccessAtBoot();
     startRemotePlayAtBoot();
     startTailscaleAtBoot();
-    // A Remote Play session already open when the console starts (back from
-    // Steam, a crash) needs gamescope composing: the session script starts it
-    // so (cabinetos-session, #304), before the console draws a frame.
+    // NOTHING HERE for a Remote Play session already open at start (back
+    // from Steam, a crash): the session script starts gamescope composed
+    // (cabinetos-session, #304).
 
     noticeAppliedUpdate();
     settleTabsAtStart();

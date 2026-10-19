@@ -114,16 +114,17 @@ static int romProbe(const char* address, int romId, const char* validExts) {
 // this project that means a command that prints a fact rather than a screen
 // somebody has to describe over the telephone.
 //
-// So there are three, in the same shape as --storage and --core-options: they
-// run before SDL, need no window, no GL and no controller, and can be run over
+// So each has a flag, in the same shape as --storage and --core-options
+// (--first-run with its step and server check, --network and --network-scan,
+// --qr): they run before SDL, need no window, no GL and no controller, and can be run over
 // SSH against the real console without disturbing the session on the television.
 
 // What the network is, what is on the air, and whether this console is still
 // allowed to save a connection.
 //
-// THE LAST LINE IS THE POINT OF THE WHOLE COMMAND. Wi-Fi configuration works
-// today only because the session user is in `wheel`, and Phase 6 is exactly the
-// change that takes it out. That failure presents as a network bug on a machine
+// THE LAST LINE IS THE POINT OF THE WHOLE COMMAND. Wi-Fi saving rests on
+// 60-cabinetos-network.rules (and, on installed consoles, on `wheel` too). If
+// that grant is ever lost the failure presents as a network bug on a machine
 // whose network is fine, so the console answers the question directly.
 static int networkProbe(bool doScan) {
     if (!net::available()) {

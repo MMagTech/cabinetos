@@ -23,7 +23,7 @@ ExecStart=/usr/libexec/cabinetos-flatpak-setup
 # booted with no network. See the script's header.
 #
 # TimeoutStartSec is generous because the KDE runtime alone is 1.1 GB and a
-# first boot installs two runtimes and three emulators over a domestic
+# first boot installs two runtimes and two emulators over a domestic
 # connection. infinity is wrong — a wedged download should end, and the timer
 # will pick it up again.
 TimeoutStartSec=3600

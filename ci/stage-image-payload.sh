@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Assemble everything the image has to carry that is not in this repository:
-# the frontend binary, the twenty-two libretro cores, and the one core's worth
-# of system files that ships with an emulator rather than coming off RomM.
+# the frontend and the Wii bridge, the 22 libretro cores and PCSX2, the system
+# files that ship with emulators rather than coming off RomM, Cemu and
+# Sunshine.
 #
 # WHY THIS EXISTS AT ALL. Until 2026-09-19 the image contained none of it. The
 # Containerfile copied build_files, system_files and two licence files, so a
@@ -14,13 +15,17 @@
 # None of these are built here. They are big, they are slow, and they come from
 # somewhere that already builds them properly:
 #
-#   the frontend   .github/workflows/build-frontend.yml
+#   the frontend   .github/workflows/build-frontend.yml (and the Wii bridge)
 #   the cores      .github/workflows/build-core.yml, each pinned to an exact
 #                  commit and each asserting that commit back out of the
 #                  finished .so
+#   PCSX2          .github/workflows/build-pcsx2.yml (cabinetos-ps2.so, its
+#                  libraries and resources)
+#   Cemu           .github/workflows/build-cemu.yml
+#   Sunshine       .github/workflows/build-sunshine.yml
 #
 # So this only ever COLLECTS and CHECKS. It builds nothing, and it fails before
-# the thirteen-minute image build starts rather than after it.
+# the image build starts rather than after it.
 #
 # Usage:
 #   ci/stage-image-payload.sh              from this tree's own builds
@@ -115,9 +120,10 @@ done
 # --- The cores -------------------------------------------------------------
 #
 # Named after the core as the MANIFEST knows it, not as upstream's makefile
-# names its output — beetle_ngp builds mednafen_ngp_libretro.so. The three
-# lines below are the same rule as cores/build-core.sh and as
-# catalog::coreFileName, and all three must agree: the frontend looks the file
+# names its output — beetle_ngp builds mednafen_ngp_libretro.so. The line
+# below is the same rule as cores/build-core.sh, cores/check-options.sh,
+# cores/arcade-sets.sh and catalog::coreFileName, and all five must agree:
+# the frontend looks the file
 # up by this name, and when it does not find one it reports the platform as
 # "the core for this system is not built on this console yet". A wrong name
 # here is twenty-two working emulators the console says it does not have.

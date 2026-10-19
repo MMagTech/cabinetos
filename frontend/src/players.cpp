@@ -113,7 +113,7 @@ std::string keyOf(SDL_Gamepad* gp) {
     return {};
 }
 
-// "E4:17:D8:71:F1:ED" from "e4-17-d8-71-f1-ed" or "e4:17:d8:71:f1:ed"; empty
+// "AA:BB:CC:DD:EE:01" from "aa-bb-cc-dd-ee-01" or "aa:bb:cc:dd:ee:01"; empty
 // for anything that is not an address (a wired pad's "000000000003").
 std::string asAddress(const std::string& s) {
     if (s.size() != 17) return {};
@@ -141,7 +141,7 @@ std::string firstLine(const std::string& path, const char* prefix = nullptr) {
 }
 
 // A PAD'S BLUETOOTH ADDRESS. SDL's serial has it when SDL drives the pad
-// itself (a Switch pad through hidraw: "e4-17-d8-71-f1-ed"), and not when the
+// itself (a Switch pad through hidraw: "aa-bb-cc-dd-ee-01"), and not when the
 // kernel does: an Xbox pad and an 8BitDo Lite 2 came through with no serial,
 // so their rows had no Forget (MMagTech, 2026-09-26). The kernel always keeps
 // it, as the device's "uniq", so that is asked second.

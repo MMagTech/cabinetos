@@ -57,7 +57,8 @@
 //
 // The core owns the image it drew and may recreate it whenever its internal
 // resolution changes; libretro is explicit that the frontend may not keep the
-// pointer. Ours is allocated once at a fixed maximum and is the thing EGL
+// pointer. Ours is allocated in 256-point steps and grown when a frame
+// outgrows it, not every frame, and is the thing EGL
 // holds, because an EGLImage is bound to one piece of memory for its life —
 // re-importing every frame would be a syscall and a driver allocation per
 // frame. So the blit is what makes the import stable, and it is also where

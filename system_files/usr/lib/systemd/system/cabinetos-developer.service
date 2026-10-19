@@ -1,5 +1,5 @@
 # Developer access: the full command line over SSH, port 2222, while it is
-# switched on in Settings, System. docs/SETTINGS.md, System; issue #134.
+# switched on in Settings, About. docs/SETTINGS.md, About; issue #134.
 #
 # NOT ENABLED, AND NO [Install]: off by default on every console, and off
 # means nothing listens. The session starts and stops it by name

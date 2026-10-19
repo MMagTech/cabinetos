@@ -2,7 +2,7 @@
 #
 # Built inside the container in Containerfile, never on the host: the OS image
 # carries no compiler by design, and the development machine is a Mac.
-# See README.md for the loop.
+# See CONTRIBUTING.md, "Building" and "Running and testing".
 
 CXX      ?= g++
 # -MMD -MP writes a .d file per object listing the headers it included, so

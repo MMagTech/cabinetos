@@ -24,9 +24,9 @@ set -uo pipefail
 # The address is NOT baked into the image. This repository is public and
 # somebody's LAN address does not belong in it, and an image with one server's
 # address compiled in is useful to exactly one person. A console with no file
-# here still boots — it comes up on the stand-in library and says on stderr
-# that it has no server — which is the state the first-run screen will replace
-# (docs/PROJECT.md, open question 15). It writes this same file.
+# here still boots: first run asks for the server and writes its own file
+# (config/server.json under the storage root), which this one, being root's,
+# overrides (frontend/src/serveraddress.h).
 #
 # /etc, because that is the part of a bootc machine that is the machine's own
 # and survives an update. Sourced rather than parsed: it is shell, and it is
@@ -150,7 +150,7 @@ OUTPUT="${CABINETOS_OUTPUT:-$(detect_output || true)}"
 if [[ "${OUTPUT}" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     OUT_W="${BASH_REMATCH[1]}"
     OUT_H="${BASH_REMATCH[2]}"
-    echo "cabinetos-session: output ${OUT_W}x${OUT_H} (from ${CABINETOS_OUTPUT:+CABINETOS_OUTPUT}${CABINETOS_OUTPUT:-the display})"
+    echo "cabinetos-session: output ${OUT_W}x${OUT_H} (from ${CABINETOS_OUTPUT:+CABINETOS_OUTPUT=}${CABINETOS_OUTPUT:-the display})"
 else
     # No display yet: gamescope starts on the last TV's size (above). The
     # other rungs, which have no display of their own, get 1080p.
@@ -169,8 +169,8 @@ PINNED=()
 
 # VARIABLE REFRESH WHEN THE TELEVISION HAS IT (#209, MMagTech 2026-10-01).
 # `--adaptive-sync` turns VRR on only if the display reports it can, and does
-# nothing otherwise; the emulators run with vsync off on their own limiters
-# (standalone.cpp), so a VRR set shows each frame when it is ready. Only on
+# nothing otherwise. The separate emulators are asked for VSync on (#209,
+# standalone_*.cpp); how VRR paces them has not been measured. Only on
 # drm: the other rungs have no display of their own to drive. The A9's LG C1
 # reports no VRR on its current input settings (2026-10-01), so on it this
 # changes nothing until the TV's game settings say otherwise.
@@ -208,12 +208,7 @@ if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/cabinetos-remoteplay-session" ]
     echo "cabinetos-session: a stream is open: gamescope starts composed"
 fi
 
-# An explicit choice always wins.
-if [[ -n "${CABINETOS_BACKEND:-}" ]]; then
-    run_gamescope "${CABINETOS_BACKEND}"
-fi
-
-# Otherwise: work down a ladder of compositors, best first.
+# Work down a ladder of compositors, best first.
 #
 #   1. gamescope on drm  — production. VRR, HDR, scaling, the lot.
 #   2. cage              — a minimal kiosk compositor, software rendered.

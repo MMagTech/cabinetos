@@ -856,7 +856,7 @@ void idle() {
     rc_client_idle(gClient);
 }
 
-// The sample unlock, counted in the frame loop's own calls (main.cpp calls
+// The sample unlock, counted in the frame loop's own calls (pace.cpp calls
 // frame() or idle() every frame of a game).
 void sampleTick() {
     if (!gSample || ++gSampleFrames != 300) return;

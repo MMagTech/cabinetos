@@ -167,7 +167,9 @@ void destroyShared() {
 // Allocates the one image the picture crosses on, and hands the same memory to
 // EGL as a texture.
 //
-// LINEAR TILING, AND THAT IS A MEASURED ANSWER RATHER THAN THE EASY ONE.
+// LINEAR TILING ON THE DMABUF ROUTE, AND THAT IS A MEASURED ANSWER RATHER
+// THAN THE EASY ONE. (The memory-object route, preferred, is optimally tiled;
+// below.)
 //
 // The obvious worry is that writing into a linear image is slow, and that an
 // optimally-tiled one negotiated through VK_EXT_image_drm_format_modifier

@@ -131,7 +131,7 @@ constexpr int kAxisDeadzone = 12000;   // of 32767
 
 }  // namespace idle
 
-// TURN OFF SCREEN AFTER, docs/SETTINGS.md, System. Saved as the word in
+// TURN OFF SCREEN AFTER, docs/SETTINGS.md, Display and Sound. Saved as the word in
 // config/settings.json; the frame loop hands the seconds to idle::Watch.
 // The starting value is 15 minutes, what the console did before there
 // was a choice. NO "NEVER" AND NO HOUR: both were built and dropped the

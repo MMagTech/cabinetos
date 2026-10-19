@@ -7,7 +7,7 @@
 # games for both arcade cores, and the console picks the core per game by the
 # zip's set name: FinalBurn Neo if its list has the set, else MAME 2003-Plus if
 # its list does, else the game is greyed as not supported here
-# (frontend/src/catalog.cpp, arcadeCoreFor). The lists are generated here so
+# (frontend/src/catalog.cpp, arcadeGame). The lists are generated here so
 # they always match the pinned core, never typed in.
 #
 # THE PIN IS READ FROM cores/build-core.sh, the one place it is written. Not

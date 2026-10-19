@@ -47,12 +47,10 @@ struct Entry {
     const char* system = nullptr;
 };
 
-// Derived from Cabinet's core-manifest.json, 2026-09-14. The manifest is the
-// source of truth and this follows it; if a core is added there, add it here.
-//
-// It is not generated from the manifest because the manifest is not in this
-// repository and is not fetchable — see docs/PROJECT.md, open question 13. When
-// it lands, this table is a candidate for generation.
+// Started from Cabinet's core-manifest.json, 2026-09-14. Since 2026-10-11
+// Cabinet is a reference, not a constraint: this table is this console's
+// own, and a core's pin moves by docs/PROJECT.md, "Constraints and
+// principles", 8 (only for something a player gets).
 const Entry kTable[] = {
     {"3do",                  nullptr,     Support::Playable, "opera",           nullptr},
     // One slug, two platforms, two different cores. This is the case the
@@ -126,8 +124,6 @@ bool eq(const char* a, const std::string& b) { return b == a; }
 
 namespace {
 
-// Returns the table row, not a Coverage, because the row carries one thing the
-// caller needs that the answer does not: whether the core is hardware-rendered.
 // A folder name with capitals, spaces, dashes, underscores, dots and "+"
 // ignored, so `MAME 2003-Plus`, `mame_2003_plus` and `Mame2003+` are one name.
 std::string folderKey(const std::string& s) {
@@ -159,6 +155,8 @@ bool genericArcade(const std::string& slug, const std::string& fsSlug) {
     return slug == "arcade" && arcadeFolder(fsSlug).empty();
 }
 
+// Returns the table row, not a Coverage, because displayQualifier needs the
+// row's `system`.
 const Entry* lookup(const std::string& slug, const std::string& fsSlug) {
     // An arcade folder is matched on the emulator its name spells, not on
     // the name as typed.
@@ -279,10 +277,11 @@ Coverage answer(const Entry* e) {
     Coverage c{e->support, e->core, e->reason};
     if (c.support != Support::Playable || !c.core) return c;
 
-    // An emulator that is its own application is installed by first boot
-    // from Flathub, not shipped in the image, so "not here" is an ordinary
-    // state for a while on a new machine, and a permanent one on a console
-    // that has never reached the internet (open question 21).
+    // Two emulators that are their own application, xemu and Eden, are
+    // installed by first boot from Flathub, not shipped in the image, so
+    // "not here" is an ordinary state for a while on a new machine, and a
+    // permanent one on a console that has never reached the internet (open
+    // question 21). RPCS3, Xenia and Cemu are in the image.
     if (const cab::standalone::Emulator* emu = cab::standalone::find(c.core)) {
         if (!cab::standalone::installed(*emu)) {
             c.support = Support::NotInstalled;
@@ -341,7 +340,7 @@ const std::unordered_set<std::string>& setsOf(const char* core) {
 
 // A game in a generic arcade folder: FinalBurn Neo if its list has the set,
 // else MAME 2003-Plus if its list does (#310). The set is the file's name, as
-// the core is handed it (main.cpp keeps an arcade file's own name).
+// the core is handed it (launch_routes.cpp keeps an arcade file's own name).
 Coverage arcadeGame(const romm::Game& g) {
     std::string set = g.fsName;
     if (const size_t dot = set.find_last_of('.'); dot != std::string::npos) set.erase(dot);

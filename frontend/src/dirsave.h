@@ -40,7 +40,7 @@ namespace cab {
 
 // One entry in a directory save: a path relative to the archive root, and when
 // it last changed. The time is what decides which folders belong to the game
-// that just ran — see main.cpp.
+// that just ran: see saves.cpp (listDirSave).
 struct DirEntry {
     std::string relPath;    // "ULUS10002LUMINES/PARAM.SFO"
     // NANOSECONDS, and the size beside it, because seconds are not enough: a
