@@ -315,11 +315,8 @@ Each with where it is recorded.
   cache's key (`covercache.cpp`). They should move into the client.
   `ci/check-romm-paths.sh` lists them and fails a pull request that adds
   another.
-- **Threads not yet put right:** #404 ("The launch worker writes the job's
-  entry path while the frame thread reads it"), #405 ("favorites.json is
-  written from two threads through the same temporary file with no lock"),
-  #406 ("Four background threads are never stopped at exit (pairing, remove
-  and sign out, reconnect, drive backfill)").
+- **Threads not yet put right:** #405 ("favorites.json is written from two
+  threads through the same temporary file with no lock").
 - **CI runs one self-test** (`--check-option-tables`); the others are run by
   hand. No Python is tested, and neither are `tools/` and `disk_config/`.
   A pull request to `main` never builds the cores, `frontend/ps2`, Cemu,
