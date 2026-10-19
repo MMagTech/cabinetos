@@ -12,7 +12,7 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-10-19, evening.** `latest` is **2026.10.19.2** (#517). `testing` is
-**2026.10.19.3** (revision 2b115cb), the day's batch: PR #PRNUM, "PRTITLE",
+**2026.10.19.3** (revision 2b115cb), the day's batch: PR #519, "Batch 2026-10-19: Wii Remotes, Play on a slow server, archive folders, stranded Xbox saves, Steam's exit, What's new",
 waiting on his TV check and merge. Seven sessions built it on separate
 files while he was at work, one combined it, built it in the builder, ran
 every self-test and smoke-tested it headless on the A9 through the
@@ -40,7 +40,7 @@ PROJECT.md.
 ## Next
 
 1. **His TV check of 2026.10.19.3, then the merge on his go** (the list is in
-   PR #PRNUM, "For the TV"). After the merge: close nothing by hand (the
+   PR #519, "For the TV"). After the merge: close nothing by hand (the
    body closes #480, #481, #482, #488 and #329), delete the batch branches
    (`claude/ovn4-*`, `claude/research-*`, `ovn4-2026-10-19`) and their
    worktrees, and record #511's verdict on that issue's thread if the PR
@@ -50,7 +50,7 @@ PROJECT.md.
    (CONTRIBUTING.md, "What CI checks").
 3. **The next batch, the one that may touch `system_files/`** (once #511
    is proven): #305's 25 s stall, which is gamescope's own exit waiting on
-   logind (the Steam session's findings are in PR #PRNUM: in
+   logind (the Steam session's findings are in PR #519: in
    `cabinetos-session`, give gamescope 2 s once its app is gone, then stop
    it and carry on; try it with `ui-loop.sh --session-script` first);
    #492's last item (STALE-187, the flatpak script's unset overrides);
