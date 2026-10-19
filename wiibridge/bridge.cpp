@@ -93,6 +93,9 @@ std::string field(const std::string& uevent, const char* key) {
 }
 
 constexpr size_t kSetupMax = 96;
+// These copies drop commands sent too fast: the setup goes out again this far
+// apart (see reattach).
+constexpr auto kSetupGap = std::chrono::milliseconds(15);
 
 // Whether the Remote answers a command with an acknowledgement (0x22): every
 // memory write, and anything with the acknowledge bit set (WiiBrew, "Wiimote",
@@ -416,6 +419,8 @@ void detach(Remote& r) {
     r.reads.clear();
     r.swallowAcks = 0;
     r.swallowed = 0;
+    r.replay = {};
+    r.replaying = false;
     // The real extension forgets its setup when the Remote goes off; what the
     // GAME believes (extension in, encryption on, its key) is kept, because the
     // game never saw the Remote go.
@@ -428,18 +433,35 @@ void detach(Remote& r) {
 // Measured on the A9 2026-10-03: a Remote switched off and on mid-game came back
 // with its Nunchuk unset while the game still expected it encrypted, and the
 // stick read wrong; the game does not set the extension up again by itself.
+//
+// The game's setup again, in its order, gently: these copies drop commands
+// sent too fast, so one every kSetupGap, sent by the loop (replayNext), and
+// the light and report mode a gap after the last. The Remote is held until
+// then (see held), as it was when the bridge slept between them; the other
+// Remotes are not (#480). Every write is acknowledged by the Remote; those
+// answers are the bridge's, not the game's.
 void reattach(Remote& r, const std::string& node, int fd) {
     r.real = fd;
     r.node = node;
-    // The game's setup again, in its order, gently: these copies drop commands
-    // sent too fast. Every write is acknowledged by the Remote; those answers
-    // are the bridge's, not the game's.
-    for (const auto& c : r.setup) {
+    r.replay.left.assign(r.setup.begin(), r.setup.end());
+    r.replay.due = std::chrono::steady_clock::now();
+    r.replaying = true;
+}
+
+// One step of reattach's replay, when it is due: the next setup command, or,
+// a gap after the last, the rest.
+void replayNext(Remote& r) {
+    if (!r.replaying || std::chrono::steady_clock::now() < r.replay.due) return;
+    if (!r.replay.left.empty()) {
+        const std::vector<uint8_t> c = std::move(r.replay.left.front());
+        r.replay.left.pop_front();
         toReal(r, c.data(), c.size());
         sentOurs(r, c.data(), c.size());
         if (c[0] == 0x16 && c[2] == 0xa4 && c[4] == 0xfb) r.plain = true;
-        ::usleep(15000);
+        r.replay.due = std::chrono::steady_clock::now() + kSetupGap;
+        return;
     }
+    r.replaying = false;
     if (r.ext) ensurePlain(r);   // a game that skipped the plain setup
     if (!r.lastMode.empty()) {
         toReal(r, r.lastMode.data(), r.lastMode.size());
@@ -450,7 +472,7 @@ void reattach(Remote& r, const std::string& node, int fd) {
         sentOurs(r, r.lastLed.data(), r.lastLed.size());
     }
     std::fprintf(stderr, "[wiibridge] %s back on %s, to the same stand-in; %zu setup command(s) sent again\n",
-                 r.uniq.c_str(), node.c_str(), r.setup.size());
+                 r.uniq.c_str(), r.node.c_str(), r.setup.size());
 }
 
 void drop(Remote& r) {
@@ -565,6 +587,92 @@ void rescan() {
     ::closedir(dir);
 }
 
+// A REMOTE WITH PACED REPORTS GOING OUT IS HELD, both ways, until the last
+// one's gap is over: the game's commands to it and its reports to the game
+// wait in the kernel, as they did when the bridge slept between them, so
+// nothing lands between two of them or overtakes one. Only the other Remotes
+// go on (#480).
+bool held(const Remote& r) { return r.replaying || r.miiAnswers.busy(); }
+
+// How long poll may wait: until the next paced report is due, or a held
+// Remote's gap is over, and never more than 100 ms. To the nanosecond
+// (ppoll): whole milliseconds made the gaps up to one longer.
+timespec pollWait() {
+    const auto now = std::chrono::steady_clock::now();
+    std::chrono::nanoseconds wait = std::chrono::milliseconds(100);
+    for (const auto& r : gRemotes) {
+        if (r->replaying) wait = std::min(wait, std::chrono::nanoseconds(r->replay.due - now));
+        if (r->miiAnswers.busy()) wait = std::min(wait, std::chrono::nanoseconds(r->miiAnswers.due - now));
+    }
+    const long long ns = std::max<long long>(wait.count(), 0);
+    return {static_cast<time_t>(ns / 1000000000), static_cast<long>(ns % 1000000000)};
+}
+
+// ONE PASS OF THE LOOP: wait for a report either way or for a paced one to be
+// due, then move what came for every Remote, and its next paced report.
+void pass() {
+    std::vector<pollfd> fds;
+    for (const auto& r : gRemotes) {
+        const bool h = held(*r);
+        fds.push_back({h ? -1 : r->real, POLLIN, 0});   // -1 while it is off or held: poll skips it
+        fds.push_back({h ? -1 : r->uhid, POLLIN, 0});
+    }
+    const timespec wait = pollWait();
+    ::ppoll(fds.data(), fds.size(), &wait, nullptr);
+    for (size_t i = 0; i < gRemotes.size();) {
+        Remote& r = *gRemotes[i];
+        bool gone = false;
+        uint8_t buf[64];
+        while (r.real >= 0 && !held(r)) {
+            const ssize_t n = ::read(r.real, buf, sizeof buf);
+            if (n > 0) {
+                fromReal(r, buf, static_cast<size_t>(n));
+                continue;
+            }
+            if (n < 0 && errno != EAGAIN && errno != EINTR) gone = true;
+            break;
+        }
+        // A Mii read holds it from the next command on (miiRead).
+        while (!held(r)) {
+            uhid_event ev{};
+            const ssize_t n = ::read(r.uhid, &ev, sizeof ev);
+            if (n <= 0) break;
+            switch (ev.type) {
+                case UHID_OUTPUT:
+                    fromGame(r, ev.u.output.data, ev.u.output.size);
+                    break;
+                case UHID_GET_REPORT: {
+                    uhid_event rep{};
+                    rep.type = UHID_GET_REPORT_REPLY;
+                    rep.u.get_report_reply.id = ev.u.get_report.id;
+                    rep.u.get_report_reply.err = EIO;
+                    (void)::write(r.uhid, &rep, sizeof rep);
+                    break;
+                }
+                case UHID_SET_REPORT: {
+                    fromGame(r, ev.u.set_report.data, ev.u.set_report.size);
+                    uhid_event rep{};
+                    rep.type = UHID_SET_REPORT_REPLY;
+                    rep.u.set_report_reply.id = ev.u.set_report.id;
+                    rep.u.set_report_reply.err = 0;
+                    (void)::write(r.uhid, &rep, sizeof rep);
+                    break;
+                }
+                default:
+                    break;   // START, STOP, OPEN, CLOSE: nothing to do
+            }
+        }
+        if (!held(r)) {
+            checkDropped(r);
+            settleAnswers(r);
+        }
+        if (r.real >= 0 && (gone || ::access(("/dev/" + r.node).c_str(), F_OK) != 0)) detach(r);
+        replayNext(r);
+        miiAnswer(r);
+        ++i;
+    }
+}
+
 }  // namespace
 }  // namespace wiibridge
 
@@ -592,63 +700,11 @@ int main(int argc, char** argv) {
             rescan();
             lastScan = std::chrono::steady_clock::now();
         }
-        std::vector<pollfd> fds;
-        for (const auto& r : gRemotes) {
-            fds.push_back({r->real, POLLIN, 0});   // -1 while it is off: poll skips it
-            fds.push_back({r->uhid, POLLIN, 0});
-        }
-        if (fds.empty()) {
+        if (gRemotes.empty()) {
             ::usleep(250000);
             continue;
         }
-        ::poll(fds.data(), fds.size(), 100);
-        for (size_t i = 0; i < gRemotes.size();) {
-            Remote& r = *gRemotes[i];
-            bool gone = false;
-            uint8_t buf[64];
-            for (; r.real >= 0;) {
-                const ssize_t n = ::read(r.real, buf, sizeof buf);
-                if (n > 0) {
-                    fromReal(r, buf, static_cast<size_t>(n));
-                    continue;
-                }
-                if (n < 0 && errno != EAGAIN && errno != EINTR) gone = true;
-                break;
-            }
-            for (;;) {
-                uhid_event ev{};
-                const ssize_t n = ::read(r.uhid, &ev, sizeof ev);
-                if (n <= 0) break;
-                switch (ev.type) {
-                    case UHID_OUTPUT:
-                        fromGame(r, ev.u.output.data, ev.u.output.size);
-                        break;
-                    case UHID_GET_REPORT: {
-                        uhid_event rep{};
-                        rep.type = UHID_GET_REPORT_REPLY;
-                        rep.u.get_report_reply.id = ev.u.get_report.id;
-                        rep.u.get_report_reply.err = EIO;
-                        (void)::write(r.uhid, &rep, sizeof rep);
-                        break;
-                    }
-                    case UHID_SET_REPORT: {
-                        fromGame(r, ev.u.set_report.data, ev.u.set_report.size);
-                        uhid_event rep{};
-                        rep.type = UHID_SET_REPORT_REPLY;
-                        rep.u.set_report_reply.id = ev.u.set_report.id;
-                        rep.u.set_report_reply.err = 0;
-                        (void)::write(r.uhid, &rep, sizeof rep);
-                        break;
-                    }
-                    default:
-                        break;   // START, STOP, OPEN, CLOSE: nothing to do
-                }
-            }
-            checkDropped(r);
-            settleAnswers(r);
-            if (r.real >= 0 && (gone || ::access(("/dev/" + r.node).c_str(), F_OK) != 0)) detach(r);
-            ++i;
-        }
+        pass();
     }
     for (auto& r : gRemotes) drop(*r);
     return 0;

@@ -25,6 +25,16 @@ struct PendingRead {
     unsigned done = 0;
 };
 
+// REPORTS THE BRIDGE SENDS A SET TIME APART, one per pass of its loop when
+// it is due, never by sleeping: the loop serves every Remote, and a sleep
+// stopped them all (#480). While some are left, or the last one's gap runs,
+// their Remote is held: see held, in bridge.cpp.
+struct Paced {
+    std::deque<std::vector<uint8_t>> left;
+    std::chrono::steady_clock::time_point due{};   // the next, or the end of the last one's gap
+    bool busy() const { return !left.empty() || std::chrono::steady_clock::now() < due; }
+};
+
 struct Remote {
     std::string node, name, uniq;
     int real = -1;
@@ -59,20 +69,28 @@ struct Remote {
     std::vector<uint8_t> lastStatus;
     // EVERY OTHER SETUP COMMAND THE GAME SENT, in order: the camera (0x13, 0x1a,
     // registers 0xB0..), the extension and MotionPlus (0xA4.., 0xA6..). A
-    // Remote switched off forgets all of it; reattach sends it again. The
-    // encryption the bridge answers itself never reached the Remote and is not
-    // here. Nor is the speaker: see isSetup.
+    // Remote switched off forgets all of it; when it is back it is sent
+    // again. The encryption the bridge answers itself never reached the
+    // Remote and is not here. Nor is the speaker: see isSetup.
     std::vector<std::vector<uint8_t>> setup;
+    // That setup going out again, and whether the light and report mode are
+    // still to follow it (see reattach and replayNext).
+    Paced replay;
+    bool replaying = false;
+    // A Mii read's answers still to go to the game (see miiRead).
+    Paced miiAnswers;
 };
 
 // bridge.cpp: a report to the stand-in, and the acknowledgement of one.
 void toGame(Remote& r, const uint8_t* d, size_t n);
 void ackToGame(Remote& r, uint8_t reportId);
 
-// mii.cpp: where the Miis are kept, and a read or a write of the Remote's Mii
-// memory answered from there (false when it is not one).
+// mii.cpp: where the Miis are kept, a read or a write of the Remote's Mii
+// memory answered from there (false when it is not one), and the next of a
+// read's answers, sent when it is due.
 extern std::string gMiiDir;
 bool miiRead(Remote& r, const uint8_t* d, size_t n);
 bool miiWrite(Remote& r, const uint8_t* d, size_t n);
+void miiAnswer(Remote& r);
 
 }  // namespace wiibridge

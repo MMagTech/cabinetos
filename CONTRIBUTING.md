@@ -86,7 +86,10 @@ podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make
 ```
 
 Unlike the frontend's, its Makefile lists its source files by hand: a new
-file there must be added to `wiibridge/Makefile`.
+file there must be added to `wiibridge/Makefile`. `make test` there builds
+and runs its one test, `wiibridge/pacing-test.cpp` (#480): two Remotes on
+socket pairs through the bridge's own loop, no hardware. CI does not run
+it yet.
 
 **A libretro core:** `cores/build-core.sh <core>` from the repository root,
 where `<core>` is the name of one of its `case` arms (the same 22 names as
