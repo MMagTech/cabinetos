@@ -902,6 +902,12 @@ int App::shutDown(char** argv) {
     }
     addJob->wake.notify_all();
     if (addJob->th.joinable()) addJob->th.join();
+    // AND THE REST OF #406: a Remove or Sign-out send, stopped after the file
+    // on the wire (what is left stays owed), the reconnect watcher and the
+    // drive backfill, each at its next step.
+    removeJob->stop = true;
+    if (removeJob->th.joinable()) removeJob->th.join();
+    stopOfflineSync();
 
     ra::shutdown();
     images.shutdown();

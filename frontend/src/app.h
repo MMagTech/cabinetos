@@ -1699,13 +1699,23 @@ struct App {
     // their own login (they are never the person signed in: accounts::remove
     // refuses that), and only then deletes. Off the frame thread, because a
     // server that does not answer costs curl's whole timeout.
+    // STOPPED AND JOINED, NOT DETACHED (#406): a send still running at exit
+    // ran on into the program's teardown. `stop` ends it after the file on
+    // the wire (sendOwedBeforeRemoving); the destructor joins, so the App
+    // never ends holding it.
     struct RemoveJob {
         std::mutex m;
         std::atomic<bool> running{false};
+        std::atomic<bool> stop{false};
         bool finished = false;
         int left = 0;   // still owed after trying
         accounts::Account who;
         bool everyone = false;   // Sign out: every account's, then leave
+        std::thread th;
+        ~RemoveJob() {
+            stop = true;
+            if (th.joinable()) th.join();
+        }
     };
     std::shared_ptr<RemoveJob> removeJob = std::make_shared<RemoveJob>();
     void finishRemove(const accounts::Account& who);

@@ -267,13 +267,15 @@ void App::startRemove(const accounts::Account& who) {
       removeJob->everyone = false; }
     menuNotice.say("Removing " + who.name, Tone::Info);
     const std::string addr = rommAddress ? rommAddress : "";
-    std::thread([removeJob = removeJob, who, addr]() {
-        const int left = sendOwedBeforeRemoving(who, addr);
-        std::lock_guard<std::mutex> lk(removeJob->m);
-        removeJob->left = left;
-        removeJob->finished = true;
-        removeJob->running = false;
-    }).detach();
+    // The last send has finished (running was false), so this join is quick.
+    if (removeJob->th.joinable()) removeJob->th.join();
+    removeJob->th = std::thread([job = removeJob.get(), who, addr]() {
+        const int left = sendOwedBeforeRemoving(who, addr, &job->stop);
+        std::lock_guard<std::mutex> lk(job->m);
+        job->left = left;
+        job->finished = true;
+        job->running = false;
+    });
 }
 
 // SIGN OUT SENDS FIRST TOO, the same way (MMagTech, 2026-10-05: "the two
@@ -288,15 +290,16 @@ void App::startSignOut() {
       removeJob->who = accounts::Account{}; removeJob->everyone = true; }
     menuNotice.say("Signing out", Tone::Info);
     const std::string addr = rommAddress ? rommAddress : "";
-    std::thread([removeJob = removeJob, addr]() {
+    if (removeJob->th.joinable()) removeJob->th.join();
+    removeJob->th = std::thread([job = removeJob.get(), addr]() {
         int left = 0;
         for (const accounts::Account& a : accounts::all())
-            left += sendOwedBeforeRemoving(a, addr);
-        std::lock_guard<std::mutex> lk(removeJob->m);
-        removeJob->left = left;
-        removeJob->finished = true;
-        removeJob->running = false;
-    }).detach();
+            left += sendOwedBeforeRemoving(a, addr, &job->stop);
+        std::lock_guard<std::mutex> lk(job->m);
+        job->left = left;
+        job->finished = true;
+        job->running = false;
+    });
 }
 
 // ---- An account switch, behind the curtain ---------------------------
