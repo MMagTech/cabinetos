@@ -1709,6 +1709,16 @@ Outcome Flow::run() {
                 }
 
                 case SDL_EVENT_KEY_DOWN:
+                    // THE SYSTEM'S KEY REPEAT, as the console's own input
+                    // drops it (input.cpp, #443): a held Return, Space or
+                    // Escape acted again at every repeat, and a held
+                    // Backspace went back step after step (#485). Backspace
+                    // still repeats where it deletes, on the keyboard.
+                    if (e.key.repeat &&
+                        (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER ||
+                         e.key.key == SDLK_SPACE || e.key.key == SDLK_ESCAPE ||
+                         (e.key.key == SDLK_BACKSPACE && !keyboard_.isOpen())))
+                        break;
                     if (keyboard_.isOpen()) {
                         switch (e.key.key) {
                             case SDLK_LEFT: keyboard_.moveFocus(-1, 0); break;

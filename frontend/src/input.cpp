@@ -166,8 +166,12 @@ void App::handleEvent(const SDL_Event& e) {
                 const SDL_Keycode k = e.key.key;
                 const bool deletes = owner == InputOwner::Keyboard ||
                                      (pinScreen.isOpen() && owner == InputOwner::UI);
+                // And `[` and `]`, which moved along the bar again and
+                // again, and F5, which wrote a save state at every
+                // repeat (#484).
                 if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_ESCAPE ||
-                    (k == SDLK_BACKSPACE && !deletes))
+                    k == SDLK_LEFTBRACKET || k == SDLK_RIGHTBRACKET || k == SDLK_F5 ||
+                    k == SDLK_F8 || (k == SDLK_BACKSPACE && !deletes))
                     break;
             }
             // A physical keyboard's digits go into the PIN pad, the
@@ -494,8 +498,12 @@ void App::handleEvent(const SDL_Event& e) {
                     // TV, 2026-10-04), and there Start is the
                     // keyboard's "done", as its legend says. The rule
                     // is: Start opens the menu except while typing.
-                    if (here() != Screen::Search && !pinScreen.isOpen() &&
-                        !choiceScreen.isOpen() && !downloadsPanel.isOpen())
+                    // On Search with the keyboard put away (the results
+                    // focused), nobody is typing, so it is the menu too
+                    // (#484).
+                    if (!(here() == Screen::Search && keyboard.isOpen()) &&
+                        !pinScreen.isOpen() && !choiceScreen.isOpen() &&
+                        !downloadsPanel.isOpen())
                         openPowerMenu();
                     break;
                 default: break;
