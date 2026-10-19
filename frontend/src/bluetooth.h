@@ -61,6 +61,15 @@ struct Adapter {
 // person is left waiting for something that will never arrive.
 Adapter adapter();
 
+// THE RADIO BY ITS KERNEL NAME, "hci0", or empty with none (#303): for what
+// talks to it by name, bluez's object path and btmgmt's index. Linux numbers
+// adapters as they come, so the name is not fixed: the A9's own came back as
+// hci1 after its Bluetooth reset at boot (2026-10-09), and Wii Remotes,
+// looked for at hci0, could not be reached. The lowest number: with the one
+// onboard radio the console supports, that radio, whatever it is called.
+// cabinetos-wii-search picks the same way.
+std::string adapterName();
+
 // Switches the radio on. A console has no reason to have it off, but it may
 // well find it off, and a scan that silently returns nothing on a powered-down
 // adapter is the failure this prevents.

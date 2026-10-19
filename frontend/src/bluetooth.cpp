@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
+#include <dirent.h>
 #include <unistd.h>
 
 #include "btagent.h"
@@ -140,6 +142,23 @@ std::vector<Device> describe(std::vector<Device> found) {
 }  // namespace
 
 bool available() { return proc::run({"bluetoothctl", "--version"}, 5).ok(); }
+
+std::string adapterName() {
+    DIR* d = ::opendir("/sys/class/bluetooth");
+    if (!d) return {};
+    long best = -1;
+    while (const dirent* e = ::readdir(d)) {
+        // "hci0", not "hci0:256", a connection's entry beside it.
+        const char* n = e->d_name;
+        if (std::strncmp(n, "hci", 3) != 0 || !std::isdigit(static_cast<unsigned char>(n[3])))
+            continue;
+        char* end = nullptr;
+        const long i = std::strtol(n + 3, &end, 10);
+        if (*end == '\0' && (best < 0 || i < best)) best = i;
+    }
+    ::closedir(d);
+    return best < 0 ? std::string() : "hci" + std::to_string(best);
+}
 
 Adapter adapter() {
     Adapter a;

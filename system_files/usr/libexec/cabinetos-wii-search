@@ -41,11 +41,25 @@ if ! command -v btmgmt >/dev/null 2>&1; then
     exit 1
 fi
 
+# THE CONSOLE'S RADIO, WHATEVER LINUX NAMED IT (#303): btmgmt with no
+# --index searches with index 0 (BlueZ client/mgmt.c, cmd_find), and the
+# A9's own adapter came back as hci1 after a reset at boot (2026-10-09). The
+# lowest number, as the session picks it (frontend/src/bluetooth.h,
+# adapterName): with the one onboard radio, that radio. "hci0:256" beside
+# it is a connection, not an adapter.
+index=$(find /sys/class/bluetooth -maxdepth 1 -name 'hci*' -printf '%f\n' 2>/dev/null |
+    sed -n 's/^hci\([0-9][0-9]*\)$/\1/p' | sort -n | head -n 1)
+if [[ -z "${index}" ]]; then
+    echo "cabinetos-wii-search: no Bluetooth adapter" >&2
+    say state=failed "reason=no Bluetooth adapter"
+    exit 1
+fi
+
 say state=searching
 
 # One limited inquiry, BR/EDR only. btmgmt prints a dev_found line per device
 # and, for one that gave its name, a "name ..." line after it.
-out=$(timeout 30 btmgmt find -l -b 2>&1)
+out=$(timeout 30 btmgmt --index "${index}" find -l -b 2>&1)
 rc=$?
 if [[ ${rc} -ne 0 ]] && ! grep -q "dev_found" <<<"${out}"; then
     echo "cabinetos-wii-search: btmgmt find -l failed (${rc}): ${out}" >&2
