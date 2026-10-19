@@ -352,7 +352,7 @@ void App::openDetail(int cardIndex) {
         const catalog::Coverage cov = catalog::coverageFor(g);
         raReadable = !cov.core || ra::coreReadable(cov.core);
         d.playable = cov.support == catalog::Support::Playable;
-        d.reason = cov.reason ? cov.reason : "not playable on this console";
+        d.reason = cov.reason ? cov.reason : "Not playable on this console";
         detailManualPath = pdfManual(g.manualPath) ? g.manualPath : std::string();
         detailManualTitle = g.name.empty() ? g.fsName : g.name;
         break;

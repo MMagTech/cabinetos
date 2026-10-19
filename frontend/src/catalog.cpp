@@ -107,7 +107,7 @@ const Entry kTable[] = {
     // games is the largest excluded row in the reference library, so it is the
     // tile most likely to be asked about.
     {"Game & Watch",         nullptr,     Support::Excluded, "gw",
-     "not built here. These games are too small to play on a television"},
+     "Not built here. These games are too small to play on a television"},
 };
 
 bool eq(const char* a, const std::string& b) { return b == a; }
@@ -263,8 +263,7 @@ namespace {
 // Two ways a Playable row stops being playable, and they are different work:
 // the core has not been built, or it has been built and cannot be driven.
 Coverage answer(const Entry* e) {
-    if (!e) return {Support::NoCore, nullptr,
-                    "no core in the manifest serves this system"};
+    if (!e) return {Support::NoCore, nullptr, "No core for this system"};
 
     Coverage c{e->support, e->core, e->reason};
     if (c.support != Support::Playable || !c.core) return c;
@@ -277,7 +276,7 @@ Coverage answer(const Entry* e) {
     if (const cab::standalone::Emulator* emu = cab::standalone::find(c.core)) {
         if (!cab::standalone::installed(*emu)) {
             c.support = Support::NotInstalled;
-            c.reason = "its emulator is not installed on this console yet";
+            c.reason = "Its emulator is not installed on this console yet";
         }
         return c;
     }
@@ -286,7 +285,7 @@ Coverage answer(const Entry* e) {
     struct stat st;
     if (::stat(path.c_str(), &st) != 0 || st.st_size == 0) {
         c.support = Support::NotInstalled;
-        c.reason = "the core for this system is not built on this console yet";
+        c.reason = "The core for this system is not built on this console yet";
         return c;
     }
 
