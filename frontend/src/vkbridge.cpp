@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "gpu.h"
 #include "vkhost_state.h"
 
 namespace cab::vk {
@@ -483,8 +484,10 @@ bool choosePictureRoute(std::string* err) {
         reinterpret_cast<PFNEGLDESTROYIMAGEPROC>(eglGetProcAddress("eglDestroyImage"));
     gGlEglImageTargetTexture2D = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
         eglGetProcAddress("glEGLImageTargetTexture2DOES"));
-    const bool haveEglImage =
-        gEglCreateImage && gEglDestroyImage && gGlEglImageTargetTexture2D;
+    // The EGL route hands a dmabuf, which a GPU without the extension cannot
+    // export (#489, EMU-02).
+    const bool haveEglImage = gEglCreateImage && gEglDestroyImage &&
+                              gGlEglImageTargetTexture2D && gpu::vulkan().externalMemoryDmaBuf;
 
     std::fprintf(stderr,
                  "[vulkan] picture route: %s (video driver %s)\n",

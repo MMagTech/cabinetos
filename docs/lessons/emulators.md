@@ -149,6 +149,16 @@ Read before working on a core, an emulator, input, saves or states.
   clock pacing ran 2 frames or 0 whenever the stopwatch wobbled near a
   frame boundary. The beat was the smallest cause.
 
+- **A STATE SAVE CAN RUN THE GAME.** Mupen64Plus-Next's `retro_serialize`
+  runs the machine to its next vertical interrupt before saving, so each of
+  rewind's snapshots was an N64 frame nobody counted: its sound filled the
+  speaker, which held the picture twice a second, and for three weeks that
+  was put down to the core's timing (#254, "N64 makes 3.4% more sound per
+  frame than it promises", 2026-10-18). Found only by counting `retro_run`
+  calls against VIs inside a measuring build of the core. **When a core's
+  numbers are off by a round fraction, look for what the console does on
+  that period** (one frame in thirty is 3.3%; snapshots every 30 frames).
+
 - **A CORE CAN ASK FOR ITS GL CONTEXT TWICE, AND THE SECOND ASK MUST KEEP
   THE FIRST.** melonDS calls SET_HW_RENDER in retro_load_game and again
   from its first retro_run. The host made a fresh desktop context on the
@@ -222,6 +232,14 @@ Read before working on a core, an emulator, input, saves or states.
   could not hash it either (no `ra_hash`). A single-disc game (Mad Dog
   McCree) booted the same way was the control. Check Redump before blaming
   the feature.
+  And the file can be another console's game: RomM's PlayStation "Primal
+  Rage (USA).chd" (#422, "Primal Rage (PS1) will not start", 2026-10-18)
+  has a Mode 1 data track of 55,251 sectors, 129,950,352 bytes, exactly
+  Redump's **Saturn** Primal Rage (USA) Track 01 (the PlayStation one is
+  222,614,448 bytes and Mode 2, as every PlayStation disc is), and the
+  console's Saturn core plays it. PCSX-ReARMed's "unsupported/invalid CD
+  image" was right. Read the CHD's track list (its CHT2 metadata) and the
+  track sizes against Redump before reading the core.
 
 ## PS2 and GameCube
 

@@ -290,6 +290,13 @@ bool Core::load(const std::string& soPath) {
     gHWVulkan = false;
     gHWFrame = false;
     gHWContextName.clear();
+    // Nor are the last core's Vulkan negotiation interface, which points
+    // into a core that is dlclosed by now, and its pixel format: libretro's
+    // default is 0RGB1555 for a core that never says (#489, EMU-01, EMU-07).
+    // Every Vulkan core shipped today sends its interface again during its
+    // own load, and every core states its format, so nothing changes today.
+    vk::setNegotiation(nullptr);
+    gPixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
     // Whatever the last core declared is not this one's business. Cleared here
     // rather than in unload() so a caller that inspects the table after a core
     // is unloaded still sees what that core actually asked for.
@@ -400,7 +407,9 @@ bool Core::load(const std::string& soPath) {
     // machine keeps itself, so the brake holding it there is correct, and it
     // is what RetroArch's audio sync does to every core. Cabinet's "slowed N64
     // down" was most likely this same 3 to 4%, slowed to true speed; why was
-    // never recorded, so that is a reading, not a finding.
+    // never recorded, so that is a reading, not a finding. #254, 2026-10-18:
+    // the machine was not fast. Each rewind snapshot ran an N64 frame the
+    // console did not count (Core::saveState, core_memory.cpp).
     //
     // SO EVERY CORE, which is the end state #144 asked for. Three cores out of
     // three that were measured needed it, each for a different reason, and
@@ -672,6 +681,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     accumulator_ = 0.0;
     paceClock_ = 0.0;
     governorSkips_ = 0;
+    saveRunsFrame_ = false;
     gFramesRun = 0;
     gAudioFrames = 0;
     gAudio.clear();

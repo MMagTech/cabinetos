@@ -2084,6 +2084,18 @@ blocking audio write does. The two causes differ:
   the sound are timed from the same clock, so the cause is not known.
   Nobody reports it upstream; the nearest is mupen64plus-core#1176 (round
   50/60 Hz constants, no replies). #254.
+  **Found 2026-10-18 (#254): it was the console's own rewind.** The core's
+  `retro_serialize` runs the emulated machine to its next vertical
+  interrupt before it saves (libretro.c), so every half-second snapshot was
+  a whole N64 frame, sound and picture, that the console never counted:
+  581 `retro_run` calls per 600 VIs, and the core's own output was 735.46
+  samples per VI, exactly 44100/60 (a measuring build of the core on the
+  A9, not shipped). One frame in thirty is the 3.3%. The fix is a rule for
+  every core: a save that makes sound ran a frame, is counted as one, and
+  rewind's snapshot then takes the place of that refresh's run. Hydro
+  Thunder, locked, through a real-time sink: 17 to 19 frames held per 10 s
+  before, 0 after; sound per game frame +3.34% before, -0.02 to +0.07%
+  after. Rewind stays on N64, as decided on 2026-09-27.
 - **Dreamcast, from Flycast's source:** `retro_run` returns when the game
   draws a frame, not at each refresh, and a game that skipped one hands
   over two frames of sound (`shell/libretro/audiostream.cpp` says so).

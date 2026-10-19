@@ -8,6 +8,7 @@
 #include "core_state.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -76,8 +77,30 @@ bool Core::saveState(std::vector<uint8_t>& out) {
     const size_t n = g.serialize_size();
     if (n == 0) return false;  // some cores genuinely cannot; that is not an error
     out.resize(n);
-    CoreContext in;
-    return g.serialize(out.data(), n);
+    const uint64_t soundBefore = gAudioFrames;
+    bool saved;
+    {
+        CoreContext in;
+        saved = g.serialize(out.data(), n);
+    }
+    // A SAVE THAT MADE SOUND RAN THE GAME (#254). Mupen64Plus-Next runs the
+    // emulated machine to its next vertical interrupt to take a state
+    // (libretro.c, retro_serialize), so each save is a whole N64 frame: its
+    // sound, and its picture handed over. Uncounted, the rewind snapshots
+    // made 3.3% more sound per frame than promised and the speaker held a
+    // frame twice a second. Counted as the frame it is; the frame loop takes
+    // such a core's snapshots in place of a run (pace.cpp).
+    if (gAudioFrames != soundBefore) {
+        if (!saveRunsFrame_)
+            std::fprintf(stderr, "[core] a state save runs a frame of the game (%llu "
+                                 "sound frames); counted as one\n",
+                         static_cast<unsigned long long>(gAudioFrames - soundBefore));
+        saveRunsFrame_ = true;
+        ++gFramesRun;
+        accumulator_ -= 1.0 / std::max(av_.fps, 1.0);   // runFor's budget
+        if (afterFrame_) afterFrame_();
+    }
+    return saved;
 }
 
 size_t Core::saveRamSize() const {
