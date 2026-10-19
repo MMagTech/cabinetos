@@ -427,6 +427,9 @@ rc_libretro_memory_regions_t gRegions{};
 // Held for the length of a PS2 frame's check, so endGame can wait out one
 // that is running on PCSX2's thread before the game goes.
 std::mutex gFrameMutex;
+// A loaded state's achievement progress waiting for the game's set (#279,
+// stateLoaded); empty when nothing waits.
+std::vector<uint8_t> gPendingProgress;
 
 
 uint32_t RC_CCONV readMemory(uint32_t address, uint8_t* buffer, uint32_t n, rc_client_t*) {
@@ -634,6 +637,16 @@ void shutdown() {
 void pump() {
     runAnswers();
 
+    // A state's progress that came before the set (stateLoaded), given
+    // now the set is here. Before the next frame's check, which would
+    // otherwise start every achievement afresh.
+    if (!gPendingProgress.empty() && gClient && gGameActive.load() &&
+        rc_client_is_game_loaded(gClient)) {
+        std::vector<uint8_t> p;
+        p.swap(gPendingProgress);
+        stateLoaded(p.data(), p.size());
+    }
+
     // Unlocks earned offline: tried again every half a minute until sent.
     if (gLoggedIn && !gSending &&
         std::chrono::steady_clock::now() - gLastSendTry >= std::chrono::seconds(30)) {
@@ -816,6 +829,7 @@ void beginGame(const std::string& raHash, const std::string& platformSlug, bool 
 
 void endGame() {
     gDeferredLoad.clear();
+    gPendingProgress.clear();
     if (!gGameActive.exchange(false)) return;
     if (gPs2) {
         ps2::setFrameCallback(nullptr, nullptr);
@@ -833,9 +847,42 @@ void endGame() {
     clearUserAgentCore();
 }
 
-void stateLoaded() {
+std::vector<uint8_t> progress() {
+    std::vector<uint8_t> out;
+    if (!gClient || !gGameActive.load() || gProbe) return out;
+    std::lock_guard<std::mutex> lk(gFrameMutex);
+    if (!rc_client_is_game_loaded(gClient)) return out;
+    out.resize(rc_client_progress_size(gClient));
+    if (out.empty() || rc_client_serialize_progress_sized(gClient, out.data(), out.size()) != RC_OK) {
+        std::fprintf(stderr, "[ra] no achievement progress for the state\n");
+        out.clear();
+        return out;
+    }
+    std::fprintf(stderr, "[ra] %zu bytes of achievement progress in the state\n", out.size());
+    return out;
+}
+
+void stateLoaded(const uint8_t* progress, size_t size) {
+    gPendingProgress.clear();
     if (!gClient || !gGameActive.load() || gProbe) return;
     std::lock_guard<std::mutex> lk(gFrameMutex);
+    if (progress && size > 0) {
+        // THE SET IS STILL ON ITS WAY: Play's Resume loads the newest state
+        // on the game's first frame, before rcheevos may have the set. Kept
+        // for it, and given once it has (pump).
+        if (!rc_client_is_game_loaded(gClient)) {
+            gPendingProgress.assign(progress, progress + size);
+            std::fprintf(stderr, "[ra] the state's achievement progress waits for the set\n");
+            return;
+        }
+        const int r = rc_client_deserialize_progress_sized(gClient, progress, size);
+        if (r == RC_OK) {
+            std::fprintf(stderr, "[ra] the state's achievement progress restored (%zu bytes)\n",
+                         size);
+            return;
+        }
+        std::fprintf(stderr, "[ra] the state's achievement progress was refused (%d)\n", r);
+    }
     rc_client_reset(gClient);
 }
 

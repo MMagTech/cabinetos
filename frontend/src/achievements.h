@@ -88,9 +88,19 @@ bool coreReadable(const std::string& manifestCore);
 void beginGame(const std::string& raHash, const std::string& platformSlug, bool ps2);
 // Before the core unloads it.
 void endGame();
-// After a save state is loaded (not rewind): the memory jumped, so what each
-// achievement was waiting for starts again, as RetroArch does.
-void stateLoaded();
+// THE ACHIEVEMENT PROGRESS A SAVE STATE CARRIES (#279), as RetroArch's do
+// (cheevos/cheevos.c): rcheevos' own record of where each achievement and
+// leaderboard stands, counts and all (rc_client_serialize_progress_sized),
+// for the state's "ACHV" block (statefile.h). Empty when no game's
+// achievements are being checked, which leaves the state as it was.
+std::vector<uint8_t> progress();
+// After a save state is loaded (not rewind): the memory jumped. With the
+// progress the state carried, every achievement goes on from where it stood
+// when the state was saved (rc_client_deserialize_progress_sized). Without
+// it (a state from before #279, or saved by somebody not signed in), or when
+// rcheevos will not take it, what each was waiting for starts again
+// (rc_client_reset), as before.
+void stateLoaded(const uint8_t* progress, size_t size);
 // After the core ran this frame's frames (libretro only; PS2 calls itself).
 void frame();
 // Instead of frame() while the game is not running (the pause menu): keeps the

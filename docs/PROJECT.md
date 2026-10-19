@@ -16466,8 +16466,34 @@ token (0600) and removed with the account.
 
 **Softcore only** (2026-10-05). Hardcore needs RetroAchievements to approve
 this frontend and keep every release to their checklist. Nothing hardcore is
-built, hidden or otherwise. States and rewind work as always; loading a state
-restarts what each achievement was waiting for, as RetroArch does.
+built, hidden or otherwise. States and rewind work as always.
+
+**A save state carries the achievement progress, as RetroArch's do (#279,
+"RetroAchievements: save states don't carry achievement progress as
+RetroArch's do"; MMagTech 2026-10-18, yes "as long as it's not something
+too hard"; built 2026-10-18).** RetroArch writes rcheevos' progress into
+each state (`rc_client_serialize_progress`, cheevos/cheevos.c) and puts it
+back on load (`rc_client_deserialize_progress_sized`); this console saved
+none and reset every achievement on a load, so a count over time started
+again and Resume could miss a trigger. Now the progress goes inside the
+state file in RetroArch's own layout (`frontend/src/statefile.h`, read off
+tasks/task_save.c): "RASTATE" and version 1, a "MEM " block with the core's
+bytes unchanged, an "ACHV" block, "END ". It reaches RomM inside the state,
+so another console resuming it gets it, and RetroArch loads such a file as
+its own. **Only a state with progress is wrapped**: nobody signed in, or a
+game with no set, writes the core's bytes alone as before, so those states
+load as always everywhere. Every state from before (core data alone)
+still loads and resets the achievements as before. A wrapped state on a
+console still on an older version is handed to the core whole, which
+cannot read it (a core that checks the size refuses it); every console
+updates, so that is a passing case. Progress loaded before rcheevos has the game's set (Play's Resume
+loads on the first frame) waits and is given the moment the set arrives.
+**Tested headless on the A9, 2026-10-18**, offline
+(`CABINETOS_RA_OFFLINE=1`, nothing sent), Super Mario Land: a state saved
+at frame 900 carried 5,392 bytes of progress (the file 32,312 bytes);
+loaded back at frame 1500, rcheevos' progress read back identical to the
+state's; RomM's state from 2026-10-06 (core data alone) loaded and reset as
+before; a state loaded before the set waited, then was restored identical.
 
 **During play: only the unlock, small.** A card fades in at the top right
 (the badge, "Achievement unlocked", the name) and fades out after four
