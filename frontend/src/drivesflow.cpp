@@ -155,8 +155,9 @@ void App::pressEject(const screens::Result& res) {
     // it is stopped and waited for, so nothing holds a file
     // open on the drive. Its stage is left as the worker set
     // it, so the frame loop undoes the keep as for any failed
-    // download.
-    if (launchJob.busy() && launchJob.entryPath.rfind(loc + "/", 0) == 0) {
+    // download. By the job's drive, not its entry path, which the worker
+    // may be renaming at this moment (#404).
+    if (launchJob.busy() && launchJob.location == loc) {
         std::fprintf(stderr, "[drives] eject: stopping the download of %s\n",
                      launchJob.title.c_str());
         launchJob.stop();

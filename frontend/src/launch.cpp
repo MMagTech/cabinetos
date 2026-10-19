@@ -249,6 +249,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         ? placed.entryPath
                         : cache::entryPathFor(location, game.platformFsSlug, game.id,
                                               job.title, kept);
+    job.location = location;
 
     const int id = game.id;
     const int platformId = game.platformId;
