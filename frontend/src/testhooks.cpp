@@ -90,6 +90,13 @@ void App::openScreenForCapture() {
             if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
         }
     } else if (initialScreen) {
+        // The rest are the Library and the screens under it. A name that is
+        // none of them says so rather than passing a Library capture off as
+        // the screen asked for (#488, PLAY-28).
+        if (SDL_strcmp(initialScreen, "library") != 0 && SDL_strcmp(initialScreen, "grid") != 0 &&
+            SDL_strcmp(initialScreen, "detail") != 0)
+            std::fprintf(stderr, "[screen] unknown screen '%s': showing the Library\n",
+                         initialScreen);
         libraryScreen.enter();
         stack.push_back(Screen::Library);
         if (initialTab > 0) {
@@ -227,8 +234,10 @@ void App::launchHooks(float dt) {
         autoUnkeepId = 0;
         removeDownload(id);
     }
-    if (thenLaunchId > 0 && !overlayExitDemo && !playing && autoLaunchId == 0 &&
-        !launchJob.busy()) {
+    // Not while an emulator of its own runs: `playing` is false all through
+    // such a game, and the second launch fired over its pause menu (#488).
+    if (thenLaunchId > 0 && !overlayExitDemo && !playing && !standaloneRun.active() &&
+        autoLaunchId == 0 && !launchJob.busy()) {
         std::fprintf(stderr, "[launch] then: %d\n", thenLaunchId);
         autoLaunchId = thenLaunchId;
         thenLaunchId = 0;

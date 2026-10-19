@@ -432,8 +432,8 @@ minute and guessing at it for twenty.
   `CABINETOS_RELAY_UP=http://<server>:<port> romm-readonly-relay.py 16006
   45=arcade:Arcade`, then
   `CABINETOS_ROMM=127.0.0.1:16006` headless with a scratch `--storage-root`
-  (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
-  to the real games drive). #310 ("Arcade games in any RomM arcade folder
+  (copy `config/*.json`, and set `CABINETOS_DRIVES` to an empty folder, or
+  downloads go to the real games drive). #310 ("Arcade games in any RomM arcade folder
   show up, not only in folders named exactly FBNEO or MAME2003") was tested
   this way, 2026-10-10: a launch
   tried to upload Paperboy's NVRAM and the relay refused it.
@@ -536,10 +536,11 @@ minute and guessing at it for twenty.
   arguments also matches gamescope, whose command line carries them: that
   kill took gamescope with it.
 
-- **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `drives.json` `[]` keeps
-  downloads off it, but the frontend found `/run/media/cabinet/Games` and its
-  folder time moved (nothing was written). Check the real drive after a rig
-  run that keeps or removes games.
+- **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `config/drives.json` is
+  only the memory behind the missing-drive line, and writing `[]` to it
+  kept nothing off the drive: the frontend found `/run/media/cabinet/Games`
+  and its folder time moved. `CABINETOS_DRIVES` at an empty folder is what
+  keeps a run off every drive (#488, FIRSTRUN-19).
 
 ### TWO GAMES AT DIFFERENT SOUND RATES, WITHOUT A RESTART — learned 2026-09-27
 

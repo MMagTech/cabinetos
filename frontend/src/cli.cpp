@@ -260,8 +260,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             startupShot = true;
         } else if (SDL_strcmp(argv[i], "--focus-bar") == 0) {
             // A capture of the bar's own focus, which nothing could take until
-            // now — line 2716 has referred to this flag since the bar was
-            // built and it was never actually added. An optional slot follows:
+            // now (app.h's note on initialRow asked for it since the bar was
+            // built). An optional slot follows:
             // 0 Library, 1 Search, 2 Settings, 3 the account chip.
             focusBarSlot = 0;
             if (i + 1 < argc && argv[i + 1][0] != '-') focusBarSlot = SDL_atoi(argv[++i]);
@@ -401,19 +401,25 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
 //   the image      /usr/lib/cabinetos/cores, installed by the build, and a
 //                  server address in /etc/cabinetos/session.env that the
 //                  session script exports before starting this;
-//   a source tree  cores/build, where cores/build-core.sh leaves them, and
-//                  --romm on the command line.
+//   a source tree  cores/build, where cores/build-core.sh leaves them, from
+//                  the repository root or from frontend/ (../cores/build),
+//                  and --romm on the command line.
 //
 // An explicit flag always wins. What is chosen is printed, for the same
 // reason the storage root below is: a console reading the wrong directory
 // reports every platform as "not built on this console yet", which reads
-// as twenty-one broken cores rather than as one wrong path.
+// as every core broken rather than as one wrong path.
 void App::resolveCoresAndServer() {
     if (!coreDir) {
-        struct stat cs;
-        coreDir = (::stat("cores/build", &cs) == 0 && S_ISDIR(cs.st_mode))
-                      ? "cores/build"
-                      : "/usr/lib/cabinetos/cores";
+        // frontend/ too, where the stand-in library's covers are found, so
+        // one folder gives both (#488, FIRSTRUN-20).
+        auto isDir = [](const char* p) {
+            struct stat cs;
+            return ::stat(p, &cs) == 0 && S_ISDIR(cs.st_mode);
+        };
+        coreDir = isDir("cores/build")      ? "cores/build"
+                : isDir("../cores/build")   ? "../cores/build"
+                                            : "/usr/lib/cabinetos/cores";
     }
     std::fprintf(stderr, "[cores] %s\n", coreDir);
     if (!rommAddress) {

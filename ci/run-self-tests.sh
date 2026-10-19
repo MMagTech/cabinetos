@@ -15,8 +15,9 @@
 # against, from frontend/ as CONTRIBUTING.md says.
 #
 # NOT RUN HERE, and why:
-#   --romm-race-test  needs a stand-in RomM server that is not in the
-#                     repository yet, and must never be pointed at a real one.
+#   --romm-race-test  needs its stand-in RomM server running beside it
+#                     (tools/racemock.py), and must never be pointed at a
+#                     real one.
 #   --evict-test, --state-test, --speed-test, --sync-test, --overlay-test
 #                     need a screen, a core and a game, or a server.
 #

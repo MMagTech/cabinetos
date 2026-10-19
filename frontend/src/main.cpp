@@ -86,8 +86,6 @@ int App::run(int argc, char** argv) {
                                                   .playtimeTestMode = playtimeTestMode,
                                                   .discTestMode = discTestMode,
                                                   .filesTestMode = filesTestMode,
-                                                  .removeAccountId = removeAccountId,
-                                                  .removeAnyway = removeAnyway,
                                                   .padsSeconds = padsSeconds,
                                                   .firstRunRulesMode = firstRunRulesMode,
                                                   .firstRunWriteMode = firstRunWriteMode,
@@ -120,7 +118,9 @@ int App::run(int argc, char** argv) {
                           .accountsProbeMode = accountsProbeMode,
                           .serverCheckAddress = serverCheckAddress,
                           .keepersRomId = keepersRomId,
-                          .storageReport = storageReport}))
+                          .storageReport = storageReport,
+                          .removeAccountId = removeAccountId,
+                          .removeAnyway = removeAnyway}))
         return *rc;
 
     if (const std::optional<int> rc = startDisplay()) return *rc;

@@ -341,9 +341,9 @@ Each with where it is recorded.
 - **A fork's image carries the project's key and image name until the fork
   edits them:** they are written into tracked files (CONTRIBUTING.md,
   "Generate a signing key", lists them).
-- **Two test stand-ins are not in the repository:** the frame-time tool many
-  comments cite as `frames.py`, and `racemock.py`, which `--romm-race-test`
-  needs (`romm_racetest.cpp`).
+- **A test stand-in is not in the repository:** the frame-time tool many
+  comments cite as `frames.py`. (`racemock.py`, which `--romm-race-test`
+  needs, is `tools/racemock.py` since #488.)
 - **Not built yet:** choosing a different core for a game, and exporting
   (`detailscreen.cpp`'s note).
 - **The test instruments ship in the program**, run only by a flag.
@@ -351,7 +351,9 @@ Each with where it is recorded.
   sign-in tokens and the PIN live in `~/.config/cabinetos/` and Remote
   Play's files in `/var/lib/cabinetos`, whatever the storage root
   (`accounts.cpp`, `remoteplay.cpp`), so a headless test on a signed-in
-  console acts as that console's person.
+  console acts as that console's person. A scratch `HOME` and
+  `CABINETOS_DRIVES` separate the sign-in and the drives
+  (CONTRIBUTING.md, "Running and testing"); Remote Play's files stay.
 - **No documented way to run your own build on your own console**, and the
   environment variables a run off a console needs (`CABINETOS_SHADERS`,
   `CABINETOS_PAD_DB`, `CABINETOS_ASSETS`, `CABINETOS_STORAGE`,

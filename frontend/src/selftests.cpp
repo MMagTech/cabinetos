@@ -225,10 +225,13 @@ int accountsTest() {
         std::fprintf(stderr, "[accounts] could not make a scratch root\n");
         return 1;
     }
-    // Both halves have to move: the list follows the storage root, the tokens
-    // follow HOME. Missing either one writes into the real console.
+    // All three have to move: the list follows the storage root, the tokens
+    // follow HOME, and the drive search would make each person's empty
+    // CabinetOS/roms and cache folders on every plugged-in drive (#488).
+    // Missing any one writes into the real console.
     storage::setRoot(root);
     setenv("HOME", root, 1);
+    setenv("CABINETOS_DRIVES", (std::string(root) + "/drives").c_str(), 1);
     std::string serr;
     if (!storage::ensureTree(&serr)) {
         std::fprintf(stderr, "[accounts] scratch root unusable: %s\n", serr.c_str());
