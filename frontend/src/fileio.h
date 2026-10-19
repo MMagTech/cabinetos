@@ -36,3 +36,11 @@ bool removeFile(const std::string& path);
 }  // namespace cab
 
 std::string sanitisedStem(const std::string& title);
+
+// The stem as RomM keeps an uploaded file's name (sanitize_filename in
+// backend/utils/filesystem.py, 5.3.1 and 5.4.0): \ / : | become '-', and
+// * ? " < > and control characters go, as do leading spaces. RomM 5.3.1
+// also drops '+', 5.4.0 keeps it; dropping it always matches both. A state
+// or screenshot named with this is listed on RomM under the name it was
+// sent with, which is what state rotation compares (#484, ROMM-02).
+std::string rommKeptStem(const std::string& stem);

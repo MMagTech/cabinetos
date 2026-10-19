@@ -57,9 +57,11 @@ bool Client::fetchSaves(int romId, std::vector<Asset>* out, std::string* err) {
 }
 
 bool Client::fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* out,
-                           std::string* err) {
+                           std::string* err, std::vector<int>* skipped) {
     out->clear();
+    if (skipped) skipped->clear();
     constexpr size_t kPerCall = 500;
+    bool anyAnswered = false;
     for (size_t at = 0; at < romIds.size(); at += kPerCall) {
         std::string q;
         for (size_t i = at; i < romIds.size() && i < at + kPerCall; ++i)
@@ -79,13 +81,25 @@ bool Client::fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* o
             if (placed) {
                 for (Asset& a : got)
                     if (asked.count(a.romId)) out->push_back(std::move(a));
+                anyAnswered = true;
                 continue;
             }
         }
-        // One game at a time, as before RomM 5.3.
+        // One game at a time: a server before RomM 5.3, or a batched call
+        // that failed for any other reason. A game whose own request fails is
+        // skipped, not the whole list (#484, ROMM-30), once one has answered;
+        // a first failure with none answered is a server that is not there,
+        // and asking every game in turn would only wait out each one.
         for (size_t i = at; i < romIds.size() && i < at + kPerCall; ++i) {
             std::vector<Asset> one;
-            if (!fetchSaves(romIds[i], &one, err)) return false;
+            if (!fetchSaves(romIds[i], &one, err)) {
+                if (!anyAnswered) return false;
+                std::fprintf(stderr, "[romm] saves of %d not fetched: %s\n", romIds[i],
+                             err ? err->c_str() : "");
+                if (skipped) skipped->push_back(romIds[i]);
+                continue;
+            }
+            anyAnswered = true;
             for (Asset& a : one) a.romId = romIds[i];
             out->insert(out->end(), one.begin(), one.end());
         }

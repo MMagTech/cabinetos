@@ -296,7 +296,10 @@ auto App::launchById(int romId) -> bool {
         // SAID, NOT SILENT (#184): a press that did nothing looked like a
         // broken button. One download at a time until there is a queue.
         menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
-        return false;    // one at a time
+        // THE SAME GAME, ALREADY JOINED, is a press that counts (#484): false
+        // made the caller drop the state it had just picked, so a second
+        // Play from a state lost both presses' states.
+        return launchJob.romId == romId;
     }
     // A JOB THE FRAME LOOP HAS NOT TAKEN YET is not replaced (#472): a
     // second press while the curtain falls on a Ready game replaced it, and
@@ -317,6 +320,7 @@ auto App::launchById(int romId) -> bool {
         // touches the job, so refuseLaunch would name the last game.
         const catalog::Coverage cov = catalog::coverageFor(*g);
         if (cov.support == catalog::Support::Playable && cov.core) refuseLaunch(lerr);
+        else showWhyUnplayable(romId);
         return false;
     }
     launchJob.startedOn = static_cast<int>(here());
@@ -349,6 +353,22 @@ void App::refuseLaunch(const std::string& why) {
     else detailScreen.setNotice(why);
     sound::play(sound::Cue::Edge);
     curtain.retarget(0.0f, kCurtainUp);
+}
+
+// A GAME THIS CONSOLE CANNOT PLAY, pressed where Play is not greyed (Home's
+// Resume on a Vita game in RomM's history, or a Wii game that needs a Remote
+// with none paired): its page, which says why, and the edge sound (#484).
+// It did nothing on screen. Not refuseLaunch: the job was never touched, so
+// it names the last game launched.
+void App::showWhyUnplayable(int romId) {
+    sound::play(sound::Cue::Edge);
+    if (here() == Screen::Detail && detailScreen.game().romId == romId) return;
+    for (size_t i = 0; i < cards.size(); ++i) {
+        if (cards[i].id == romId) {
+            openDetailSoon(static_cast<int>(i));
+            return;
+        }
+    }
 }
 
 // A LAUNCH THAT DOES NOT START A GAME TAKES WHAT ITS PRESS ASKED FOR WITH
@@ -567,8 +587,9 @@ void App::prepareSaveDirAndDiscs(LaunchContext& c) {
         if (const char* region = catalog::gameCubeRegion(launchJob.titleId))
             oldGameCubeCard = c.saveDir + "/card." + region + ".raw";
         else
-            std::fprintf(stderr, "[save] RomM has no game code for this GameCube game, so its "
-                         "region and save folder are unknown; saves stay on this console\n");
+            std::fprintf(stderr, "[save] no game code for this GameCube game, from RomM or "
+                         "off its file, so its region and save folder are unknown; saves "
+                         "stay on this console\n");
     }
     if (c.dirSub && c.launchTag && liveClient.haveToken())
         restoreDirSave(liveClient, launchJob.romId, c.launchTag, c.saveDir + "/" + c.dirSub,

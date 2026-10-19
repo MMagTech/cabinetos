@@ -60,8 +60,10 @@ bool signOut(std::string* err);
 // choices), every account's saves and states on this console, its covers, the
 // accounts and their tokens, the PIN, and the address. Keeps Wi-Fi,
 // controllers, BIOS and the console's own settings. A games drive that is not
-// plugged in keeps its games; they are that server's and nothing here will
-// use them.
+// plugged in keeps its games, and nothing marks them as the last server's:
+// plugged in later under a new server, they are matched to its games by rom
+// id (cache::findAll), and online the drive backfill writes the new server's
+// record over theirs (#484; what should become of them is not decided).
 void finishSignOut();
 
 }  // namespace server

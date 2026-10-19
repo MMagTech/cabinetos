@@ -203,9 +203,13 @@ public:
 
     bool fetchSaves(int romId, std::vector<Asset>* out, std::string* err);
     // Many games' saves at once (#88): RomM 5.3 takes `rom_ids` repeated, up
-    // to 500 a call. On a server that does not, it asks one game at a time.
+    // to 500 a call. When that call fails, on a server before 5.3 or for any
+    // other reason, it asks one game at a time and skips a game whose own
+    // request fails, naming it in `skipped` (its saves are unknown, not
+    // none); false when one fails before any request has answered (the
+    // server is not there).
     bool fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* out,
-                       std::string* err);
+                       std::string* err, std::vector<int>* skipped = nullptr);
     bool fetchStates(int romId, std::vector<Asset>* out, std::string* err);
 
     // `/api/saves/{id}/content` or `/api/states/{id}/content`. Small enough to
@@ -276,8 +280,9 @@ public:
                      const ProgressFn& onProgress, std::string* err) const;
 
 private:
-    // Gives every Wii game in `games` from `first` on a code: RomM's, else one
-    // this console read before, else read now off the file (wii.h). And every
+    // Gives every Wii and GameCube game in `games` from `first` on a code:
+    // RomM's, else one this console read before, else read now off the file
+    // (wii.h). And every
     // Wii U game its product code, which RomM does not have (fillWiiUCode).
     void fillWiiCodes(std::vector<Game>& games, size_t first = 0) const;
     void fillWiiUCode(Game& g) const;

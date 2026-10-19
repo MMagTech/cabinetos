@@ -89,9 +89,11 @@ void backfillDrive(const std::string& address) {
         for (const auto& kv : saveTagOf) ids.push_back(kv.first);
         std::vector<romm::Asset> rows;
         const uint64_t asked = savemirror::mark();
-        if (!ids.empty() && !gStop.load() && c.fetchSavesFor(ids, &rows, &err)) {
+        std::vector<int> skipped;
+        if (!ids.empty() && !gStop.load() && c.fetchSavesFor(ids, &rows, &err, &skipped)) {
             std::map<int, std::vector<romm::Asset>> byGame;
             for (int id : ids) byGame[id];   // a game with none is listed as none
+            for (int id : skipped) byGame.erase(id);   // and one not asked, not at all
             for (romm::Asset& a : rows) byGame[a.romId].push_back(std::move(a));
             for (const auto& [romId, list] : byGame) {
                 if (gStop.load()) break;
