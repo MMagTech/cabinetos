@@ -1074,7 +1074,11 @@ void Flow::pumpJobs() {
             // the old code is still an approval, and its account is written.
             pollPairing();
         } else if (state == 0) {
-            pollPairing();      // still waiting; ask again on its interval
+            // Still waiting: asked again on its interval, ON THE PAIRING STEP
+            // ONLY (#485). Left, it went on asking twice every five seconds
+            // on every other step; coming back makes a new code (enterStep).
+            if (machine_.step() == firstrun::Step::Pair) pollPairing();
+            else pairingLive_ = false;
         } else if (state == -2) {
             // THE CODE IS OVER ON THE SERVER: ten minutes went by, or somebody
             // pressed Deny on the phone. Its QR now opens a page refusing it,
