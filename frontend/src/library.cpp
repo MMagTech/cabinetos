@@ -85,8 +85,7 @@ int appendGame(Library& lib, const romm::Game& g) {
 // Returns false only when the request failed. A tile that legitimately holds
 // nothing this console can play returns true with an empty membership, which
 // is a different thing and reads differently on the screen.
-bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
-                   bool* more) {
+bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile) {
     if (!tile.cards.empty()) return true;   // already walked into once
     const std::string& filter = tile.query;
     std::vector<romm::Game> games;
@@ -117,7 +116,10 @@ bool loadTileGames(romm::Client& client, Library& lib, screens::Tile& tile,
         games = std::move(page);
     }
     tile.loadedAtMs = SDL_GetTicks();
-    if (more) *more = (total > static_cast<int>(games.size()));
+    static unsigned reading = 0;
+    tile.readId = ++reading;
+    tile.fetched = games.size();
+    tile.total = std::max(games.size(), static_cast<size_t>(std::max(total, 0)));
     int unplayable = 0;
     for (const auto& g : games) {
         // A collection can hold games from systems this console cannot run.

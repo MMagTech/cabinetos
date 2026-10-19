@@ -734,26 +734,37 @@ struct App {
     // and on the screen, for the same reason the cover fill returns paths:
     // appending to the store from another thread would race every screen that
     // draws from it.
+    //
+    // ONE PER TILE, AND NEVER JOINED ON THE FRAME THREAD WHILE IT WORKS
+    // (#471). A request cannot be cut half way, so a filler told to stop
+    // finishes the page it is on; that page is still added to its tile, and
+    // the filler is joined once it has ended (drainGridPages) or at exit.
+    // Joined on the spot, opening a tile while another filled froze the
+    // picture for the page in flight. `quit` and `running` change only
+    // under `m`, so a filler told to stop can be told to carry on without
+    // a page being fetched twice (openTile).
     struct GridFill {
+        std::string tileQuery;   // the tile it fills (Tile::query)
+        unsigned readId = 0;     // and which reading of it (Tile::readId)
         std::mutex m;
         std::vector<romm::Game> arrived;
-        std::atomic<bool> running{false};
-        std::atomic<bool> quit{false};
-        std::string tileQuery;   // the tile being filled (Tile::query)
+        bool running = true;
+        bool quit = false;
         std::thread th;
-        void stop() {
-            quit.store(true);
-            if (th.joinable()) th.join();
-            quit.store(false);
-            std::lock_guard<std::mutex> lk(m);
-            arrived.clear();
-        }
     };
-    GridFill gridFill;
+    std::vector<std::unique_ptr<GridFill>> gridFills;
+    // The tile the grid screen was last opened on, and which reading of it.
+    std::string gridTileQuery;
+    unsigned gridReadId = 0;
     struct GridFillStop {
-        GridFill& f;
-        ~GridFillStop() { f.stop(); }
-    } gridFillStop{gridFill};
+        std::vector<std::unique_ptr<GridFill>>& fills;
+        ~GridFillStop() {
+            for (auto& f : fills) {
+                { std::lock_guard<std::mutex> lk(f->m); f->quit = true; }
+            }
+            for (auto& f : fills) if (f->th.joinable()) f->th.join();
+        }
+    } gridFillStop{gridFills};
 
     // THE SWEEP AND THE EVICTION, BEHIND EVERYTHING, ONCE PER BOOT.
     //
@@ -2036,6 +2047,8 @@ struct App {
     void drawCurtain(float sc);
     // gridfill.cpp
     void drainGridPages();
+    bool takeGridPages(GridFill& f, bool toScreen);
+    void fillGrid(screens::Tile& t);
     void openTile(const screens::Result& res);
     // about.cpp
     void pressCredits();
