@@ -73,6 +73,14 @@ open, are in #517's body.
   another's stranded save: he wants another way; the Xbox 360 way, saves
   copied off to their owner at the next start, was offered), #288 and #339
   (set aside; reasons in coreoptions.cpp and PROJECT.md question 34).
+- **The game page's launch messages, later** (MMagTech, 2026-10-19, at the
+  TV): "Disc can't be read" sits as a loose grey line under Download, as do
+  all ten or so reasons Play or Download fails ("Couldn't start this game",
+  "Not enough space", "No PS2 BIOS on your server", the keys and licence
+  ones). He wants their placement (the Play row's right end, in amber, was
+  offered; or the bottom pill) and their wording reviewed together, with a
+  way to cycle through each on the TV first, like `--notice-gallery`: he
+  has never seen half of them. Not an issue.
 - **Waiting on others:** #297 and #390 (Sunshine), #346 and #353 (RomM's
   save channels; revisit around mid-January 2027), #487's
   BASE_UPDATE_TOKEN secret (his), Xenia Edge taking Canary's Unreal tiling
