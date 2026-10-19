@@ -66,8 +66,8 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
         // is not due this frame. This is RetroArch's audio sync (its
         // audio write blocks when the buffer is full, default latency
         // 64 ms), and it replaced a day of per-core fixes: a core that
-        // runs fast (N64 by 3 to 4%, Flycast's free-running thread,
-        // PPSSPP's double speed) fills the queue and is held; one that
+        // runs fast (Flycast's free-running thread, PPSSPP's double
+        // speed) fills the queue and is held; one that
         // delivers sound in bursts (N64) waits instead of having the
         // top of each burst thrown away as crackle; a stall cannot
         // pile up delay. Nothing is discarded to keep time.
@@ -119,13 +119,43 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
             paceCount = due > 0 ? paceCount - due * paceEvery : paceCount;
             if (paceCount >= paceEvery) paceCount %= paceEvery;
         }
+        // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
+        // own frames so fast forward keeps them half a game-second
+        // apart. Taken here, compressed on rewind's worker. Not while a
+        // disc change has the lid open (#162): the history is dropped
+        // when it closes anyway.
+        const uint64_t every = static_cast<uint64_t>(
+            std::max(1.0, std::round(core.avInfo().fps * 0.5)));
+        auto snapshot = [&] {
+            if (rewindAvailable != 1 || session.discInserting ||
+                core.framesRun() < rewindLastFrame + every)
+                return false;
+            rewindLastFrame = core.framesRun();
+            const uint64_t t0 = SDL_GetTicksNS();
+            if (core.saveState(rewindRaw) && !rewindRaw.empty()) {
+                const double ms = (SDL_GetTicksNS() - t0) / 1e6;
+                if (ms > rewindWorstMs) rewindWorstMs = ms;
+                rewindKeep.offer(rewindRaw);
+            }
+            return true;
+        };
         int ran = 0;
         if (!holdForSpeaker && due > 0) {
             // RetroAchievements checks each frame run here, and only
             // here: this is play (achievements.h).
             core.setAfterFrame(ra::frame);
-            if (!locked) ran = core.runFor(dt);
-            else for (int i = 0; i < due; ++i) ran += core.runFrame();
+            // A CORE WHOSE SAVE RUNS A FRAME (N64, #254) has its
+            // snapshot taken as this refresh's first frame, not after
+            // it: after, the save hid the run's picture and made a
+            // frame of sound more, which the speaker held a frame for.
+            // The clock's budget loses that frame too (Core::saveState).
+            int runs = due;
+            if (core.saveRunsFrame() && snapshot()) {
+                ran = 1;
+                --runs;
+            }
+            if (!locked) ran += core.runFor(dt);
+            else for (int i = 0; i < runs; ++i) ran += core.runFrame();
             core.setAfterFrame(nullptr);
         }
         // HOW SMOOTH IT WAS (#221): a frame shown with no new game frame
@@ -137,23 +167,9 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
         if (ran == 0 && holdForSpeaker) ++pace.held;
         if (ran > 1) pace.skipped += static_cast<uint64_t>(ran - 1);
         pace.dtSum += dt;
-        // A SNAPSHOT EVERY HALF SECOND OF PLAY, counted in the game's
-        // own frames so fast forward keeps them half a game-second
-        // apart. Taken here, compressed on rewind's worker.
-        const uint64_t every = static_cast<uint64_t>(
-            std::max(1.0, std::round(core.avInfo().fps * 0.5)));
-        // Not while a disc change has the lid open (#162): the
-        // history is dropped when it closes anyway.
-        if (rewindAvailable == 1 && !session.discInserting &&
-            core.framesRun() >= rewindLastFrame + every) {
-            rewindLastFrame = core.framesRun();
-            const uint64_t t0 = SDL_GetTicksNS();
-            if (core.saveState(rewindRaw) && !rewindRaw.empty()) {
-                const double ms = (SDL_GetTicksNS() - t0) / 1e6;
-                if (ms > rewindWorstMs) rewindWorstMs = ms;
-                rewindKeep.offer(rewindRaw);
-            }
-        }
+        // After the runs for every other core, and for that one until
+        // its first save shows what it does.
+        if (!core.saveRunsFrame()) snapshot();
     }
     // Frozen, rewinding or PlayStation 2 (which checks on PCSX2's
     // own thread): the session is kept alive without reading memory.
@@ -251,7 +267,8 @@ void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
                 // SOUND PER GAME FRAME against what the core's own rate
                 // and frame rate promise. A core above 0 makes more
                 // sound than real time and gets held by the speaker
-                // (N64 and Dreamcast, PROJECT.md #221). The core's counts
+                // (Dreamcast, PROJECT.md #221; N64's +3.4% was rewind's
+                // snapshots, each an uncounted frame, #254). The core's counts
                 // start at its load, as these do, so the first line's
                 // figure is the game's first ten seconds.
                 const uint64_t a = core.audioFramesTotal(), f = core.framesRun();

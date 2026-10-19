@@ -382,6 +382,12 @@ public:
     // taken part-way through a retro_run is corrupt by definition.
     size_t stateSize() const;
     bool saveState(std::vector<uint8_t>& out);
+    // Whether this game's state save runs the emulated machine through a
+    // frame first, as Mupen64Plus-Next's does (#254): learned from the first
+    // save that made sound. Such a save counts in framesRun, runs the
+    // after-frame call and uses up a frame of runFor's budget, and the frame
+    // loop takes rewind's snapshots in place of a run rather than after one.
+    bool saveRunsFrame() const { return saveRunsFrame_; }
     // Returns false when the core rejects the bytes, which is the expected
     // failure for a state written by a different build of the same core — the
     // exact thing the manifest exists to prevent.
@@ -521,6 +527,7 @@ private:
     double paceClock_ = 0.0;
     bool governed_ = false;
     uint64_t governorSkips_ = 0;
+    bool saveRunsFrame_ = false;   // see saveRunsFrame
 };
 
 }  // namespace cab

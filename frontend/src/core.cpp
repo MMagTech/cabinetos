@@ -400,7 +400,9 @@ bool Core::load(const std::string& soPath) {
     // machine keeps itself, so the brake holding it there is correct, and it
     // is what RetroArch's audio sync does to every core. Cabinet's "slowed N64
     // down" was most likely this same 3 to 4%, slowed to true speed; why was
-    // never recorded, so that is a reading, not a finding.
+    // never recorded, so that is a reading, not a finding. #254, 2026-10-18:
+    // the machine was not fast. Each rewind snapshot ran an N64 frame the
+    // console did not count (Core::saveState, core_memory.cpp).
     //
     // SO EVERY CORE, which is the end state #144 asked for. Three cores out of
     // three that were measured needed it, each for a different reason, and
@@ -672,6 +674,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     accumulator_ = 0.0;
     paceClock_ = 0.0;
     governorSkips_ = 0;
+    saveRunsFrame_ = false;
     gFramesRun = 0;
     gAudioFrames = 0;
     gAudio.clear();
