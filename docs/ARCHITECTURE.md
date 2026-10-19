@@ -165,7 +165,11 @@ is in the file named for its feature, and
    `recoverDriveSaves`, which that game's launch also runs); then the rest
    of the start-up steps.
 9. `runFrameLoop` (`frame.cpp`) until the console exits or restarts; then the
-   game is left, the emulators closed, the core unloaded, and `shutDown`.
+   game is left, the emulators closed, the core unloaded, and `shutDown`
+   (`startup.cpp`): the uploads are sent and RetroAchievements' unlocks put
+   on disk first, then the workers are stopped. That rest is given two
+   seconds (#305), except for a restart in place; past them the process ends
+   and names what it was waiting on.
 
 ### Pressing Play on a game
 

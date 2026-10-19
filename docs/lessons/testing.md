@@ -521,7 +521,30 @@ minute and guessing at it for twenty.
   backfill)") runs then. The exits that do return are the
   Steam handover and a quit by SIGTERM: test an exit headless with `timeout
   --preserve-status -s TERM` (SDL makes it a quit, `[shutdown] asked to
-  stop`), and on the TV with Steam and back.
+  stop`), and on the TV with Steam and back. Since #305 they too are cut
+  two seconds after the saves if what follows has not finished
+  (`[shutdown] 2 s after the saves, still waiting on ...`).
+
+- **A SLOW HANDOVER TO STEAM: SPLIT IT AT GAMESCOPE'S `launch: Primary
+  child shut down!`** #305 ("Opening Steam sometimes takes 25 seconds
+  instead of a fraction of one"), 2026-10-19: from `[steam] asked the
+  session to hand over to Steam` to that line is the frontend's own exit
+  (0.06 to 0.28 s in 20 of the 21 handovers since 2026-10-04); from it to
+  the session's `handing the screen to Steam` is gamescope's. All four
+  25 s cases were gamescope's: `[libseat] ... Could not close device:
+  Connection timed out` exactly 25.2 s after its app was gone, the
+  default D-Bus timeout on logind's ReleaseDevice. The same stall shows on
+  gamescope exits that are not handovers. The brief's lead, the
+  frontend's D-Bus calls on exit, was wrong: those run only inside a
+  pairing. **To open Steam and come back in a test:** on Home, Escape
+  (the Power menu, Cancel focused), Down (Switch to Steam), Return,
+  Return (Start); come back with `steam -shutdown` as `cabinet` with
+  `XDG_RUNTIME_DIR=/run/user/1000`, which ends Steam's session the way
+  its own menu does, so the session's whole return path runs. Escape on
+  Settings goes Back to Home rather than opening the menu. Capture with
+  `gamescopectl screenshot` into a file of your own while other sessions
+  run headless frontends: they write and remove the same
+  `/tmp/cabinetos-frame.bmp` the SIGUSR1 capture uses.
 
 - **A TEST GAME ON THE CONSOLE ENDS INSIDE A MINUTE, BY `--restore`, NEVER
   BY A KILL.** 2026-10-15, move 4 of #398: a loop launch (`tools/ui-loop.sh
