@@ -13,12 +13,15 @@
 #include <dirent.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 #include "capture.h"
@@ -935,6 +938,31 @@ void App::settleTabsAtStart() {
     tabDissolve.from = tabDissolve.to = 0.0f;
 }
 
+// THE REST OF AN EXIT IS GIVEN TWO SECONDS (#305), once the saves are sent
+// and the unlocks are on disk. Everything after that is a watcher's look, a
+// cache, or a request somebody can make again, and every one of them can
+// wait on something outside: a RomM call 30 s, a look at Sunshine 8 s, a
+// Steam slice job minutes. Nothing bounded them, and the session waits for
+// this process before Steam starts. Measured on the A9, 2026-10-19: the
+// rest takes 0.2 to 0.6 s; the journal's 21 hand-overs since 2026-10-04
+// had it gone in 0.06 to 0.28 s but once in 2.4 s, with no line to say
+// where. Past the two seconds the process ends here, the way Restart and
+// Power off end it every day (gamescope's reaper), and says what it was
+// waiting on. Not for a restart in place: that one must reach its exec.
+namespace {
+constexpr int kExitRestSeconds = 2;
+std::atomic<const char*> gExitStep{""};
+
+void boundTheRestOfTheExit() {
+    std::thread([] {
+        std::this_thread::sleep_for(std::chrono::seconds(kExitRestSeconds));
+        std::fprintf(stderr, "[shutdown] %d s after the saves, still waiting on %s; ending now\n",
+                     kExitRestSeconds, gExitStep.load());
+        ::_exit(0);
+    }).detach();
+}
+}  // namespace
+
 int App::shutDown(char** argv) {
     // Drained rather than abandoned: anything still queued is a save somebody
     // has already made, and quitting is not a reason to throw it away. This is
@@ -943,6 +971,9 @@ int App::shutDown(char** argv) {
     if (uploader.pending() > 0)
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
+    // And an unlock still waiting to go out is written to its queue on disk.
+    ra::shutdown();
+    if (!restartSelf) boundTheRestOfTheExit();
     // A STEAM DOWNLOAD IS CANCELLED, not waited for (#485, SETTINGS-04):
     // SteamJobStop joins its thread as the App goes, and the download script
     // ends only on a cancel or its parent gone. Cancelled, proc::run stops it
@@ -950,18 +981,23 @@ int App::shutDown(char** argv) {
     if (steamInstall) steamInstall->cancel = true;
     // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
     // still running at exit ends the process with abort().
+    gExitStep = "Remote Play's watcher";
     remoteplay::watch(false);
     remoteplay::join();
+    gExitStep = "Tailscale's watcher";
     tailscale::watch(false);
     tailscale::cancelLogin();
     tailscale::join();
+    gExitStep = "Tailscale's sign-out";
     if (tsWorker.joinable()) tsWorker.join();
+    gExitStep = "the report";
     stopReport();
     // AND ADD AN ACCOUNT'S PAIRING (#398, SETTINGS-03; part of #406). It was
     // joined only before the next pairing, so after any visit to Add an
     // account the App was destroyed holding a joinable thread and Switch to
     // Steam ended in std::terminate. A poll still waiting stops at once; one
     // in flight is the server's answer away.
+    gExitStep = "an account's pairing";
     {
         std::lock_guard<std::mutex> lk(addJob->m);
         addJob->stop = true;
@@ -971,17 +1007,21 @@ int App::shutDown(char** argv) {
     // AND THE REST OF #406: a Remove or Sign-out send, stopped after the file
     // on the wire (what is left stays owed), the reconnect watcher and the
     // drive backfill, each at its next step.
+    gExitStep = "a Remove or Sign out";
     removeJob->stop = true;
     if (removeJob->th.joinable()) removeJob->th.join();
+    gExitStep = "offline sync";
     stopOfflineSync();
 
-    ra::shutdown();
+    gExitStep = "the covers";
     images.shutdown();
+    gExitStep = "the window";
     text.shutdown();
     renderer.shutdown();
     SDL_GL_DestroyContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    gExitStep = "the App's workers or the end of the process";
 
     // STARTING AGAIN IN PLACE, for Sign out and a new server address. Not by
     // exiting: gamescope ends with its child, and the session coming back up
