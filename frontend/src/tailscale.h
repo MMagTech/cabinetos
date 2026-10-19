@@ -42,7 +42,14 @@ struct Status {
 
 // Ask every two seconds while on. The app turns it on while Settings or the
 // sign-in screen is showing, and off otherwise.
+//
+// OFF, AND CANCELLING THE SIGN-IN, DO NOT WAIT FOR THEIR THREADS (#481,
+// SETTINGS-15): each may be inside `tailscale status`, up to five seconds
+// and two more to stop it, and leaving Settings held its picture that long
+// with tailscaled stuck. The next watch(true) or startLogin waits for the
+// last one, and join() at exit for both.
 void watch(bool on);
+void join();
 Status last();
 // Changes whenever the status does, so the app rebuilds its rows only then.
 int generation();

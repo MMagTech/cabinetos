@@ -124,6 +124,7 @@ void App::runFrameLoop() {
         switchText.tick(dt);
         menuNotice.tick(dt);
         tickRaToast(dt);
+        remoteplay::answered();
         // ---- System update: root's answers, the weekly check, the panel ----
         updPoll -= dt;
         tickUpdateTimer(dt);

@@ -15,10 +15,13 @@
 // (/usr/libexec/cabinetos-remoteplay).
 //
 // THE CALLS ARE QUICK BUT NOT FREE, so they are made on a thread of their own
-// every two seconds while watching, and the app reads the last answer.
+// every two seconds while watching, and the app reads the last answer. The
+// app's own calls go there too (later), so a Sunshine that accepts and does
+// not answer holds that thread, never the picture (#481, SETTINGS-14).
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -52,7 +55,20 @@ struct Request {
 // controllers aside with nobody playing (A9, 2026-10-08). Without it (the
 // console starting under a running Sunshine, back from Steam), the log is read
 // from its start, which is how a stream already open is found.
+//
+// OFF DOES NOT WAIT FOR THE THREAD: it may be inside a call of up to four
+// seconds. The next watch(true) waits for it, and join() at exit.
 void watch(bool on, bool fresh = false);
+void join();
+
+// `work` (pair, decline, remove, rename below, which each block for a call
+// and then a refresh) on the watching thread, after what it is doing; `then`,
+// if given, with its answer on the frame thread at the next answered(). Not
+// watching, `work` runs here at once: Sunshine is stopped, and a refused
+// connection fails at once.
+void later(std::function<bool()> work, std::function<void(bool)> then);
+// The answers of later()'s work: call once a frame.
+void answered();
 
 // WHETHER A DEVICE IS STREAMING NOW: Sunshine's own "CLIENT CONNECTED" and
 // "CLIENT DISCONNECTED" lines, and "Process terminated" (a session closed

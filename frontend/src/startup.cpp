@@ -887,8 +887,10 @@ int App::shutDown(char** argv) {
     // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
     // still running at exit ends the process with abort().
     remoteplay::watch(false);
+    remoteplay::join();
     tailscale::watch(false);
     tailscale::cancelLogin();
+    tailscale::join();
     if (tsWorker.joinable()) tsWorker.join();
     stopReport();
     // AND ADD AN ACCOUNT'S PAIRING (#398, SETTINGS-03; part of #406). It was
