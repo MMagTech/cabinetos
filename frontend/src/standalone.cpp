@@ -348,7 +348,8 @@ std::string bootPath(const std::string& entryPath) {
 bool installGame(const Emulator& e, const std::string& entryPath,
                  const std::atomic<bool>& cancel, std::string* romPath,
                  std::string* message) {
-    if (std::strcmp(e.core, "xemu") == 0) return installXbox(entryPath, romPath, message);
+    if (std::strcmp(e.core, "xemu") == 0)
+        return installXbox(entryPath, cancel, romPath, message);
     if (std::strcmp(e.core, "rpcs3") != 0) {
         *message = "Couldn't install this game";
         return false;

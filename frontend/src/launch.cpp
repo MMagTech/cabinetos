@@ -249,6 +249,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         ? placed.entryPath
                         : cache::entryPathFor(location, game.platformFsSlug, game.id,
                                               job.title, kept);
+    job.location = location;
 
     const int id = game.id;
     const int platformId = game.platformId;
@@ -297,6 +298,12 @@ auto App::launchById(int romId) -> bool {
         menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
         return false;    // one at a time
     }
+    // A JOB THE FRAME LOOP HAS NOT TAKEN YET is not replaced (#472): a
+    // second press while the curtain falls on a Ready game replaced it, and
+    // a replacement that ended in no game left the screen black. The press
+    // can only be for the same game, from its own page; it counts as taken,
+    // so a state or a Resume it asked for stays with the launch.
+    if (launchJob.waiting()) return launchJob.romId == romId;
     const romm::Game* g = nullptr;
     for (const auto& x : games) if (x.id == romId) { g = &x; break; }
     if (!g) { std::fprintf(stderr, "[launch] no game with id %d\n", romId); return false; }
@@ -417,13 +424,16 @@ bool App::takeFinishedJob() {
         // will not load the game does (refuseLaunch): pressed on Home's
         // Resume, it said nothing anywhere (#398). A Download, a Play the
         // person walked away from and a cancel keep the page's notice.
-        const bool sayIt = launchJob.playWhenReady && !launchJob.cancel.load() &&
+        // A CANCEL SAYS NOTHING (#472): the person asked for it, and a
+        // transfer cut short by it fails in the same words as a real fault.
+        const bool cancelled = launchJob.cancel.load();
+        const bool sayIt = launchJob.playWhenReady && !cancelled &&
                            launchJob.startedOn == static_cast<int>(here());
         if (here() == Screen::Detail &&
             detailScreen.game().romId == launchJob.romId) {
             detailScreen.setKept(
                 cache::isKeptBy(storage::currentUser(), launchJob.romId));
-            if (!sayIt) detailScreen.setNotice(launchJob.message);
+            if (!sayIt) detailScreen.setNotice(cancelled ? std::string() : launchJob.message);
         }
         refreshKeeps();
         forgetLaunchAsks();

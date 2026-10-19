@@ -42,7 +42,7 @@ void App::ovStep(int delta) {
     overlaySlot = ((overlaySlot + delta) % n + n) % n;
     // The Power menu on Home moves with a sound; the pause menu does not
     // (#389, and powerCue further down).
-    if (powerMenu && !playing) sound::play(sound::Cue::Move);
+    if (powerMenu && !playing && !standalonePaused) sound::play(sound::Cue::Move);
 }
 
 auto App::ovLabel(int i) -> const char* {
@@ -70,12 +70,18 @@ auto App::ovLabel(int i) -> const char* {
 // Activate. Over a game it stays silent, like the pause menu it shares a
 // panel with (MMagTech: the pause menu may be the one exception).
 void App::powerCue(sound::Cue c) {
-    if (powerMenu && !playing) sound::play(c);
+    if (powerMenu && !playing && !standalonePaused) sound::play(c);
 }
 
 void App::closeOverlay(bool cue) {
     if (remoteOnlyHere() && !powerMenu) {
         sound::play(sound::Cue::Edge);
+        return;
+    }
+    // B in the Power menu over such a game goes back to the pause menu
+    // (#473, PLAY-18), as its Cancel does.
+    if (remoteOnlyHere() && powerMenu && cue) {
+        backToPauseMenu();
         return;
     }
     if (cue && overlayOpen) powerCue(sound::Cue::Back);

@@ -79,6 +79,15 @@ auto App::switchAccount(int id, std::string* why) -> bool {
             *why = owed == 1 ? "A save is still uploading" : "Saves are still uploading";
         return false;
     }
+    // NOR WHILE THE LIBRARY IS RELOADING after an offline start (#483,
+    // FILES-10): its worker asks who the person is when it writes their
+    // favourites, so a switch in between wrote the last person's into the
+    // new person's favorites.json. It takes seconds; the chip is pressed
+    // again after.
+    if (onlineLoad.running.load()) {
+        if (why) *why = "The library is still loading";
+        return false;
+    }
 
     // A REFUSED SWITCH PUTS THE LAST PERSON BACK (#398, SETTINGS-01).
     // `activate` writes the new id into accounts.json before anything below
@@ -267,13 +276,15 @@ void App::startRemove(const accounts::Account& who) {
       removeJob->everyone = false; }
     menuNotice.say("Removing " + who.name, Tone::Info);
     const std::string addr = rommAddress ? rommAddress : "";
-    std::thread([removeJob = removeJob, who, addr]() {
-        const int left = sendOwedBeforeRemoving(who, addr);
-        std::lock_guard<std::mutex> lk(removeJob->m);
-        removeJob->left = left;
-        removeJob->finished = true;
-        removeJob->running = false;
-    }).detach();
+    // The last send has finished (running was false), so this join is quick.
+    if (removeJob->th.joinable()) removeJob->th.join();
+    removeJob->th = std::thread([job = removeJob.get(), who, addr]() {
+        const int left = sendOwedBeforeRemoving(who, addr, &job->stop);
+        std::lock_guard<std::mutex> lk(job->m);
+        job->left = left;
+        job->finished = true;
+        job->running = false;
+    });
 }
 
 // SIGN OUT SENDS FIRST TOO, the same way (MMagTech, 2026-10-05: "the two
@@ -282,21 +293,30 @@ void App::startRemove(const accounts::Account& who) {
 // so anybody else's would otherwise be lost to a sign out.
 void App::startSignOut() {
     if (removeJob->running.load()) return;
+    // NOT WHILE AN UPLOAD IS GOING (#483, FILES-11), as a switch is not:
+    // the send below covers the signed-in person too, so the same file
+    // could go to RomM twice at once.
+    if (const int owed = uploader.pending(); owed > 0) {
+        menuNotice.say(owed == 1 ? "A save is still uploading" : "Saves are still uploading",
+                       Tone::Info);
+        return;
+    }
     removeJob->running = true;
     { std::lock_guard<std::mutex> lk(removeJob->m);
       removeJob->finished = false; removeJob->left = 0;
       removeJob->who = accounts::Account{}; removeJob->everyone = true; }
     menuNotice.say("Signing out", Tone::Info);
     const std::string addr = rommAddress ? rommAddress : "";
-    std::thread([removeJob = removeJob, addr]() {
+    if (removeJob->th.joinable()) removeJob->th.join();
+    removeJob->th = std::thread([job = removeJob.get(), addr]() {
         int left = 0;
         for (const accounts::Account& a : accounts::all())
-            left += sendOwedBeforeRemoving(a, addr);
-        std::lock_guard<std::mutex> lk(removeJob->m);
-        removeJob->left = left;
-        removeJob->finished = true;
-        removeJob->running = false;
-    }).detach();
+            left += sendOwedBeforeRemoving(a, addr, &job->stop);
+        std::lock_guard<std::mutex> lk(job->m);
+        job->left = left;
+        job->finished = true;
+        job->running = false;
+    });
 }
 
 // ---- An account switch, behind the curtain ---------------------------

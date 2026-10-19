@@ -78,7 +78,14 @@ struct LaunchJob {
     // when somebody keeps it and `<location>/cache/<platform>/…` when nobody
     // does. One entry, named `<romId> - <title>` — a file when the game is a
     // single payload and a directory when its archive unpacked into several.
+    // The worker may rename it (a folder collapsed to one file, a file moved
+    // into a folder), so it is read only after the stage is Ready or Failed.
     std::string entryPath;
+    // THE DRIVE THE JOB WRITES TO, the location `entryPath` is under. Set by
+    // beginLaunch before the worker starts and never written by the worker,
+    // so the frame thread may read it while the job is busy: Eject asks it
+    // whether the download must stop first (#404).
+    std::string location;
     // ONE SPELLING OF A PLATFORM, EVERYWHERE. RomM's `fs_slug` — "Sony
     // Playstation", not "psx". See storage.h for why the short one lost.
     std::string platformFsSlug;
@@ -115,6 +122,13 @@ struct LaunchJob {
         const Stage st = stage.load();
         return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking ||
                st == Stage::Installing;
+    }
+    // Finished, and not yet taken by the frame loop (takeFinishedJob): a
+    // Ready game waits there while the curtain comes down. No new launch
+    // replaces it (#472).
+    bool waiting() const {
+        const Stage st = stage.load();
+        return st == Stage::Ready || st == Stage::Failed;
     }
 };
 

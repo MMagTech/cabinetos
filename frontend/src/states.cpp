@@ -58,10 +58,20 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         notice.say("Not while the disc is changing", Tone::Info);
         return;
     }
+    // A REFUSAL IS A FAILURE, NOT A SYSTEM WITHOUT STATES (#222). A core
+    // with no states at all says a size of 0 (Game & Watch, VeMUlator), and
+    // that is still "No save states". One that has them and would not make
+    // this one (Flycast's "Serializer overflow", seen once off-screen)
+    // failed, and says so.
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
-        std::fprintf(stderr, "[state] this core cannot serialize\n");
-        notice.say("No save states for this system", Tone::Info);
+        if (core.stateSize() == 0) {
+            std::fprintf(stderr, "[state] this core cannot serialize\n");
+            notice.say("No save states for this system", Tone::Info);
+        } else {
+            std::fprintf(stderr, "[state] the core would not make this state\n");
+            notice.say("Couldn't save the state", Tone::Problem);
+        }
         return;
     }
     // Named with a timestamp because states accumulate on purpose; a save

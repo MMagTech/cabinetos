@@ -19,8 +19,10 @@
 // removed may keep a fourth on RomM, which their next save elsewhere tidies.
 // Returns how much is still owed afterwards: refused, unanswered, or a marker
 // from before 2026-09-26 that cannot be sent at all.
-static int sendEverythingOwed(const romm::Client& c, const storage::User& who) {
+static int sendEverythingOwed(const romm::Client& c, const storage::User& who,
+                              const std::atomic<bool>* stop) {
     for (const cache::Owed& o : cache::owed(who)) {
+        if (stop && stop->load()) break;
         const std::vector<uint8_t> data = cab::readBytes(o.localPath);
         if (data.empty()) {
             // Its file is gone, so nothing is left to send or to lose.
@@ -38,7 +40,7 @@ static int sendEverythingOwed(const romm::Client& c, const storage::User& who) {
         if (!ok) break;
         cache::clearPending(who, o.romId, o.fileName);
     }
-    if (!playtime::owed(who).empty()) {
+    if (!playtime::owed(who).empty() && !(stop && stop->load())) {
         std::string err;
         if (!sendPlaySessionsAs(c, who, &err))
             std::fprintf(stderr, "[remove] play time not sent for %s: %s\n", who.name.c_str(),
@@ -50,7 +52,8 @@ static int sendEverythingOwed(const romm::Client& c, const storage::User& who) {
 // THE SENDING HALF OF REMOVE (#194): what `who` owes, with their own login
 // (they are never the person signed in; accounts::remove refuses that).
 // Returns how much is still owed afterwards. Blocks: off the frame thread.
-int sendOwedBeforeRemoving(const accounts::Account& who, const std::string& addr) {
+int sendOwedBeforeRemoving(const accounts::Account& who, const std::string& addr,
+                           const std::atomic<bool>* stop) {
     storage::User u;
     u.id = who.id;
     u.name = who.name;
@@ -65,7 +68,7 @@ int sendOwedBeforeRemoving(const accounts::Account& who, const std::string& addr
     else if (!c.loadToken(accounts::tokenPath(who.id)))
         std::fprintf(stderr, "[remove] %s's login would not load\n", who.name.c_str());
     else
-        left = sendEverythingOwed(c, u);
+        left = sendEverythingOwed(c, u, stop);
     std::fprintf(stderr, "[remove] %s: %d still owed\n", who.name.c_str(), left);
     return left;
 }

@@ -63,6 +63,13 @@ bool startGame(const std::string& discPath, const std::string& biosDir,
                float upscale, int anisotropy, bool widescreen,
                const std::string& discCode);
 
+// WHY THE MACHINE STOPPED BY ITSELF BEFORE IT RAN (#506), or empty while it
+// is starting, runs, or ended as asked. startGame returns as soon as PCSX2's
+// thread is started, before the machine is built, so a disc PCSX2 cannot
+// open is known only here: its thread ends with PCSX2's reason ("PCSX2
+// would not boot <disc>") and the machine never ran.
+std::string stoppedWhy();
+
 // Asks the game to stop and WAITS. Blocking is the point: PCSX2 flushes the
 // memory card during shutdown, so a card captured before this returns is the
 // card as it was when the game started.

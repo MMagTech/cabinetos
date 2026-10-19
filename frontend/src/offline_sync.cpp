@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <ctime>
 #include <map>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -21,6 +22,15 @@
 #include "savemirror.h"
 #include "storage.h"
 
+// STOPPED AT EXIT (#406). Both threads were detached and endless or long,
+// so one still running at exit ran on into the program's teardown. Each now
+// looks at gStop between steps, and stopOfflineSync joins them. The thread
+// objects are under gThreads, because the reconnect thread starts backfills.
+static std::atomic<bool> gStop{false};
+static std::mutex gThreads;
+static std::thread gBackfill;    // under gThreads
+static std::thread gReconnect;   // under gThreads
+
 // WHAT OFFLINE WILL NEED, FETCHED WHILE ONLINE (#88). A game on the drive
 // with no record cannot be shown offline, and one whose covers were never
 // drawn here would show as a colour. Both are fetched once per start, behind
@@ -30,9 +40,12 @@
 // "fetch covers once for games already kept", and cached games the same.
 void backfillDrive(const std::string& address) {
     static std::atomic<bool> running{false};
-    if (running.exchange(true)) return;
+    if (gStop.load() || running.exchange(true)) return;
     const storage::User who = storage::currentUser();
-    std::thread([address, who]() {
+    std::lock_guard<std::mutex> lk(gThreads);
+    // The last one has finished (running was false), so this join is quick.
+    if (gBackfill.joinable()) gBackfill.join();
+    gBackfill = std::thread([address, who]() {
         romm::Client c;
         std::string err;
         if (!who.valid() || !c.setAddress(address, &err) || !accounts::loadActiveToken(c)) {
@@ -42,6 +55,7 @@ void backfillDrive(const std::string& address) {
         int records = 0, covers = 0, missing = 0, saves = 0;
         std::map<int, std::string> saveTagOf;   // rom id -> the tag a launch restores
         for (const cache::OnDrive& d : cache::onDrive()) {
+            if (gStop.load()) break;
             const std::string note =
                 storage::gamesDir() + "/" + std::to_string(d.romId) + ".json";
             romm::Game g;
@@ -75,11 +89,12 @@ void backfillDrive(const std::string& address) {
         for (const auto& kv : saveTagOf) ids.push_back(kv.first);
         std::vector<romm::Asset> rows;
         const uint64_t asked = savemirror::mark();
-        if (!ids.empty() && c.fetchSavesFor(ids, &rows, &err)) {
+        if (!ids.empty() && !gStop.load() && c.fetchSavesFor(ids, &rows, &err)) {
             std::map<int, std::vector<romm::Asset>> byGame;
             for (int id : ids) byGame[id];   // a game with none is listed as none
             for (romm::Asset& a : rows) byGame[a.romId].push_back(std::move(a));
             for (const auto& [romId, list] : byGame) {
+                if (gStop.load()) break;
                 if (savemirror::forgottenSince(romId, asked)) continue;   // an upload landed
                 savemirror::putList(who, romId, list);
                 std::map<std::string, const romm::Asset*> newest;   // extension -> row
@@ -98,7 +113,7 @@ void backfillDrive(const std::string& address) {
                     ++saves;
                 }
             }
-        } else if (!ids.empty()) {
+        } else if (!ids.empty() && !gStop.load()) {
             std::fprintf(stderr, "[offline] saves not fetched: %s\n", err.c_str());
         }
         std::fprintf(stderr, "[offline] ready for offline: %d record(s), %d cover(s) and %d "
@@ -106,7 +121,7 @@ void backfillDrive(const std::string& address) {
                      missing ? (", " + std::to_string(missing) +
                                 " game(s) the server would not describe").c_str() : "");
         running = false;
-    }).detach();
+    });
 }
 
 // WHETHER THIS MACHINE HAS A ROUTE OUT AT ALL: a default route in the kernel's
@@ -135,12 +150,14 @@ static bool haveDefaultRoute() {
 // noticed (the Offline chip, launches that stop asking it) without waiting
 // for somebody to need it.
 void startReconnect(const std::string& address) {
-    std::thread([address]() {
+    std::lock_guard<std::mutex> lk(gThreads);
+    if (gStop.load() || gReconnect.joinable()) return;
+    gReconnect = std::thread([address]() {
         long long lastTry = 0;
         bool hadRoute = haveDefaultRoute();
         long long lastBeat = static_cast<long long>(std::time(nullptr));
         long long lastFill = lastBeat;
-        for (;;) {
+        while (!gStop.load()) {
             if (!romm::serverAway()) {
                 const long long now = static_cast<long long>(std::time(nullptr));
                 // What offline needs, again every quarter of an hour: a save
@@ -173,7 +190,24 @@ void startReconnect(const std::string& address) {
             }
             SDL_Delay(250);
         }
-    }).detach();
+    });
+}
+
+// The reconnect thread first, since it starts backfills; once it is joined
+// nothing else does, so the backfill taken after it is the last.
+void stopOfflineSync() {
+    gStop = true;
+    std::thread r, b;
+    {
+        std::lock_guard<std::mutex> lk(gThreads);
+        r = std::move(gReconnect);
+    }
+    if (r.joinable()) r.join();
+    {
+        std::lock_guard<std::mutex> lk(gThreads);
+        b = std::move(gBackfill);
+    }
+    if (b.joinable()) b.join();
 }
 
 // ---- Uploads owed, and the server going and coming back (#88, #398) ----

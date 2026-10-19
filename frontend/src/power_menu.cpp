@@ -13,6 +13,13 @@ using namespace design;   // NOLINT, as main.cpp names them
 
 void App::powerActivate(PowerItem item) {
     if (item == PwResume || item == PwCancel) {
+        // A WII REMOTE GAME DURING A STREAM STAYS PAUSED (#473, PLAY-18;
+        // MMagTech's rule of 2026-10-07, pausemenu.cpp): back to the pause
+        // menu, which has no Resume, rather than into the game.
+        if (remoteOnlyHere()) {
+            backToPauseMenu();
+            return;
+        }
         closeOverlay();
         return;
     }
@@ -26,12 +33,37 @@ void App::powerActivate(PowerItem item) {
                               : item == PwRestart ? power::Action::Restart
                                                   : power::Action::PowerOff;
     std::fprintf(stderr, "[power] %s chosen%s\n", power::name(act),
-                 playing ? " from a game; leaving it first" : "");
+                 playing || standalonePaused ? " from a game; leaving it first" : "");
     // Restart and Power off are silent here: how the console sounds and
     // looks on its way down is #393's. Sleep clicks like any choice.
     if (act == power::Action::Rest) powerCue(sound::Cue::Activate);
+    // A GAME STILL STARTING IS LEFT THE WAY EXIT TO HOME LEAVES IT (#473,
+    // PLAY-12): unloaded while its core builds the machine, PPSSPP dies,
+    // and the console started again instead of sleeping or powering off.
+    // The choice waits for the core, at most exitToHome's wait (pumpExit).
+    if (playing && !cab::Core::shared().running()) {
+        powerAfterExit = act;
+        closeOverlay(false);
+        exitToHome();
+        return;
+    }
+    // AN EMULATOR OF ITS OWN IS CLOSED FIRST (#473, PLAY-32), as Exit to
+    // Home closes it, and the choice is made once it has gone and its
+    // saves are queued (finishStandalone).
+    if (standalonePaused && standaloneRun.active()) {
+        powerAfterExit = act;
+        closeOverlay(false);
+        standaloneRun.stop();
+        return;
+    }
     if (playing) finishExit();
     closeOverlay(false);
+    powerAct(act);
+}
+
+// The choice itself, once the game is left: Sleep waits for the uploads
+// (waitForUploadsToPowerDown); Restart and Power off go now.
+void App::powerAct(power::Action act) {
     if (act == power::Action::Rest) {
         restPending = true;
         restWaitStart = SDL_GetTicksNS();
@@ -42,24 +74,38 @@ void App::powerActivate(PowerItem item) {
     }
 }
 
+// From the Power menu back to the pause menu it was opened over: the pause
+// menu's rows, built again as on the way in.
+void App::backToPauseMenu() {
+    overlayOpen = false;
+    toggleOverlay();
+}
+
 // Pressed while it is already open, it closes, like Resume.
+//
+// OVER AN EMULATOR OF ITS OWN, PAUSED, IT IS THE MENU OVER A GAME (#473,
+// PLAY-32): Resume first, no Steam, silent, as over any other game.
 void App::openPowerMenu() {
+    const bool game = playing || standalonePaused;
     if (overlayOpen && powerMenu) {
-        closeOverlay();
+        if (remoteOnlyHere()) backToPauseMenu();
+        else closeOverlay();
         return;
     }
     powerItems.clear();
     // THE FIRST ITEM DOES NOTHING, and it is the one focused. In a game
     // that is Resume; on Home it is Cancel. MMagTech, 2026-09-27: Start
     // pressed by accident opened the menu on Sleep, one A from asleep.
-    powerItems.push_back(playing ? PwResume : PwCancel);
+    // Over a Wii Remote game during a stream it is Cancel too: the game
+    // stays paused (PLAY-18).
+    powerItems.push_back(game && !remoteOnlyHere() ? PwResume : PwCancel);
     // STEAM'S DOOR (#223), never over a game. MMagTech, 2026-10-04: in
     // the Library it read as part of the ROM library, and it is not; here
     // it is a mode the machine switches into, the mirror of Steam's own
     // "Switch to Desktop". Straight under Cancel, his call: it is what
     // Start will most often be pressed for, and a slip still meets "Start
     // Steam?" or the PIN. Gone when somebody chose Hide Steam.
-    if (!playing && steam::available() && !steam::hidden()) powerItems.push_back(PwSteam);
+    if (!game && steam::available() && !steam::hidden()) powerItems.push_back(PwSteam);
     if (restAvailable) powerItems.push_back(PwRest);
     powerItems.push_back(PwRestart);
     powerItems.push_back(PwPowerOff);
@@ -69,7 +115,7 @@ void App::openPowerMenu() {
     overlayFade.retarget(1.0f, overlayFadeSeconds);
     overlayFocus.retarget(1.0f, kOverlayFocusDuration);
     overlayFocus.elapsed = kOverlayFocusDuration;
-    std::fprintf(stderr, "[power] menu open%s\n", playing ? " over a game" : "");
+    std::fprintf(stderr, "[power] menu open%s\n", game ? " over a game" : "");
     powerCue(sound::Cue::Activate);
 }
 

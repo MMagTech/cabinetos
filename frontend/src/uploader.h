@@ -69,6 +69,11 @@ public:
         bool isPlay = false;
         // Favourites (#267): every one owed, read off favorites-owed.json.
         bool isFavorite = false;
+        // WHOSE IT IS, set on the frame thread when it is queued (push, and
+        // the resends), so the worker never reads storage::currentUser(),
+        // which a switch of person assigns (#483, FILES-09). Last, so the
+        // positional builds above leave it empty and push fills it.
+        storage::User who{};
     };
 
     // An upload that has not reached the server is the ONE irreplaceable thing
@@ -91,6 +96,7 @@ public:
     // Called at start, after an upload that worked, and every few minutes
     // while something is owed (the frame loop's `owing()`). The bytes are read
     // off the disk on the worker; anything already queued is not queued twice.
+    // On the frame thread, for the person signed in.
     void resendOwed();
 
     // Everything owed in favorites-owed.json, in one job, as sendPlay.
@@ -140,6 +146,12 @@ private:
 
     void enqueue(Job job);
 
+    // resendOwed, sendFavorites and sendPlay for a named person: the worker
+    // resends for the person whose upload just worked.
+    void resendOwedFor(const storage::User& who);
+    void sendFavoritesFor(const storage::User& who);
+    void sendPlayFor(const storage::User& who);
+
     void run();
 
     // THE COPY OF RomM's SAVES FOR THIS GAME (#88, savemirror.h), after a
@@ -151,7 +163,6 @@ private:
 
     void finished(const Job& job, bool ok, bool leftSomething);
 
-    bool sendPlaySessions(std::string* err);
 
     romm::Client* client_ = nullptr;
     std::thread worker_;

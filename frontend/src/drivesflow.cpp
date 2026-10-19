@@ -3,6 +3,7 @@
 
 #include "app.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "storage.h"
@@ -123,15 +124,22 @@ void App::followDrives() {
 }
 
 void App::pressEject(const screens::Result& res) {
+    // THE DRIVE THE ROW WAS BUILT FOR, by its path, not by its place in a
+    // fresh list (#483, SETTINGS-07): a drive arriving or leaving in the
+    // frame of the press moved the others along, so the question named one
+    // drive and Eject unmounted another. Gone since the row was built, the
+    // press is refused.
     const std::vector<std::string> locs = storage::locations();
-    const size_t i = static_cast<size_t>(res.value - kSetEject);
-    if (drives::ejecting() || i >= locs.size() || !storage::isExternal(locs[i])) {
+    const auto at = ejectPaths.find(res.value);
+    const bool there = at != ejectPaths.end() &&
+                       std::find(locs.begin(), locs.end(), at->second) != locs.end();
+    if (drives::ejecting() || !there || !storage::isExternal(at->second)) {
         sound::play(sound::Cue::Edge);
         return;
     }
     // The drive's row was pressed: Eject is asked, with the
     // drive named, and Cancel beside it.
-    const std::string loc = locs[i];
+    const std::string loc = at->second;
     const std::string ejName =
         driveNames.count(res.value) ? driveNames[res.value] : "External";
     // FORMAT BESIDE EJECT when nothing of the console's is on
@@ -155,8 +163,9 @@ void App::pressEject(const screens::Result& res) {
     // it is stopped and waited for, so nothing holds a file
     // open on the drive. Its stage is left as the worker set
     // it, so the frame loop undoes the keep as for any failed
-    // download.
-    if (launchJob.busy() && launchJob.entryPath.rfind(loc + "/", 0) == 0) {
+    // download. By the job's drive, not its entry path, which the worker
+    // may be renaming at this moment (#404).
+    if (launchJob.busy() && launchJob.location == loc) {
         std::fprintf(stderr, "[drives] eject: stopping the download of %s\n",
                      launchJob.title.c_str());
         launchJob.stop();

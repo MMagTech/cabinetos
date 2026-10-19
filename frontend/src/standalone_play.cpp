@@ -214,6 +214,13 @@ void App::finishStandalone() {
     dropPressesFromClosing();
     letGoOfHeld();
     std::fprintf(stderr, "[standalone] back to Home\n");
+    // A Power menu choice made over its pause menu (#473), now that it
+    // has gone and its saves are queued.
+    if (powerAfterExit) {
+        const power::Action act = *powerAfterExit;
+        powerAfterExit.reset();
+        powerAct(act);
+    }
 }
 
 // THE PAUSE MENU OVER A GAME THIS WINDOW DID NOT DRAW (#169). The same

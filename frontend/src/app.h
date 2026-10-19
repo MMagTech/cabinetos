@@ -65,6 +65,7 @@
 #include "panels.h"
 #include "pin.h"
 #include "players.h"
+#include "power.h"
 #include "playtime.h"
 #include "qrlink.h"
 #include "remoteplay.h"
@@ -1016,6 +1017,13 @@ struct App {
     // mid-upload has sent nothing, and the save would sit owed until morning.
     bool restPending = false;
     uint64_t restWaitStart = 0;
+    // SLEEP, RESTART OR POWER OFF CHOSEN WHILE THE GAME CANNOT BE LEFT YET
+    // (#473): a core still building its machine, or an emulator of its own
+    // that was asked to close. Done once the game is left (pumpExit,
+    // finishStandalone); finishExit forgets it, so any other way out of the
+    // game takes it with it.
+    std::optional<power::Action> powerAfterExit;
+    void powerAct(power::Action act);
     int ovCount();
     void ovStep(int delta);
     const char* ovLabel(int i);
@@ -1356,6 +1364,7 @@ struct App {
     Uint64 shortcutTakenAt = 0;
     std::vector<drives::Drive> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
+    std::map<int, std::string> ejectPaths;   // an Eject row's id -> its location
     // An Eject row's id -> its drive in `formatable`, when Format is offered
     // beside Eject.
     std::map<int, size_t> ejectFormats;
@@ -1699,13 +1708,23 @@ struct App {
     // their own login (they are never the person signed in: accounts::remove
     // refuses that), and only then deletes. Off the frame thread, because a
     // server that does not answer costs curl's whole timeout.
+    // STOPPED AND JOINED, NOT DETACHED (#406): a send still running at exit
+    // ran on into the program's teardown. `stop` ends it after the file on
+    // the wire (sendOwedBeforeRemoving); the destructor joins, so the App
+    // never ends holding it.
     struct RemoveJob {
         std::mutex m;
         std::atomic<bool> running{false};
+        std::atomic<bool> stop{false};
         bool finished = false;
         int left = 0;   // still owed after trying
         accounts::Account who;
         bool everyone = false;   // Sign out: every account's, then leave
+        std::thread th;
+        ~RemoveJob() {
+            stop = true;
+            if (th.joinable()) th.join();
+        }
     };
     std::shared_ptr<RemoveJob> removeJob = std::make_shared<RemoveJob>();
     void finishRemove(const accounts::Account& who);
@@ -1866,6 +1885,7 @@ struct App {
     void finishExit();
     void exitToHome();
     void pumpExit();
+    void watchPs2Start();
 
     // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
     // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
@@ -1877,6 +1897,7 @@ struct App {
     void powerCue(sound::Cue c);
     void closeOverlay(bool cue = true);
     void powerActivate(PowerItem item);
+    void backToPauseMenu();
     void standaloneScreenshot();
     void pumpStandaloneShot();
     void stepChoice(int slot, int delta, bool wrap);

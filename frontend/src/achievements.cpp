@@ -86,15 +86,18 @@ std::string param(const std::string& form, const std::string& key) {
     return {};
 }
 
-std::string keptPath(const std::string& name) {
-    return accounts::raDir(gAccount) + "/" + storage::safeSegment(name);
+// WHOSE FOLDER IS NAMED BY THE CALLER (#483, FILES-13): an answer that
+// arrives after a switch of person belongs to the one who asked, so the
+// server's callbacks pass the account they were asked for.
+std::string keptPath(const std::string& name, int account) {
+    return accounts::raDir(account) + "/" + storage::safeSegment(name);
 }
 
 }  // namespace
 
-void keepAnswer(const std::string& name, const std::string& body) {
-    if (gAccount <= 0 || body.empty()) return;
-    const std::string path = keptPath(name);
+void keepAnswer(const std::string& name, const std::string& body, int account) {
+    if (account <= 0 || body.empty()) return;
+    const std::string path = keptPath(name, account);
     const std::string part = path + ".part";
     FILE* f = std::fopen(part.c_str(), "wb");
     if (!f) return;
@@ -106,9 +109,9 @@ void keepAnswer(const std::string& name, const std::string& body) {
 
 namespace {
 
-std::string keptAnswer(const std::string& name) {
-    if (gAccount <= 0) return {};
-    FILE* f = std::fopen(keptPath(name).c_str(), "rb");
+std::string keptAnswer(const std::string& name, int account = gAccount) {
+    if (account <= 0) return {};
+    FILE* f = std::fopen(keptPath(name, account).c_str(), "rb");
     if (!f) return {};
     std::string body;
     char buf[16384];
@@ -125,9 +128,9 @@ struct Owed {
     long long when = 0;   // unix seconds it was earned
 };
 
-std::vector<Owed> loadOwed() {
+std::vector<Owed> loadOwed(int account = gAccount) {
     std::vector<Owed> out;
-    json_object* arr = json_tokener_parse(keptAnswer("pending.json").c_str());
+    json_object* arr = json_tokener_parse(keptAnswer("pending.json", account).c_str());
     if (!arr) return out;
     if (json_object_get_type(arr) == json_type_array) {
         for (size_t i = 0; i < json_object_array_length(arr); ++i) {
@@ -145,7 +148,7 @@ std::vector<Owed> loadOwed() {
     return out;
 }
 
-void saveOwed(const std::vector<Owed>& owed) {
+void saveOwed(const std::vector<Owed>& owed, int account = gAccount) {
     json_object* arr = json_object_new_array();
     for (const Owed& w : owed) {
         json_object* o = json_object_new_object();
@@ -155,7 +158,8 @@ void saveOwed(const std::vector<Owed>& owed) {
         json_object_object_add(o, "when", json_object_new_int64(w.when));
         json_object_array_add(arr, o);
     }
-    keepAnswer("pending.json", json_object_to_json_string_ext(arr, JSON_C_TO_STRING_PLAIN));
+    keepAnswer("pending.json", json_object_to_json_string_ext(arr, JSON_C_TO_STRING_PLAIN),
+               account);
     json_object_put(arr);
 }
 
@@ -166,29 +170,30 @@ long long nowSeconds() {
 
 // What rcheevos is given instead of a failure, when there is something to
 // give. False leaves the failure as it was.
-bool offlineAnswer(const std::string& api, const std::string& form, std::string* body) {
+bool offlineAnswer(const std::string& api, const std::string& form, std::string* body,
+                   int account = gAccount) {
     const std::string hash = param(form, "m");
     if (api == "login2") {
         // Only the same person's kept sign-in, and only with their token.
         if (param(form, "t").empty()) return false;
-        json_object* o = json_tokener_parse(keptAnswer("login.json").c_str());
+        json_object* o = json_tokener_parse(keptAnswer("login.json", account).c_str());
         if (!o) return false;
         json_object* u = nullptr;
         const bool same = json_object_object_get_ex(o, "User", &u) &&
                           strcasecmp(json_object_get_string(u), param(form, "u").c_str()) == 0;
         json_object_put(o);
         if (!same) return false;
-        *body = keptAnswer("login.json");
+        *body = keptAnswer("login.json", account);
         std::fprintf(stderr, "[ra] offline: signed in from the kept answer\n");
         return true;
     }
     if (api == "achievementsets" && !hash.empty()) {
-        *body = keptAnswer("sets-" + hash + ".json");
+        *body = keptAnswer("sets-" + hash + ".json", account);
         if (!body->empty()) std::fprintf(stderr, "[ra] offline: the kept set for %s\n", hash.c_str());
         return !body->empty();
     }
     if (api == "startsession") {
-        *body = keptAnswer("session-" + hash + ".json");
+        *body = keptAnswer("session-" + hash + ".json", account);
         // Never played online: no unlocks known, which only means one earned
         // elsewhere may be earned again here and sent twice; the server keeps
         // the first.
@@ -202,11 +207,11 @@ bool offlineAnswer(const std::string& api, const std::string& form, std::string*
         w.hash = hash;
         w.when = nowSeconds() - std::strtoll(param(form, "o").c_str(), nullptr, 10);
         if (w.id == 0) return false;
-        std::vector<Owed> owed = loadOwed();
+        std::vector<Owed> owed = loadOwed(account);
         bool have = false;
         for (const Owed& o : owed) have = have || (o.id == w.id && o.user == w.user);
         if (!have) owed.push_back(w);
-        saveOwed(owed);
+        saveOwed(owed, account);
         std::fprintf(stderr, "[ra] offline: unlock %u kept to send later (%zu waiting)\n", w.id,
                      owed.size());
         *body = "{\"Success\":true,\"AchievementID\":" + std::to_string(w.id) + "}";
@@ -219,13 +224,16 @@ bool offlineAnswer(const std::string& api, const std::string& form, std::string*
     return false;
 }
 
-void rememberAnswer(const std::string& api, const std::string& form, const std::string& body) {
+void rememberAnswer(const std::string& api, const std::string& form, const std::string& body,
+                    int account) {
     // Only answers that say they succeeded: a refusal kept would be replayed.
     if (body.find("\"Success\":true") == std::string::npos) return;
     const std::string hash = param(form, "m");
-    if (api == "login2") keepAnswer("login.json", body);
-    else if (api == "achievementsets" && !hash.empty()) keepAnswer("sets-" + hash + ".json", body);
-    else if (api == "startsession" && !hash.empty()) keepAnswer("session-" + hash + ".json", body);
+    if (api == "login2") keepAnswer("login.json", body, account);
+    else if (api == "achievementsets" && !hash.empty())
+        keepAnswer("sets-" + hash + ".json", body, account);
+    else if (api == "startsession" && !hash.empty())
+        keepAnswer("session-" + hash + ".json", body, account);
 }
 
 bool gSending = false;
@@ -275,18 +283,19 @@ void RC_CCONV serverCall(const rc_api_request_t* r, rc_client_server_callback_t 
                          void* callbackData, rc_client_t*) {
     const std::string form = r->post_data ? r->post_data : "";
     const std::string api = param(form, "r");
-    send(*r, [callback, callbackData, form, api](int status, const std::string& body) {
+    const int account = gAccount;
+    send(*r, [callback, callbackData, form, api, account](int status, const std::string& body) {
         std::string substitute;
         rc_api_server_response_t resp{};
         if (status == RC_API_SERVER_RESPONSE_RETRYABLE_CLIENT_ERROR &&
-            offlineAnswer(api, form, &substitute)) {
+            offlineAnswer(api, form, &substitute, account)) {
             resp.body = substitute.c_str();
             resp.body_length = substitute.size();
             resp.http_status_code = 200;
             callback(&resp, callbackData);
             return;
         }
-        if (status >= 200 && status < 300) rememberAnswer(api, form, body);
+        if (status >= 200 && status < 300) rememberAnswer(api, form, body, account);
         resp.body = body.c_str();
         resp.body_length = body.size();
         resp.http_status_code = status;

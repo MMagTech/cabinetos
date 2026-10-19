@@ -43,9 +43,13 @@ Result run(const std::vector<std::string>& args, int timeoutSeconds,
     size_t handed = 0;   // how much of r.out has gone to onLine
     if (args.empty()) return r;
 
+    // CLOSE-ON-EXEC (#483, FILES-14): a child another thread forked at this
+    // moment inherited the write ends, and while it lived this run never saw
+    // the end of its output and waited out its whole limit. The child's dup2
+    // onto 1 and 2 below clears the flag on those two.
     int outPipe[2], errPipe[2];
-    if (pipe(outPipe) != 0) return r;
-    if (pipe(errPipe) != 0) {
+    if (pipe2(outPipe, O_CLOEXEC) != 0) return r;
+    if (pipe2(errPipe, O_CLOEXEC) != 0) {
         close(outPipe[0]);
         close(outPipe[1]);
         return r;
