@@ -192,7 +192,9 @@ is in the file named for its feature, and
    the person sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
    (`standalone_play.cpp`) and ends this flow; an Xbox game whose last saves
    are still on its drive has them taken off first (`recoverDriveSaves`,
-   `startup.cpp`), or does not start.
+   `startup.cpp`): to this person's folder and the server, or to the folder
+   of the person they belong to, who sends them at their next start. Only a
+   drive that will not give them up stops the game.
 5. For a core: this person's save folder for this game and core is made, a
    folder save is restored and the starting disc chosen
    (`prepareSaveDirAndDiscs`); then the file saves (most saves) are restored

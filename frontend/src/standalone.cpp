@@ -393,7 +393,7 @@ bool beforeStart(const Emulator& e, const std::string& entryPath, const std::str
                  const std::string& player, const std::string& note, std::string* err) {
     // The note first, in the person's folder: from here until the save is
     // zipped, the emulator writes there and nothing has been sent.
-    if (e.notesPlaying && !writeFile(saveDir + "/" + kPlayingNote, note)) {
+    if (e.notesPlaying && !writePlayingNote(saveDir, note)) {
         *err = "could not mark " + saveDir + " as playing";
         return false;
     }
@@ -408,16 +408,28 @@ bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string
     return xemuAfterEnd(e, entryPath, saveDir, err);
 }
 
-void finished(const Emulator& e, const std::string& saveDir) {
-    if (e.notesPlaying) ::unlink((saveDir + "/" + kPlayingNote).c_str());
+// The note in the person's folder goes, whichever wrote it: beforeStart
+// (`notesPlaying`), or another person's start that brought this person's
+// Xbox saves off the drive for them (App::recoverDriveSaves). Nothing else
+// is ever there, and one that is not there costs nothing.
+void finished(const Emulator&, const std::string& saveDir) {
+    removePlayingNote(saveDir);
 }
 
-std::string playingNote(const std::string& entryPath) {
-    return readFile(entryPath + "/" + kPlayingNote);
+std::string playingNote(const std::string& folder) {
+    return readFile(folder + "/" + kPlayingNote);
 }
 
-bool hasPlayingNote(const std::string& entryPath) {
-    return isFile(entryPath + "/" + kPlayingNote);
+bool hasPlayingNote(const std::string& folder) {
+    return isFile(folder + "/" + kPlayingNote);
+}
+
+bool writePlayingNote(const std::string& folder, const std::string& note) {
+    return writeFile(folder + "/" + kPlayingNote, note);
+}
+
+void removePlayingNote(const std::string& folder) {
+    ::unlink((folder + "/" + kPlayingNote).c_str());
 }
 
 bool Run::start(const Emulator& e, const std::string& romPath, const std::string& entryPath,

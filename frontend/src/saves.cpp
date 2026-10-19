@@ -212,6 +212,9 @@ void syncDirSave(GameSession& sess, Uploader& up) {
 // had just ended with everything changed, and is owed until it lands, so the
 // restore that follows keeps it rather than unpacking the server's older zip
 // over it (restoreDirSave, isPending). The note names the game and the tag.
+// The same note, in the same place, is how an Xbox game's saves reach the
+// server when another person's start brought them off the drive into this
+// person's folder (App::recoverDriveSaves, #484).
 void finishInterruptedSave(const cab::standalone::Emulator& emu,
                            const std::string& saveDir, Uploader& up) {
     std::istringstream note(cab::standalone::playingNote(saveDir));

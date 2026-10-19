@@ -793,43 +793,74 @@ void App::recoverPowerCutSaves() {
             }
         }
     }
-    // AND AN XBOX 360 OR WII U GAME'S (`notesPlaying`), whose note is in the
-    // person's own folder: `saves/<platform>/<rom id>/<core>/`. Only this
-    // person's, since the upload goes as them; anyone else's is finished when
-    // they next start a game of that kind here, or the console starts as them.
-    for (const cab::standalone::Emulator* emu : cab::standalone::all()) {
-        if (!emu->notesPlaying) continue;
-        const std::string saves = storage::userDir(storage::currentUser()) + "/saves";
-        for (const std::string& platform : listNames(saves))
-            for (const std::string& rom : listNames(saves + "/" + platform)) {
+    // AND THE NOTES IN THIS PERSON'S OWN FOLDERS, `saves/<platform>/<rom
+    // id>/<core>/`: an Xbox 360, Wii U, Switch or PS3 game's (`notesPlaying`,
+    // the emulator writes there), and an Xbox game's whose saves another
+    // person's start brought off the drive for them (recoverDriveSaves,
+    // below). Only this person's, since the upload goes as them; anyone
+    // else's is finished when they next start a game of that kind here, or
+    // the console starts as them.
+    const std::string saves = storage::userDir(storage::currentUser()) + "/saves";
+    for (const std::string& platform : listNames(saves))
+        for (const std::string& rom : listNames(saves + "/" + platform))
+            for (const cab::standalone::Emulator* emu : cab::standalone::all()) {
                 const std::string dir = saves + "/" + platform + "/" + rom + "/" + emu->core;
                 if (cab::standalone::hasPlayingNote(dir))
                     finishInterruptedSave(*emu, dir, uploader);
             }
-    }
 }
 
 // ONE XBOX GAME'S FOLDER, as above: true when it holds no note, or its
-// saves came off. False while they stay on the drive (somebody else's, or
-// the drive would not give them up): nothing may write that drive until
-// they are off. A launch of the game runs it too, before beforeStart would
-// put this person's older copy over them (#398, EMU-12).
+// saves came off. False only while they stay on the drive because it would
+// not give them up: nothing may write that drive until they are off. A
+// launch of the game runs it too, before beforeStart would put this
+// person's older copy over them (#398, EMU-12).
+//
+// WHOSE THEY ARE DECIDES WHERE THEY GO (#484, MMagTech, 2026-10-19). This
+// person's go up now, as if their game had just ended. Another person's are
+// copied into that person's folder, exactly as their own end would do, and
+// the note is left there rather than on the drive: the upload goes only as
+// them, through what Xbox 360 and Wii U use (finishInterruptedSave, at their
+// next launch of the game or the next start of the console as them,
+// recoverPowerCutSaves), and the game starts for whoever is here. Until then
+// another person's stayed on the drive and the game was refused to everyone
+// else until that person played it. Saves whose folder names nobody on this
+// console (the person was removed, and their folder with them) are treated
+// as removed with them: one line here, and the game starts.
 bool App::recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::string& path) {
     if (!cab::standalone::hasPlayingNote(path)) return true;
-    std::istringstream note(cab::standalone::playingNote(path));
+    const std::string text = cab::standalone::playingNote(path);
+    std::istringstream note(text);
     std::string id, dir, title, tag;
     std::getline(note, id);
     std::getline(note, dir);
     std::getline(note, title);
     std::getline(note, tag);
-    // ONLY THIS PERSON'S. The upload goes as whoever the console acts as,
-    // so somebody else's stays on the drive, still protected, until they
-    // are the one here.
     const std::string mine = storage::userDir(storage::currentUser()) + "/";
-    if (dir.compare(0, mine.size(), mine) != 0) {
-        std::fprintf(stderr, "[xbox] %s holds another person's saves; left for them\n",
-                     path.c_str());
-        return false;
+    const bool theirs = dir.compare(0, mine.size(), mine) != 0;
+    if (theirs) {
+        bool known = false;
+        for (const storage::User& u : storage::knownUsers()) {
+            const std::string own = storage::userDir(u) + "/";
+            if (dir.compare(0, own.size(), own) == 0) known = true;
+        }
+        if (!known) {
+            std::fprintf(stderr, "[xbox] %s holds saves of nobody on this console any more "
+                         "(%s); removed with them\n", path.c_str(), dir.c_str());
+            cab::standalone::removePlayingNote(path);
+            return true;
+        }
+        // THEIR NOTE FIRST, THEN THEIR SAVES. A stop between the two leaves
+        // both notes, and the next start does this again. The other order
+        // would leave their saves in their folder with nothing to say they
+        // are owed, and their next launch would unpack the server's older
+        // zip over them (restoreDirSave).
+        storage::makeDirs(dir);
+        if (!cab::standalone::writePlayingNote(dir, text)) {
+            std::fprintf(stderr, "[xbox] saves left on %s: could not mark %s\n", path.c_str(),
+                         dir.c_str());
+            return false;
+        }
     }
     GameSession owed;
     owed.romId = std::atoi(id.c_str());
@@ -839,9 +870,14 @@ bool App::recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::st
     owed.dirSaveRoot = cab::standalone::saveRoot(xemu, dir);
     owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
     std::string aerr;
-    if (dir.empty() || !cab::standalone::afterEnd(xemu, path, dir, &aerr)) {
+    if (!cab::standalone::afterEnd(xemu, path, dir, &aerr)) {
         std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(), aerr.c_str());
         return false;
+    }
+    if (theirs) {
+        std::fprintf(stderr, "[xbox] %s held another person's saves; copied into %s, to go "
+                     "up when the console next acts as them\n", path.c_str(), dir.c_str());
+        return true;
     }
     std::fprintf(stderr, "[xbox] finished what a stop left on %s\n", path.c_str());
     syncDirSave(owed, uploader);
