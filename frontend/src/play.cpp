@@ -737,13 +737,6 @@ void App::reportAndUnloadCore() {
                              1000.0 * wait / static_cast<double>(vframes));
             }
         }
-        // Whether the second brake did anything. It is reported rather than
-        // assumed, because a brake nobody can see is indistinguishable from a
-        // brake that is not there — and this one has never engaged on either
-        // PSP game measured. See Core::runFor.
-        if (core.governorSkips() > 0)
-            std::fprintf(stderr, "[core] the audio governor held it back %llu times\n",
-                         static_cast<unsigned long long>(core.governorSkips()));
         // NOT UNLOADED WHILE THE MACHINE IS STILL BEING BUILT (#473), the
         // rule exitToHome keeps (core.h, running): asked to stop in the
         // first seconds of a PSP game, the unload killed PPSSPP's boot

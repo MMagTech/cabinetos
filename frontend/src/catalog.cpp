@@ -29,21 +29,13 @@ struct Entry {
     Support support;
     const char* core;
     const char* reason;
-    // True for the three cores that render through RETRO_ENVIRONMENT_SET_HW_RENDER.
-    // A fact about the CORE rather than about this console, which is why it
-    // lives in the table beside the core name — but it is answered here rather
-    // than by asking the core, because the answer has to be available before
-    // anything is loaded, while a shelf is being drawn.
-    bool hwRender = false;
     // Set only where the slug alone is ambiguous: the name of the SYSTEM this
     // row actually serves, used to qualify a tile so two platforms with the
     // same name can be told apart. Cabinet's manifest carries the same thing in
     // its `systems` field.
     //
     // LAST IN THE STRUCT ON PURPOSE. Every row below is positional, so a field
-    // inserted in the middle would silently re-assign the ones that follow it —
-    // the three rows ending in `true` would have handed that `true` to the
-    // wrong member.
+    // inserted in the middle would silently re-assign the ones that follow it.
     const char* system = nullptr;
 };
 
@@ -60,24 +52,24 @@ const Entry kTable[] = {
     // arcadeFolder below). A generic arcade folder matches neither row and
     // picks one of them per game.
     {"arcade",               "FBNEO",     Support::Playable, "fbneo_libretro",  nullptr,
-     false, "FinalBurn Neo"},
+     "FinalBurn Neo"},
     {"arcade",               "MAME2003",  Support::Playable, "mame2003_plus",   nullptr,
-     false, "MAME 2003-Plus"},
+     "MAME 2003-Plus"},
     {"atari2600",            nullptr,     Support::Playable, "stella2014",      nullptr},
     {"atari7800",            nullptr,     Support::Playable, "prosystem",       nullptr},
-    {"dc",                   nullptr,     Support::Playable, "flycast",         nullptr, true},
+    {"dc",                   nullptr,     Support::Playable, "flycast",         nullptr},
     {"gamegear",             nullptr,     Support::Playable, "genesis_plus_gx", nullptr},
     {"gb",                   nullptr,     Support::Playable, "gambatte",        nullptr},
     {"gba",                  nullptr,     Support::Playable, "mgba",            nullptr},
     {"gbc",                  nullptr,     Support::Playable, "gambatte",        nullptr},
     {"genesis",              nullptr,     Support::Playable, "genesis_plus_gx", nullptr},
-    {"n64",                  nullptr,     Support::Playable, "mupen64plus",     nullptr, true},
+    {"n64",                  nullptr,     Support::Playable, "mupen64plus",     nullptr},
     {"nds",                  nullptr,     Support::Playable, "melonds",         nullptr},
     {"neo-geo-pocket-color", nullptr,     Support::Playable, "beetle_ngp",      nullptr},
     {"nes",                  nullptr,     Support::Playable, "fceumm",          nullptr},
     {"ngc",                  nullptr,     Support::Playable, "dolphin",         nullptr},
     {"ps2",                  nullptr,     Support::Playable, "pcsx2",           nullptr},
-    {"psp",                  nullptr,     Support::Playable, "ppsspp",          nullptr, true},
+    {"psp",                  nullptr,     Support::Playable, "ppsspp",          nullptr},
     {"psx",                  nullptr,     Support::Playable, "pcsx_rearmed",    nullptr},
     {"saturn",               nullptr,     Support::Playable, "beetle_saturn",   nullptr},
     {"segacd",               nullptr,     Support::Playable, "genesis_plus_gx", nullptr},
@@ -298,19 +290,11 @@ Coverage answer(const Entry* e) {
         return c;
     }
 
-    // A hardware-rendered core used to stop here: built, on the disk, and
-    // still unrunnable, because the host refused RETRO_ENVIRONMENT_SET_HW_RENDER
-    // and these three cores draw with GL rather than handing back pixels.
-    //
-    // It no longer does. The host owns a GLES context and hands the core a
-    // framebuffer inside it, and this was measured rather than assumed:
-    // Mario Kart 64 reaches its title screen on Mupen64Plus and Ikaruga
-    // reaches its own on Flycast, both from the real library, both with
-    // sound. So `hwRender` no longer changes the answer — it records which
-    // rows take that path, which is the fact PPSSPP will be checked against
-    // when it is built. It is kept in place rather than removed because this
-    // table is positional and every row below a removed field silently
-    // re-assigns; see the struct.
+    // A core that draws through a graphics context rather than handing back
+    // pixels (Flycast, Mupen64Plus, PPSSPP, Dolphin) plays like any other: the
+    // host serves it (core_hwrender.cpp). One asking for a context this
+    // machine cannot serve is refused as it loads, and the launch says so as
+    // for any core that will not load.
     return c;
 }
 
@@ -406,11 +390,6 @@ const char* shortReason(Support s) {
         case Support::NoCore: return "No core for this system";
         case Support::Excluded: return "Not shipped here";
         case Support::NotInstalled: return "Core not built yet";
-        // Nothing produces this today. Kept because it is the honest answer
-        // for a core that asks for something this context cannot serve —
-        // desktop GL or Vulkan rather than GLES — which the host refuses by
-        // name. Both cores tested asked for GLES 3.0 and got it.
-        case Support::NeedsHardwareRender: return "Needs a 3D core";
         case Support::NeedsController: return "Needs a Wii Remote";
         case Support::UnsupportedGame: return "Not supported here";
     }

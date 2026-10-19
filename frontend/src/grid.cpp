@@ -216,12 +216,10 @@ void GridScreen::draw(Ctx& c) {
     const int cols = columns();
     const float cw = coverWidth();
     const float ch = cw * 4.0f / 3.0f;
-    const float captionH = c.text.lineHeight(ui::TextStyle::Callout, c.sc) *
-                           static_cast<float>(design::kGridCaptionLines);
-    const float rowPitch = ch + design::kGridCaptionGap + captionH + design::kGridRowSpacing;
+    const float rowPitch = ch + design::kGridCaptionGap + design::kGridRowSpacing;
 
     // THE HEADING STAYS (2026-10-13). It carries the focused game's name (no
-    // captions under the covers, design::kGridCaptionLines), and when it
+    // captions under the covers, design.h's grid notes), and when it
     // scrolled away with the covers the name went with it: two rows down,
     // nothing said which game was selected. Reported to MMagTech, who chose
     // keeping it in place. So the covers scroll under it instead: clipped at
@@ -254,7 +252,7 @@ void GridScreen::draw(Ctx& c) {
     const float lift = ch * (design::kFocusScale - 1.0f) * 0.5f + 8.0f;
     float want = scroll_.to;
     if (rowTop - want < gridTop) want = std::max(0.0f, rowTop - gridTop);
-    const float rowBottom = rowTop + ch + design::kGridCaptionGap + captionH + lift;
+    const float rowBottom = rowTop + ch + design::kGridCaptionGap + lift;
     if (rowBottom - want > ui::kCanvasHeight - design::kScreenBottomPad)
         want = std::ceil((rowBottom - (ui::kCanvasHeight - design::kScreenBottomPad)) /
                          rowPitch) * rowPitch;
@@ -275,7 +273,7 @@ void GridScreen::draw(Ctx& c) {
             const float bx = design::kLibraryInset +
                              static_cast<float>(col) * (cw + design::kGridColumnSpacing);
             const float by = gridTop + static_cast<float>(r) * rowPitch - scroll;
-            if (by + ch + captionH < -rowPitch) continue;
+            if (by + ch < -rowPitch) continue;
             if (by > ui::kCanvasHeight + rowPitch) break;
 
             Card& card = cards[idx];
@@ -303,23 +301,9 @@ void GridScreen::draw(Ctx& c) {
             c.r.setContentAlpha(appear * row);
             drawCover(c, card, x, y, w, h, design::kGridCoverRadius * s, f, /*rim=*/true);
             c.r.setContentAlpha(appear);
-
             // NO CAPTION HERE. The focused card's title is drawn once, beside
-            // the screen's heading — see drawGlass and design::kGridCaptionLines
-            // for what that bought and what it cost. Kept behind the constant
-            // rather than deleted, so putting it back is one number.
-            if (design::kGridCaptionLines > 0) {
-                const std::vector<std::string> lines =
-                    wrapTwoLines(c.text, card.title, ui::TextStyle::Callout, c.sc, cw);
-                float baseline = by + ch + design::kGridCaptionGap +
-                                 c.text.ascent(ui::TextStyle::Callout, c.sc) +
-                                 design::captionSlide(f, ch);
-                for (const std::string& line : lines) {
-                    c.text.draw(c.r, line, bx, baseline, ui::TextStyle::Callout,
-                                ui::Color::white(isFocused ? 1.0f : 0.60f), c.sc);
-                    baseline += c.text.lineHeight(ui::TextStyle::Callout, c.sc);
-                }
-            }
+            // the screen's heading: see drawGlass, and design.h's grid notes
+            // for what that bought and what it cost.
         }
     }
 }

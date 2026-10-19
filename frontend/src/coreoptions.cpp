@@ -2,13 +2,17 @@
 // purpose, each with its reason. Moved out of catalog.cpp in the restructure
 // (#398).
 //
-// THREE ANSWERS HERE ARE HALF OF A PAIR, AND CHANGE WITH THE OTHER HALF IN
+// TWO ANSWERS HERE ARE HALF OF A PAIR, AND CHANGE WITH THE OTHER HALF IN
 // savetable.cpp (saveFiles and firmwareAliases):
 // opera_nvram_storage=shared is what gives saveFiles the 3DO's one fixed save
-// path (opera/shared/nvram.0.srm); pcsx2_shared_memory_cards disabled is what
-// gives each PS2 game a card of its own for saveFiles to name; and opera_bios
-// names the file firmwareAliases stages the 3DO's firmware under
-// (panafz10.bin).
+// path (opera/shared/nvram.0.srm), and opera_bios names the file
+// firmwareAliases stages the 3DO's firmware under (panafz10.bin).
+//
+// NONE FOR PLAYSTATION 2: PCSX2 runs in the console's own host
+// (frontend/ps2), which reads no core options. The host sets the card, one
+// per game and named from the rom, and the pads' analogue mode itself
+// (CabinetPS2Host.cpp), so the three pcsx2_* answers that were here reached
+// nothing and were removed (#492).
 
 #include "coreoptions.h"
 
@@ -167,44 +171,6 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
         return {{"beetle_saturn_save_method", "libretro"}};
     }
 
-    // Opera, and both of these are the difference between 3DO working and
-    // 3DO not starting at all.
-    //
-    // opera_bios is the defaults trap at its purest. Its declared default is
-    // "disabled", its value has to be a BIOS FILENAME, and answered with the
-    // default the core has no BIOS ROM and there is no boot. RomM holds the
-    // 3DO firmware under exactly this name on the reference server and the
-    // launch path fetches every file a platform lists into `bios/`, so the
-    // two halves meet. THE WEAK JOINT, said out loud: this is a filename
-    // written down here and a filename on somebody's server, and nothing
-    // checks that they agree. The reference stages whatever 1 MB firmware the
-    // platform has UNDER this name, which is the stronger answer and is worth
-    // building the day a server is found that calls it something else.
-    //
-    // opera_nvram_storage is a declared-default-versus-code-fallback mismatch:
-    // the option table says "per game" and the core's own unanswered fallback
-    // is "shared". Forced to shared deliberately, because it buys a fixed
-    // filename — `opera/shared/nvram.0.srm` — that the save sync can rely on,
-    // and each game already has its own save directory here so shared IS per
-    // game. catalog::saveFiles depends on this being set.
-    // PlayStation 2, and both of these are faults rather than preferences.
-    //
-    // `shared_memory_cards` defaults to ON, which puts every game's save in
-    // one `Mcd001.ps2` that belongs to no rom — RomM stores a save against a
-    // rom, so a shared card cannot be synced at all. Cabinet for Mac makes the
-    // same choice and its comment says why.
-    //
-    // `analog_mode1` defaults to OFF, which is the DualShock's analogue mode
-    // disabled: the sticks do nothing. A PlayStation 2 game with dead sticks
-    // reads as a broken emulator, and it is one unanswered option — exactly
-    // the class of silent fault the note at the top of this function is about.
-    if (manifestName(coreName) == "pcsx2") {
-        return {
-            {"pcsx2_shared_memory_cards", "disabled"},
-            {"pcsx2_analog_mode1", "enabled"},
-            {"pcsx2_analog_mode2", "enabled"},
-        };
-    }
     // NINTENDO 64 DRAWS WITH ParaLLEl-RDP WHEREVER THERE IS VULKAN — 2026-09-27
     // (#82). The declared default is GLideN64, which redraws the N64's
     // graphics with modern techniques and gets textures wrong in game after
@@ -275,6 +241,27 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // (85%) left trails behind everything. Looks, not saves or states.
     if (coreName == "mgba") return {{"mgba_interframe_blending", "mix_smart"}};
     if (coreName == "stella2014") return {{"stella2014_mix_frames", "ghost_75"}};
+
+    // Opera, and both of these are the difference between 3DO working and
+    // 3DO not starting at all.
+    //
+    // opera_bios is the defaults trap at its purest. Its declared default is
+    // "disabled", its value has to be a BIOS FILENAME, and answered with the
+    // default the core has no BIOS ROM and there is no boot. RomM holds the
+    // 3DO firmware under exactly this name on the reference server and the
+    // launch path fetches every file a platform lists into `bios/`, so the
+    // two halves meet. THE WEAK JOINT, said out loud: this is a filename
+    // written down here and a filename on somebody's server, and nothing
+    // checks that they agree. The reference stages whatever 1 MB firmware the
+    // platform has UNDER this name, which is the stronger answer and is worth
+    // building the day a server is found that calls it something else.
+    //
+    // opera_nvram_storage is a declared-default-versus-code-fallback mismatch:
+    // the option table says "per game" and the core's own unanswered fallback
+    // is "shared". Forced to shared deliberately, because it buys a fixed
+    // filename, `opera/shared/nvram.0.srm`, that the save sync can rely on,
+    // and each game already has its own save directory here so shared IS per
+    // game. catalog::saveFiles depends on this being set.
     if (coreName == "opera") {
         return {
             {"opera_bios", "panafz10.bin"},
