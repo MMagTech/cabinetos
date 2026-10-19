@@ -14,8 +14,7 @@
 // THE MII CHANNEL ON THIS SERVER (#275): the Wii game whose title is the
 // Mii Channel's, asked of RomM online and remembered for when it is away.
 // Online and not there, it is forgotten: nobody's Miis go into games.
-static bool findMiiChannel(romm::Client& client, int platformId, int* romId,
-                           std::string* title) {
+bool findMiiChannel(romm::Client& client, int platformId, int* romId, std::string* title) {
     if (!romm::serverAway() && client.haveToken() && platformId > 0) {
         std::vector<romm::Game> games;
         std::string err;
@@ -43,22 +42,22 @@ static bool findMiiChannel(romm::Client& client, int platformId, int* romId,
 // master copy is the Mii Channel's own `RFL_DB.dat`, brought up to date first
 // exactly as the Mii Channel's own launch would (restoreDirSave: RomM's newest
 // online, the copy last seen offline, and never over a save still owed to the
-// server). It replaces whatever the game's NAND held, so a change a game makes
-// to the Mii list lasts until its next launch; the game's own zip never
-// carries it (catalog::inDirectorySave). No Mii Channel, or no Miis made in
-// it yet: nothing is copied, and the game is as it was.
-void copyMiisInto(romm::Client& client, int platformId, const std::string& platformFsSlug,
+// server), from what the launch worker fetched for it. It replaces whatever
+// the game's NAND held, so a change a game makes to the Mii list lasts until
+// its next launch; the game's own zip never carries it
+// (catalog::inDirectorySave). No Mii Channel, or no Miis made in it yet:
+// nothing is copied, and the game is as it was.
+void copyMiisInto(const SaveFetch& mii, const std::string& platformFsSlug,
                   const std::string& core, const std::string& saveDir) {
-    int miiRom = 0;
-    std::string miiTitle;
-    if (!findMiiChannel(client, platformId, &miiRom, &miiTitle)) {
+    const int miiRom = mii.romId;
+    if (miiRom <= 0 || mii.title.empty()) {
         std::fprintf(stderr, "[mii] no Mii Channel on the server; the game keeps its own Miis\n");
         return;
     }
     const std::string miiWii =
         storage::savesDir(storage::currentUser(), platformFsSlug, miiRom, core) + "/User/Wii";
-    if (const char* tag = catalog::saveTag(core.c_str()); tag && client.haveToken())
-        restoreDirSave(client, miiRom, tag, miiWii, miiTitle);
+    if (const char* tag = catalog::saveTag(core.c_str()); tag && mii.asked)
+        restoreDirSave(mii, tag, miiWii, mii.title);
     const std::vector<uint8_t> db = cab::readBytes(miiWii + "/" + wii::kMiiDatabase);
     if (db.empty()) {
         std::fprintf(stderr, "[mii] no Miis made in the Mii Channel yet; nothing copied\n");

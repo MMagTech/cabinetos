@@ -262,9 +262,9 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
     const std::string entryPath = job.entryPath;
     job.worker = std::thread([&job, &client, id, platformId, slug, fsSlug, fsName, emu,
                               entryPath, location, validExts, blockExtract, expectedSize,
-                              multiFile]() {
+                              multiFile, user]() {
         launchWorker(job, client, id, platformId, slug, fsSlug, fsName, emu, entryPath,
-                     location, validExts, blockExtract, expectedSize, multiFile);
+                     location, validExts, blockExtract, expectedSize, multiFile, user);
     });
     return true;
 }
@@ -410,6 +410,15 @@ struct LaunchContext {
 // returns false ends the pump for this frame where the one function
 // returned; a stage after it does not run. What the stages hand on is
 // the LaunchContext.
+//
+// THE RESTORE ORDER, decided here and nowhere else (#481, LAUNCH-17): the
+// folder save and the file saves are written BEFORE the core loads the game,
+// because a core reads them once while the machine is built; the battery
+// save AFTER it, because the core is handed the bytes; and in every one a
+// copy this console still owes the server wins over the server's. The
+// server's rows and bytes were fetched by the worker before the job was
+// Ready (launch_routes.cpp, fetchLaunchSaves; launchJob.saves), so no stage
+// here waits on the network.
 void App::pumpLaunch() {
     if (!takeFinishedJob()) return;
     LaunchContext c{.core = cab::Core::shared(), .user = storage::currentUser()};
@@ -417,7 +426,10 @@ void App::pumpLaunch() {
     restoreBeforeLoad(c);
     if (!loadLaunchedGame(c)) return;
     setUpLoadedGame(c);
-    restoreBatterySave(c.core, session, c.saveDir, c.user, liveClient);
+    restoreBatterySave(c.core, session, c.saveDir, c.user, launchJob.saves);
+    // The fetched saves are written; a card can be megabytes, so not kept.
+    launchJob.saves = SaveFetch{};
+    launchJob.miiSaves = SaveFetch{};
     reportLoadedOptions(c.core);
     openSoundAndPace(c.core);
     startPlaying(c.core);
@@ -592,8 +604,8 @@ void App::prepareSaveDirAndDiscs(LaunchContext& c) {
                          "off its file, so its region and save folder are unknown; saves "
                          "stay on this console\n");
     }
-    if (c.dirSub && c.launchTag && liveClient.haveToken())
-        restoreDirSave(liveClient, launchJob.romId, c.launchTag, c.saveDir + "/" + c.dirSub,
+    if (c.dirSub && c.launchTag && launchJob.saves.asked)
+        restoreDirSave(launchJob.saves, c.launchTag, c.saveDir + "/" + c.dirSub,
                        launchJob.title, oldGameCubeCard);
 
     // AND THE SAVES THE CORE WRITES AS A FILE, which is most of the ones
@@ -680,8 +692,8 @@ void App::restoreBeforeLoad(LaunchContext& c) {
     // own are the master copy (#275).
     if (launchJob.platformSlug == "wii" && launchJob.coreName == "dolphin" &&
         !wii::isMiiChannel(launchJob.titleId))
-        copyMiisInto(liveClient, launchJob.platformId, launchJob.platformFsSlug,
-                     launchJob.coreName, c.saveDir);
+        copyMiisInto(launchJob.miiSaves, launchJob.platformFsSlug, launchJob.coreName,
+                     c.saveDir);
     if (launchJob.coreName == "dolphin") shareDolphinCache(c.saveDir);
     // What each player's port holds. A joypad, but on two systems. Wii: a
     // Classic Controller, or a GameCube pad for a game that takes only
@@ -711,9 +723,8 @@ void App::restoreBeforeLoad(LaunchContext& c) {
                        ? dolphinReadablePath(launchJob.romPath, launchJob.romId)
                        : launchJob.romPath;
 
-    c.restored =
-        restoreFileSaves(saveSpecs, launchJob.fsStem, c.saveDir, launchJob.romId,
-                         c.launchTag, liveClient);
+    c.restored = restoreFileSaves(saveSpecs, launchJob.fsStem, c.saveDir, c.launchTag,
+                                  launchJob.saves);
 }
 
 // Stage 6: the load. False when the core refused the game, which is said

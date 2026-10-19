@@ -71,8 +71,9 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
         refuseLaunch("Couldn't start this game");
         return;
     }
-    if (!root.empty() && tag && liveClient.haveToken())
-        restoreDirSave(liveClient, launchJob.romId, tag, root, launchJob.title);
+    if (!root.empty() && tag && launchJob.saves.asked)
+        restoreDirSave(launchJob.saves, tag, root, launchJob.title);
+    launchJob.saves = SaveFetch{};
     // AND ONTO WHERE THE EMULATOR READS THEM, when that is not a folder
     // (Xbox: its hard drive). The note says whose they are, should the
     // console go down before the game ends.

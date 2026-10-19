@@ -35,7 +35,11 @@
 #     tags:<romId>=<regions>;<languages>;<revision>;<tags> (each a comma list,
 #     any part empty) gives it RomM's four fields, for the same-name heading
 #     (#383): twins on a Home shelf and long labels, without renaming files.
-import json, os, sys, urllib.parse, urllib.request
+#   * hold:<what>=<seconds> answers every /api/<what> request that late
+#     (hold:saves=20 holds a game's save rows and bytes), as a slow or hung
+#     server would, for what the console does meanwhile (#481, LAUNCH-17: a
+#     launch must not hold the picture on them).
+import json, os, sys, time, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # The RomM server it reads from, from the environment, so no address is
@@ -57,6 +61,7 @@ NESTED = set()    # nested:<romId>
 MEDIA = set()     # media:<romId>, also in NESTED
 NAMES = {}        # name:<romId>=<name>
 TAGS = {}         # tags:<romId>=<regions>;<languages>;<revision>;<tags>
+HOLD = {}         # hold:<what>=<seconds>: "/api/<what>" -> seconds
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
 MOCK = [
     (9101, "Alex", 9001, "Saturday co-op", False, False, 8),
@@ -99,6 +104,10 @@ for a in sys.argv[2:]:
         lst = lambda x: [t.strip() for t in x.split(",") if t.strip()]
         TAGS[int(rid)] = {"regions": lst(parts[0]), "languages": lst(parts[1]),
                           "revision": parts[2].strip(), "tags": lst(parts[3])}
+        continue
+    if a.startswith("hold:"):
+        what, secs = a[5:].split("=", 1)
+        HOLD["/api/" + what] = float(secs)
         continue
     if a.startswith("hide:"):
         FILES[int(a[5:])] = None
@@ -259,6 +268,10 @@ class H(BaseHTTPRequestHandler):
     def fwd(self, head=False):
         hdrs = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "connection", "accept-encoding")}
         import re as _re
+        for prefix, secs in HOLD.items():
+            if self.path.startswith(prefix):
+                sys.stderr.write(f"hold: {self.command} {self.path} held {secs:g} s\n"); sys.stderr.flush()
+                time.sleep(secs)
         small = _re.search(r"/roms/\d+/(\d+)/cover/small\.", self.path)
         if small and NOSMALL and int(small.group(1)) % 3 == 0:
             sys.stderr.write(f"nosmall: game {small.group(1)} small cover answered 404\n")

@@ -16,10 +16,12 @@
 
 // RomM'S SAVES FOR A GAME, OR THE COPY OF THEM (#88, savemirror.h). Online:
 // asked, and the copy refreshed. Offline: the copy, as last seen, so a launch
-// decides exactly as it would online. Every restore asks through these two.
-bool savesFor(romm::Client& client, int romId, std::vector<romm::Asset>* rows,
-              std::string* err) {
-    const storage::User& u = storage::currentUser();
+// decides exactly as it would online. Every fetch asks through these two, on
+// a worker (fetchSaves below for a launch; the game's page for its own line):
+// the person is handed in, as the worker's threads do not read the current
+// one.
+bool savesFor(romm::Client& client, const storage::User& u, int romId,
+              std::vector<romm::Asset>* rows, std::string* err) {
     if (!romm::serverAway()) {
         const uint64_t asked = savemirror::mark();
         if (client.fetchSaves(romId, rows, err)) {
@@ -36,9 +38,8 @@ bool savesFor(romm::Client& client, int romId, std::vector<romm::Asset>* rows,
     return false;
 }
 
-std::vector<uint8_t> saveBytesFor(romm::Client& client, int romId,
+std::vector<uint8_t> saveBytesFor(romm::Client& client, const storage::User& u, int romId,
                                   const romm::Asset& row) {
-    const storage::User& u = storage::currentUser();
     if (!romm::serverAway()) {
         std::vector<uint8_t> b = client.fetchAsset("saves", row.id);
         if (!b.empty()) {
@@ -48,6 +49,62 @@ std::vector<uint8_t> saveBytesFor(romm::Client& client, int romId,
         if (!romm::serverAway()) return b;
     }
     return savemirror::getBytes(u, romId, row);
+}
+
+// THE WORKER'S HALF OF EVERY RESTORE (#481, LAUNCH-17): the rows, then the
+// bytes of each row a restore may pick, chosen as the restores choose below
+// (the newest under the tag: of any kind for a folder save, in each region for
+// a file save and the battery), so whichever each takes is there. Until this,
+// each restore asked RomM on the frame thread behind the curtain, and a server
+// that was slow or hung held a black screen with no way out.
+void fetchSaves(romm::Client& client, const storage::User& user, int romId, const char* tag,
+                const std::atomic<bool>* cancel, SaveFetch* out) {
+    *out = SaveFetch{};
+    out->romId = romId;
+    if (!tag || !client.haveToken()) return;
+    out->asked = true;
+    out->mark = savemirror::mark();
+    out->listed = savesFor(client, user, romId, &out->rows, &out->error);
+    if (!out->listed) return;
+    const romm::Asset* any = nullptr;
+    std::map<std::string, const romm::Asset*> inRegion;
+    for (const romm::Asset& a : out->rows) {
+        if (a.emulator != tag) continue;
+        if (!any || a.updatedAt > any->updatedAt) any = &a;
+        const romm::Asset*& r = inRegion[regionOfRow(a.fileName)];
+        if (!r || a.updatedAt > r->updatedAt) r = &a;
+    }
+    std::vector<const romm::Asset*> pick;
+    if (any) pick.push_back(any);
+    for (const auto& [region, a] : inRegion)
+        if (a != any) pick.push_back(a);
+    for (const romm::Asset* a : pick) {
+        if (cancel && cancel->load()) return;
+        out->bytes[a->id] = saveBytesFor(client, user, romId, *a);
+    }
+}
+
+// THE ROWS WERE FETCHED BEFORE A SAVE OF THIS GAME LEFT THIS CONSOLE. The
+// upload queue forgets the game's copy as each save lands (uploader.cpp,
+// refreshSaveCopy), so one landing after the worker's mark makes the fetched
+// rows older than what this console just sent: a game left and started again
+// at once, its save still on its way up when the worker asked and there by the
+// time the curtain was down. The console's own copy stands, as it would have
+// had the upload still been owed; asked again, the server would only hand
+// that copy back.
+static bool fetchIsStale(const SaveFetch& f) {
+    if (!savemirror::forgottenSince(f.romId, f.mark)) return false;
+    std::fprintf(stderr, "[save] a save of this game reached the server after its rows were "
+                 "fetched; this console's copy is the newer\n");
+    return true;
+}
+
+// The row's bytes as the worker fetched them; empty when it got none, which
+// reads as the row coming back empty, as a failed fetch always has.
+static const std::vector<uint8_t>& fetchedBytes(const SaveFetch& f, const romm::Asset& row) {
+    static const std::vector<uint8_t> none;
+    const auto it = f.bytes.find(row.id);
+    return it == f.bytes.end() ? none : it->second;
 }
 
 // A DIRECTORY SAVE COMES DOWN before the game starts: the newest zip RomM
@@ -60,9 +117,11 @@ std::vector<uint8_t> saveBytesFor(romm::Client& client, int romId,
 // and Dolphin does the rest at boot. Only when the folder does not exist yet,
 // and never over a card already on this console: that one is at least as new,
 // and Dolphin reads it in itself.
-void restoreDirSave(romm::Client& client, int romId, const char* tag,
-                    const std::string& root, const std::string& title,
-                    const std::string& oldCard) {
+//
+// From what the launch worker fetched (fetchSaves); nothing is asked here.
+void restoreDirSave(const SaveFetch& fetched, const char* tag, const std::string& root,
+                    const std::string& title, const std::string& oldCard) {
+    const int romId = fetched.romId;
     // NOT OVER A SAVE THIS CONSOLE HAS NOT SENT YET. The zip syncDirSave made
     // is newer than anything the server holds until its upload lands, and
     // unpacking the server's older one would write over it. Found 2026-09-29:
@@ -90,16 +149,14 @@ void restoreDirSave(romm::Client& client, int romId, const char* tag,
                      name.c_str());
         return;
     }
-    std::vector<romm::Asset> saves;
-    std::string serr;
-    if (!savesFor(client, romId, &saves, &serr)) return;
+    if (!fetched.listed || fetchIsStale(fetched)) return;
     const romm::Asset* newest = nullptr;
-    for (const auto& a : saves) {
+    for (const auto& a : fetched.rows) {
         if (a.emulator != tag) continue;
         if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
     }
     if (!newest) return;
-    std::vector<uint8_t> data = saveBytesFor(client, romId, *newest);
+    const std::vector<uint8_t>& data = fetchedBytes(fetched, *newest);
     // SNIFFED, never taken from the name. The reference implementation's PSP
     // saves are an Apple directory archive wearing an `.srm` extension, so the
     // filename says nothing at all about what is inside. Anything that is not
@@ -322,18 +379,22 @@ std::string regionOfRow(const std::string& fileName) {
 // launch after an offline session would fetch the older copy and write it over
 // the top. Otherwise the server's own row wins, because that is how a card
 // made on another device arrives. Failing both, whatever is on this disk plays.
+//
+// The server's rows are what the launch worker fetched (fetchSaves); nothing
+// is asked here.
 std::vector<cab::FileSaveState> restoreFileSaves(
         const std::vector<catalog::SaveFile>& specs, const std::string& fsStem,
-        const std::string& saveDir, int romId, const char* tag,
-        romm::Client& client) {
+        const std::string& saveDir, const char* tag, const SaveFetch& fetched) {
     std::vector<cab::FileSaveState> out;
     if (specs.empty()) return out;
 
+    const int romId = fetched.romId;
     std::vector<romm::Asset> rows;
-    if (tag && client.haveToken()) {
-        std::string err;
-        if (!savesFor(client, romId, &rows, &err))
-            std::fprintf(stderr, "[save] could not ask the server: %s\n", err.c_str());
+    if (tag && fetched.asked) {
+        if (!fetched.listed)
+            std::fprintf(stderr, "[save] could not ask the server: %s\n", fetched.error.c_str());
+        else if (!fetchIsStale(fetched))
+            rows = fetched.rows;
     }
     const storage::User& user = storage::currentUser();
 
@@ -397,7 +458,7 @@ std::vector<cab::FileSaveState> restoreFileSaves(
                 if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
             }
             if (newest) {
-                std::vector<uint8_t> data = saveBytesFor(client, romId, *newest);
+                const std::vector<uint8_t>& data = fetchedBytes(fetched, *newest);
                 // A row that holds nothing a game wrote does not get to
                 // replace one that does. Three of the thirteen Dreamcast cards
                 // on the reference server are formatted and empty, uploaded by
@@ -412,7 +473,7 @@ std::vector<cab::FileSaveState> restoreFileSaves(
                                  "[save] %s holds no save — keeping this console's copy\n",
                                  newest->fileName.c_str());
                 } else {
-                    chosen = std::move(data);
+                    chosen = data;
                     from = "the server";
                 }
             }
@@ -561,8 +622,10 @@ void syncSave(GameSession& sess, Uploader& up) {
 // restoreFileSaves and restoreDirSave keep (pending.h, isPending), and
 // what RetroArch does: the frontend loads the local `.srm`.
 // Stage 8 of a launch (launch.cpp), after the load and before the first frame.
+// RomM's rows are what the launch worker fetched (fetchSaves); nothing is
+// asked here.
 void restoreBatterySave(cab::Core& core, GameSession& session, const std::string& saveDir,
-                        const storage::User& user, romm::Client& client) {
+                        const storage::User& user, const SaveFetch& fetched) {
     if (core.saveRamSize() > 0) {
         const std::string name = saveRowName(session.fsStem, std::string(), "srm");
         const std::vector<uint8_t> local = cab::readBytes(saveDir + "/" + name);
@@ -572,12 +635,10 @@ void restoreBatterySave(cab::Core& core, GameSession& session, const std::string
         if (owed) {
             std::fprintf(stderr, "[save] %s has not reached the server yet - it wins\n",
                          name.c_str());
-        } else if (!session.saveTag.empty()) {
-            std::vector<romm::Asset> saves;
-            std::string serr;
-            if (savesFor(client, session.romId, &saves, &serr)) {
+        } else if (!session.saveTag.empty() && fetched.asked) {
+            if (fetched.listed && !fetchIsStale(fetched)) {
                 const romm::Asset* newest = nullptr;
-                for (const auto& a : saves) {
+                for (const auto& a : fetched.rows) {
                     if (a.emulator != session.saveTag) continue;
                     // THE BATTERY ROW ONLY. Cabinet files a Game Boy
                     // clock as its own 8-byte `.rtc` row under the same
@@ -587,8 +648,7 @@ void restoreBatterySave(cab::Core& core, GameSession& session, const std::string
                     if (!newest || a.updatedAt > newest->updatedAt) newest = &a;
                 }
                 if (newest) {
-                    std::vector<uint8_t> data =
-                        saveBytesFor(client, session.romId, *newest);
+                    const std::vector<uint8_t>& data = fetchedBytes(fetched, *newest);
                     if (!data.empty() && core.writeSaveRam(data)) {
                         session.saveAtLaunch = data;
                         fromServer = true;
@@ -596,8 +656,9 @@ void restoreBatterySave(cab::Core& core, GameSession& session, const std::string
                                      newest->fileName.c_str(), data.size());
                     }
                 }
-            } else {
-                std::fprintf(stderr, "[save] could not ask the server: %s\n", serr.c_str());
+            } else if (!fetched.listed) {
+                std::fprintf(stderr, "[save] could not ask the server: %s\n",
+                             fetched.error.c_str());
             }
         }
         if (!fromServer && !local.empty() && core.writeSaveRam(local)) {
