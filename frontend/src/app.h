@@ -1568,6 +1568,10 @@ struct App {
         std::string address;  // the Remote paired, once done
         bool fresh = false, done = false;
         std::atomic<bool> stop{false};
+        // Until the worker has returned. A pairing cannot be stopped half
+        // way, so Back leaves it to finish behind the panel (#481,
+        // SETTINGS-23), and a new window waits for it.
+        std::atomic<bool> running{false};
         std::thread th;
         void quit() {
             stop = true;
