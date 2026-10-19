@@ -87,7 +87,7 @@ bool sessionOpen();
 
 // END THE SESSION, as Quit in Moonlight does (Sunshine's POST
 // /api/apps/close): a device still connected is told the stream ended, and
-// Sunshine runs `ended`. For the screen going out (#294, main.cpp idleFrame):
+// Sunshine runs `ended`. For the screen going out (#294, startup.cpp, idleFrame):
 // a session left open over a sleeping screen streams black to whoever joins
 // it next. Blocks for the call, up to four seconds: call it on a worker.
 bool endSession();
@@ -117,7 +117,7 @@ bool remove(const std::string& deviceId, std::string* why);
 // A STOPGAP: Sunshine fixed it itself in v2026.1007.173111, a pre-release
 // (a completed pairing replaces every record with the same certificate,
 // LizardByte/Sunshine#5696). When the pin moves to a stable release with
-// that fix, delete this and its use in main.cpp. Until then a phone pairing
+// that fix, delete this and its use in remoteplayflow.cpp. Until then a phone pairing
 // again can fail once, if Moonlight checks before the console has tidied.
 std::vector<std::string> samePairedDevice(const std::string& deviceId);
 // Give a paired device another name. The console's alone (see Device).

@@ -1,13 +1,12 @@
 #include "server.h"
 
-#include <dirent.h>
-
 #include <cstdio>
 #include <cstdlib>
 
 #include "accounts.h"
 #include "covercache.h"
 #include "firstrun.h"
+#include "pending.h"
 #include "romm.h"
 #include "storage.h"
 
@@ -65,13 +64,7 @@ bool changeAddress(const std::string& from, const std::string& to, std::string* 
 
 int unsentSaves() {
     int n = 0;
-    for (const storage::User& u : storage::knownUsers()) {
-        DIR* d = ::opendir(storage::pendingDir(u).c_str());
-        if (!d) continue;
-        while (struct dirent* f = ::readdir(d))
-            if (f->d_name[0] != '.') ++n;
-        ::closedir(d);
-    }
+    for (const storage::User& u : storage::knownUsers()) n += cache::pendingCount(u);
     return n;
 }
 

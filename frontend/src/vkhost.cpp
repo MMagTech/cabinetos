@@ -106,8 +106,26 @@ void RETRO_CALLCONV setCommandBuffers(void* handle, uint32_t numCmd,
     }
 }
 
+// UNDER THE QUEUE LOCK (#483, EMU-05). vkDeviceWaitIdle needs every queue of
+// the device externally synchronised, and present() submits to the same queue
+// on the GL thread; Mesa's waits by submitting to the queue, so the two could
+// submit at once. paraLLEl-RDP's own device wait does the same (Granite's
+// Device::wait_idle_nolock, under its queue lock callback).
+//
+// IT CANNOT DEADLOCK THE CORES WE RUN ON VULKAN, read in their sources at the
+// pinned commits (2026-10-19): Dolphin (1a0f972, DolphinLibretro/Vulkan.cpp),
+// PPSSPP (c989c25, VulkanFrameData.cpp, VulkanContext.cpp), Flycast (a172e00,
+// vk_context_lr.h) and Mupen64Plus-Next's paraLLEl-RDP (f275caf, rdp.cpp,
+// device.cpp) hold lock_queue only around one submit or one idle wait, never
+// while calling wait_sync_index (from their image acquire, or paraLLEl's
+// begin_frame), and all hand set_image no semaphores, so present() holds the
+// lock only over GPU work already submitted. A new Vulkan core is checked the
+// same way. RetroArch's own wait_sync_index is empty (gfx/drivers/vulkan.c,
+// read at 07bd4ca): it waits in its swap instead, as present() does here.
 void RETRO_CALLCONV waitSyncIndex(void* handle) {
-    if (gDevice && gApi.deviceWaitIdle) gApi.deviceWaitIdle(gDevice);
+    if (!gDevice || !gApi.deviceWaitIdle) return;
+    std::lock_guard<std::mutex> lk(gQueueLock);
+    gApi.deviceWaitIdle(gDevice);
 }
 
 void RETRO_CALLCONV lockQueue(void* handle) { gQueueLock.lock(); }

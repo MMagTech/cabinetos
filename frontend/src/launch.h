@@ -1,7 +1,7 @@
 // A launch: the job a Play or a Download press starts, and the call that
 // starts it. beginLaunch (launch.cpp) does the frame thread's half and starts
-// a worker that fetches the game (launch_routes.cpp); main() owns the one
-// LaunchJob and reads it every frame. Moved out of main.cpp in the
+// a worker that fetches the game (launch_routes.cpp); the App owns the one
+// LaunchJob (app.h) and reads it every frame. Moved out of main.cpp in the
 // restructure (#398).
 
 #pragma once
@@ -138,12 +138,12 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                  const std::string& coreDir, std::string* err,
                  bool playWhenReady = true, bool keepWhenReady = false);
 
-// --ps2-upscale and --ps2-aniso, from main()'s argument parser. The two values
+// --ps2-upscale and --ps2-aniso, from the command line (cli.cpp). The two values
 // live in launch.cpp, the only place that reads them; see the comment there.
 void setPs2Upscale(float upscale);
 void setPs2Anisotropy(int anisotropy);
-// --ps2-copy, defined in main.cpp beside the PS2 window and set by the
-// command line (cli.cpp).
+// --ps2-copy, defined beside the PS2 window (ps2window.cpp), which reads it,
+// and set by the command line (cli.cpp).
 extern bool gPs2Copy;
 
 // beginLaunch's worker, in launch_routes.cpp, run on job.worker and called by

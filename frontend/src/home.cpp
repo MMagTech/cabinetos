@@ -9,7 +9,7 @@
 #include "catalog.h"
 #include "screenparts.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // ASKED, NOT REMEMBERED. These were constants worked out once at startup,
 // and switching accounts replaces the library underneath them: a console
@@ -106,17 +106,13 @@ void App::settleFocus() {
     }
 }
 
-// THE HERO'S TWO ACTIONS, AND THEY MUST NOT COLLAPSE INTO ONE.
+// HOME'S TWO ACTIONS, AND THEY MUST NOT COLLAPSE INTO ONE.
 //
-// Resume — the pill — goes straight into the game, with the previous
-// choices already made. The ARTWORK opens the launch screen, which is where
-// a different state, a different core or an export is chosen. Cabinet's own
-// comment on this: stopping at a screen with a Play button on it is two
-// actions, not one, and Home promises one.
-//
-// Until this session the artwork launched too, because there was no launch
-// screen for it to open and doing nothing at all was worse. There is one
-// now, so the distinction is real.
+// The first card on Recent is Resume and goes straight into the game, with
+// the previous choices already made. Every other card opens its launch
+// screen, which is where a different state is chosen. Cabinet's own comment
+// on this: stopping at a screen with a Play button on it is two actions, not
+// one, and Home promises one.
 void App::activateHome() {
     // THE FIRST CARD ON RECENT IS RESUME, and it goes straight into the
     // game. This used to be a pill on the hero, and the objection recorded
@@ -169,17 +165,10 @@ void App::moveFocus(int delta) {
 }
 
 void App::moveRow(int delta) {
-    int row = focusRow;
-    // Step over a row that is not there — no Favorites, or no hero —
-    // rather than stopping on nothing.
-    for (int i = 0; i < 4; ++i) {
-        const int candidate = row + delta;
-        if (candidate < RowRecent || candidate > RowFavorites) return;
-        row = candidate;
-        if (rowExists(row)) break;
-        if (row == RowFavorites) return;
-    }
-    if (row == focusRow || !rowExists(row)) { sound::play(sound::Cue::Edge); return; }
+    // Two rows: past either end, or onto one that is not there (no
+    // Favorites), nothing happens, as it never did.
+    const int row = focusRow + delta;
+    if (row < RowRecent || row > RowFavorites || !rowExists(row)) return;
     // LAND ON THE COVER ABOVE OR BELOW — #126, MMagTech 2026-09-27. Each
     // row used to remember its own slot and go back to it, so Down from
     // the third cover could land on the ninth. Now it is the cover nearest
@@ -287,8 +276,7 @@ void App::drawHome(float dt, float sc) {
         scrollY.retarget(wantScroll, kFocusDuration);
     const float scroll = scrollY.value();
 
-    // ---- The hero -------------------------------------------------------
-    //
+    // ---- The shelves ----------------------------------------------------
     float shelfHeaderY = recentTop - scroll;
     screens::Ctx coverCtx{renderer, text, images, sc, &cards};
 
@@ -464,9 +452,8 @@ void App::drawHome(float dt, float sc) {
             screens::drawCover(coverCtx, card, x, y, w, h, kCoverRadius * scale, f,
                                /*rim=*/true);
 
-            // No caption here any more — the focused card's title is in
-            // the shelf header. At 158 points wide a caption truncated
-            // most titles to nothing useful anyway.
+            // No caption under the card: the focused card's title is in
+            // the shelf header.
         }
     }
         // Header, headroom, cover, headroom. No caption row: the focused

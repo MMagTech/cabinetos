@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "cache.h"
+#include "fileio.h"
 #include "storage.h"
 
 namespace covercache {
@@ -26,8 +27,8 @@ Stats gStats;
 // platform logo, a stand-in library's file on disk — and those are then never
 // cached rather than filed under a guess.
 //
-//   /assets/romm/resources/roms/15/569/cover/small.png?ts=2025-03-11 06:56:03
-//                               ^pid ^rid       ^size      ^version
+//   /assets/romm/resources/roms/1/2/cover/small.png?ts=2025-01-01 00:00:00
+//                               ^pid ^rid    ^size      ^version
 bool parse(const std::string& key, std::string* pid, std::string* rid,
            std::string* size, std::string* version) {
     const std::string marker = "/resources/roms/";
@@ -218,24 +219,28 @@ void saveTiles(const std::map<int, Tile>& tiles) {
         std::lock_guard<std::mutex> lk(gMutex);
         if (!storage::makeDirs(d)) return;
     }
-    const std::string tmp = path + ".part";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) return;
-    bool ok = true;
-    for (const auto& [id, t] : tiles) {
-        if (std::fprintf(f, "%d\t%s\t%d\t%s\n", id, t.updatedAt.c_str(),
-                         t.romCount, t.cover.c_str()) < 0) { ok = false; break; }
-    }
-    ok = ok && (std::fflush(f) == 0);
-    std::fclose(f);
-    if (!ok || std::rename(tmp.c_str(), path.c_str()) != 0) std::remove(tmp.c_str());
+    std::string text;
+    for (const auto& [id, t] : tiles)
+        text += std::to_string(id) + "\t" + t.updatedAt + "\t" + std::to_string(t.romCount) +
+                "\t" + t.cover + "\n";
+    cab::writeBytes(path, text);
 }
 
 // --- Sweep and eviction -----------------------------------------------------
 
 namespace {
 
-// Every regular file under a directory, with its size and last-used time.
+// Ends in `suffix`.
+bool endsWith(const char* name, const char* suffix) {
+    const size_t n = std::strlen(name), k = std::strlen(suffix);
+    return n >= k && std::strcmp(name + n - k, suffix) == 0;
+}
+
+// Every cover under a directory, with its size and last-used time. Not the
+// tile map, which is read at every start and rewritten only when a tile
+// changes, so it is often the oldest file here; and not a temporary another
+// thread is writing (#482, FILES-04). lstat: a link is not followed out of
+// the cache (FILES-05).
 void walk(const std::string& root, std::vector<std::string>* files,
           std::vector<struct stat>* stats) {
     DIR* d = ::opendir(root.c_str());
@@ -245,28 +250,16 @@ void walk(const std::string& root, std::vector<std::string>* files,
             continue;
         const std::string p = root + "/" + e->d_name;
         struct stat st;
-        if (::stat(p.c_str(), &st) != 0) continue;
+        if (::lstat(p.c_str(), &st) != 0) continue;
         if (S_ISDIR(st.st_mode)) { walk(p, files, stats); continue; }
         if (!S_ISREG(st.st_mode)) continue;
+        if (std::strcmp(e->d_name, "tiles.tsv") == 0 || endsWith(e->d_name, ".part") ||
+            endsWith(e->d_name, ".placing"))
+            continue;
         files->push_back(p);
         stats->push_back(st);
     }
     ::closedir(d);
-}
-
-void removeTree(const std::string& path) {
-    DIR* d = ::opendir(path.c_str());
-    if (d) {
-        while (dirent* e = ::readdir(d)) {
-            if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0)
-                continue;
-            removeTree(path + "/" + e->d_name);
-        }
-        ::closedir(d);
-        ::rmdir(path.c_str());
-        return;
-    }
-    ::remove(path.c_str());
 }
 
 }  // namespace
@@ -289,15 +282,16 @@ void sweep(const std::vector<int>& livePlatformIds) {
         if (std::strcmp(e->d_name, ".") == 0 || std::strcmp(e->d_name, "..") == 0)
             continue;
         const std::string p = base + "/" + e->d_name;
+        // A link is removed, never followed (storage::removeEntry lstats).
         struct stat st;
-        if (::stat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
+        if (::lstat(p.c_str(), &st) != 0 || !(S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)))
+            continue;
         const int id = std::atoi(e->d_name);
         if (id <= 0) continue;
         if (std::find(livePlatformIds.begin(), livePlatformIds.end(), id) !=
             livePlatformIds.end())
             continue;
-        removeTree(p);
-        ++gone;
+        if (storage::removeEntry(p)) ++gone;
     }
     ::closedir(d);
     if (gone)

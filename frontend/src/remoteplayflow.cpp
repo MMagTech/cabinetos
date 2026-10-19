@@ -10,7 +10,7 @@
 #include "prefs.h"
 #include "unit.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Remote Play on or off, as Developer access: a refusal said in the row,
 // otherwise "Turning on…" until systemd answers.

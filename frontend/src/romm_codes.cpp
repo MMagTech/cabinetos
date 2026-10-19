@@ -1,7 +1,7 @@
-// The codes RomM does not have: a Wii game's code and a Wii U game's product
-// code, read off the game's file when RomM sends none (wii.h, wiiu.h), after
-// every list of games the client fetches. Moved out of romm.cpp in the
-// restructure (#398).
+// The codes RomM does not have: a Wii or GameCube game's code and a Wii U
+// game's product code, read off the game's file when RomM sends none (wii.h,
+// wiiu.h), after every list of games the client fetches. Moved out of
+// romm.cpp in the restructure (#398).
 
 #include "romm.h"
 
@@ -20,17 +20,21 @@ void Client::fillWiiCodes(std::vector<Game>& games, size_t first) const {
             fillWiiUCode(g);
             continue;
         }
-        if (g.platformSlug != "wii" || !wii::codeFromTitleId(g.titleId).empty()) continue;
+        const bool gc = g.platformSlug == "ngc";
+        if ((g.platformSlug != "wii" && !gc) || !wii::codeFromTitleId(g.titleId).empty())
+            continue;
         bool known = false;
         std::string code = wii::rememberedCode(g.id, &known);
         if (!known) {
             const std::vector<uint8_t> head = fetchHead(g, wii::kHeaderBytes);
             // A failed read is not an answer: asked again next time.
             if (head.empty()) continue;
-            code = wii::codeFromHeader(head.data(), head.size());
+            code = gc ? wii::gameCubeCodeFromHeader(head.data(), head.size())
+                      : wii::codeFromHeader(head.data(), head.size());
             wii::rememberCode(g.id, code);
-            std::fprintf(stderr, "[wii] %s: RomM has no code; read %s off the file\n",
-                         g.name.c_str(), code.empty() ? "none" : code.c_str());
+            std::fprintf(stderr, "[%s] %s: RomM has no code; read %s off the file\n",
+                         gc ? "gamecube" : "wii", g.name.c_str(),
+                         code.empty() ? "none" : code.c_str());
         }
         if (!code.empty()) g.titleId = wii::titleIdOf(code);
     }

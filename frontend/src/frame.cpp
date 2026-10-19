@@ -12,7 +12,7 @@
 #include "powerprofile.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // The function statics in this loop stay function statics (#398, batch c):
 // run() runs once, so each is one object for the life of the process, as
@@ -46,7 +46,10 @@ void App::runFrameLoop() {
 
         // THE SCREENSHOT gamescope is writing, whenever there is one.
         pumpStandaloneShot();
-        if (watchStandalone(dt)) continue;
+        if (watchStandalone(dt)) {
+            refuseCaptureOverAnotherWindow("the emulator's");
+            continue;
+        }
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
@@ -146,7 +149,8 @@ void App::runFrameLoop() {
         menuNotice.tick(dt);
         tickRaToast(dt);
         remoteplay::answered();
-        // ---- System update: root's answers, the weekly check, the panel ----
+        // ---- Root's answers, every half second: access, Remote Play, the
+        // report, Tailscale and the update (and its weekly check) ----
         updPoll -= dt;
         tickUpdateTimer(dt);
         if (updPoll <= 0.0f) {
@@ -193,7 +197,10 @@ void App::runFrameLoop() {
         }
         retargetHomePress();
 
-        if (frameOverPs2Window()) continue;
+        if (frameOverPs2Window()) {
+            refuseCaptureOverAnotherWindow("PCSX2's");
+            continue;
+        }
 
         int dw = 0, dh = 0;
         SDL_GetWindowSizeInPixels(window, &dw, &dh);
@@ -206,11 +213,8 @@ void App::runFrameLoop() {
             }
         }
         renderer.beginFrame(dw, dh);
-        // Declared here rather than inside the Home branch: the hero's glass
-        // cannot be drawn until after presentScene, which is outside it.
-        // The top bar belongs to HOME. It used to be drawn inside the hero's
-        // block, which meant a console with nothing playable in its recent
-        // history had no way to reach Library at all.
+        // Declared here rather than inside a screen's branch: the glass, the
+        // pause menu and the bar are drawn after presentScene, outside them.
         const float sc = renderer.scale();
         // A game is on the screen: ours, or one this window is paused over
         // (standalone.h), where nothing of Home may be drawn under the menu.
@@ -267,8 +271,7 @@ void App::runFrameLoop() {
             screens::Ctx actx{renderer, text, images, sc, &cards};
             accountScreen.draw(actx);
         }
-        // The PIN pad over all of it, the panel included: it can be opened
-        // from the panel, and it covers the screen.
+        // The question panel, over the account switcher.
         if (choiceScreen.isOpen() && (!playing || overlayOpen)) {
             screens::Ctx cctx{renderer, text, images, sc, &cards};
             choiceScreen.draw(cctx);
@@ -279,6 +282,8 @@ void App::runFrameLoop() {
             raList.draw(lctx);
             renderer.setContentAlpha(1.0f);
         }
+        // The PIN pad over all of it, the panel included: it can be opened
+        // from the panel, and it covers the screen.
         if (pinScreen.isOpen() && !playing) {
             screens::Ctx pctx{renderer, text, images, sc, &cards};
             pinScreen.draw(pctx);

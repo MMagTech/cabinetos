@@ -368,7 +368,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // What is missing, and what the install will need on top: each
         // file not yet installed may cost its size again while it goes
         // in. Counted for every large file rather than by a `.pkg` name,
-        // which a PKG does not always have (standalone.cpp, isPkg).
+        // which a PKG does not always have (standalone_rpcs3.cpp, isPkg).
         std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
         int64_t fetchBytes = 0, installBytes = 0;
         for (const romm::RomFile& f : files) {
@@ -684,15 +684,28 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // server saw it, and the download answered 404.
         const std::string path =
             "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName);
+        // NO SIZE FROM RomM, NO ROOM CHECK ABOVE (#484, LAUNCH-11's other
+        // half): the same check, once, when the server declares the length.
+        bool roomAsked = expectedSize > 0, noRoom = false;
         const bool ok = client.fetchToFile(path, dest,
-            [&job](int64_t got, int64_t total) {
+            [&job, &roomAsked, &noRoom, &location, id](int64_t got, int64_t total) {
                 job.got = got;
                 job.total = total;
-                return !job.cancel.load();
+                if (!roomAsked && total > 0) {
+                    roomAsked = true;
+                    const int64_t want =
+                        total + static_cast<int64_t>(static_cast<double>(total) *
+                                                     cache::kOverheadFraction);
+                    if (cache::freeBytes(location) < want) {
+                        cache::evictUntilFree(location, want, id);
+                        noRoom = cache::freeBytes(location) < want;
+                    }
+                }
+                return !job.cancel.load() && !noRoom;
             }, &err);
         if (!ok) {
             std::fprintf(stderr, "[launch] download: %s\n", err.c_str());
-            job.message = "Couldn't download this game";
+            job.message = noRoom ? "Not enough space" : "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }

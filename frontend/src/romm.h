@@ -86,8 +86,9 @@ public:
     // credential, so it does not belong anywhere near the repository.
     bool loadToken(const std::string& path);
 
-    // Step one of pairing. Asks for read-only scopes only; anything that writes
-    // is requested separately, when something actually needs to write.
+    // Step one of pairing. Asks for the scopes in kScopes (romm_pairing.cpp):
+    // the reads, and the three writes the console makes (its saves, states
+    // and screenshots as assets, time played and favourites).
     bool beginPairing(Pairing* out, std::string* err);
 
     // Step two, called on the pairing's own interval.
@@ -183,7 +184,7 @@ public:
     //
     // PLAY HISTORY LIVES ON THE SERVER, not on the console. A game played on an
     // Apple TV is recent here the moment this console is paired, which is what
-    // makes a hero possible on a machine that has never launched anything.
+    // fills Recent on a machine that has never launched anything.
     bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
     // The games marked favourite, in RomM's title order: RomM keeps no date
@@ -203,9 +204,13 @@ public:
 
     bool fetchSaves(int romId, std::vector<Asset>* out, std::string* err);
     // Many games' saves at once (#88): RomM 5.3 takes `rom_ids` repeated, up
-    // to 500 a call. On a server that does not, it asks one game at a time.
+    // to 500 a call. When that call fails, on a server before 5.3 or for any
+    // other reason, it asks one game at a time and skips a game whose own
+    // request fails, naming it in `skipped` (its saves are unknown, not
+    // none); false when one fails before any request has answered (the
+    // server is not there).
     bool fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* out,
-                       std::string* err);
+                       std::string* err, std::vector<int>* skipped = nullptr);
     bool fetchStates(int romId, std::vector<Asset>* out, std::string* err);
 
     // `/api/saves/{id}/content` or `/api/states/{id}/content`. Small enough to
@@ -224,8 +229,9 @@ public:
                      const std::vector<uint8_t>& shot = {}) const;
 
     // Removes states, and each one's picture with it (RomM 5.1,
-    // `POST /api/states/delete`). Only the signed-in user's; RomM refuses the
-    // whole request if one id is not theirs.
+    // `POST /api/states/delete`). Only the signed-in user's. RomM deletes in
+    // order and stops at the first id that is not theirs (404), so the ones
+    // before it are gone.
     bool deleteStates(const std::vector<int>& ids, std::string* err) const;
 
     // MAKES A GAME ONE OF THIS PERSON'S FAVOURITES, OR NOT (#267). On RomM 5
@@ -276,8 +282,9 @@ public:
                      const ProgressFn& onProgress, std::string* err) const;
 
 private:
-    // Gives every Wii game in `games` from `first` on a code: RomM's, else one
-    // this console read before, else read now off the file (wii.h). And every
+    // Gives every Wii and GameCube game in `games` from `first` on a code:
+    // RomM's, else one this console read before, else read now off the file
+    // (wii.h). And every
     // Wii U game its product code, which RomM does not have (fillWiiUCode).
     void fillWiiCodes(std::vector<Game>& games, size_t first = 0) const;
     void fillWiiUCode(Game& g) const;

@@ -1,7 +1,8 @@
 // The RomM client's transport: every request goes out from here (get,
 // postJson and sendJson, postMultipart, fetchToFile, fetchBytes, fetchRange),
 // each on its own CURL handle, with the console-wide flag that says whether
-// the server is away. The client's other files (romm_pairing.cpp,
+// the server is away. One does not: setFavorite makes a person's first
+// Favorites collection on a handle of its own (romm_playdata.cpp). The client's other files (romm_pairing.cpp,
 // romm_library.cpp, romm_playdata.cpp, romm_codes.cpp) ask through these.
 // Moved out of romm.cpp in the restructure (#398).
 

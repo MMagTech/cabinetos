@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "fileio.h"
 #include "romm.h"
 #include "storage.h"
 
@@ -49,22 +50,6 @@ std::string readFile(const std::string& path) {
     while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) body.append(buf, n);
     std::fclose(f);
     return body;
-}
-
-// Write to a sibling and rename, so an interrupted write cannot leave a
-// truncated account list — the same shape `storage::writeRememberedDrives`
-// uses. `mode` is applied before the rename, so the file is never briefly
-// world-readable with a credential in it.
-bool writeFileAtomic(const std::string& path, const std::string& body, mode_t mode) {
-    const std::string tmp = path + ".part";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) return false;
-    const bool wrote = std::fwrite(body.data(), 1, body.size(), f) == body.size();
-    std::fclose(f);
-    if (!wrote) { ::unlink(tmp.c_str()); return false; }
-    ::chmod(tmp.c_str(), mode);
-    if (::rename(tmp.c_str(), path.c_str()) != 0) { ::unlink(tmp.c_str()); return false; }
-    return true;
 }
 
 bool fileExists(const std::string& path) {
@@ -149,7 +134,7 @@ bool save(const Book& b, std::string* err) {
     json_object_put(root);
 
     // Not a credential: this is the same tier as config/user.json.
-    if (!writeFileAtomic(listPath(), body, 0644)) {
+    if (!cab::writeBytes(listPath(), body, 0644)) {
         if (err) *err = "could not write " + listPath();
         return false;
     }
@@ -206,7 +191,7 @@ bool add(const Account& a, const std::string& token, std::string* err) {
         existing.name = a.name;
         existing.avatar = a.avatar;
         makeDirs0700(homeDir() + "/.config/cabinetos/accounts");
-        if (!writeFileAtomic(tokenPath(a.id), "{\"access_token\":\"" + token + "\"}\n", 0600)) {
+        if (!cab::writeBytes(tokenPath(a.id), "{\"access_token\":\"" + token + "\"}\n", 0600)) {
             if (err) *err = "could not write the token for account " + std::to_string(a.id);
             return false;
         }
@@ -214,7 +199,7 @@ bool add(const Account& a, const std::string& token, std::string* err) {
     }
 
     makeDirs0700(homeDir() + "/.config/cabinetos/accounts");
-    if (!writeFileAtomic(tokenPath(a.id), "{\"access_token\":\"" + token + "\"}\n", 0600)) {
+    if (!cab::writeBytes(tokenPath(a.id), "{\"access_token\":\"" + token + "\"}\n", 0600)) {
         if (err) *err = "could not write the token for account " + std::to_string(a.id);
         return false;
     }
@@ -384,7 +369,7 @@ bool setRaLogin(int id, const std::string& username, const std::string& token) {
     body += '\n';
     json_object_put(o);
     makeDirs0700(homeDir() + "/.config/cabinetos/accounts");
-    return writeFileAtomic(raPath(id), body, 0600);
+    return cab::writeBytes(raPath(id), body, 0600);
 }
 
 void clearRaLogin(int id) { ::unlink(raPath(id).c_str()); }
@@ -403,7 +388,7 @@ bool setPin(const std::string& pin, std::string* err) {
         return true;
     }
     makeDirs0700(homeDir() + "/.config/cabinetos");
-    if (!writeFileAtomic(pinPath(), value + "\n", 0600)) {
+    if (!cab::writeBytes(pinPath(), value + "\n", 0600)) {
         if (err) *err = "could not write " + pinPath();
         return false;
     }
@@ -419,7 +404,7 @@ bool checkPin(const std::string& pin) {
 bool forgetEveryone() {
     const std::string dir = homeDir() + "/.config/cabinetos";
     bool ok = true;
-    for (const std::string& p : {listPath(), dir + "/accounts", pinPath(), dir + "/romm.json"})
+    for (const std::string& p : {listPath(), dir + "/accounts", pinPath()})
         if (storage::exists(p) && !storage::removeEntry(p)) {
             std::fprintf(stderr, "[sign out] could not remove %s\n", p.c_str());
             ok = false;

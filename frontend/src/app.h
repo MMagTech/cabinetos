@@ -851,7 +851,14 @@ struct App {
     struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
         backStart[cab::vpad::kMaxPlayers];
     // A screenshot being written by gamescope, which takes about two seconds.
-    struct { std::string path, name; int romId = 0; int64_t size = -1; } standaloneShot;
+    // askedMs and checkedMs are SDL_GetTicks: when it was asked for, and when
+    // its size was last looked at (pumpStandaloneShot).
+    struct {
+        std::string path, name;
+        int romId = 0;
+        int64_t size = -1;
+        uint64_t askedMs = 0, checkedMs = 0;
+    } standaloneShot;
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
@@ -1855,6 +1862,7 @@ struct App {
     void pumpLeave();
     void pumpArrive();
     void refuseLaunch(const std::string& why);
+    void showWhyUnplayable(int romId);
     void startStandalone(const cab::standalone::Emulator& emu);
     static void dropPressesFromClosing();
     void finishStandalone();
@@ -2140,6 +2148,7 @@ struct App {
     void stateHooks();
     void noticeGalleryHook(float dt);
     void captureFrame(int dw, int dh);
+    void refuseCaptureOverAnotherWindow(const char* whose);
     // discrig.cpp
     void parseDiscScript();
     void runDiscScript();

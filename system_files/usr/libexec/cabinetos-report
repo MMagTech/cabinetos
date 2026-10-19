@@ -534,7 +534,7 @@ def kv(pairs):
     return "".join("%s  %s\n" % (k.ljust(width), v) for k, v in pairs)
 
 
-def journal_lines(boot, since_text=None):
+def journal_lines(boot):
     """One boot's log as (text, kept, dropped) lines, formatted and filtered."""
     args = ["journalctl", "-b", str(boot), "-o", "json", "--no-pager",
             "--output-fields=MESSAGE,SYSLOG_IDENTIFIER,_COMM,_TRANSPORT,PRIORITY,__REALTIME_TIMESTAMP"]
@@ -703,7 +703,7 @@ def section_machine():
 def section_graphics(frontend_lines):
     out = "".join(l + "\n" for l in frontend_lines
                   if l.startswith("[frontend] GL_") or l.startswith("[quality] this machine")
-                  or l.startswith("[gpu]") or l.startswith("[cpus]"))
+                  or l.startswith("[cpus]"))
     out += "\n--- vulkaninfo --summary\n" + ANSI.sub("", run(["vulkaninfo", "--summary"], timeout=20))
     return out
 
@@ -865,7 +865,7 @@ def input_devices(frontend_lines):
             out += "\n".join(l for l in block.splitlines() if l[:2] in ("I:", "N:", "U:", "H:", "P:")) + "\n\n"
     out += "--- Keyboards\n" + keyboards()
     out += "\n--- What the frontend said about controllers and keys (last 60 lines)\n"
-    lines = [l for l in frontend_lines if re.match(r"\[(players|input|wiiremote|wii|wiibridge|shortcuts|vpad|rumble|volume)\]", l)]
+    lines = [l for l in frontend_lines if re.match(r"\[(players|input|wiiremote|wii|wiibridge|shortcuts|vpad|volume)\]", l)]
     out += "".join(l + "\n" for l in lines[-60:])
     return out
 

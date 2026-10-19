@@ -245,8 +245,10 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 103, Left 105, Right 106, Return 28, Escape 1, Backspace 14) or
 `ydotool type '<server address>'`. The frontend takes a keyboard everywhere.
 
-- **The frontend's SIGUSR1 capture only works in the main loop.** First run
-  and the startup screen have loops of their own: use `gamescopectl
+- **The frontend's SIGUSR1 capture only works in the main loop, over a
+  picture it draws.** First run and the startup screen have loops of their
+  own, and during a PS2 game or one in an emulator of its own the picture is
+  another window's (the journal says `[capture] not taken`): use `gamescopectl
   screenshot` with `XDG_RUNTIME_DIR=/run/user/1000` and
   `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
   session restart leaves the old socket behind and gamescopectl fails on it.

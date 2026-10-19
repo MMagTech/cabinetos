@@ -9,7 +9,7 @@
 
 #include "batteryrow.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // CONTROLLER BATTERIES (#293, MMagTech 2026-10-08): wherever this
 // bar is (Home, Library, Search, Settings), so the bar keeps its

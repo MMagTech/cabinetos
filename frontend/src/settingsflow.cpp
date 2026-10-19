@@ -14,7 +14,7 @@
 #include "shortcuts.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // THE DRIVES' NAMES, as Storage shows them: the main drive is
 // "CabinetOS", any other internal disk "Internal", one that can be
@@ -476,8 +476,6 @@ void App::buildSettings() {
 
 
     settingsScreen.setCategories(std::move(cats));
-    if (const int p = players::playerOf(settingsLastPad); p >= 0)
-        settingsScreen.mark(kSetPad + p);
 }
 
 void App::rebuildSettingsRows() { buildSettings(); }
@@ -518,9 +516,6 @@ void App::applySetting(const screens::Result& res) {
         pressFormat(res);
     } else if (res.value >= kSetEject) {
         pressEject(res);
-    } else if (res.value == SetAddController) {
-        sound::play(sound::Cue::Activate);
-        openPadWindow();
     } else if (res.value == SetWiiRemotes) {
         sound::play(sound::Cue::Activate);
         openWiiPanel();

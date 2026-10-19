@@ -11,7 +11,11 @@
 #include "overlaywin.h"
 #include "ps2.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
+
+// --ps2-copy: PCSX2 without a window of its own, every frame copied back for
+// this window to draw, as before #226. For measuring the two side by side.
+bool gPs2Copy = false;
 
 void App::openPs2Window() {
     if (gPs2Copy || !std::getenv("GAMESCOPE_WAYLAND_DISPLAY")) return;

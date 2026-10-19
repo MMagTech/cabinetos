@@ -42,10 +42,6 @@
 volatile std::sig_atomic_t gCaptureRequested = 0;
 void requestCapture(int) { gCaptureRequested = 1; }
 
-// --ps2-copy: PCSX2 without a window of its own, every frame copied back for
-// this window to draw, as before #226. For measuring the two side by side.
-bool gPs2Copy = false;
-
 int main(int argc, char** argv) {
     // The version-bump check's frontend half (optcheck.h): before anything is
     // opened, so CI runs it with no display, no GPU and no core.

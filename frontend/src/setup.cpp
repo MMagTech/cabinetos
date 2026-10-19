@@ -171,7 +171,7 @@ private:
     void startWifiScan();
     void joinSelected(const std::string& passphrase);
     // The password keyboard for the chosen network; `why` goes in its field
-    // ("Wrong password"). Settings' Wi-Fi does the same (main.cpp).
+    // ("Wrong password"). Settings' Wi-Fi does the same (wifi.cpp).
     void openPassphrase(const std::string& why);
     void startServerProbe(const std::string& address);
     void startPairing();

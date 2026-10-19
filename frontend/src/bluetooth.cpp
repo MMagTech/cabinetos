@@ -55,7 +55,7 @@ bool looksLikeGamepad(const std::string& icon, const std::string& classText) {
 // BLUEZ USES THE ADDRESS AS THE NAME WHEN A DEVICE HAS NOT GIVEN ONE, with
 // dashes where the address has colons:
 //
-//     Device 52:BE:86:6B:D9:90 52-BE-86-6B-D9-90
+//     Device 12:34:56:78:9A:BC 12-34-56-78-9A-BC
 //
 // So a device with no name does not have an EMPTY name, it has a name that
 // looks like a name and is not one. Anything deciding whether a row is worth
@@ -170,7 +170,7 @@ Adapter adapter() {
     a.present = true;
     a.powered = field(r.out, "Powered") == "yes";
     a.name = field(r.out, "Name");
-    // "Controller 50:BB:B5:A2:33:9B (public)"
+    // "Controller 00:11:22:33:44:55 (public)"
     const size_t at = r.out.find("Controller ");
     if (at != std::string::npos && r.out.size() >= at + 11 + 17)
         a.address = r.out.substr(at + 11, 17);
@@ -274,8 +274,8 @@ bool listen(int seconds, std::vector<Device>* out, std::string* err,
     // CUT SHORT: whoever cut it is waiting (a window closing, a pairing
     // asked for), and every device heard was told to onHeard already.
     if (cancel && cancel->load()) return true;
-    // Every line about a device names it: "[NEW] Device E4:17:D8:3D:DB:BE
-    // 8BitDo Lite 2", "[CHG] Device 63:95:E1:A8:D2:1C RSSI: ...", with
+    // Every line about a device names it: "[NEW] Device AA:BB:CC:DD:EE:01
+    // 8BitDo Lite 2", "[CHG] Device AA:BB:CC:DD:EE:02 RSSI: ...", with
     // colour codes around the tag. The address after "Device " is the thing.
     std::vector<Device> heard;
     for (const std::string& line : lines(r.out)) {

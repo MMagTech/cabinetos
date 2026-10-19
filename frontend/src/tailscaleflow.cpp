@@ -9,7 +9,7 @@
 #include "prefs.h"
 #include "unit.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 bool App::tsEndsSoon(const tailscale::Status& st) {
     return st.expires != 0 && st.expires - std::time(nullptr) < kTsWarnDays * 86400;

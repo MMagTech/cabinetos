@@ -16,7 +16,7 @@
 #include "noticegallery.h"
 #include "saves.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Opening straight onto a screen, for a capture. This walks the SAME route
 // a person would: the Library is entered, a tile is opened, the launch
@@ -409,6 +409,19 @@ void App::noticeGalleryHook(float dt) {
 
 // Capture before the swap. After a swap the back buffer's contents are
 // undefined, so a readback taken there is whatever the driver left.
+// A SIGUSR1 OR DISC-SCRIPT STILL ASKED WHILE THE PICTURE IS ANOTHER
+// WINDOW'S (PCSX2's, or an emulator of its own): this frame draws nothing,
+// and a still taken later held whatever this window drew next, a menu over
+// black, long after it was asked for (#488, PLAY-10). Said and dropped;
+// gamescope's own capture takes those games (docs/lessons/testing.md).
+void App::refuseCaptureOverAnotherWindow(const char* whose) {
+    if (!gCaptureRequested) return;
+    gCaptureRequested = 0;
+    discScript.captureTo.clear();
+    std::fprintf(stderr, "[capture] not taken: the picture is %s own window; use "
+                         "gamescopectl screenshot\n", whose);
+}
+
 void App::captureFrame(int dw, int dh) {
     if (shotMode && frame >= shotAfterFrames &&
         (!waitForPairCode || shownPairCode) &&

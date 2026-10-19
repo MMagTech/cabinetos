@@ -13,7 +13,7 @@
 #include "ps2.h"
 #include "rumble.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Every frame while a built-in game runs, after the pads are read (play.cpp).
 void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {

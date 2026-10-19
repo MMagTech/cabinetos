@@ -5,7 +5,7 @@
 #include "app.h"
 
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // What a screen asked for, and whether the app can do it. A screen never
 // reaches the disk, the network or a core; it returns one of these.

@@ -39,7 +39,7 @@
 #include "storage.h"
 #include "volume.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // The names in a folder, without . and .., or none.
 static std::vector<std::string> listNames(const std::string& dir) {

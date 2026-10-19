@@ -101,3 +101,17 @@ std::string sanitisedStem(const std::string& title) {
     while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
     return out.empty() ? "game" : out;
 }
+
+std::string rommKeptStem(const std::string& stem) {
+    std::string out;
+    for (char c : stem) {
+        const unsigned char u = static_cast<unsigned char>(c);
+        if (c == '\\' || c == '/' || c == ':' || c == '|') out += '-';
+        else if (c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '+' ||
+                 u < 0x20 || u == 0x7f)
+            continue;
+        else out += c;
+    }
+    const size_t start = out.find_first_not_of(' ');
+    return start == std::string::npos ? "game" : out.substr(start);
+}

@@ -8,7 +8,7 @@
 
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // FORMAT, from a drive's row. THREE STEPS, MMagTech 2026-09-25: the PIN
 // if set; the drive by name and size, AND WHAT IS ON IT (#236, now that

@@ -3,16 +3,19 @@
 #include <fcntl.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "accounts.h"
+#include "covercache.h"
 #include "fileio.h"
 #include "firstrun.h"
 #include "pending.h"
@@ -146,10 +149,10 @@ int firstRunWriteTest() {
         };
         const std::vector<std::string> gone = {
             r + "/roms/snes/1 - Kept.sfc",       r + "/cache/snes/2 - Cached.sfc",
-            r + "/users/1 - A/saves/snes/1/x.srm", r + "/users/1 - A/pending/1-x.srm",
+            r + "/users/1 - A/saves/snes/1/x.srm", r + "/users/1 - A/pending/1-x.srm.pending",
             r + "/covers/srv_6005/a.jpg",        r + "/config/user.json",
             r + "/config/accounts.json",         home + "/.config/cabinetos/accounts/1.json",
-            home + "/.config/cabinetos/pin",     home + "/.config/cabinetos/romm.json",
+            home + "/.config/cabinetos/pin",
             // What was learned per game, by rom id: the next server's game 1
             // is another game (FILES-12).
             r + "/games/1.json",                 r + "/games/1.facts.json",
@@ -423,10 +426,10 @@ int firstRunRules() {
 
 // What a full disk or a cut write leaves behind (#482). Every file the
 // console replaces goes through cab::writeBytes; this proves the rules it
-// promises in fileio.h, and the two callers with rules of their own on top:
-// pending markers and prefs::set. A full disk is a file size limit here
-// (RLIMIT_FSIZE, with SIGXFSZ ignored so the write fails rather than the
-// process). A power cut cannot be made headless; the fsync is read, not run.
+// promises in fileio.h, and the callers with rules of their own on top:
+// pending markers, prefs::set and the cover cache's sweeps. A full disk is a
+// file size limit here (RLIMIT_FSIZE, with SIGXFSZ ignored so the write
+// fails rather than the process). A power cut cannot be made headless; the fsync is read, not run.
 int filesTest() {
     int failures = 0;
     auto check = [&](bool ok, const char* what) {
@@ -510,6 +513,37 @@ int filesTest() {
     for (int t = 0; t < 8; ++t)
         allKept = allKept && prefs::get("files_test_" + std::to_string(t), "") == "49";
     check(allKept, "eight threads setting their own key keep every last value");
+
+    // 5. The cover cache's sweeps (FILES-04, 05): the size sweep leaves the
+    // tile map and a cover being written, and the platform sweep removes a
+    // link without following it.
+    covercache::setServer("files-test");
+    const std::string covers = covercache::dir() + "/" + storage::safeSegment("files-test");
+    const std::string pic(1000, 'c');
+    const time_t now = std::time(nullptr);
+    auto aged = [&](const std::string& p, const std::string& body, time_t age) {
+        cab::writeBytes(p, body);
+        const struct timeval tv[2] = {{now - age, 0}, {now - age, 0}};
+        ::utimes(p.c_str(), tv);
+    };
+    aged(covers + "/tiles.tsv", "1\t2025-01-01\t3\tcover\n", 1000);
+    aged(covers + "/1/old.png", pic, 100);
+    aged(covers + "/1/new.png", pic, 50);
+    aged(covers + "/1/coming.png.part", pic, 0);
+    covercache::evict(1500);
+    check(!exists(covers + "/1/old.png") && exists(covers + "/1/new.png"),
+          "the size sweep removes the least recently used cover");
+    check(exists(covers + "/tiles.tsv"), "and leaves the tile map, though it is the oldest");
+    check(exists(covers + "/1/coming.png.part"), "and a cover still being written");
+    const std::string outside = std::string(root) + "/outside";
+    cab::writeBytes(outside + "/keep.txt", std::string("keep\n"));
+    ::symlink(outside.c_str(), (covers + "/99").c_str());
+    covercache::sweep({1});
+    struct stat lst{};
+    check(::lstat((covers + "/99").c_str(), &lst) != 0,
+          "a platform the server lost goes, though its folder is a link");
+    check(exists(outside + "/keep.txt") && exists(covers + "/1/new.png"),
+          "and what the link pointed at, and a live platform, stay");
 
     storage::removeEntry(root);
     std::printf("\nfiles: %d failure%s\n", failures, failures == 1 ? "" : "s");

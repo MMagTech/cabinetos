@@ -46,6 +46,13 @@ std::string codeFromTitleId(const std::string& hex);
 std::string codeFromHeader(const unsigned char* head, size_t size);
 constexpr size_t kHeaderBytes = 64 * 1024;
 
+// A GAMECUBE GAME'S FOUR LETTERS, the same way, for one RomM has no title_id
+// for (#484, ROMM-07): without them its region, and so the folder Dolphin
+// keeps its card in, is unknown, and its saves would stay on this console.
+// The disc header's magic is GameCube's (0xC2339F3D at 0x1C), in the same
+// containers. Remembered with the Wii's codes (rememberedCode, below).
+std::string gameCubeCodeFromHeader(const unsigned char* head, size_t size);
+
 // What the console has already read, per RomM rom id, so a file is read once.
 // `*known` says whether there is an answer at all; an empty answer is one (the
 // file had no code that could be read), so it is not asked again.

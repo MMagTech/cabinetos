@@ -15,16 +15,19 @@
 //
 // --- THE PATH IS THE VERSION ------------------------------------------------
 //
-// RomM hands out cover paths with the art's own timestamp on them:
+// RomM hands out cover paths with a timestamp on them, the game row's
+// updated_at (so it moves when anything about the game changes, the art
+// included):
 //
-//   /assets/romm/resources/roms/15/569/cover/small.png?ts=2025-03-11 06:56:03
+//   /assets/romm/resources/roms/1/2/cover/small.png?ts=2025-01-01 00:00:00
 //
 // So changed art is a changed path, which becomes a different file here, and
 // the stale one is simply never asked for again. **That is why there is no TTL
 // and no revalidation.** MMagTech raised the TTL question — art that sits on
 // disk forever after a platform is deleted — and the answer is a sweep against
-// the server's own list rather than a clock; see docs/PROJECT.md question 30.
-// The sweep is NOT built yet, which is the honest state of this file.
+// the server's own list rather than a clock (sweep, below, run at start-up;
+// docs/PROJECT.md question 30); an old version of a changed picture ages out
+// by least recent use (evict).
 //
 // --- WHAT IS DELIBERATELY NOT CACHED ----------------------------------------
 //
@@ -79,7 +82,7 @@ Stats stats();
 // Which picture a platform's TILE shows, remembered between boots.
 //
 // WHY IT IS NOT A LIBRARY SNAPSHOT, since that rule is open question 22's and
-// it matters: this records "platform 15's tile shows this picture". It does
+// it matters: this records "platform 1's tile shows this picture". It does
 // not record which games exist, what they are called, or which platform they
 // are on, and nothing can be browsed from it. It is also only ever READ on a
 // boot where the platform list came back — the console exits before reaching

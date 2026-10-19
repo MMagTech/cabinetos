@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <utility>
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::askPin(const std::string& title, const std::string& detail,
                  std::function<void()> then, bool always) {
