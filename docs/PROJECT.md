@@ -261,7 +261,8 @@ down. "Look now at" is where the code or a later decision moved on.
   2026-09-29, built 2026-09-30 (#192, "New systems 4: Xbox 360 (Xenia
   Edge)"). Edge's Sign In box stays, a known gap: the upstream ask
   (has207/xenia-edge#286) closed 2026-10-06 without the option. FSR for the
-  720p picture was tried on the TV 2026-10-18 and not shipped. Look now at:
+  720p picture was tried on the TV 2026-10-18 and not shipped. Multi-disc
+  (#339) was counted and set aside 2026-10-18. Look now at:
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
@@ -15768,6 +15769,50 @@ the rest is recorded here):
   console passes. Upstream first if it comes back from a player; our
   fallback would be `--guest_scheduler=false` for every game, measured on
   the A9 first.
+
+#### Multi-disc, issue #339: counted and set aside, 2026-10-18
+
+#339 is "Multi-disc on Xbox 360 (Xenia Edge)". Its recorded plan was (1)
+count the library, (2) check whether Edge changes discs properly, (3) fit it
+to #162's cache model. Step 1 is done; steps 2 and 3 were not started.
+
+**Counted** from libretro-database's `metadat/redump/Microsoft - Xbox
+360.dat` (DAT version 2026.10.07, 3,959 entries, about 1,950 titles once
+regions and revisions are folded): **52 titles have more than one disc, 2.7%
+of the library; 48 of them in English** (98 English releases, regions and
+revisions counted apart). The issue's "60 English titles" was high. Redump's
+own disc labels split them three ways:
+
+| Kind (Redump's label) | English titles | Which |
+|---|---|---|
+| Install disc and play disc ("Install Disc", "Content Install Disc", "Play Disc", "Game Disc") | 9 | Grand Theft Auto V, Forza Motorsport 3 (three editions) and 4, Call of Duty: Ghosts, Alien: Isolation, Saints Row IV National Treasure Edition, Guitar Hero Live, Watch Dogs |
+| One disc per mode ("Campaign", "Multiplayer", "Single Player") | 8 | Battlefield 3, Battlefield Hardline, Max Payne 3, Medal of Honor: Warfighter, Red Dead Redemption GOTY, Splinter Cell: Blacklist, and one release each of Assassin's Creed III and IV |
+| No label: the game itself decides | 30 | among them Lost Odyssey (4), Blue Dragon (3), Final Fantasy XIII (3), Star Ocean: The Last Hope (3), L.A. Noire (3; Complete Edition 4), Rage (3), Wolfenstein: The New Order (4), Mass Effect 2 and 3, Halo 4, Dead Space 2 and 3, Infinite Undiscovery, The Last Remnant, MagnaCarta 2, Metal Gear Solid V, Battlefield 4, Dragon Age: Inquisition, The Witcher 2 EE |
+
+Which of the unlabelled ones ask for a disc mid-story is not in the DAT and
+was not guessed. One Kinect title (Nat Geo TV, two volumes) completes the
+48. MMagTech's own server has 8 Xbox 360 games, none multi-disc (checked
+2026-10-12).
+
+**What Edge does**, from the 2026-09-29 reading above, not re-read at a
+newer pin: at `a7c39fa` its swap checks the disc number and lists the discs
+its own library knows with the same title id (`library/<TID>/game.toml`),
+else opens a desktop file picker; no m3u (xenia-canary#306, open).
+
+**Set aside, MMagTech 2026-10-18:** "This just seems to me like it's too
+small of a percentage of the library to even consider. Unless any of them
+are actual AAA hits, I almost say we just skip it and close it out unless
+someone brings it back up." The list does hold hits, but most of the big
+ones are the install or per-mode kind, not a swap in mid-story. Not built;
+#339 closes until someone asks for it again.
+
+**If it comes back, step 3 needs:** step 2 first (Edge's swap tried on the
+A9 with a two-disc game, and Edge's log since `a7c39fa` read for disc or
+m3u changes); each disc of a game fetched into one folder Edge's library
+scans, so its own list offers them and the desktop picker never opens; a
+separate look at the install-and-play kind, whose first disc installs data
+to the hard disk rather than being played; one save per game as #162 has
+it.
 
 ### 35. Wii (Dolphin), issue #173
 **Researched and decided with MMagTech 2026-09-30.** Research only; no code.
