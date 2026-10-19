@@ -1,5 +1,6 @@
 #include "fileio.h"
 
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -36,23 +37,42 @@ std::vector<uint8_t> readBytes(const std::string& path) {
     return out;
 }
 
-bool writeBytes(const std::string& path, const std::vector<uint8_t>& data) {
+bool writeBytes(const std::string& path, const void* data, size_t size, mode_t mode) {
     if (!makeParents(path)) return false;
     const std::string tmp = path + ".placing";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) return false;
-    const bool wrote = data.empty() ||
-                       std::fwrite(data.data(), 1, data.size(), f) == data.size();
-    const bool closed = std::fclose(f) == 0;
-    if (!wrote || !closed) {
-        ::unlink(tmp.c_str());
-        return false;
+    // A temporary left by a run that died keeps its own mode through O_TRUNC,
+    // so it goes first and the new one is made with `mode`.
+    ::unlink(tmp.c_str());
+    const int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, mode);
+    if (fd < 0) return false;
+    const char* p = static_cast<const char*>(data);
+    size_t left = size;
+    bool ok = true;
+    while (ok && left > 0) {
+        const ssize_t n = ::write(fd, p, left);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) {
+            ok = false;
+            break;
+        }
+        p += n;
+        left -= static_cast<size_t>(n);
     }
-    if (::rename(tmp.c_str(), path.c_str()) != 0) {
+    ok = ok && ::fsync(fd) == 0;
+    ok = ::close(fd) == 0 && ok;
+    if (!ok || ::rename(tmp.c_str(), path.c_str()) != 0) {
         ::unlink(tmp.c_str());
         return false;
     }
     return true;
+}
+
+bool writeBytes(const std::string& path, const std::vector<uint8_t>& data, mode_t mode) {
+    return writeBytes(path, data.data(), data.size(), mode);
+}
+
+bool writeBytes(const std::string& path, const std::string& text, mode_t mode) {
+    return writeBytes(path, text.data(), text.size(), mode);
 }
 
 bool removeFile(const std::string& path) {
@@ -80,12 +100,4 @@ std::string sanitisedStem(const std::string& title) {
     }
     while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
     return out.empty() ? "game" : out;
-}
-
-bool writeLocal(const std::string& path, const std::vector<uint8_t>& data) {
-    FILE* f = std::fopen(path.c_str(), "wb");
-    if (!f) return false;
-    const bool ok = std::fwrite(data.data(), 1, data.size(), f) == data.size();
-    std::fclose(f);
-    return ok;
 }

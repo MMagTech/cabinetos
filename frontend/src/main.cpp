@@ -85,6 +85,7 @@ int App::run(int argc, char** argv) {
                                                   .volumeTestMode = volumeTestMode,
                                                   .playtimeTestMode = playtimeTestMode,
                                                   .discTestMode = discTestMode,
+                                                  .filesTestMode = filesTestMode,
                                                   .removeAccountId = removeAccountId,
                                                   .removeAnyway = removeAnyway,
                                                   .padsSeconds = padsSeconds,

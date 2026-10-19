@@ -23,6 +23,7 @@ struct EarlyProbeOptions {
     bool volumeTestMode = false;
     bool playtimeTestMode = false;
     bool discTestMode = false;
+    bool filesTestMode = false;
     int removeAccountId = 0;
     bool removeAnyway = false;
     int padsSeconds = 0;

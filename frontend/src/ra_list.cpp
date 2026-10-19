@@ -5,6 +5,7 @@
 
 #include "ra_state.h"
 
+#include "fileio.h"
 #include "covercache.h"
 #include "storage.h"
 
@@ -53,11 +54,8 @@ void keepList(const std::string& hash, const GameList& l) {
     json_object_put(o);
     storage::makeDirs(covercache::dir() + "/achievements");
     const std::string path = listPath(hash);
-    if (FILE* f = std::fopen((path + ".part").c_str(), "wb")) {
-        std::fwrite(body.data(), 1, body.size(), f);
-        std::fclose(f);
-        std::rename((path + ".part").c_str(), path.c_str());
-    }
+    if (!cab::writeBytes(path, body))
+        std::fprintf(stderr, "[ra] could not keep the list %s\n", path.c_str());
 }
 
 void count(GameList& l) {

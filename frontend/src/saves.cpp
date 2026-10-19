@@ -175,7 +175,7 @@ void syncDirSave(GameSession& sess, Uploader& up) {
     // that only exists in a pending upload is a save that can be lost.
     const std::string name = sanitisedStem(sess.title) + ".zip";
     const std::string path = sess.saveDir + "/" + name;
-    if (!writeLocal(path, zip)) {
+    if (!cab::writeBytes(path, zip)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }
@@ -486,7 +486,7 @@ void syncFileSaves(GameSession& sess, Uploader& up) {
                 ? macSaveRowName(sess.romId, f.spec.region)
                 : saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
         const std::string local = sess.saveDir + "/" + name;
-        if (f.spec.inSystemDir && !writeLocal(local, data)) {
+        if (f.spec.inSystemDir && !cab::writeBytes(local, data)) {
             std::fprintf(stderr, "[save] could not write %s — leaving the card in %s\n",
                          local.c_str(), written.c_str());
             continue;
@@ -519,7 +519,7 @@ void syncSave(GameSession& sess, Uploader& up) {
 
     const std::string name = saveRowName(sess.fsStem, std::string(), "srm");
     const std::string path = sess.saveDir + "/" + name;
-    if (!writeLocal(path, ram)) {
+    if (!cab::writeBytes(path, ram)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }

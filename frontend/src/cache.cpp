@@ -16,6 +16,8 @@
 
 #include <json-c/json.h>
 
+#include "fileio.h"
+
 namespace cache {
 namespace {
 
@@ -480,16 +482,7 @@ bool keep(const storage::User& u, int romId, const std::string& record,
     // it is not. A half-written record is a kept game that cannot be read back,
     // which is the worst of both: the space is protected and the game is not
     // launchable offline.
-    const std::string tmp = path + ".part";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) {
-        if (err) *err = "could not write the keep record";
-        return false;
-    }
-    const bool ok = std::fwrite(record.data(), 1, record.size(), f) == record.size();
-    std::fclose(f);
-    if (!ok || ::rename(tmp.c_str(), path.c_str()) != 0) {
-        ::unlink(tmp.c_str());
+    if (!cab::writeBytes(path, record)) {
         if (err) *err = "could not write the keep record";
         return false;
     }

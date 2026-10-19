@@ -20,6 +20,7 @@
 
 #include <json-c/json.h>
 
+#include "fileio.h"
 #include "steam.h"
 #include "storage.h"
 #include "storage_internal.h"
@@ -92,13 +93,10 @@ void writeRememberedDrives(const std::vector<std::string>& drives) {
     json_object* a = json_object_new_array();
     for (const std::string& d : drives)
         json_object_array_add(a, json_object_new_string(d.c_str()));
-    const std::string tmp = drivesMemoPath() + ".part";
-    if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
-        std::fputs(json_object_to_json_string_ext(a, JSON_C_TO_STRING_PRETTY), f);
-        std::fputc('\n', f);
-        std::fclose(f);
-        ::rename(tmp.c_str(), drivesMemoPath().c_str());
-    }
+    const std::string text =
+        std::string(json_object_to_json_string_ext(a, JSON_C_TO_STRING_PRETTY)) + "\n";
+    if (!cab::writeBytes(drivesMemoPath(), text))
+        std::fprintf(stderr, "[storage] could not write %s\n", drivesMemoPath().c_str());
     json_object_put(a);
 }
 

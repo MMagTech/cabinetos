@@ -91,7 +91,7 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
 
     storage::makeDirs(sess.stateDir);
     const std::string path = sess.stateDir + "/" + name;
-    if (!writeLocal(path, st)) {
+    if (!cab::writeBytes(path, st)) {
         std::fprintf(stderr, "[state] could not write locally, not uploading\n");
         notice.say("Couldn't save the state", Tone::Problem);
         return;
@@ -110,7 +110,7 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         if (core.snapshot(rgba, w, h) && ui::encodePNG(rgba, w, h, png)) {
             shotName = stem + ".png";
             shotPath = sess.stateDir + "/" + shotName;
-            if (!writeLocal(shotPath, png)) shotPath.clear();
+            if (!cab::writeBytes(shotPath, png)) shotPath.clear();
             std::fprintf(stderr, "[state] picture %ux%u, %zu bytes\n", w, h, png.size());
         } else {
             png.clear();
@@ -168,7 +168,7 @@ void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         storage::screenshotsDir(storage::currentUser()) + "/" + std::to_string(sess.romId);
     storage::makeDirs(dir);
     const std::string path = dir + "/" + name;
-    if (!writeLocal(path, png)) {
+    if (!cab::writeBytes(path, png)) {
         notice.say("Couldn't save the screenshot", Tone::Problem);
         return;
     }

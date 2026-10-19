@@ -42,6 +42,7 @@ TESTS=(
     --playtime-test
     --disc-test
     --same-names-test
+    --files-test
 )
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

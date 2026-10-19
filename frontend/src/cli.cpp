@@ -206,6 +206,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
                                                  : -1;
         } else if (SDL_strcmp(argv[i], "--disc-test") == 0) {
             discTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--files-test") == 0) {
+            filesTestMode = true;
         } else if (SDL_strcmp(argv[i], "--load-state") == 0 && i + 1 < argc) {
             loadStateAfter = SDL_atoi(argv[++i]);
         } else if (SDL_strcmp(argv[i], "--sync-test") == 0) {

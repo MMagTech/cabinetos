@@ -214,7 +214,8 @@ int64_t treeBytes(const std::string& path);
 bool exists(const std::string& path);
 
 // Deletes a file or a whole directory. True when it is gone. For signing out,
-// which clears a server's games and people; nothing else should need it.
+// which clears a server's games and people, and for --files-test's scratch
+// root; nothing else should need it.
 bool removeEntry(const std::string& path);
 
 }  // namespace storage

@@ -363,6 +363,8 @@ struct App {
     // checks disc.h's rules with no core and no server.
     std::string discScriptText;
     bool discTestMode = false;
+    // --files-test: what survives a full disk, through cab::writeBytes (#482).
+    bool filesTestMode = false;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;

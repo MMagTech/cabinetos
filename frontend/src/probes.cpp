@@ -595,6 +595,7 @@ std::optional<int> earlyProbe(const EarlyProbeOptions& o) {
     const bool volumeTestMode = o.volumeTestMode;
     const bool playtimeTestMode = o.playtimeTestMode;
     const bool discTestMode = o.discTestMode;
+    const bool filesTestMode = o.filesTestMode;
     const int removeAccountId = o.removeAccountId;
     const bool removeAnyway = o.removeAnyway;
     const int padsSeconds = o.padsSeconds;
@@ -622,6 +623,7 @@ std::optional<int> earlyProbe(const EarlyProbeOptions& o) {
     if (volumeTestMode) return volume::test();
     if (playtimeTestMode) return playtime::test();
     if (discTestMode) return disc::test();
+    if (filesTestMode) return filesTest();
     // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
     // Remove runs, for a test on a console whose PIN the tester does not
     // have. When something is still owed it says what Remove would ask and
