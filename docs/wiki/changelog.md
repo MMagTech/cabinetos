@@ -4,6 +4,38 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.19.3 {#v2026-10-19-3}
+
+*19 October 2026*
+
+- **New:** this page, on the console. Settings, **About**, **What's new**
+  shows a QR code that opens What's new; scan it with your phone, B goes
+  back. ([#329](https://github.com/MMagTech/cabinetos/issues/329))
+- **Fixed:** Wii Remotes: when one was switched back on during a game, the
+  others froze for up to a second and a half, and loading Miis from a
+  Remote briefly froze the others too. The other Remotes now keep working
+  throughout. ([#480](https://github.com/MMagTech/cabinetos/issues/480))
+- **Fixed:** pressing Play while your server was slow or not answering held
+  a black screen until it answered. The game's saves are now fetched while
+  the download is still on screen, and the picture stays alive. A drive the
+  console could not make its folder on added ten seconds to every start; it
+  no longer does. Formatting a drive full of files no longer pauses the
+  picture after the PIN. ([#481](https://github.com/MMagTech/cabinetos/issues/481))
+- **Fixed:** a game whose archive keeps its files in folders (a cue sheet
+  with its tracks in a folder beside it, or two discs whose tracks share a
+  name) could fail to start or start the wrong disc. Its folders are kept
+  now. ([#482](https://github.com/MMagTech/cabinetos/issues/482))
+- **Fixed:** an original-Xbox game that another person's game left its saves
+  on said "Couldn't start this game" until that person played it again.
+  Their saves are now kept for them and sent as them the next time the
+  console acts as them, and the game starts for you on your own saves.
+  ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** opening Steam no longer waits on the console's background
+  tasks: once your saves are sent, the switch goes ahead within two
+  seconds. A separate pause of about 25 seconds that sometimes happens
+  while the screen changes over is not fixed yet.
+  ([#305](https://github.com/MMagTech/cabinetos/issues/305))
+
 ## 2026.10.19.2 {#v2026-10-19-2}
 
 *19 October 2026*
