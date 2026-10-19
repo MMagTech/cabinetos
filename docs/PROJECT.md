@@ -17838,7 +17838,9 @@ second pointer, tapped with R2. So a game on Sony's list may still need a
 tap: Sony judged it playable with the pointer. Wikipedia's Vita lists carry
 Sony's list as a PS TV column, sourced to Sony Japan's software search and
 the US store's "PS Vita Games (for PS TV)": 1,075 Yes, 569 No, 16 Partial of
-1,664 rows. By name, not title ID.
+1,664 rows. By name, not title ID: Sony's full list lived in a PS Store
+category (`STORE-MSF77008-PSTVCOMPATIBLE`), and no copy keyed by title ID
+was found.
 
 **What reaches Vita3K today: no touch at all.** Every emulator of its own
 gets the console's virtual pads, which carry neither a touch pad nor motion
@@ -17916,7 +17918,10 @@ Blog and Wikipedia (the game's own manuals are encrypted, above).
   "sensor missing".
 - **A Wii-style greying rule needs data,** as GameTDB is for Wii; nothing
   says which Vita games need motion, so "needs motion" could not be told
-  from "needs touch". Sony's list leaves the motion games out already.
+  from "needs touch". Sony's list leaves the motion games out already:
+  the PS TV had no gyroscope for Vita games at all (Wikipedia's PS TV
+  article, citing Sony's 2013 announcement), so every listed game plays
+  without motion.
 - **Could a DualSense unlock them?** Vita3K takes motion from any SDL pad
   reporting both sensors (`ctrl.cpp:102-108`, Vita3K PR #2628, 2023-09-02),
   and a DualSense does. But the virtual pads carry none, and SDL 3.4.16 pairs
