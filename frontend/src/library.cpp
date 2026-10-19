@@ -485,15 +485,11 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
             lib.favorites.push_back(appendGame(lib, g));
         }
         // KEPT FOR OFFLINE (#88): this person's favourites, in order, so the
-        // offline Home shows the ones on the drive. `favorites.json` in their
-        // folder.
+        // offline Home shows the ones on the drive (favorites.cpp).
         if (const storage::User& who = storage::currentUser(); who.valid()) {
-            json_object* arr = json_object_new_array();
-            for (const auto& g : favs) json_object_array_add(arr, json_object_new_int(g.id));
-            const std::string path = storage::userDir(who) + "/favorites.json";
-            const std::string tmp = path + ".part";
-            if (json_object_to_file(tmp.c_str(), arr) == 0) ::rename(tmp.c_str(), path.c_str());
-            json_object_put(arr);
+            std::vector<int> ids;
+            for (const auto& g : favs) ids.push_back(g.id);
+            keepFavorites(who, std::move(ids));
         }
         std::fprintf(stderr, "[library] %zu favourites\n", lib.favorites.size());
     }
@@ -550,18 +546,10 @@ Library offlineLibrary() {
     // FAVORITES: this person's, as last seen online, that are on the drive,
     // in their order (MMagTech, 2026-10-05). None on the drive: no shelf, as
     // online with none.
-    if (const storage::User& who = storage::currentUser(); who.valid()) {
-        if (json_object* arr = json_object_from_file(
-                (storage::userDir(who) + "/favorites.json").c_str())) {
-            if (json_object_is_type(arr, json_type_array))
-                for (size_t i = 0; i < json_object_array_length(arr); ++i) {
-                    const int id = json_object_get_int(json_object_array_get_idx(arr, i));
-                    if (auto it = lib.byRomId.find(id); it != lib.byRomId.end())
-                        lib.favorites.push_back(it->second);
-                }
-            json_object_put(arr);
-        }
-    }
+    if (const storage::User& who = storage::currentUser(); who.valid())
+        for (const int id : favoriteList(who))
+            if (auto it = lib.byRomId.find(id); it != lib.byRomId.end())
+                lib.favorites.push_back(it->second);
     for (auto& [pid, idxs] : byPlatform) {
         screens::Tile tile;
         tile.id = pid;

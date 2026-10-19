@@ -2,6 +2,7 @@
 
 #include <json-c/json.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
@@ -14,9 +15,40 @@
 // at once; what the server still has to hear is kept per person in
 // `favorites-owed.json`, rom id to wanted state, and sent by the uploader
 // whenever it sends anything owed. The last press wins: pressing twice while
-// the server is away leaves nothing to send. Locked: the frame thread writes
-// it and the uploader's worker reads it.
-static std::mutex gFavOwedMutex;
+// the server is away leaves nothing to send.
+//
+// THE PERSON'S LIST, `favorites.json` (#88): their favourites in Home's
+// order, rom ids, kept for the offline Home and a game page's heart. This
+// file is its only reader and writer (#405).
+//
+// ONE LOCK FOR BOTH FILES (#405): the frame thread presses, the uploader's
+// worker sends, and loadLibrary rewrites the list on the online reload's
+// worker as well as on the frame thread. Each change is made whole under the
+// lock, so two writers never share the `.part` file, and a press during a
+// reload is not written over by the list the reload read before it.
+static std::mutex gFavMutex;
+
+static std::string listPath(const storage::User& u) { return storage::userDir(u) + "/favorites.json"; }
+
+static std::vector<int> listLocked(const storage::User& u) {
+    std::vector<int> ids;
+    if (json_object* arr = json_object_from_file(listPath(u).c_str())) {
+        if (json_object_is_type(arr, json_type_array))
+            for (size_t i = 0; i < json_object_array_length(arr); ++i)
+                ids.push_back(json_object_get_int(json_object_array_get_idx(arr, i)));
+        json_object_put(arr);
+    }
+    return ids;
+}
+
+static void putListLocked(const storage::User& u, const std::vector<int>& ids) {
+    json_object* arr = json_object_new_array();
+    for (int id : ids) json_object_array_add(arr, json_object_new_int(id));
+    const std::string path = listPath(u);
+    const std::string tmp = path + ".part";
+    if (json_object_to_file(tmp.c_str(), arr) == 0) ::rename(tmp.c_str(), path.c_str());
+    json_object_put(arr);
+}
 
 static std::map<int, bool> favOwedLocked(const storage::User& u) {
     std::map<int, bool> m;
@@ -41,15 +73,36 @@ static void putFavOwedLocked(const storage::User& u, const std::map<int, bool>& 
 }
 
 std::map<int, bool> favOwed(const storage::User& u) {
-    std::lock_guard<std::mutex> lock(gFavOwedMutex);
+    std::lock_guard<std::mutex> lock(gFavMutex);
     return favOwedLocked(u);
 }
 
-void oweFavorite(const storage::User& u, int romId, bool on) {
-    std::lock_guard<std::mutex> lock(gFavOwedMutex);
+std::vector<int> favoriteList(const storage::User& u) {
+    std::lock_guard<std::mutex> lock(gFavMutex);
+    return listLocked(u);
+}
+
+void pressFavorite(const storage::User& u, int romId, bool on) {
+    std::lock_guard<std::mutex> lock(gFavMutex);
+    std::vector<int> ids = listLocked(u);
+    ids.erase(std::remove(ids.begin(), ids.end(), romId), ids.end());
+    if (on) ids.insert(ids.begin(), romId);
+    putListLocked(u, ids);
     std::map<int, bool> m = favOwedLocked(u);
     m[romId] = on;
     putFavOwedLocked(u, m);
+}
+
+void keepFavorites(const storage::User& u, std::vector<int> ids) {
+    std::lock_guard<std::mutex> lock(gFavMutex);
+    // What is owed is read again here, under the lock, rather than trusted
+    // from when the caller fetched: a press since then wins.
+    for (const auto& [id, on] : favOwedLocked(u)) {
+        auto it = std::find(ids.begin(), ids.end(), id);
+        if (!on && it != ids.end()) ids.erase(it);
+        if (on && it == ids.end()) ids.insert(ids.begin(), id);
+    }
+    putListLocked(u, ids);
 }
 
 // Every favourite `who` owes, sent; each stops being owed once the server has
@@ -63,7 +116,7 @@ bool sendFavoritesAs(romm::Client& c, const storage::User& who, std::string* err
                                      "before favourites needed collections.write\n");
             return false;
         }
-        std::lock_guard<std::mutex> lock(gFavOwedMutex);
+        std::lock_guard<std::mutex> lock(gFavMutex);
         std::map<int, bool> m = favOwedLocked(who);
         if (auto it = m.find(romId); it != m.end() && it->second == on) m.erase(it);
         putFavOwedLocked(who, m);
@@ -98,22 +151,7 @@ void App::toggleFavorite(const screens::Result& res) {
         if (cardAt(focusRow, focusSlot)) slotAnim(slotFocus, focusRow, focusSlot).settle(1.0f);
     }
     if (const storage::User& who = storage::currentUser(); who.valid()) {
-        const std::string path = storage::userDir(who) + "/favorites.json";
-        std::vector<int> ids;
-        if (json_object* arr = json_object_from_file(path.c_str())) {
-            if (json_object_is_type(arr, json_type_array))
-                for (size_t i = 0; i < json_object_array_length(arr); ++i)
-                    ids.push_back(json_object_get_int(json_object_array_get_idx(arr, i)));
-            json_object_put(arr);
-        }
-        ids.erase(std::remove(ids.begin(), ids.end(), romId), ids.end());
-        if (on) ids.insert(ids.begin(), romId);
-        json_object* arr = json_object_new_array();
-        for (int id : ids) json_object_array_add(arr, json_object_new_int(id));
-        const std::string tmp = path + ".part";
-        if (json_object_to_file(tmp.c_str(), arr) == 0) ::rename(tmp.c_str(), path.c_str());
-        json_object_put(arr);
-        oweFavorite(who, romId, on);
+        pressFavorite(who, romId, on);
         uploader.sendFavorites();
     }
     std::fprintf(stderr, "[favorite] %d %s\n", romId, on ? "on" : "off");

@@ -1,16 +1,26 @@
-// Favourites not yet on the server (#267): rom id to wanted state, per person,
-// in favorites-owed.json. The lock is favorites.cpp's own and there is one;
-// the frame thread, the upload worker and the online reload all take it.
-// Moved out of main.cpp in the restructure (#398).
+// A person's favourites on this console: their list in Home's order
+// (favorites.json, kept for the offline Home and a game page's heart), and
+// the presses not yet on the server (#267): rom id to wanted state, in
+// favorites-owed.json. favorites.cpp is the only reader and writer of both,
+// under one lock of its own (#405); the frame thread, the upload worker and
+// the online reload all take it. Moved out of main.cpp in the restructure
+// (#398).
 
 #pragma once
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include "romm.h"
 #include "storage.h"
 
 std::map<int, bool> favOwed(const storage::User& u);
-void oweFavorite(const storage::User& u, int romId, bool on);
+// The person's list, newest first as this console knows it.
+std::vector<int> favoriteList(const storage::User& u);
+// A heart pressed: the list and what is owed change together.
+void pressFavorite(const storage::User& u, int romId, bool on);
+// The list as the server has it, written with every press not yet sent
+// applied on top (loadLibrary).
+void keepFavorites(const storage::User& u, std::vector<int> ids);
 bool sendFavoritesAs(romm::Client& c, const storage::User& who, std::string* err);
