@@ -886,6 +886,9 @@ struct App {
         std::atomic<bool> running{false}, ready{false};
         int forAccount = 0;
         Library lib;
+        bool liveOk = false;   // the live client answered at the server too
+        std::string why;       // and why not
+        bool failing = false;  // the last load came back empty (said once)
         ~OnlineLoad() { if (th.joinable()) th.join(); }
     };
     OnlineLoad onlineLoad;
