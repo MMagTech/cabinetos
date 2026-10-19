@@ -274,11 +274,13 @@ something besides `.md` files and `docs/`):
 
 **No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
 after the Warnings step of `build-frontend.yml`, on every pull request it
-runs on): each warning in a file the pull request changes is compared with
-the same file compiled at the base, by file and text, so moved code is not
-new. Only what can put a warning in a touched file is compiled again at the
-base: one touched `.cpp` took 6 seconds, and `app.h`, which 53 files
-include, 38 seconds against 80 for the whole compile in the same run
+runs on): the warnings in the files the pull request changes are compared
+with the same files compiled at the base, by their text across all those
+files, so code moved within a file or from one changed file to another is
+not new. Vendored files (`frontend/third_party/`, `frontend/src/libretro.h`)
+are not checked. Only what can put a warning in a touched file is compiled
+again at the base: one touched `.cpp` took 6 seconds, and `app.h`, which 53
+files include, 38 seconds against 80 for the whole compile in the same run
 (2026-10-18). The run's summary lists each touched file's count at the base
 and now, and every new warning. Report only for its first week, like the
 checks below.
