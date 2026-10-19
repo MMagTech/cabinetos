@@ -109,8 +109,13 @@ auto App::switchAccount(int id, std::string* why) -> bool {
         return false;
     };
 
+    // Its own words in the journal, not on the television (#485): "account
+    // 13's token would not load" is a line for whoever reads the log.
     std::string err;
-    if (!accounts::activate(id, liveClient, &err)) return refuse(err);
+    if (!accounts::activate(id, liveClient, &err)) {
+        std::fprintf(stderr, "[accounts] %s\n", err.c_str());
+        return refuse("Couldn't switch.");
+    }
     // OFFLINE (#88): the person is who accounts.json says, and Home is
     // the games on the drive, which are the console's and not anybody's
     // (MMagTech, 2026-10-05). Their saves are their own, as always.
