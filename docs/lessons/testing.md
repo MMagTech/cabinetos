@@ -160,6 +160,17 @@ the repository alone.
   to take longer than a second. **Use `--launch-after 0`.** Twenty minutes went
   on this, chasing a difference between two binaries that did not exist.
 
+- **TWO TEST HOOKS STOP SHORT OF FIRST RUN, OR GO STRAIGHT TO THE SERVER.**
+  Found by the faults step's overnight checks, 2026-10-18 (#488). `--nav`
+  walks once, just before the frame loop; first run runs its own loops
+  before that, so a walk never reaches its screens. And `--setup` writes nothing,
+  but its pairing step asks the real RomM for a device code, so `--setup
+  --setup-step pair` reaches the server at once: run it through the read-only
+  relay, which refuses that request, unless the code is what is being checked.
+  Until #488 a `--nav` walk without `--screenshot` also pressed nothing at
+  all: the start-up screen was still down over Home and every press was
+  dropped. A walk now skips that lift, as a capture always did.
+
 - **A `--frames` CAPTURE OF A LAUNCH IS TAKEN BEFORE THE GAME HAS LOADED.**
   `--frames` counts the UI's frames, thousands a second headless, and the
   capture ends the run, so `--launch <id> --launch-after 0 --frames 600

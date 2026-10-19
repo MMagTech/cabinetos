@@ -135,6 +135,13 @@ void App::openScreenForCapture() {
 // just above; walking before that pressed nothing.
 void App::walkNavScript() {
     if (navScript) {
+        // NO START-UP SCREEN FOR A WALK, as for a capture (startCurtain):
+        // navigate drops every press while it is down over Home, so a walk
+        // without --screenshot pressed nothing at all (#488).
+        if (arriving) {
+            arriving = false;
+            curtain.from = curtain.to = 0.0f;
+        }
         std::string word;
         for (const char* p = navScript;; ++p) {
             if (*p && *p != ',') { word += *p; continue; }
@@ -234,10 +241,13 @@ void App::launchHooks(float dt) {
         autoUnkeepId = 0;
         removeDownload(id);
     }
-    // Not while an emulator of its own runs: `playing` is false all through
-    // such a game, and the second launch fired over its pause menu (#488).
+    // ONCE THE FIRST GAME IS OVER, with nothing in flight: not while an
+    // emulator of its own runs (`playing` is false all through such a game,
+    // and the second launch fired over its pause menu), and not while the
+    // curtain comes down on a finished job (busy() is false there, and the
+    // game starts only when it is taken) (#488).
     if (thenLaunchId > 0 && !overlayExitDemo && !playing && !standaloneRun.active() &&
-        autoLaunchId == 0 && !launchJob.busy()) {
+        autoLaunchId == 0 && !launchJob.busy() && !launchJob.waiting()) {
         std::fprintf(stderr, "[launch] then: %d\n", thenLaunchId);
         autoLaunchId = thenLaunchId;
         thenLaunchId = 0;

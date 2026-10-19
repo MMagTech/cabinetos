@@ -144,9 +144,10 @@ SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --no-setup \
 
 Headless frames are not paced: 1,500 of them are about a second, so a
 test that waits for a game to print something needs 20,000 or more.
-`--nav` presses are dropped while the start-up screen is still down unless
-the run is a capture (`--screenshot`), and `--nav` does not reach first
-run's screens.
+`--nav <presses>` walks the screens after start-up through the same door a
+pad uses; it skips the start-up screen's lift as a capture does, or its
+presses would land on a Home nobody can see yet and be dropped. It does not
+reach first run's screens, which run before it.
 
 `--no-setup` skips first run; on a machine with no server address it shows
 a stand-in library of six made-up games. The server is the first of
@@ -162,8 +163,9 @@ television size, so a small machine can check a 4K layout. `--setup` shows
 first run on a console that is already set up, and saves no server address,
 sign-in or finish marker (`setup.h`, `dryRun`), though its pairing step asks
 the server for a real code, which expires by itself: `--setup` walked to
-the pairing step reaches your real server, so point it at the read-only
-relay. `--setup-step <name>`
+the pairing step, or `--setup --setup-step pair`, reaches your real server,
+so point it at the read-only relay, which refuses that request (a POST), unless
+a real code is what you are checking. `--setup-step <name>`
 opens it at `network`, `server`, `pair`, `controller` or `done`; Wi-Fi is
 part of `network`.
 
