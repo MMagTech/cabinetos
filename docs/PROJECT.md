@@ -17272,6 +17272,134 @@ returns the sound to the TV.
 **Open:** the volume goes back to full at every start (#351 above), on the
 default output. With headphones in at start, that is the headphones (#391, waiting, not built).
 
+#### Sound dying until a restart (#228): the 2026-10-18 failure, read from the A9's logs
+
+**Read overnight 2026-10-18, read-only**: the journal of the failing boot
+(`journalctl -b -2`), tonight's boot live, the PipeWire dump the finding
+session kept, and SDL 3.4.18's source (the A9's `SDL3-3.4.18-1.fc44`, read
+at the `release-3.4.18` tag). Nothing was changed or pressed on the console.
+The case: no sound in Spyro: Year of the Dragon at about 4:27 PM on
+2026.10.18.6, the app's stream linked to the TV and running, pw-top's ERR
+for it rising 47 a second, silence recorded from the TV's output (#228's
+comment of 2026-10-18).
+
+**What the log shows (Eastern time).** The app started at 15:53:02
+(`[sound] interface audio at 48000 Hz`) and sat on Home. 16:03:02 `[idle]
+dim -> blank after 600s without input`, 16:03:03 `[idle] display asleep:
+gamescope took it`. Nothing else touched PipeWire until the TV came back:
+16:26:31 `drm: current connector 'HDMI-A-1' disconnected`, back at 16:26:32,
+again at 16:26:37 and 16:26:38, then 16:26:44 `[idle] display awake:
+gamescope took it`. Spyro opened its sound at 16:27:25 (`[frontend] audio
+out at 44100 Hz`), and every ten-second line after it was normal (`[audio]
+30` to `54 ms waiting to play`; `sound per game frame +0.00%`, which since
+#398 reads -100.00% for a silent core, so the core made sound). PipeWire and
+WirePlumber log nothing at their default level, and the kernel logged
+nothing about sound after the probe at 15:52:57.
+
+- **The misses began at the blank.** 77,319 at the first reading (about
+  16:30 to 16:31; the dump is from 16:31) at 46.875 a second (48,000 /
+  1024) is 27.5 minutes: about 16:03:00 to 16:03:30, the blank, not the
+  TV's return.
+- **The silent stream was the one opened at start-up, never replaced.** The
+  dump of it (node 61) reads `object.serial` 61, `client.id` 60,
+  `node.loop.name` `SDLAudioP15`, `target.object`
+  `alsa_output.pci-0000_c6_00.1.hdmi-stereo`, driven by node 53. A serial
+  equal to its id is an object made before PipeWire had reused any id, and
+  tonight's boot starts the same way (the app's SDL device watcher is client
+  59; ids 60 and 61 are free now).
+- **Blanking the screen removes the TV's sound output.** Tonight's boot, read
+  at 22:30 with the screen asleep since 21:03:58: ELD `monitor_present 0`,
+  no HDMI sink, only `Dummy Output` (`auto_null`), the app's stream on it.
+  Dummy Output is pipewire-pulse's (`module-always-sink`,
+  `/usr/share/pipewire/pipewire-pulse.conf`), and pipewire-pulse runs only
+  once something speaks Pulse to it: tonight an overnight ssh session
+  started it at 21:04:26; in the failing boot it never ran
+  (`pipewire-pulse.socket` listening at 15:53:01, no `Started
+  pipewire-pulse.service`). **So from 16:03 to 16:26 the console had no
+  sound output at all.**
+- **Tonight SDL moved the app; on 2026-10-18 nothing moved it.** The app's
+  stream now is a new one (node 65, serial 139, `SDLAudioP27`,
+  `target.object` `auto_null`, ERR steady at 6): SDL replaced it when the
+  default output became Dummy Output, 28 s after the blank.
+
+**Why that is silence: SDL's "zombie" device.** When PipeWire removes a
+sink, SDL marks its device disconnected and swaps in stand-in functions;
+anything opened on the default output (both of the app's streams,
+`SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK` in `sound.cpp`, `startup.cpp` and
+`launch.cpp`) is "left on the zombie device for later migration", and moves
+only when PipeWire's `default.audio.sink` names a device SDL knows. With no
+sink there is nothing to move to. SDL's PipeWire stream stays open:
+WirePlumber relinks it (SDL leaves `node.dont-reconnect` unset; its
+`target.object` names the HDMI sink), PipeWire calls it every cycle, and
+SDL's callback mixes the app's sound into a scratch buffer and drops it (so
+the game's queue drains at the right speed and the `[audio]` and `[pace]`
+lines look normal) but never takes or hands back a PipeWire buffer
+(`ZombieGetDeviceBuf`, `ZombiePlayDevice`), so PipeWire counts a miss every
+cycle and plays silence. Spyro's stream, opened on the default at 16:27:25,
+joined the zombie too (SDL "pretends to open" a zombie device). Every
+reading of 2026-10-18 matches this, and a restart is a new process with a
+new SDL, which is why it brings the sound back.
+
+**Why the TV's return did not move it back: two candidates, not told
+apart.**
+1. **The returning sink reused the old one's PipeWire id.** SDL's PipeWire
+   backend names each device by the node's id (`PW_ID_TO_HANDLE(id)`), and
+   PipeWire gives a freed id to the next object; nothing else used PipeWire
+   in those 23 minutes. The sink at 16:31 was id 53, and the start-up sink
+   was very likely 53 too (assumed from tonight's boot, whose start-up
+   layout is the same and whose id 53 is a reused one, between the MIDI
+   ports and the camera device, beside four reused or free port ids). Two
+   devices then share one handle while the zombie is still alive, and SDL's
+   lookup of the new default (`SDL_FindPhysicalAudioDeviceByHandle`: first
+   match in a hash table, zombies not skipped) can return the zombie itself,
+   which is "already the default", so nothing moves. SDL asserts that
+   handles are unique (`SDL_AddAudioDevice`); the same family is open
+   upstream as libsdl-org/SDL#16133 ("SDL_audio.c assert in
+   SDL_AddAudioDevice when PC returns from sleep"), moved by SDL's
+   maintainer to 3.6.0.
+2. **The default arrived before SDL knew the sink.** SDL adds a new sink
+   only after a round trip to PipeWire (`hotplug_core_sync`) and looks the
+   new default up by name among the sinks it has finished adding
+   (`change_default_device`); a `default.audio.sink` that arrives first is
+   dropped and never retried.
+
+Both need the sink to vanish with no other output to fall back on, which is
+why it takes a blank (or anything else that removes the sink: restarting
+WirePlumber under the app gave the same 47 a second on 2026-10-14, testing
+lessons) and why most wakes still have sound. Earlier boots blanked and
+woke with no pipewire-pulse (00:40 to 07:06, then Battle Clash on snes9x at
+07:12; 08:32 to 10:09) and no silence was reported; not checked by ear.
+
+**Ruled out:** #280's chip power state (in force: `power_save_controller` N,
+both controllers active, no `Refused to change power state`); the image
+(2026.10.18.6 touches no sound code); volume and mute (1.00, not muted); the
+core (it made sound, above); the silent day's starved sound thread (the
+queue drained normally, so SDL's callback ran every cycle).
+
+**Not known:** whether #228's first case (2026-10-02, silence after a
+restart with the stream linked) was this too. A session start remakes the
+TV's sink within a second (testing lessons, 2026-10-11), which can leave the
+same zombie; no ERR was read that day.
+
+**The cheapest measurement.** On a boot where `systemctl --user is-active
+pipewire-pulse.service` says inactive (tonight's does not qualify: it is
+running, so Dummy Output catches the app), log `pw-mon` and `pw-metadata -m`
+on the A9 (both only watch) from before the blank to after the wake; let the
+screen blank on Home and the TV sleep, wake it, and read the app's stream in
+`pw-dump` and `pw-top`. Confirmed if the stream is still the start-up one
+(same `SDLAudioP` number and serial) with ERR rising 47 a second. The log
+then shows the old and new sink ids (equal: candidate 1) and how soon
+`default.audio.sink` was set after the new sink appeared (in the same
+instant: candidate 2 is possible). A test without the TV, `systemctl --user
+restart wireplumber` under the app, changes the console and is MMagTech's
+call.
+
+**Fix directions, not chosen or tried:** keep an output present while the
+TV sleeps, so SDL always has a default to move to (as pipewire-pulse's
+Dummy Output did tonight); have the app reopen its SDL sound when SDL
+reports the device removed or the screen wakes; SDL's own fix (#16133,
+3.6.0).
+
 ### 47. Interface sounds everywhere, and a calmer set, issue #389
 
 **Decided by MMagTech at the TV, 2026-10-14.** The interface sounds are
