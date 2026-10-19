@@ -18,7 +18,7 @@
 #
 # Usage: ci/layer-report.sh <image>        e.g. localhost/cabinetos:latest
 #
-# Run by build.yml on every image build, pull requests included.
+# Run by build.yml on every image build (pushes to main and testing).
 
 set -euo pipefail
 

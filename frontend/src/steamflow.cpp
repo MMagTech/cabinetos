@@ -9,11 +9,17 @@
 
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 bool App::runSteamJob(const std::string& busy, std::function<void()> work,
                       std::function<void()> finish) {
-    if (steamJob.th.joinable()) return false;
+    // One at a time, and a second is refused out loud (#485, SETTINGS-11):
+    // Adjust storage or Remove Steam pressed during a grow or a removal
+    // closed the panel and did nothing, with no sound.
+    if (steamJob.th.joinable()) {
+        sound::play(sound::Cue::Edge);
+        return false;
+    }
     steamJob.done = false;
     steamJob.finish = std::move(finish);
     steamJob.busy = busy;
@@ -226,6 +232,11 @@ void App::pressSteamShow() {
 }
 
 void App::pressSteam() {
+    // Not while a grow or a removal is still running, as steamPressed.
+    if (steamJob.th.joinable()) {
+        sound::play(sound::Cue::Edge);
+        return;
+    }
     // Grow it, or remove Steam: the PIN when set, once per
     // visit, as Downloads (it gives or takes space for the
     // whole console).

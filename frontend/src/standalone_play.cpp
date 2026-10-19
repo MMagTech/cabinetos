@@ -18,7 +18,7 @@
 #include "shortcuts.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // THE GAME IS ON THE DISK AND ITS EMULATOR IS ITS OWN APPLICATION: start
 // it and let it have the television. The curtain is already down, so the
@@ -26,7 +26,6 @@ using namespace design;   // NOLINT, as main.cpp names them
 // what every launch looks like. gamescope gives the new window the screen
 // by itself (measured 2026-09-28), so this window stays as it is.
 void App::startStandalone(const cab::standalone::Emulator& emu) {
-    cache::touch(launchJob.entryPath);
     const storage::User& user = storage::currentUser();
     const std::string saveDir = storage::savesDir(
         user, launchJob.platformFsSlug, launchJob.romId, launchJob.coreName);
@@ -98,6 +97,10 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
         refuseLaunch("Couldn't start this game");
         return;
     }
+    // Just played, for the cache's eviction order, now that it has started
+    // (#484, LAUNCH-05): a game refused above, a Switch game with no keys on
+    // the server, is not, as a built-in game is touched only once it loads.
+    cache::touch(launchJob.entryPath);
     // A GAME FOR THE SEATS, as one of ours is (players.h): a pad that goes off
     // keeps its player, so the next pad does not take over its controller.
     // The frame loop says so while the menu is up; while the emulator has the
@@ -214,6 +217,13 @@ void App::finishStandalone() {
     dropPressesFromClosing();
     letGoOfHeld();
     std::fprintf(stderr, "[standalone] back to Home\n");
+    // A Power menu choice made over its pause menu (#473), now that it
+    // has gone and its saves are queued.
+    if (powerAfterExit) {
+        const power::Action act = *powerAfterExit;
+        powerAfterExit.reset();
+        powerAct(act);
+    }
 }
 
 // THE PAUSE MENU OVER A GAME THIS WINDOW DID NOT DRAW (#169). The same

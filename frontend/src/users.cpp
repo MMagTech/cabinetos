@@ -14,6 +14,7 @@
 
 #include <json-c/json.h>
 
+#include "fileio.h"
 #include "romm.h"
 #include "storage.h"
 #include "storage_internal.h"
@@ -79,13 +80,8 @@ void setCurrentUser(const User& u) {
     if (!u.avatar.empty())
         json_object_object_add(o, "avatar", json_object_new_string(u.avatar.c_str()));
     const char* text = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
-    const std::string tmp = userCachePath() + ".part";
-    if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
-        std::fputs(text, f);
-        std::fputc('\n', f);
-        std::fclose(f);
-        ::rename(tmp.c_str(), userCachePath().c_str());
-    }
+    if (!cab::writeBytes(userCachePath(), std::string(text) + "\n"))
+        std::fprintf(stderr, "[user] could not write %s\n", userCachePath().c_str());
     json_object_put(o);
     makeDirs(userDir(u));
 }

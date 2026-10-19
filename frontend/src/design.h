@@ -113,6 +113,12 @@ constexpr float kProgressDelay = 0.400f;
 // state the user asked for". Pressing Play is exactly that.
 constexpr float kCurtainDown = 0.260f;
 constexpr float kCurtainUp = 0.420f;
+// RESTART AND POWER OFF FADE TO BLACK (#393). MMagTech, 2026-10-14: the
+// picture cut off at once, "which can read as a crash"; 2026-10-18: "a fade
+// with no sound". The same curtain, slower: this one is the console going
+// away, and a second is long enough to read as meant and short enough not
+// to feel like waiting. The machine is asked to go down when it is over.
+constexpr float kPowerFade = 1.000f;
 
 constexpr float kRepeatDelay = 0.420f;    // before the second move
 constexpr float kRepeatStart = 0.120f;    // and between the ones after it
@@ -552,7 +558,7 @@ constexpr float kSettingsListGap = 8.0f;
 constexpr float kSettingsPaneGap = 60.0f;
 // Between a row's title and its detail line.
 constexpr float kSettingsDetailGap = 4.0f;
-// A row whose control is not built yet. Legible, clearly not live.
+// A Disabled row: built, nothing to do right now. Legible, clearly not live.
 constexpr float kSettingsUnbuiltAlpha = 0.38f;
 // The backdrop under a full-screen cover: the artwork itself, filled and
 // blurred, because the leftovers should be the art's own colours rather than

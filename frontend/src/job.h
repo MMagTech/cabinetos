@@ -20,7 +20,7 @@ namespace cab {
 // --- Blocking work, moved off the frame ------------------------------------
 //
 // One worker, one result, polled once a frame. The same shape as LaunchJob
-// (main.cpp) and StateLoad (states.h), generalised because first run needs
+// (launch.h) and StateLoad (states.h), generalised because first run needs
 // five of them and writing the thread handling five times is how one of them
 // ends up subtly different.
 template <class T>

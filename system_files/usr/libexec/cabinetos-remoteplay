@@ -2,6 +2,9 @@
 #
 # Remote Play, before Sunshine starts. docs/SETTINGS.md, Remote Play; #286.
 #
+#   cabinetos-remoteplay wait-screen
+#                                  waits until a screen is connected and
+#                                  driven (#268)
 #   cabinetos-remoteplay prepare   Sunshine's settings written, and the
 #                                  console's own login for Sunshine's API
 #                                  made the first time
@@ -14,9 +17,10 @@
 #   cabinetos-remoteplay steam     beside Steam's session: what the console
 #                                  does during a stream, done for Steam
 #
-# prepare is run by cabinetos-remoteplay.service (ExecStartPre), started and
-# ended by Sunshine itself (the CabinetOS entry's prep-cmd), streaming and
-# steam by the session script around Steam (steam_step), all as `cabinet`.
+# wait-screen and prepare are run by cabinetos-remoteplay.service
+# (ExecStartPre), started and ended by Sunshine itself (the CabinetOS entry's
+# prep-cmd), streaming and steam by the session script around Steam
+# (steam_step), all as `cabinet`.
 #
 # WHY gamescope MUST COMPOSE WHILE STREAMING: it normally shows the frontend
 # on a display layer of its own over a black base layer, and Sunshine reads
@@ -42,7 +46,7 @@
 # (sysfs `enabled`, about 20 ms after the wake on the A9) before Sunshine
 # goes on to capture. A rejoin runs no prep-cmd at all (Sunshine's
 # nvhttp::resume), so the console ends the session before its screen goes
-# out instead (main.cpp, idleFrame): no session is ever open over a sleeping
+# out instead (frontend/src/startup.cpp, idleFrame): no session is ever open over a sleeping
 # screen.
 #
 # THE SETTINGS ARE OURS, written on every start, so a console always runs the
@@ -98,7 +102,7 @@ screen_lit() {
 }
 
 # WHETHER A DEVICE IS STREAMING NOW, read as the console reads it
-# (remoteplay.cpp, readLog): Sunshine running, and the last of its "CLIENT
+# (sunshinelog.cpp, readLog): Sunshine running, and the last of its "CLIENT
 # CONNECTED", "CLIENT DISCONNECTED", "Process terminated" and "Executing Undo
 # Cmd" lines the first. The last two end a session closed at Sunshine's end;
 # the Undo line is the session's end step, written however it ends (the
@@ -173,11 +177,15 @@ EOF
 EOF
         ;;
     started|ended)
-        sock=$(newest_socket)
-        [ -n "$sock" ] || exit 0
+        # THE SESSION'S MARKER FIRST, whether or not a gamescope is there
+        # to tell (#485, SCRIPTS-09): an `ended` with no socket (the cage or
+        # headless rung) left it, and the next gamescope started composed,
+        # a measured frame cost, until a later stream ended.
         on=0; [ "$1" = started ] && on=1
         if [ "$on" = 1 ]; then : > "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"
         else rm -f "$XDG_RUNTIME_DIR/cabinetos-remoteplay-session"; fi
+        sock=$(newest_socket)
+        [ -n "$sock" ] || exit 0
         # Woken before composing, and only when asleep (above). No
         # screen connected at all is left alone: there is nothing to wake.
         if [ "$on" = 1 ] && connected_screen && ! screen_lit; then
@@ -270,7 +278,7 @@ EOF
         done
         ;;
     *)
-        echo "usage: $0 prepare | started | ended | streaming | steam" >&2
+        echo "usage: $0 wait-screen | prepare | started | ended | streaming | steam" >&2
         exit 2
         ;;
 esac

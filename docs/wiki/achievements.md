@@ -28,4 +28,6 @@ you have them all. Press Up then Right to reach it and **A** to see the list:
 how many you have, and the points for each.
 
 Achievements are earned in softcore mode: save states, rewind and the rest stay
-available.
+available. A save state keeps where each achievement stood, as RetroArch's
+states do, so one that counts something over time carries on counting from
+the state, here or on another console.

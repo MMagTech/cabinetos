@@ -10,7 +10,7 @@
 
 #include "shortcuts.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::padWindowRows(std::vector<std::string>* names, std::vector<std::string>* values) {
     // Not the pads already playing: they are in Controllers. A pad bluez
@@ -51,9 +51,13 @@ void App::padWindowRefresh() {
     choiceScreen.replace(names, values, none ? "This console has no Bluetooth" : padDetail);
 }
 
+// NOT JOINED HERE (#481, SETTINGS-08): the worker's bluetoothctl takes a
+// moment to end, and joining held the window on the screen while it did.
+// The next open joins it (by then long finished), or the exit does.
 void App::closePadWindow() {
     padWindowOpen = false;
-    padWin.quit();
+    padWin.stop = true;
+    padWin.cut = true;
     padPairingName.clear();
 }
 
@@ -103,6 +107,9 @@ void App::openPadWindow() {
     padWin.th = std::thread([&pw = padWin]() {
         while (!pw.stop) {
             pw.cut = false;
+            // A quit landing between the test above and the line before
+            // would have its cut erased and wait out a ten-second round.
+            if (pw.stop) break;
             std::string address;
             {
                 std::lock_guard<std::mutex> lk(pw.m);
@@ -294,13 +301,12 @@ bool App::interceptControllers(const SDL_Event& e) {
         return true;
     }
     // WHICH PAD IS WHICH: the pad last pressed has a dot on its row
-    // in Controllers (players.h). With shortcuts on, the Shortcut
-    // button row follows it too.
+    // in the Controllers panel (padsPanelRows). With shortcuts on, the
+    // Shortcut button row follows it too.
     if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
-        if (const int p = players::playerOf(e.gbutton.which); p >= 0) {
+        if (players::playerOf(e.gbutton.which) >= 0) {
             const bool moved = settingsLastPad != e.gbutton.which;
             settingsLastPad = e.gbutton.which;
-            settingsScreen.mark(kSetPad + p);
             if (moved && shortcuts::enabled()) buildSettings();
         }
     return false;

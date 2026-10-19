@@ -5,7 +5,7 @@
 #
 # Bazzite rebuilds daily. A dependency bot pointed at it would open a pull
 # request every day, and a pull request that arrives every day stops being read.
-# So this does three things a bot cannot:
+# So this does five things a bot cannot:
 #
 #   1. Compares the package manifest of the new base against the one committed
 #      at the last bump, so the PR says what actually changed rather than just
@@ -23,6 +23,10 @@
 #      and Steam's first download (cabinetos-steam-download) pass it
 #      (ci/check-gamescope-flags.sh, #227). One gone makes the update
 #      RELEVANT and says which, before it can reach a television.
+#   5. Checks the builders still start from the base's Fedora release: the
+#      frontend's and the PCSX2, Cemu and Sunshine builders' `FROM
+#      fedora:NN`, and Sunshine's fc44 package name. A base on a newer Fedora
+#      makes the update RELEVANT and names the files that must move with it.
 #
 # Writes to the working directory:
 #   base-manifest.txt   the new base's package list (committed with the bump)
@@ -145,6 +149,25 @@ else
     fi
 fi
 
+# The builders' Fedora (#487, SCRIPTS-20). They are pinned to a Fedora
+# release, not to the base, and a cache hit restores a build made against
+# that release, so nothing else says they are behind the day Bazzite moves.
+new_fedora="$(podman run --rm "${BASE_REPO}@${new_digest}" rpm -E %fedora)"
+: > /tmp/builders-behind.txt
+for f in frontend/Containerfile cores/*-builder/Containerfile; do
+    if grep -qE '^FROM[[:space:]]+\S*fedora:[0-9]+' "${f}" &&
+        ! grep -qE "^FROM[[:space:]]+\S*fedora:${new_fedora}([[:space:]]|$)" "${f}"; then
+        echo "${f}: $(grep -oE '^FROM[[:space:]]+\S*fedora:[0-9]+' "${f}" | head -1)" \
+            >> /tmp/builders-behind.txt
+    fi
+done
+if grep -qE 'fc[0-9]+' cores/build-sunshine.sh && ! grep -q "fc${new_fedora}" cores/build-sunshine.sh; then
+    echo "cores/build-sunshine.sh: the package name's $(grep -oE 'fc[0-9]+' cores/build-sunshine.sh | head -1)" \
+        >> /tmp/builders-behind.txt
+fi
+builders_behind=$(count /tmp/builders-behind.txt)
+say "new base is Fedora ${new_fedora}; ${builders_behind} builder file(s) on another release"
+
 first_run=false
 if [[ ! -s "${MANIFEST}" ]]; then
     say "no committed manifest — establishing a baseline, no comparison possible"
@@ -233,6 +256,9 @@ if [[ "${first_run}" == true ]]; then
 elif [[ "${gamescope_check}" == missing ]]; then
     verdict="RELEVANT"
     summary="gamescope no longer takes a flag we pass it; the console would lose 4K and VRR, or Install Steam would fail."
+elif (( builders_behind > 0 )); then
+    verdict="RELEVANT"
+    summary="The base moved to Fedora ${new_fedora}; ${builders_behind} builder file(s) still build for another release."
 elif (( relevant_count > 0 )); then
     verdict="RELEVANT"
     summary="${relevant_count} change(s) to packages CabinetOS depends on, in: ${areas}."
@@ -283,10 +309,23 @@ emit summary "${summary}"
     elif [[ "${gamescope_check}" == unknown ]]; then
         echo "### gamescope's flags could not be checked"
         echo
-        echo "\`gamescope --help\` did not run in the new base, so nobody has"
-        echo "confirmed it still takes what \`cabinetos-session\` and"
-        echo "\`cabinetos-steam-download\` pass. Check by"
-        echo "hand before merging (\`ci/check-gamescope-flags.sh\`)."
+        echo "\`ci/check-gamescope-flags.sh\` could not tell: either"
+        echo "\`gamescope --help\` did not run in the new base, or it read too few"
+        echo "flags from \`cabinetos-session\` or \`cabinetos-steam-download\`"
+        echo "(the run's log says which). So nobody has confirmed gamescope still"
+        echo "takes what they pass. Check by hand before merging."
+        echo
+    fi
+
+    if (( builders_behind > 0 )); then
+        echo "### ⛔ The builders are on another Fedora"
+        echo
+        echo "The new base is Fedora ${new_fedora}. These still build for another"
+        echo "release, so the frontend, PCSX2, Cemu or Sunshine would be built"
+        echo "against libraries the image no longer has. Move them in this pull"
+        echo "request:"
+        echo
+        echo '```'; cat /tmp/builders-behind.txt; echo '```'
         echo
     fi
 
@@ -333,21 +372,24 @@ emit summary "${summary}"
 
 cp /tmp/new-manifest.txt "${MANIFEST}"
 
-python3 - "${BASE_REPO}" "${new_version}" "${new_digest}" <<'PY'
+python3 - "${BASE_REPO}" "${new_version}" "${new_digest}" "${BASE_CHANNEL}" <<'PY'
 import re, sys, pathlib
-repo, version, digest = sys.argv[1:4]
+repo, version, digest, channel = sys.argv[1:5]
 p = pathlib.Path("Containerfile")
 s = p.read_text()
 new_from = f"FROM {repo}:{version}@{digest}"
 s2, n = re.subn(r'^FROM\s+\S+@sha256:[0-9a-f]{64}.*$', new_from, s, count=1, flags=re.M)
 assert n == 1, "failed to rewrite the FROM line"
 
-# Keep the "resolved on" comment honest.
+# Keep the "resolved on" comment honest, on the channel this run read.
+# Asserted like the FROM line: a reworded comment stops the run rather than
+# going stale.
 import datetime
 today = datetime.date.today().isoformat()
-s2 = re.sub(r'^# Resolved \d{4}-\d{2}-\d{2}:$', f"# Resolved {today}:", s2, count=1, flags=re.M)
-s2 = re.sub(r'^#   ghcr\.io/ublue-os/bazzite:stable == .*$',
-            f"#   {repo}:stable == {version}", s2, count=1, flags=re.M)
+s2, n = re.subn(r'^# Resolved \d{4}-\d{2}-\d{2}:$', f"# Resolved {today}:", s2, count=1, flags=re.M)
+assert n == 1, "failed to rewrite the '# Resolved <date>:' comment"
+s2, n = re.subn(r'^#   \S+:\S+ == .*$', f"#   {repo}:{channel} == {version}", s2, count=1, flags=re.M)
+assert n == 1, "failed to rewrite the '#   <repo>:<channel> == <version>' comment"
 p.write_text(s2)
 print(f"Containerfile pinned to {new_from}")
 PY

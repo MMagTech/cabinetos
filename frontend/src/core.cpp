@@ -49,6 +49,19 @@ std::string gSystemDir, gSaveDir;
 unsigned gRotation = 0;
 bool gRotationAnnounced = false;
 
+// A NEW SHAPE OR RATE ASKED FOR MID-GAME (#220): SET_GEOMETRY (the
+// picture's size and aspect, the maximum kept) and SET_SYSTEM_AV_INFO (the
+// frame and sound rates too). Dolphin sends the first when a GameCube game
+// switches to widescreen, and both when it moves between 50 and 60 Hz
+// (DolphinLibretro/Main.cpp at the pinned 1a0f97270b, lines 343-380).
+// Refused, the game went on drawn at its first shape: a widescreen game
+// squeezed into 4:3. Held here and taken after the retro_run that asked
+// (Core::takeAvAsked), so nothing changes in the middle of a frame.
+bool gGeometryAsked = false;
+retro_game_geometry gGeometry{};
+bool gTimingAsked = false;
+retro_system_timing gTiming{};
+
 // The core writes into its own buffer and reuses it between calls, so a frame
 // is copied out rather than referenced.
 std::vector<uint8_t> gFrame;
@@ -113,6 +126,20 @@ bool environment(unsigned cmd, void* data) {
             const unsigned r = *static_cast<const unsigned*>(data);
             if (r > 3) return false;
             gRotation = r;
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_SET_GEOMETRY:
+            gGeometry = *static_cast<const retro_game_geometry*>(data);
+            gGeometryAsked = true;
+            return true;
+
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
+            const auto* av = static_cast<const retro_system_av_info*>(data);
+            gGeometry = av->geometry;
+            gGeometryAsked = true;
+            gTiming = av->timing;
+            gTimingAsked = true;
             return true;
         }
 
@@ -249,7 +276,7 @@ bool Core::load(const std::string& soPath) {
             return false;
         }
         gIsPs2 = true;
-        handle_ = reinterpret_cast<void*>(1); // loaded() is asked about by name everywhere
+        handle_ = reinterpret_cast<void*>(1); // unload() and loadGame() test handle_
         return true;
     }
     gIsPs2 = false;
@@ -263,6 +290,13 @@ bool Core::load(const std::string& soPath) {
     gHWVulkan = false;
     gHWFrame = false;
     gHWContextName.clear();
+    // Nor are the last core's Vulkan negotiation interface, which points
+    // into a core that is dlclosed by now, and its pixel format: libretro's
+    // default is 0RGB1555 for a core that never says (#489, EMU-01, EMU-07).
+    // Every Vulkan core shipped today sends its interface again during its
+    // own load, and every core states its format, so nothing changes today.
+    vk::setNegotiation(nullptr);
+    gPixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
     // Whatever the last core declared is not this one's business. Cleared here
     // rather than in unload() so a caller that inspects the table after a core
     // is unloaded still sees what that core actually asked for.
@@ -373,7 +407,9 @@ bool Core::load(const std::string& soPath) {
     // machine keeps itself, so the brake holding it there is correct, and it
     // is what RetroArch's audio sync does to every core. Cabinet's "slowed N64
     // down" was most likely this same 3 to 4%, slowed to true speed; why was
-    // never recorded, so that is a reading, not a finding.
+    // never recorded, so that is a reading, not a finding. #254, 2026-10-18:
+    // the machine was not fast. Each rewind snapshot ran an N64 frame the
+    // console did not count (Core::saveState, core_memory.cpp).
     //
     // SO EVERY CORE, which is the end state #144 asked for. Three cores out of
     // three that were measured needed it, each for a different reason, and
@@ -590,6 +626,9 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 
     retro_system_av_info av{};
     g.get_system_av_info(&av);
+    // Whatever was asked for while loading, get_system_av_info has the last
+    // word on now.
+    gGeometryAsked = gTimingAsked = false;
     av_.fps = av.timing.fps > 0 ? av.timing.fps : 60.0;
     av_.sampleRate = av.timing.sample_rate > 0 ? av.timing.sample_rate : 44100.0;
     av_.baseWidth = av.geometry.base_width;
@@ -642,6 +681,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     accumulator_ = 0.0;
     paceClock_ = 0.0;
     governorSkips_ = 0;
+    saveRunsFrame_ = false;
     gFramesRun = 0;
     gAudioFrames = 0;
     gAudio.clear();
@@ -811,7 +851,42 @@ void Core::step() {
     // calls per frame for nothing.
     if (gHWWanted && !gHWVulkan && !gHWDesktop) restoreGLState();
     ++gFramesRun;
+    takeAvAsked();
     if (afterFrame_) afterFrame_();
+}
+
+// A shape or a rate the core asked for during the run just made (#220).
+void Core::takeAvAsked() {
+    if (!gGeometryAsked && !gTimingAsked) return;
+    if (gGeometryAsked) {
+        gGeometryAsked = false;
+        if (gGeometry.base_width > 0 && gGeometry.base_height > 0) {
+            av_.baseWidth = gGeometry.base_width;
+            av_.baseHeight = gGeometry.base_height;
+        }
+        av_.aspectRatio = gGeometry.aspect_ratio > 0.0f ? gGeometry.aspect_ratio : 0.0f;
+        // A NEW MAXIMUM ONLY FOR A PICTURE IN MEMORY, which is copied at
+        // whatever size each frame comes. A hardware core's target was built
+        // from the maximum at load; RetroArch rebuilds its video driver for a
+        // bigger one, and this host does not.
+        if (!gHWWanted && gGeometry.max_width > 0 && gGeometry.max_height > 0) {
+            av_.maxWidth = gGeometry.max_width;
+            av_.maxHeight = gGeometry.max_height;
+        }
+    }
+    if (gTimingAsked) {
+        gTimingAsked = false;
+        if (gTiming.fps > 0) av_.fps = gTiming.fps;
+        if (gTiming.sample_rate > 0 && gTiming.sample_rate != av_.sampleRate) {
+            av_.sampleRate = gTiming.sample_rate;
+            // The governor's clock counted the old rate's samples; started
+            // again from now at the new one, as runFrame does.
+            paceClock_ = static_cast<double>(gAudioFrames) / av_.sampleRate;
+            ++soundRateChanges_;
+        }
+    }
+    std::fprintf(stderr, "[core] now %ux%u, %.4f fps, %.0f Hz, aspect %.4f\n", av_.baseWidth,
+                 av_.baseHeight, av_.fps, av_.sampleRate, av_.aspectRatio);
 }
 
 bool Core::uploadFrame() {

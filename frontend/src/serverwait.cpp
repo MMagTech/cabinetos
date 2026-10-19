@@ -1,9 +1,9 @@
 // The screen a console shows while its server does not answer at start
 // (#60, #88): the wait, a new address, Sign out, and going offline after
 // fifteen seconds when a game on the drive can be played (#398,
-// restructure batch d). Its own PIN rule and address flow are not
-// Settings' ones, on purpose; see the comments above the call in
-// startup.cpp.
+// restructure batch d). Its PIN and its address check follow Settings'
+// rules (pinflow.cpp, serveraddressflow.cpp; #485); Sign out is offered
+// here because Settings is out of reach (startup.cpp, above the call).
 
 #include "app.h"
 
@@ -14,8 +14,9 @@
 
 #include "cache.h"
 #include "catalog.h"
+#include "firstrun.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 std::optional<int> App::waitForServer(char** argv) {
     std::string err;
@@ -51,14 +52,31 @@ std::optional<int> App::waitForServer(char** argv) {
     });
     bool goOffline = false;
     double driveCheckedAt = -1.0;
+    // ONE CHECK AT A TIME, AS IN SETTINGS (#485, FIRSTRUN-09): B closes the
+    // keyboard while one runs, and a second commit joined it on this thread,
+    // freezing the screen for as long as the address took to fail. Shared
+    // with its thread, so a check still running when the loop ends is left
+    // to finish alone, not waited for on the last frame.
     struct CheckJob {
         std::thread th;
-        std::atomic<bool> done{false};
+        std::atomic<bool> running{false}, done{false};
         server::Check result = server::Check::Failed;
         std::string address;
         Uint64 at = 0;
-        ~CheckJob() { if (th.joinable()) th.join(); }
-    } check;
+    };
+    auto check = std::make_shared<CheckJob>();
+    struct CheckEnd {
+        std::shared_ptr<CheckJob> job;
+        ~CheckEnd() {
+            if (!job->th.joinable()) return;
+            if (job->running.load()) job->th.detach();
+            else job->th.join();
+        }
+    } checkEnd{check};
+    // Root's address outranks ours (serveraddress.h): a console set up by
+    // hand cannot change it here, as in Settings (#485, FIRSTRUN-10).
+    const bool addressOurs = server::addressIsOurs();
+    const std::string setElsewhere = "Set in " + firstrun::serverAddressSource();
 
     // The pads, which main opens only later: this screen needs them.
     if (SDL_JoystickID* ids = SDL_GetGamepads(nullptr)) {
@@ -83,35 +101,50 @@ std::optional<int> App::waitForServer(char** argv) {
     auto keyboardResult = [&](ui::KeyboardResult r) {
         if (r == ui::KeyboardResult::Cancelled) sound::play(sound::Cue::Back);   // #389
         if (r != ui::KeyboardResult::Committed) return;
+        if (check->running.load()) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
         sound::play(sound::Cue::Activate);
         const std::string addr = trimmedAddress(addrKeyboard.value());
         if (addr.empty()) return;
         addrKeyboard.open(serverKeyboardConfig(addr));
         addrKeyboard.sayInField("Checking\xE2\x80\xA6", /*problem=*/false, /*keep=*/true);
         addrKeyboard.setBusy(true);
-        if (check.th.joinable()) check.th.join();
-        check.done = false;
-        check.address = addr;
-        check.at = SDL_GetTicks();
-        check.th = std::thread([&check, addr]() {
+        if (check->th.joinable()) check->th.join();   // finished: running is false
+        check->done = false;
+        check->running = true;
+        check->address = addr;
+        check->at = SDL_GetTicks();
+        check->th = std::thread([job = check, addr]() {
             std::string detail;
-            check.result = server::check(addr, &detail);
+            job->result = server::check(addr, &detail);
             std::fprintf(stderr, "[server] %s at startup: %d%s%s\n", addr.c_str(),
-                         static_cast<int>(check.result), detail.empty() ? "" : ", ",
+                         static_cast<int>(job->result), detail.empty() ? "" : ", ",
                          detail.c_str());
-            check.done = true;
+            job->done = true;
+            job->running = false;
         });
     };
     // What the pad's answer means, from a press or from a typed digit.
     auto pinOutcome = [&](screens::PinScreen::Outcome o) {
         if (o == screens::PinScreen::Outcome::Cancelled) pad.close();
         if (o != screens::PinScreen::Outcome::Entered) return;
+        // SETTINGS' RULE (pinflow.cpp; #485, FIRSTRUN-08): the edge sound on
+        // a wrong PIN, the count reset by a right one, then the activate sound.
         if (!accounts::checkPin(pad.pin())) {
+            ++pinFails;
+            sound::play(sound::Cue::Edge);
             pad.reject("Wrong PIN");
-            if (++pinFails >= 5) { pinFails = 0; pad.lockFor(30.0f); }
+            if (pinFails >= kPinTries) {
+                pinFails = 0;
+                pad.lockFor(kPinLockSeconds);
+            }
             return;
         }
+        pinFails = 0;
         pad.close();
+        sound::play(sound::Cue::Activate);
         openKeyboard(rommAddress, "");
     };
     auto press = [&](screens::Nav n) {
@@ -140,6 +173,11 @@ std::optional<int> App::waitForServer(char** argv) {
         }
         if (n != screens::Nav::Activate) return;
         if ((SDL_GetTicks() - start) / 1000.0 < kOfferAfter) return;
+        // Not over a check still running, nor for an address set by hand.
+        if (check->running.load() || !addressOurs) {
+            sound::play(sound::Cue::Edge);
+            return;
+        }
         sound::play(sound::Cue::Activate);   // #389
         if (accounts::pinIsSet())
             pad.open(screens::PinScreen::Mode::Check, "Enter the PIN",
@@ -210,6 +248,14 @@ std::optional<int> App::waitForServer(char** argv) {
                     }
                     break;
                 case SDL_EVENT_KEY_DOWN:
+                    // THE SYSTEM'S KEY REPEAT, dropped as first run and the
+                    // console's own input drop it (#443, #485): a held Return
+                    // committed again and again. Backspace still repeats: here
+                    // it only ever deletes.
+                    if (e.key.repeat && (e.key.key == SDLK_RETURN ||
+                                         e.key.key == SDLK_KP_ENTER ||
+                                         e.key.key == SDLK_ESCAPE))
+                        break;
                     switch (e.key.key) {
                         case SDLK_UP: press(screens::Nav::Up); break;
                         case SDLK_DOWN: press(screens::Nav::Down); break;
@@ -258,12 +304,25 @@ std::optional<int> App::waitForServer(char** argv) {
 
         // An address check finished ("Checking…" up 700 ms at least,
         // as in Settings). B while it ran means leave it alone.
-        if (check.done.load() && SDL_GetTicks() - check.at >= 700) {
-            check.done = false;
+        if (check->done.load() && SDL_GetTicks() - check->at >= 700) {
+            check->done = false;
             if (addrKeyboard.isOpen() && addrKeyboard.busy()) {
-                const std::string addr = check.address;
-                switch (check.result) {
-                    case server::Check::Same: newAddress = addr; break;
+                const std::string addr = check->address;
+                switch (check->result) {
+                    // SAVED HERE, AS IN SETTINGS (#485, FIRSTRUN-10): one that
+                    // cannot be saved says so in the field, rather than being
+                    // used for this start only and forgotten at the next.
+                    case server::Check::Same: {
+                        std::string cerr;
+                        if (server::changeAddress(rommAddress, addr, &cerr)) {
+                            newAddress = addr;
+                        } else {
+                            std::fprintf(stderr, "[server] could not save %s: %s\n",
+                                         addr.c_str(), cerr.c_str());
+                            openKeyboard(addr, "Couldn't save it");
+                        }
+                        break;
+                    }
                     case server::Check::Different: {
                         addrKeyboard.cancel();
                         const bool unsent = server::unsentSaves() > 0;
@@ -308,9 +367,9 @@ std::optional<int> App::waitForServer(char** argv) {
                               secs / 60, secs % 60);
             setup::drawStartup(renderer, text,
                                newAddress.empty() ? line : "Connecting", 1.0f,
-                               waited >= kOfferAfter
-                                   ? "Press (A) to change the server address"
-                                   : nullptr);
+                               waited < kOfferAfter ? nullptr
+                               : addressOurs        ? "Press (A) to change the server address"
+                                                    : setElsewhere.c_str());
             renderer.presentScene();
             screens::Ctx ctx{renderer, text, images, renderer.scale()};
             if (addrKeyboard.isOpen()) addrKeyboard.draw(renderer, text, renderer.scale());
@@ -364,11 +423,6 @@ std::optional<int> App::waitForServer(char** argv) {
         return 1;
     }
     if (!probe->answered.load() && !newAddress.empty()) {
-        std::string cerr;
-        const std::string from = rommAddress;
-        if (!server::changeAddress(from, newAddress, &cerr))
-            std::fprintf(stderr, "[server] could not save %s: %s\n", newAddress.c_str(),
-                         cerr.c_str());
         resolvedAddress = newAddress;
         rommAddress = resolvedAddress.c_str();
         if (!liveClient.setAddress(rommAddress, &err)) {

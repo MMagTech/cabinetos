@@ -41,9 +41,9 @@ struct GameSession {
     // tag is the promise that the build about to load it is the build that
     // wrote it; a SAVE in the file-writing class is the emulated machine's own
     // storage — a VMU image, a board's NVRAM — and no build flag moves it. So
-    // Flycast has a save tag and no state tag, which is exactly right: its
-    // pinned commit does not reproduce what the reference implementation
-    // ships, and a memory card does not care. See catalog::saveTag.
+    // a save tag can be given where a state's portability is unproven: a
+    // memory card does not care. Flycast's state tag is given anyway, by
+    // decision (savetable.cpp, 2026-09-23). See catalog::saveTag.
     //
     // Empty means: do not upload, we cannot vouch for it.
     std::string saveTag;

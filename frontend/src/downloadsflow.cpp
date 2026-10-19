@@ -9,7 +9,7 @@
 #include "cache.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Human-readable bytes, for the one refusal a person is ever shown.
 std::string App::gigabytes(int64_t b) {
@@ -37,6 +37,8 @@ auto App::downloadById(int romId) -> void {
             menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
         return;    // one at a time
     }
+    // Nor while a finished job waits for the frame loop (#472, launchById).
+    if (launchJob.waiting()) return;
     const romm::Game* g = nullptr;
     for (const auto& x : games) if (x.id == romId) { g = &x; break; }
     if (!g) return;

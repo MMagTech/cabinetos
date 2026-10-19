@@ -16,7 +16,7 @@
 #include "noticegallery.h"
 #include "saves.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Opening straight onto a screen, for a capture. This walks the SAME route
 // a person would: the Library is entered, a tile is opened, the launch
@@ -90,6 +90,13 @@ void App::openScreenForCapture() {
             if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
         }
     } else if (initialScreen) {
+        // The rest are the Library and the screens under it. A name that is
+        // none of them says so rather than passing a Library capture off as
+        // the screen asked for (#488, PLAY-28).
+        if (SDL_strcmp(initialScreen, "library") != 0 && SDL_strcmp(initialScreen, "grid") != 0 &&
+            SDL_strcmp(initialScreen, "detail") != 0)
+            std::fprintf(stderr, "[screen] unknown screen '%s': showing the Library\n",
+                         initialScreen);
         libraryScreen.enter();
         stack.push_back(Screen::Library);
         if (initialTab > 0) {
@@ -227,8 +234,10 @@ void App::launchHooks(float dt) {
         autoUnkeepId = 0;
         removeDownload(id);
     }
-    if (thenLaunchId > 0 && !overlayExitDemo && !playing && autoLaunchId == 0 &&
-        !launchJob.busy()) {
+    // Not while an emulator of its own runs: `playing` is false all through
+    // such a game, and the second launch fired over its pause menu (#488).
+    if (thenLaunchId > 0 && !overlayExitDemo && !playing && !standaloneRun.active() &&
+        autoLaunchId == 0 && !launchJob.busy()) {
         std::fprintf(stderr, "[launch] then: %d\n", thenLaunchId);
         autoLaunchId = thenLaunchId;
         thenLaunchId = 0;
@@ -400,6 +409,19 @@ void App::noticeGalleryHook(float dt) {
 
 // Capture before the swap. After a swap the back buffer's contents are
 // undefined, so a readback taken there is whatever the driver left.
+// A SIGUSR1 OR DISC-SCRIPT STILL ASKED WHILE THE PICTURE IS ANOTHER
+// WINDOW'S (PCSX2's, or an emulator of its own): this frame draws nothing,
+// and a still taken later held whatever this window drew next, a menu over
+// black, long after it was asked for (#488, PLAY-10). Said and dropped;
+// gamescope's own capture takes those games (docs/lessons/testing.md).
+void App::refuseCaptureOverAnotherWindow(const char* whose) {
+    if (!gCaptureRequested) return;
+    gCaptureRequested = 0;
+    discScript.captureTo.clear();
+    std::fprintf(stderr, "[capture] not taken: the picture is %s own window; use "
+                         "gamescopectl screenshot\n", whose);
+}
+
 void App::captureFrame(int dw, int dh) {
     if (shotMode && frame >= shotAfterFrames &&
         (!waitForPairCode || shownPairCode) &&

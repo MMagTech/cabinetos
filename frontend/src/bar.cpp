@@ -12,7 +12,12 @@
 #include "batteryrow.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
+
+namespace {
+// The step from one destination's start to the next: its width plus this.
+constexpr float kBarItemGap = 60.0f;
+}  // namespace
 
 // THE BAR'S OWN KEYS. Offered every key first whenever it holds focus, from
 // whichever screen is underneath — which is the whole point of its cursor
@@ -90,9 +95,7 @@ auto App::barKey(screens::Nav n) -> bool {
                 sound::play(sound::Cue::Activate);
                 return true;
             }
-            sound::play(sound::Cue::Edge);
-            std::fprintf(stderr, "[nav] %s is not built yet\n", kBarLabels[barSlot]);
-            return true;
+            break;
     }
     return false;
 }
@@ -188,7 +191,7 @@ void App::drawBar(bool gameUp, float sc, float dt) {
             }
             text.draw(renderer, kBarLabels[i], bx, barBaseline, ui::TextStyle::Callout,
                       ui::Color::white(on || sel ? 1.0f : 0.65f), sc);
-            bx += w + 60.0f;
+            bx += w + kBarItemGap;
         }
 
         const float rightEdge = barX + barW;
@@ -239,7 +242,7 @@ void App::drawBar(bool gameUp, float sc, float dt) {
         // that was judged not worth more.
         const bool ringUp = launchJob.busy() && launchJob.busyFor >= kProgressDelay;
         const bool offlineUp = romm::serverAway();
-        const float barEnd = bx - 60.0f + 22.0f + 24.0f;
+        const float barEnd = bx - kBarItemGap + 22.0f + 24.0f;
         const float leftOfName =
             (batterySlots.empty() ? 0.0f : kToName + rowW + 10.0f) +
             (offlineUp ? 12.0f + text.measure("Offline", ui::TextStyle::Caption1, sc) + 32.0f + 12.0f : 0.0f) +

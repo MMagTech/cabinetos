@@ -6,7 +6,7 @@
 # nowhere, and nothing says so. Every core is pinned, so it can only happen
 # when a commit moves a pin, and this is where that commit finds out: any
 # difference from cores/options/<core>.txt fails the build, with the
-# difference printed. Check it against what the console sets (catalog.cpp,
+# difference printed. Check it against what the console sets (coreoptions.cpp,
 # quality.cpp, sysopts.cpp), then refresh the file in the same commit.
 #
 # A SCRIPT OF ITS OWN, not a function in build-core.sh, because CI keys each

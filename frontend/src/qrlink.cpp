@@ -14,6 +14,9 @@ void QrLinkScreen::open() {
     url_.clear();
     code_.clear();
     error_.clear();
+    // THE LAST CODE'S PICTURE GOES TOO (#485, SETTINGS-06 and HOME-12): kept,
+    // a new link whose code would not encode was drawn beside the old QR.
+    qr_.set(qr::Code{});
     busy_ = true;
     appear_.retarget(0.0f, 0.0f);
     appear_.retarget(1.0f, 0.3f);
@@ -28,8 +31,8 @@ void QrLinkScreen::setPairing(const std::string& url, const std::string& code) {
     // what happens otherwise: a fabricated one scans perfectly and lands on a
     // page saying the code does not exist.
     const qr::Code c = qr::encode(url, &err);
-    if (c.valid()) qr_.set(c);
-    else error_ = err;   // the address and the code below are still usable
+    qr_.set(c);   // an invalid code leaves no picture, never the last one
+    if (!c.valid()) error_ = err;   // the address and the code below are still usable
 }
 
 void QrLinkScreen::setText(std::string title, std::vector<std::string> lines,

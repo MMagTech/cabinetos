@@ -47,8 +47,10 @@ void putLe16(uint8_t* p, uint16_t v) { p[0] = uint8_t(v); p[1] = uint8_t(v >> 8)
 // refcount table so qemu never hands the same bytes out twice.
 class Qcow2 {
 public:
-    bool open(const std::string& path, std::string* err) {
-        f_ = std::fopen(path.c_str(), "r+b");
+    // Read-only unless asked (#488, EMU-14): listing a drive or reading its
+    // saves off must work on a copy nobody may write, and must not write.
+    bool open(const std::string& path, bool writable, std::string* err) {
+        f_ = std::fopen(path.c_str(), writable ? "r+b" : "rb");
         if (!f_) return fail(err, "cannot open " + path + ": " + std::strerror(errno));
         uint8_t h[112] = {};
         if (!readAt(0, h, sizeof h)) return fail(err, "cannot read the header");
@@ -79,8 +81,9 @@ public:
             refBits_ = 1u << be32(h + 96);
             if (refBits_ != 16) return fail(err, "has an unusual refcount width");
             // Autoclear bits describe extensions a writer that does not know
-            // them must declare stale. None matter to xemu.
-            if (be64(h + 88) != 0) {
+            // them must declare stale. None matter to xemu. A reader leaves
+            // them: it changes nothing they describe.
+            if (writable && be64(h + 88) != 0) {
                 uint8_t zero[8] = {};
                 writeAt(88, zero, 8);
             }
@@ -638,7 +641,7 @@ constexpr const char* kFolders[] = {"UDATA", "TDATA"};
 
 bool writeSaves(const std::string& drive, const std::string& root, std::string* err) {
     Qcow2 q;
-    if (!q.open(drive, err)) return false;
+    if (!q.open(drive, /*writable=*/true, err)) return false;
     Fatx fs(q);
     if (!fs.open(err)) return false;
     uint32_t top = 0;
@@ -670,7 +673,7 @@ bool writeSaves(const std::string& drive, const std::string& root, std::string* 
 
 bool readSaves(const std::string& drive, const std::string& root, std::string* err) {
     Qcow2 q;
-    if (!q.open(drive, err)) return false;
+    if (!q.open(drive, /*writable=*/false, err)) return false;
     Fatx fs(q);
     if (!fs.open(err)) return false;
     ::mkdir(root.c_str(), 0755);
@@ -691,7 +694,7 @@ bool readSaves(const std::string& drive, const std::string& root, std::string* e
 
 bool list(const std::string& drive, std::string* out, std::string* err) {
     Qcow2 q;
-    if (!q.open(drive, err)) return false;
+    if (!q.open(drive, /*writable=*/false, err)) return false;
     Fatx fs(q);
     if (!fs.open(err)) return false;
     std::ostringstream s;

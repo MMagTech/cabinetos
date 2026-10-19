@@ -114,6 +114,16 @@ Read before working on a core, an emulator, input, saves or states.
   turned — and hands back 256x224 from `video_refresh` every frame. A layout
   must use the second. The `[core] WxH` line at load prints the first.
 
+- **THE SHAPE AT LOAD IS NOT THE SHAPE OF THE GAME.** Genesis Plus GX
+  declares 256x192 and aspect 1.5238 at load, then asks for 320x224 and
+  1.3061 with SET_GEOMETRY on its first frames, once the game picks its
+  mode. Until #220 ("A core's mid-game picture shape change is ignored",
+  2026-10-18) the console refused the ask and drew every 320-wide Genesis
+  game 17% too wide (a 1646x1080 quad on a 1080 screen, measured headless
+  on the A9: Comix Zone, Earthion). Nothing looked broken in a capture; it
+  was found by reading the `[core] now` line the fix added. Dolphin asks
+  the same way when a GameCube game turns widescreen on.
+
 - **A TURNED BOARD'S DECLARED ASPECT IS ALREADY TURNED.** FBNeo says 0.75 for
   DoDonPachi while handing back 448x224. Inverting it turns the picture twice
   and stretches it, which Cabinet shipped once and wrote down.
@@ -138,6 +148,16 @@ Read before working on a core, an emulator, input, saves or states.
   TV showed 4 to 11 skipped and up to 9 repeated every 10 s, because the
   clock pacing ran 2 frames or 0 whenever the stopwatch wobbled near a
   frame boundary. The beat was the smallest cause.
+
+- **A STATE SAVE CAN RUN THE GAME.** Mupen64Plus-Next's `retro_serialize`
+  runs the machine to its next vertical interrupt before saving, so each of
+  rewind's snapshots was an N64 frame nobody counted: its sound filled the
+  speaker, which held the picture twice a second, and for three weeks that
+  was put down to the core's timing (#254, "N64 makes 3.4% more sound per
+  frame than it promises", 2026-10-18). Found only by counting `retro_run`
+  calls against VIs inside a measuring build of the core. **When a core's
+  numbers are off by a round fraction, look for what the console does on
+  that period** (one frame in thirty is 3.3%; snapshots every 30 frames).
 
 - **A CORE CAN ASK FOR ITS GL CONTEXT TWICE, AND THE SECOND ASK MUST KEEP
   THE FIRST.** melonDS calls SET_HW_RENDER in retro_load_game and again
@@ -212,6 +232,14 @@ Read before working on a core, an emulator, input, saves or states.
   could not hash it either (no `ra_hash`). A single-disc game (Mad Dog
   McCree) booted the same way was the control. Check Redump before blaming
   the feature.
+  And the file can be another console's game: RomM's PlayStation "Primal
+  Rage (USA).chd" (#422, "Primal Rage (PS1) will not start", 2026-10-18)
+  has a Mode 1 data track of 55,251 sectors, 129,950,352 bytes, exactly
+  Redump's **Saturn** Primal Rage (USA) Track 01 (the PlayStation one is
+  222,614,448 bytes and Mode 2, as every PlayStation disc is), and the
+  console's Saturn core plays it. PCSX-ReARMed's "unsupported/invalid CD
+  image" was right. Read the CHD's track list (its CHT2 metadata) and the
+  track sizes against Redump before reading the core.
 
 ## PS2 and GameCube
 

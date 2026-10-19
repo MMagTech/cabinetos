@@ -338,7 +338,10 @@ bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::st
     // gamescope a frame shown without it waits in a one-picture mailbox and
     // the next replaces it, so some never reach the screen (PS2 lost 4 in
     // 60, #226). With it they queue. On a VRR television it costs nothing.
-    const std::string video = "Video:\n  VSync: true\n" + quality::rpcs3(level);
+    // The key is "VSync Mode" (Disabled, Adaptive, Full) in the pinned RPCS3
+    // (Emu/system_config.h); a "VSync: true" line is ignored. Full is FIFO;
+    // Adaptive asks for mailbox first (VK/vkutils/swapchain.cpp).
+    const std::string video = "Video:\n  VSync Mode: Full\n" + quality::rpcs3(level);
     if (!writeFile(config + "/vfs.yml", vfs) || !writeFile(config + "/config.yml",
                    std::string(kRpcs3Settings) + video) ||
         !writeFile(gui, gui_text) ||

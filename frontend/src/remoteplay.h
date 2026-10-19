@@ -15,10 +15,13 @@
 // (/usr/libexec/cabinetos-remoteplay).
 //
 // THE CALLS ARE QUICK BUT NOT FREE, so they are made on a thread of their own
-// every two seconds while watching, and the app reads the last answer.
+// every two seconds while watching, and the app reads the last answer. The
+// app's own calls go there too (later), so a Sunshine that accepts and does
+// not answer holds that thread, never the picture (#481, SETTINGS-14).
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -52,7 +55,20 @@ struct Request {
 // controllers aside with nobody playing (A9, 2026-10-08). Without it (the
 // console starting under a running Sunshine, back from Steam), the log is read
 // from its start, which is how a stream already open is found.
+//
+// OFF DOES NOT WAIT FOR THE THREAD: it may be inside a call of up to four
+// seconds. The next watch(true) waits for it, and join() at exit.
 void watch(bool on, bool fresh = false);
+void join();
+
+// `work` (pair, decline, remove, rename below, which each block for a call
+// and then a refresh) on the watching thread, after what it is doing; `then`,
+// if given, with its answer on the frame thread at the next answered(). Not
+// watching, `work` runs here at once: Sunshine is stopped, and a refused
+// connection fails at once.
+void later(std::function<bool()> work, std::function<void(bool)> then);
+// The answers of later()'s work: call once a frame.
+void answered();
 
 // WHETHER A DEVICE IS STREAMING NOW: Sunshine's own "CLIENT CONNECTED" and
 // "CLIENT DISCONNECTED" lines, and "Process terminated" (a session closed
@@ -71,7 +87,7 @@ bool sessionOpen();
 
 // END THE SESSION, as Quit in Moonlight does (Sunshine's POST
 // /api/apps/close): a device still connected is told the stream ended, and
-// Sunshine runs `ended`. For the screen going out (#294, main.cpp idleFrame):
+// Sunshine runs `ended`. For the screen going out (#294, startup.cpp, idleFrame):
 // a session left open over a sleeping screen streams black to whoever joins
 // it next. Blocks for the call, up to four seconds: call it on a worker.
 bool endSession();
@@ -101,7 +117,7 @@ bool remove(const std::string& deviceId, std::string* why);
 // A STOPGAP: Sunshine fixed it itself in v2026.1007.173111, a pre-release
 // (a completed pairing replaces every record with the same certificate,
 // LizardByte/Sunshine#5696). When the pin moves to a stable release with
-// that fix, delete this and its use in main.cpp. Until then a phone pairing
+// that fix, delete this and its use in remoteplayflow.cpp. Until then a phone pairing
 // again can fail once, if Moonlight checks before the console has tidied.
 std::vector<std::string> samePairedDevice(const std::string& deviceId);
 // Give a paired device another name. The console's alone (see Device).

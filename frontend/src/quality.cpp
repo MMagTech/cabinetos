@@ -319,7 +319,7 @@ std::string rpcs3(Level l) {
     // 150% 54, at about a third of its capacity; 100% 57. 200% was not
     // measured (the game would not load past its menu that once). The game's
     // own video mode stays 720p; that one changes the game. Lines inside
-    // RPCS3's `Video:` section, which standalone.cpp opens.
+    // RPCS3's `Video:` section, which standalone_rpcs3.cpp opens.
     static const char* const kScale[] = {"100", "150", "150"};
     return std::string("  Resolution Scale: ") + pick(l, kScale) +
            "\n  Anisotropic Filter Override: 16\n";

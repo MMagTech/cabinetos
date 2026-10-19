@@ -42,6 +42,25 @@ static int countEntries(const std::string& dir) {
     return n;
 }
 
+// A CANCEL IS ANSWERED AT EVERY STEP, not only inside a transfer (#472):
+// Escape on a keyboard, an Eject of the drive the game goes to, or a new
+// launch. It was seen only by the transfers, so a cancelled job went on
+// listing, evicting other games and unpacking, and one cancelled while it
+// unpacked still ended Ready and started. A cancelled job ends Failed, and
+// takeFinishedJob says nothing for it.
+static bool cancelled(LaunchJob& job) {
+    if (!job.cancel.load()) return false;
+    job.message = "cancelled";
+    job.stage = LaunchJob::Stage::Failed;
+    return true;
+}
+
+// The end of every route: Ready, unless a cancel came during its last step.
+static void finish(LaunchJob& job) {
+    if (cancelled(job)) return;
+    job.stage = LaunchJob::Stage::Ready;
+}
+
 // The copies are const, as the lambda's were.
 void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int platformId,
                   const std::string slug, const std::string fsSlug, const std::string fsName,
@@ -191,6 +210,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         job.got = 0;
         job.total = 0;
     }
+    if (cancelled(job)) return;
 
     // A GAME ON SEVERAL DISCS (#162): every disc fetched by its file id,
     // not as the zip RomM makes of the folder (which carries manuals,
@@ -262,6 +282,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             if (::lstat(entryPath.c_str(), &est) == 0 && !S_ISDIR(est.st_mode))
                 storage::removeEntry(entryPath);
             storage::makeDirs(entryPath);
+            if (cancelled(job)) return;
             const int64_t need =
                 fetchBytes +
                 static_cast<int64_t>(static_cast<double>(fetchBytes) * cache::kOverheadFraction);
@@ -312,7 +333,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             job.romPath = list;
             job.got = 0;
             job.total = 0;
-            job.stage = LaunchJob::Stage::Ready;
+            finish(job);
             return;
         }
     }
@@ -347,7 +368,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // What is missing, and what the install will need on top: each
         // file not yet installed may cost its size again while it goes
         // in. Counted for every large file rather than by a `.pkg` name,
-        // which a PKG does not always have (standalone.cpp, isPkg).
+        // which a PKG does not always have (standalone_rpcs3.cpp, isPkg).
         std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
         int64_t fetchBytes = 0, installBytes = 0;
         for (const romm::RomFile& f : files) {
@@ -362,6 +383,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             fetch.emplace_back(&f, d);
             fetchBytes += f.sizeBytes;
         }
+        if (cancelled(job)) return;
         const int64_t need =
             fetchBytes + installBytes +
             static_cast<int64_t>(static_cast<double>(fetchBytes + installBytes) *
@@ -395,6 +417,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         }
         job.got = 0;
         job.total = 0;
+        if (cancelled(job)) return;
         job.stage = LaunchJob::Stage::Installing;
         std::string rom, why;
         if (!cab::standalone::installGame(*emu, entryPath, job.cancel, &rom, &why)) {
@@ -403,7 +426,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             return;
         }
         job.romPath = rom;
-        job.stage = LaunchJob::Stage::Ready;
+        finish(job);
         return;
     }
 
@@ -443,7 +466,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 std::fprintf(stderr, "[launch] files of %d: %s; playing the one file "
                                      "here\n", id, lerr.c_str());
                 job.romPath = entry;
-                job.stage = LaunchJob::Stage::Ready;
+                finish(job);
                 return;
             }
             const size_t slash = entry.find_last_of('/');
@@ -483,6 +506,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 fetch.emplace_back(&f, d);
                 fetchBytes += f.sizeBytes;
             }
+            if (cancelled(job)) return;
             const int64_t need =
                 fetchBytes +
                 static_cast<int64_t>(static_cast<double>(fetchBytes) * cache::kOverheadFraction);
@@ -587,16 +611,17 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         }
         std::string primary, err;
         romfile::Kind kind = romfile::Kind::Plain;
+        if (cancelled(job)) return;
         job.stage = LaunchJob::Stage::Unpacking;
         if (!romfile::prepareFile(boot, entry, validExts, blockExtract, &primary, &kind,
-                                  &err)) {
+                                  &err, job.cancel)) {
             std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
             job.message = "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
         job.romPath = primary;
-        job.stage = LaunchJob::Stage::Ready;
+        finish(job);
         return;
     }
 
@@ -628,6 +653,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         haveIt = st.st_size == expectedSize;
 
     std::string err;
+    if (cancelled(job)) return;
     if (!haveIt) {
         // ROOM FOR IT FIRST, which until the cache existed nothing checked:
         // the disk filled and stayed full. See cache.h for the policy.
@@ -658,15 +684,28 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // server saw it, and the download answered 404.
         const std::string path =
             "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName);
+        // NO SIZE FROM RomM, NO ROOM CHECK ABOVE (#484, LAUNCH-11's other
+        // half): the same check, once, when the server declares the length.
+        bool roomAsked = expectedSize > 0, noRoom = false;
         const bool ok = client.fetchToFile(path, dest,
-            [&job](int64_t got, int64_t total) {
+            [&job, &roomAsked, &noRoom, &location, id](int64_t got, int64_t total) {
                 job.got = got;
                 job.total = total;
-                return !job.cancel.load();
+                if (!roomAsked && total > 0) {
+                    roomAsked = true;
+                    const int64_t want =
+                        total + static_cast<int64_t>(static_cast<double>(total) *
+                                                     cache::kOverheadFraction);
+                    if (cache::freeBytes(location) < want) {
+                        cache::evictUntilFree(location, want, id);
+                        noRoom = cache::freeBytes(location) < want;
+                    }
+                }
+                return !job.cancel.load() && !noRoom;
             }, &err);
         if (!ok) {
             std::fprintf(stderr, "[launch] download: %s\n", err.c_str());
-            job.message = "Couldn't download this game";
+            job.message = noRoom ? "Not enough space" : "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
@@ -709,6 +748,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         }
     }
 
+    if (cancelled(job)) return;
     job.stage = LaunchJob::Stage::Unpacking;
     std::string primary;
     romfile::Kind kind = romfile::Kind::Plain;
@@ -717,7 +757,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // A file entry is one the console already collapsed, which only
         // happens for a payload no core wanted unpacked. Nothing to do.
         job.romPath = dest;
-        job.stage = LaunchJob::Stage::Ready;
+        finish(job);
         return;
     }
 
@@ -733,6 +773,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     const int64_t unpacked = romfile::unpackedSize(dest, validExts, blockExtract);
     const int64_t need =
         unpacked + static_cast<int64_t>(static_cast<double>(unpacked) * cache::kOverheadFraction);
+    if (cancelled(job)) return;
     if (need > 0 && cache::freeBytes(location) < need) {
         cache::evictUntilFree(location, need, id);
         if (cache::freeBytes(location) < need) {
@@ -743,7 +784,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     }
 
     if (!romfile::prepareFile(dest, entryPath, validExts, blockExtract, &primary,
-                              &kind, &err)) {
+                              &kind, &err, job.cancel)) {
         std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
         job.message = "Couldn't open this game's file";
         job.stage = LaunchJob::Stage::Failed;
@@ -792,5 +833,5 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     }
 
     job.romPath = primary;
-    job.stage = LaunchJob::Stage::Ready;
+    finish(job);
 }

@@ -12,7 +12,7 @@
 #include "screenfx.h"
 #include "sysopts.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 bool App::remoteOnlyHere() {
     return playing && sessionNeedsRemote && players::streaming();
@@ -42,7 +42,7 @@ void App::ovStep(int delta) {
     overlaySlot = ((overlaySlot + delta) % n + n) % n;
     // The Power menu on Home moves with a sound; the pause menu does not
     // (#389, and powerCue further down).
-    if (powerMenu && !playing) sound::play(sound::Cue::Move);
+    if (powerMenu && !playing && !standalonePaused) sound::play(sound::Cue::Move);
 }
 
 auto App::ovLabel(int i) -> const char* {
@@ -70,12 +70,18 @@ auto App::ovLabel(int i) -> const char* {
 // Activate. Over a game it stays silent, like the pause menu it shares a
 // panel with (MMagTech: the pause menu may be the one exception).
 void App::powerCue(sound::Cue c) {
-    if (powerMenu && !playing) sound::play(c);
+    if (powerMenu && !playing && !standalonePaused) sound::play(c);
 }
 
 void App::closeOverlay(bool cue) {
     if (remoteOnlyHere() && !powerMenu) {
         sound::play(sound::Cue::Edge);
+        return;
+    }
+    // B in the Power menu over such a game goes back to the pause menu
+    // (#473, PLAY-18), as its Cancel does.
+    if (remoteOnlyHere() && powerMenu && cue) {
+        backToPauseMenu();
         return;
     }
     if (cue && overlayOpen) powerCue(sound::Cue::Back);
@@ -161,7 +167,10 @@ void App::toggleOverlay() {
         powerMenu = false;
         pauseItems.clear();
         if (!remoteOnlyHere()) pauseItems.push_back(OvResume);
-        if (session.snapshots) {
+        // NOT WHILE A STATE PICKED ON THE GAME'S PAGE IS ON ITS WAY (#484,
+        // PLAY-33): saved then, the newest state on RomM was the game's
+        // first frames, and the next Resume started there.
+        if (session.snapshots && !stateHoldWaiting) {
             pauseItems.push_back(OvSaveState);
             pauseItems.push_back(OvLoadState);
         }
@@ -309,8 +318,8 @@ void App::drawPauseScrim() {
 // rendered. That is the direct payoff of hosting cores in process
 // rather than launching them.
 //
-// Drawn after presentScene because the panel is glass, and it reads the
-// game's own picture through itself.
+// Drawn after presentScene, so it is over the game's picture. The panel is
+// solid, not glass (below).
 void App::drawPauseMenu(float sc) {
     const float ovl = overlayFade.value();
     // NOT UNDER A QUESTION ASKED FROM IT (Change disc, #162): the panel

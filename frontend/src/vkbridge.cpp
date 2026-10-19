@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "gpu.h"
 #include "vkhost_state.h"
 
 namespace cab::vk {
@@ -167,7 +168,9 @@ void destroyShared() {
 // Allocates the one image the picture crosses on, and hands the same memory to
 // EGL as a texture.
 //
-// LINEAR TILING, AND THAT IS A MEASURED ANSWER RATHER THAN THE EASY ONE.
+// LINEAR TILING ON THE DMABUF ROUTE, AND THAT IS A MEASURED ANSWER RATHER
+// THAN THE EASY ONE. (The memory-object route, preferred, is optimally tiled;
+// below.)
 //
 // The obvious worry is that writing into a linear image is slow, and that an
 // optimally-tiled one negotiated through VK_EXT_image_drm_format_modifier
@@ -481,8 +484,10 @@ bool choosePictureRoute(std::string* err) {
         reinterpret_cast<PFNEGLDESTROYIMAGEPROC>(eglGetProcAddress("eglDestroyImage"));
     gGlEglImageTargetTexture2D = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
         eglGetProcAddress("glEGLImageTargetTexture2DOES"));
-    const bool haveEglImage =
-        gEglCreateImage && gEglDestroyImage && gGlEglImageTargetTexture2D;
+    // The EGL route hands a dmabuf, which a GPU without the extension cannot
+    // export (#489, EMU-02).
+    const bool haveEglImage = gEglCreateImage && gEglDestroyImage &&
+                              gGlEglImageTargetTexture2D && gpu::vulkan().externalMemoryDmaBuf;
 
     std::fprintf(stderr,
                  "[vulkan] picture route: %s (video driver %s)\n",

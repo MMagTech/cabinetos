@@ -16,8 +16,9 @@ namespace storage {
 // --- Storage locations ------------------------------------------------------
 //
 // `roms/` and `cache/` repeat on EVERY location rather than living once at the
-// root, and that is not tidiness. Releasing the last keep on a game demotes it
-// to the cache instead of deleting it, and a demotion has to be a rename inside
+// root, and that is not tidiness. Releasing a keep can demote the game to the
+// cache instead of deleting it (keepTheBytes, cache.h), and a demotion has to
+// be a rename inside
 // one filesystem; with kept games on a big drive and one cache at the root, it
 // would mean physically copying gigabytes between disks because somebody
 // changed their mind. A rename cannot cross a filesystem — the kernel returns

@@ -97,8 +97,14 @@ bool isDirectory(const std::string& p) {
     return ::stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
 
+// A NAME NO OTHER CALL SHARES (#483, FILES-01): two threads asking at once
+// made the same probe with O_EXCL, and the one that lost was told a good
+// drive could not be written. A probe a crash left behind no longer
+// answers for the drive either.
 bool canWrite(const std::string& dir) {
-    const std::string probe = dir + "/.cabinetos-write-test";
+    static std::atomic<unsigned> n{0};
+    const std::string probe = dir + "/.cabinetos-write-test." + std::to_string(::getpid()) +
+                              "." + std::to_string(n.fetch_add(1));
     const int fd = ::open(probe.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
     if (fd < 0) return false;
     ::close(fd);

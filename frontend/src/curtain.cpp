@@ -8,7 +8,7 @@
 
 #include "powerprofile.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::startLeaving(Leave what, const std::string& label) {
     leaving = what;
@@ -85,13 +85,13 @@ void App::pumpLeave() {
 // a game.
 //
 // ANYTHING ELSE THAT WANTS THE CURTAIN TAKES IT. A game launched as the
-// console starts, or a press on Play during the lift, brings it down as
-// its own; from then on it is theirs, and this stops drawing the startup
+// console starts, a press on Play during the lift, or Restart or Power off
+// (#393), brings it down as its own; from then on it is theirs, and this stops drawing the startup
 // screen on it.
 void App::pumpArrive() {
     if (!arriving) return;
     if (launchJob.stage.load() != LaunchJob::Stage::Idle || switchPendingId ||
-        leaving != Leave::None || (arriveLifting && curtain.to > 0.0f)) {
+        leaving != Leave::None || poweringDown || (arriveLifting && curtain.to > 0.0f)) {
         arriving = false;
         return;
     }
@@ -128,8 +128,9 @@ void App::startCurtain() {
 
 // ---- The curtain, over everything --------------------------------
 //
-// Last, and over the keyboard and the in-game overlay as well: it is
-// not part of any screen, it is the screen going away. See design.h.
+// Over the screens and the in-game overlay; the keyboard and the dim are
+// drawn after it (frame.cpp). It is not part of any screen, it is the
+// screen going away. See design.h.
 void App::drawCurtain(float sc) {
     {
         const float c = curtain.value();

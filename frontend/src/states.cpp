@@ -15,6 +15,7 @@
 #include "imagecodec.h"
 #include "proc.h"
 #include "screenparts.h"
+#include "statefile.h"
 #include "storage.h"
 
 // A SAVE STATE GOES IN ON ITS OWN DISC (#162 item 9). The disc is in the
@@ -42,8 +43,18 @@ bool loadStateOnItsDisc(GameSession& sess, const std::string& name,
             return false;
         }
     }
-    const bool ok = cab::Core::shared().loadState(bytes);
+    // THE CORE'S BYTES, AND THE ACHIEVEMENT PROGRESS BESIDE THEM when the
+    // state carries it (#279, statefile.h): RetroArch's blocks, or core
+    // data alone, as every state before #279 is.
+    statefile::Parts parts;
+    if (!statefile::split(bytes, &parts)) return false;
+    cab::Core& core = cab::Core::shared();
+    const bool ok = parts.wrapped
+                        ? core.loadState(std::vector<uint8_t>(parts.core, parts.core + parts.coreSize))
+                        : core.loadState(bytes);
     if (ok && !sess.discs.empty()) syncDiscFromCore(sess);
+    // The memory jumped, and what each achievement was waiting for with it.
+    if (ok) ra::stateLoaded(parts.progress, parts.progressSize);
     return ok;
 }
 
@@ -58,12 +69,26 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         notice.say("Not while the disc is changing", Tone::Info);
         return;
     }
+    // A REFUSAL IS A FAILURE, NOT A SYSTEM WITHOUT STATES (#222). A core
+    // with no states at all says a size of 0 (Game & Watch, VeMUlator), and
+    // that is still "No save states". One that has them and would not make
+    // this one (Flycast's "Serializer overflow", seen once off-screen)
+    // failed, and says so.
     std::vector<uint8_t> st;
     if (!core.saveState(st) || st.empty()) {
-        std::fprintf(stderr, "[state] this core cannot serialize\n");
-        notice.say("No save states for this system", Tone::Info);
+        if (core.stateSize() == 0) {
+            std::fprintf(stderr, "[state] this core cannot serialize\n");
+            notice.say("No save states for this system", Tone::Info);
+        } else {
+            std::fprintf(stderr, "[state] the core would not make this state\n");
+            notice.say("Couldn't save the state", Tone::Problem);
+        }
         return;
     }
+    // WITH THE ACHIEVEMENT PROGRESS (#279), as RetroArch's states carry it,
+    // so a state resumed here or on another console goes on counting where
+    // it stopped. None to carry, and the core's bytes go alone, as before.
+    st = statefile::join(st, ra::progress());
     // Named with a timestamp because states accumulate on purpose; a save
     // overwrites, a state does not.
     //
@@ -81,8 +106,10 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     char stamp[48];
     const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
     std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
-    std::string base = sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem;
-    std::replace(base.begin(), base.end(), '/', '_');
+    // RomM's own rewrite of the name, so the state on the drive and on RomM
+    // have one name, and rotation finds what it sent (#484, ROMM-02).
+    std::string base =
+        rommKeptStem(sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem);
     // AND ITS DISC, on a game with several (#162): "Panzer Dragoon (Disc 2)
     // [...]". It travels with the state, so loading it puts that disc in.
     if (!sess.discs.empty()) base += disc::stateNamePart(sess.disc);
@@ -91,7 +118,7 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
 
     storage::makeDirs(sess.stateDir);
     const std::string path = sess.stateDir + "/" + name;
-    if (!writeLocal(path, st)) {
+    if (!cab::writeBytes(path, st)) {
         std::fprintf(stderr, "[state] could not write locally, not uploading\n");
         notice.say("Couldn't save the state", Tone::Problem);
         return;
@@ -110,7 +137,7 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         if (core.snapshot(rgba, w, h) && ui::encodePNG(rgba, w, h, png)) {
             shotName = stem + ".png";
             shotPath = sess.stateDir + "/" + shotName;
-            if (!writeLocal(shotPath, png)) shotPath.clear();
+            if (!cab::writeBytes(shotPath, png)) shotPath.clear();
             std::fprintf(stderr, "[state] picture %ux%u, %zu bytes\n", w, h, png.size());
         } else {
             png.clear();
@@ -161,14 +188,16 @@ void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     char stamp[48];
     const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
     std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
-    std::string base = sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem;
-    std::replace(base.begin(), base.end(), '/', '_');
+    // RomM's own rewrite of the name, so the state on the drive and on RomM
+    // have one name, and rotation finds what it sent (#484, ROMM-02).
+    std::string base =
+        rommKeptStem(sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem);
     const std::string name = base + " [" + stamp + "].png";
     const std::string dir =
         storage::screenshotsDir(storage::currentUser()) + "/" + std::to_string(sess.romId);
     storage::makeDirs(dir);
     const std::string path = dir + "/" + name;
-    if (!writeLocal(path, png)) {
+    if (!cab::writeBytes(path, png)) {
         notice.say("Couldn't save the screenshot", Tone::Problem);
         return;
     }
@@ -235,8 +264,8 @@ void beginLoadLatestState(StateLoad& load, GameSession& sess,
             load.note = err;
             load.serverFailed = true;
             load.tryLocal = true;
-            load.running = false;
             load.ready = true;
+            load.running = false;
             return;
         }
         const romm::Asset* best = nullptr;
@@ -260,8 +289,12 @@ void beginLoadLatestState(StateLoad& load, GameSession& sess,
             load.data = client.fetchAsset("states", best->id);
             load.note = best->fileName;
         }
-        load.running = false;
+        // READY BEFORE NOT RUNNING (#484, PLAY-16): loadPendingStates ends a
+        // launch-screen wait when both read false, so in the other order a
+        // frame between the two stores ran the game one frame before the
+        // state was applied.
         load.ready = true;
+        load.running = false;
     });
 }
 
@@ -395,8 +428,8 @@ void App::standaloneScreenshot() {
     char stamp[48];
     const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
     std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
-    std::string base = session.fsStem.empty() ? sanitisedStem(session.title) : session.fsStem;
-    std::replace(base.begin(), base.end(), '/', '_');
+    std::string base =
+        rommKeptStem(session.fsStem.empty() ? sanitisedStem(session.title) : session.fsStem);
     const std::string dir = storage::screenshotsDir(storage::currentUser()) + "/" +
                             std::to_string(session.romId);
     storage::makeDirs(dir);
@@ -404,6 +437,7 @@ void App::standaloneScreenshot() {
     standaloneShot.path = dir + "/" + standaloneShot.name;
     standaloneShot.romId = session.romId;
     standaloneShot.size = -1;
+    standaloneShot.askedMs = standaloneShot.checkedMs = SDL_GetTicks();
     const proc::Result r = proc::run({"gamescopectl", "screenshot", standaloneShot.path}, 5);
     if (!r.ok()) {
         std::fprintf(stderr, "[screenshot] gamescopectl: %s\n", proc::trimmed(r.err).c_str());
@@ -412,11 +446,23 @@ void App::standaloneScreenshot() {
     }
 }
 
-// Twice a second or so: the file is whole when its size stops changing.
+// Twice a second: the file is whole when its size stops changing. A file
+// gamescope never writes is given up on after ten seconds (#484, PLAY-17),
+// or every later Screenshot would wait behind it for the life of the process.
 void App::pumpStandaloneShot() {
     if (standaloneShot.path.empty()) return;
+    const uint64_t now = SDL_GetTicks();
+    if (now - standaloneShot.checkedMs < 500) return;
+    standaloneShot.checkedMs = now;
     struct stat st;
-    if (::stat(standaloneShot.path.c_str(), &st) != 0 || st.st_size <= 0) return;
+    if (::stat(standaloneShot.path.c_str(), &st) != 0 || st.st_size <= 0) {
+        if (now - standaloneShot.askedMs < 10000) return;
+        std::fprintf(stderr, "[screenshot] gamescope wrote nothing in 10 s: %s\n",
+                     standaloneShot.name.c_str());
+        standaloneShot.path.clear();
+        menuNotice.say("Couldn't save the screenshot", Tone::Problem);
+        return;
+    }
     if (st.st_size != standaloneShot.size) {
         standaloneShot.size = st.st_size;
         return;
@@ -472,7 +518,6 @@ void App::loadPendingStates() {
     if (stateLoad.loaded) {
         stateLoad.loaded = false;
         rewindKeep.reset();   // the history led somewhere else
-        ra::stateLoaded();    // and so did what each achievement was waiting for
         rewindLastFrame = cab::Core::shared().framesRun();
         closeOverlay();
         stateHold = true;

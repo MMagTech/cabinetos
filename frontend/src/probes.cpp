@@ -22,6 +22,7 @@
 #include "catalog.h"
 #include "core.h"
 #include "disc.h"
+#include "fileio.h"
 #include "firstrun.h"
 #include "gpu.h"
 #include "net.h"
@@ -50,23 +51,35 @@ static int romProbe(const char* address, int romId, const char* validExts) {
         return 1;
     }
 
-    std::vector<romm::Game> all;
-    if (!client.fetchGames(0, &all, &err)) {
-        std::fprintf(stderr, "[romm] %s\n", err.c_str());
+    // The one game by its id, not the whole library paged to find it, and
+    // downloaded as a launch downloads it: to a file, with no time limit and
+    // the name escaped (#488, FIRSTRUN-11's faults).
+    romm::Game game;
+    if (!client.fetchGame(romId, &game, &err)) {
+        std::fprintf(stderr, "[romm] no rom with id %d: %s\n", romId, err.c_str());
         return 1;
     }
-    const romm::Game* g = nullptr;
-    for (const auto& x : all) if (x.id == romId) { g = &x; break; }
-    if (!g) { std::fprintf(stderr, "[romm] no rom with id %d\n", romId); return 1; }
+    const romm::Game* g = &game;
 
     std::printf("game        %s\n", g->name.c_str());
     std::printf("platform    %s\n", g->platformName.c_str());
     std::printf("file        %s (%lld bytes)\n", g->fsName.c_str(),
                 static_cast<long long>(g->sizeBytes));
 
-    const std::string path = "/api/roms/" + std::to_string(g->id) + "/content/" + g->fsName;
-    std::vector<uint8_t> bytes = client.fetchBytes(path);
-    if (bytes.empty()) { std::fprintf(stderr, "[romm] download returned nothing\n"); return 1; }
+    const std::string path =
+        "/api/roms/" + std::to_string(g->id) + "/content/" + romm::encodeSegment(g->fsName);
+    char tmp[] = "/tmp/cabinetos-rom-probe-XXXXXX";
+    const int fd = ::mkstemp(tmp);
+    if (fd < 0) { std::fprintf(stderr, "[romm] no scratch file\n"); return 1; }
+    ::close(fd);
+    const bool got = client.fetchToFile(path, tmp, nullptr, &err);
+    std::vector<uint8_t> bytes = got ? cab::readBytes(tmp) : std::vector<uint8_t>{};
+    ::unlink(tmp);
+    if (bytes.empty()) {
+        std::fprintf(stderr, "[romm] download returned nothing%s%s\n", err.empty() ? "" : ": ",
+                     err.c_str());
+        return 1;
+    }
     std::printf("downloaded  %zu bytes\n", bytes.size());
 
     // What it IS, from the bytes — not from the name it happens to have.
@@ -101,16 +114,17 @@ static int romProbe(const char* address, int romId, const char* validExts) {
 // this project that means a command that prints a fact rather than a screen
 // somebody has to describe over the telephone.
 //
-// So there are three, in the same shape as --storage and --core-options: they
-// run before SDL, need no window, no GL and no controller, and can be run over
+// So each has a flag, in the same shape as --storage and --core-options
+// (--first-run with its step and server check, --network and --network-scan,
+// --qr): they run before SDL, need no window, no GL and no controller, and can be run over
 // SSH against the real console without disturbing the session on the television.
 
 // What the network is, what is on the air, and whether this console is still
 // allowed to save a connection.
 //
-// THE LAST LINE IS THE POINT OF THE WHOLE COMMAND. Wi-Fi configuration works
-// today only because the session user is in `wheel`, and Phase 6 is exactly the
-// change that takes it out. That failure presents as a network bug on a machine
+// THE LAST LINE IS THE POINT OF THE WHOLE COMMAND. Wi-Fi saving rests on
+// 60-cabinetos-network.rules (and, on installed consoles, on `wheel` too). If
+// that grant is ever lost the failure presents as a network bug on a machine
 // whose network is fine, so the console answers the question directly.
 static int networkProbe(bool doScan) {
     if (!net::available()) {
@@ -297,6 +311,8 @@ static int firstRunProbe(romm::Client& client, const char* startAt, bool tryServ
                 done.why == firstrun::Why::SignedOut
                       ? (done.clearing ? "NEEDED, signed out; games and accounts not cleared yet"
                                        : "NEEDED, signed out")
+                : done.why == firstrun::Why::NoServer
+                      ? "NEEDED, set up but no server address is set; opens at the server"
                 : !done.done             ? "NEEDED — this console is not set up"
                 : done.why == firstrun::Why::AdoptedExisting
                       ? "not needed — this machine is already configured, so it "
@@ -595,8 +611,7 @@ std::optional<int> earlyProbe(const EarlyProbeOptions& o) {
     const bool volumeTestMode = o.volumeTestMode;
     const bool playtimeTestMode = o.playtimeTestMode;
     const bool discTestMode = o.discTestMode;
-    const int removeAccountId = o.removeAccountId;
-    const bool removeAnyway = o.removeAnyway;
+    const bool filesTestMode = o.filesTestMode;
     const int padsSeconds = o.padsSeconds;
     const bool firstRunRulesMode = o.firstRunRulesMode;
     const bool firstRunWriteMode = o.firstRunWriteMode;
@@ -622,34 +637,7 @@ std::optional<int> earlyProbe(const EarlyProbeOptions& o) {
     if (volumeTestMode) return volume::test();
     if (playtimeTestMode) return playtime::test();
     if (discTestMode) return disc::test();
-    // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
-    // Remove runs, for a test on a console whose PIN the tester does not
-    // have. When something is still owed it says what Remove would ask and
-    // deletes nothing, unless --remove-anyway (the "Remove anyway" answer).
-    if (removeAccountId > 0) {
-        const std::vector<accounts::Account> list = accounts::all();
-        const accounts::Account* who = accounts::find(list, removeAccountId);
-        std::string err;
-        if (!who) {
-            std::fprintf(stderr, "[remove] no account %d\n", removeAccountId);
-            return 1;
-        }
-        if (!accounts::canRemove(who->id, &err)) {
-            std::fprintf(stderr, "[remove] refused: %s\n", err.c_str());
-            return 1;
-        }
-        const int left = sendOwedBeforeRemoving(*who, rommAddress ? rommAddress : "");
-        if (left > 0 && !removeAnyway) {
-            std::fprintf(stderr, "[remove] would ask \"Some saves haven't reached RomM\"; "
-                                 "nothing deleted\n");
-            return 2;
-        }
-        if (!removePersonNow(*who, &err)) {
-            std::fprintf(stderr, "[remove] could not: %s\n", err.c_str());
-            return 1;
-        }
-        return 0;
-    }
+    if (filesTestMode) return filesTest();
     if (padsSeconds > 0) return players::report(padsSeconds);
     if (firstRunRulesMode) return firstRunRules();
     if (firstRunWriteMode) return firstRunWriteTest();
@@ -682,15 +670,46 @@ std::optional<int> storageProbe(const StorageProbeOptions& o) {
     const char* serverCheckAddress = o.serverCheckAddress;
     const int keepersRomId = o.keepersRomId;
     const bool storageReport = o.storageReport;
+    const int removeAccountId = o.removeAccountId;
+    const bool removeAnyway = o.removeAnyway;
 
-    // Needs the storage tree, because the marker and the server address both
-    // live in it — and it must run before anything else looks at the server,
-    // since "is this console set up at all" is the question underneath all of
-    // them.
+    // One probe runs per invocation. Each of these needs the storage tree:
+    // first run's marker and the server address live in it.
     if (firstRunProbeMode) {
         romm::Client fr;
         accounts::loadActiveToken(fr);
         return firstRunProbe(fr, firstRunStep, firstRunServerCheck);
+    }
+    // REMOVE A PERSON WITHOUT THE SCREENS (#194): exactly what Settings'
+    // Remove runs, for a test on a console whose PIN the tester does not
+    // have. When something is still owed it says what Remove would ask and
+    // deletes nothing, unless --remove-anyway (the "Remove anyway" answer).
+    // HERE, after the drives are mounted, as they are when Settings' Remove
+    // runs: a kept game on a drive that was not mounted lost its keep marker
+    // (#488, FIRSTRUN-15).
+    if (removeAccountId > 0) {
+        const std::vector<accounts::Account> list = accounts::all();
+        const accounts::Account* who = accounts::find(list, removeAccountId);
+        std::string err;
+        if (!who) {
+            std::fprintf(stderr, "[remove] no account %d\n", removeAccountId);
+            return 1;
+        }
+        if (!accounts::canRemove(who->id, &err)) {
+            std::fprintf(stderr, "[remove] refused: %s\n", err.c_str());
+            return 1;
+        }
+        const int left = sendOwedBeforeRemoving(*who, rommAddress ? rommAddress : "");
+        if (left > 0 && !removeAnyway) {
+            std::fprintf(stderr, "[remove] would ask \"Some saves haven't reached RomM\"; "
+                                 "nothing deleted\n");
+            return 2;
+        }
+        if (!removePersonNow(*who, &err)) {
+            std::fprintf(stderr, "[remove] could not: %s\n", err.c_str());
+            return 1;
+        }
+        return 0;
     }
 
     if (rommAddress && romProbeId > 0)
@@ -707,11 +726,13 @@ std::optional<int> storageProbe(const StorageProbeOptions& o) {
     // case, not the clean one. It means either the core genuinely has none, or
     // it declares them through an API generation this host does not read — and
     // the second is indistinguishable from the first without going and looking.
-    // NOT when a specific core and ROM were named. --core-options-detail then
-    // means "show me THAT core's table with a game loaded", which is the only
-    // way to see the three that declare nothing until they know what they are
-    // running — Dolphin, FBNeo and MAME. Sweeping the directory instead would
-    // report zero for exactly the cores the question is about.
+    // NOT when a specific core and ROM were named, or a launch was asked for.
+    // A core's table with a game loaded, the only way to see the three that
+    // declare nothing until they know what they are running (Dolphin, FBNeo
+    // and MAME), is printed by a library launch: --launch <id> with
+    // --core-options-detail (launch.cpp, reportLoadedOptions). With --core
+    // and --rom nothing prints it (#488, FIRSTRUN-21). Sweeping the directory
+    // instead would report zero for exactly the cores the question is about.
     if (coreOptionsAudit && !(corePath && romPath) && autoLaunchId == 0) {
         DIR* d = opendir(coreDir);
         if (!d) {

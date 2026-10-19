@@ -171,7 +171,7 @@ private:
     void startWifiScan();
     void joinSelected(const std::string& passphrase);
     // The password keyboard for the chosen network; `why` goes in its field
-    // ("Wrong password"). Settings' Wi-Fi does the same (main.cpp).
+    // ("Wrong password"). Settings' Wi-Fi does the same (wifi.cpp).
     void openPassphrase(const std::string& why);
     void startServerProbe(const std::string& address);
     void startPairing();
@@ -1074,7 +1074,11 @@ void Flow::pumpJobs() {
             // the old code is still an approval, and its account is written.
             pollPairing();
         } else if (state == 0) {
-            pollPairing();      // still waiting; ask again on its interval
+            // Still waiting: asked again on its interval, ON THE PAIRING STEP
+            // ONLY (#485). Left, it went on asking twice every five seconds
+            // on every other step; coming back makes a new code (enterStep).
+            if (machine_.step() == firstrun::Step::Pair) pollPairing();
+            else pairingLive_ = false;
         } else if (state == -2) {
             // THE CODE IS OVER ON THE SERVER: ten minutes went by, or somebody
             // pressed Deny on the phone. Its QR now opens a page refusing it,
@@ -1709,6 +1713,16 @@ Outcome Flow::run() {
                 }
 
                 case SDL_EVENT_KEY_DOWN:
+                    // THE SYSTEM'S KEY REPEAT, as the console's own input
+                    // drops it (input.cpp, #443): a held Return, Space or
+                    // Escape acted again at every repeat, and a held
+                    // Backspace went back step after step (#485). Backspace
+                    // still repeats where it deletes, on the keyboard.
+                    if (e.key.repeat &&
+                        (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER ||
+                         e.key.key == SDLK_SPACE || e.key.key == SDLK_ESCAPE ||
+                         (e.key.key == SDLK_BACKSPACE && !keyboard_.isOpen())))
+                        break;
                     if (keyboard_.isOpen()) {
                         switch (e.key.key) {
                             case SDLK_LEFT: keyboard_.moveFocus(-1, 0); break;

@@ -163,5 +163,4 @@ int main(int argc, char **argv)
         XFlush(d);
         usleep(33000);
     }
-    return 0;
 }

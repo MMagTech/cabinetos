@@ -181,11 +181,10 @@ bool available();
 // What polkit says, right now, about saving a system connection — "yes", "no",
 // "auth_admin_keep", or a reason it could not be asked.
 //
-// THIS IS AN INSTRUMENT AND IT EXISTS BECAUSE OF A SPECIFIC TRAP. The grant is
-// ours today only by way of the session user being in `wheel`, which is also
-// what grants sudo, and Phase 6's developer-mode work is exactly the change
-// that takes it away. That failure has no error message anywhere near its
-// cause: Wi-Fi simply stops saving, on a machine whose network is fine. So the
+// THIS IS AN INSTRUMENT AND IT EXISTS BECAUSE OF A SPECIFIC TRAP. The grant
+// is 60-cabinetos-network.rules, and the session user is ALSO in `wheel`
+// (the installer adds it), which Bazzite's own rule grants too. If either
+// ever changes, the failure has no error message anywhere near its cause: Wi-Fi simply stops saving, on a machine whose network is fine. So the
 // console can ask the question directly and answer it in one line, instead of
 // somebody spending a day on it.
 std::string polkitVerdict();

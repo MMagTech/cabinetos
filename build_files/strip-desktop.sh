@@ -21,8 +21,7 @@
 # masked, and the desktop applications are gone. That satisfies "the user never
 # sees a desktop" without betting the image on a large dependency cascade.
 #
-# Phase 2 owns the decision about actually deleting Plasma. A candidate list is
-# at the bottom of this file, commented out.
+# Plasma stays installed: docs/PROJECT.md open question 1.
 
 # ===========================================================================
 #  DO NOT REMOVE — HDMI-CEC
@@ -35,11 +34,10 @@
 #   cec-onboot/onsleep/onpoweroff/poweroff-tv/active-source units
 #   pulse8-cec-inputattach@, rainshadow-cec-inputattach@
 #
-# HDMI-CEC is a hard requirement: the console turns the television on and is
-# woken by it. v4l-utils reads as a webcam package, linuxconsoletools as a
-# joystick utility. Both are load-bearing. build_files/require-cec.sh fails the
-# build if any of them go missing — see it for the full reasoning, and
-# docs/PROJECT.md under Hardware.
+# Kept installed for HDMI-CEC, which is shelved (2026-09-24) but may come
+# back. v4l-utils reads as a webcam package, linuxconsoletools as a joystick
+# utility. build_files/require-cec.sh fails the build if any of them go
+# missing: see it, and docs/PROJECT.md open question 31.
 
 source /ctx/lib.sh
 
@@ -236,33 +234,5 @@ rm -f /usr/lib/udev/rules.d/99-steamos-automount.rules \
 
 group_end
 
-# ---------------------------------------------------------------------------
-# PHASE 2 CANDIDATES — DO NOT ENABLE WITHOUT A VM BOOT TEST
-# ---------------------------------------------------------------------------
-#
-# The packages below are what a full Plasma removal would start from. They are
-# listed here so Phase 2 has a starting point rather than a blank page. Each one
-# needs to be validated, and the frontend toolkit choice (Phase 3) has to be
-# made first, because it determines which Qt and Wayland libraries must stay.
-#
-# See docs/PROJECT.md open question 1.
-#
-# remove_pkgs "Phase 2: full Plasma removal" \
-#     plasma-desktop \
-#     plasma-workspace \
-#     plasma-workspace-wayland \
-#     plasma-nm \
-#     plasma-pa \
-#     plasma-breeze \
-#     kwin \
-#     kwin-wayland \
-#     kde-cli-tools \
-#     kdeplasma-addons \
-#     xdg-desktop-portal-kde
-#
-# Known blockers to resolve before trying:
-#   - plasma-foreground-booster-dmemcg depends on Plasma and is part of
-#     Bazzite's game priority handling. Find out what it actually needs.
-#   - xdg-desktop-portal-kde needs a replacement portal, or Flatpak-shaped
-#     things lose file dialogs and permissions.
-#   - Bazzite versionlocks plasma-* and qt6-*; a removal may fight the lock.
+# A full Plasma removal was considered and not done: docs/PROJECT.md open
+# question 1 (packages that never run cost nothing).

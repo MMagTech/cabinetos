@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cstdio>
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::askWifi() {
     if (settingsWifi.running.load()) return;
@@ -199,8 +199,11 @@ void App::takeWifiJoin() {
         }
     }
     if (done) {
-        // "Secrets were required" is nmcli's wrong password.
+        // "Secrets were required" is nmcli's wrong password. The same three
+        // words as first run's (setup.cpp), so one nmcli message never gets
+        // two answers (#485, SETTINGS-17).
         const bool badPass = err.find("ecrets") != std::string::npos ||
+                             err.find("password") != std::string::npos ||
                              err.find("psk") != std::string::npos;
         // Is the keyboard still up, waiting on this very join?
         const bool waiting = keyboard.isOpen() && keyboard.busy() &&

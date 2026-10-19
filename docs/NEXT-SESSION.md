@@ -11,113 +11,82 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-18:** `latest` and `testing` are **2026.10.18.6** (revision
-c1f716d, digest sha256:78ec67bf...a843), #508 ("PS1 gets a DualShock, DS
-touch on the right stick, DS 3D upscaled (#345, #374, #219)"), merged on
-his go after his TV check and promoted; #345, #374 and #219 are closed. PS1
-games get a DualShock (device 517); DS touch is on the right stick (R3
-touches); melonDS is built with its OpenGL renderer and the core host gives
-a core that asks for desktop OpenGL a context of its own beside the UI's
-(`core_hwrender.cpp`), at Balanced 4x and Quality 6x (Performance keeps the
-software renderer). The A9 is on the testing channel; its PIN is off until
-he turns it back on. The machines' addresses are in his local notes, which
-CLAUDE.md loads; the test tools read them from the environment
+**2026-10-19, morning.** `latest` is **2026.10.18.7** (#516, "Ready for RomM
+5.4, and six small fixes a player can meet", merged and promoted on his go
+2026-10-18). `testing` is **2026.10.19.2** (revision a760620): #517, "Overnight
+batch", built unattended overnight by nine sessions on separate files and
+combined on branch `overnight-2026-10-19`. Not merged. The A9 is on the
+testing channel and still runs 2026.10.18.7; its PIN is off. His server can
+move to RomM 5.4 now that #516 is out (database backup first; #401 was not
+run against a 5.4 server). The machines' addresses are in his local notes,
+which CLAUDE.md loads; the tools read them from the environment
 (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`).
 
-**2026-10-18, evening: FSR for the Xbox 360 picture was tried on the TV and
-not shipped** (MMagTech: "the whole point of the OS is focusing on gameplay";
-off is also what Xenia and Batocera ship). The research, Edge's flags at the
-pin, the A9 numbers and his words are in docs/PROJECT.md, question 34,
-"DECIDED, MMagTech 2026-10-18". Nothing on consoles changed. Found on the
-way and recorded there, not filed: black patches on Gears of War 2's
-character models (Unreal's MSAA tiling; Xenia Canary fixed it 2026-10-06,
-Edge has not taken it yet, so the next Edge pin that carries it is the fix)
-and one hang each in Gears of War and Gears of War 2 (Edge's guest-thread
-scheduler is the lead). **His rule from the evening: no issue is opened
-unless he asks for one.** Things seen once while testing go in PROJECT.md
-or the pull request, not the tracker; the backlog is full of issues for
-faults no player has met.
-
-**The ecosystem, from MMagTech 2026-10-18:** CabinetOS is the console at
-home; **Cabinet Go** (the old Cabinet iOS app, renamed, at
-github.com/MMagTech/cabinet-go) is the pocket version that plays only the
-handheld systems. It is not finished and follows at a later, unknown date.
-Every other Apple app is abandoned. The docs that call Cabinet "the Apple
-TV app" (CONTRIBUTING.md, docs/CABINET.md, PROJECT.md's banner, README.md,
-the site) need reviewing against this.
-
-**Steps 1 to 4 of the #398 plan are done** (#398, "Audit the code and
-restructure it for contributors (main.cpp is 20,000 lines)"): the guide
-(#426), the docs tidy (#427), and the faults: every recorded fault is either
-fixed in a pull request into `faults` (#429 to #498) or in one of 21 issues
-grouped by area in the Later milestone (#471 to #493). The list of every
-fault with its verdict is `faults-list.md` in the audit folder (its path is
-in the local notes).
+**His rules from 2026-10-18:** no issue is opened unless he asks for one
+(findings go in the pull request or PROJECT.md); FSR for Xbox 360 stays off
+(PROJECT.md, question 34). His decisions that night, with the items still
+open, are in #517's body.
 
 ## Next
 
-1. **Finish #516, "Ready for RomM 5.4, and six small fixes a player can
-   meet"** (#401, #402, #478, #477, #417, #509 part 1, #387, #412), built as
-   testing image 2026.10.18.7 (8807f9d) on 2026-10-18 evening. Left: verify the testing image from
-   the A9, his short TV check (the PS5 touchpad shows no arrow; a system
-   reopened after a minute logs `read again`; a game plays with sound),
-   merge on his go, close the issues. Then his server can move to RomM 5.4, with a
-   database backup first; #401 was not run against a 5.4 server.
-2. **The automatic checks report only until 2026-10-25**, then fail a pull
-   request: RomM paths outside the client, docs naming missing files, new
-   compiler warnings in touched files, the self-tests. Read their first
-   week's reports before that date and fix what they find, so nothing turns
-   red by surprise (CONTRIBUTING.md, "What CI checks").
-3. **A priority list of every open issue, then work through it**
-   (MMagTech, 2026-10-18). The Later milestone holds 66, including
-   the three found at the TV on 2026-10-18, ranked with the rest and no
-   sooner: #509, "A mouse arrow shows over Home and games (a PS5 pad's
-   touchpad moves it); hide it, as question 16 decided"; #228, "Sound can
-   die until a restart (the chip power fix of #280 is in; it came back
-   2026-10-18)", reopened with the day's findings (#510 folded into it);
-   #511, "Every update downloads about 310 MB
-   that did not change (the boot splash and OS layers differ in every
-   image)". For the
-   faults step's 21 (#471 to #493), the view he was given: fix the ones a
-   player could hit, close the developer-only ones with "found by reading,
-   reopen on a report"; show him the list before closing anything, ask his
-   decisions as one short list, keep the TV checks for one sitting at the
-   end. Player reports and features come first.
-4. **Review the docs for Cabinet Go** (above).
-5. **The monthly health check** starts after item 2: the checks' reports
-   (warnings, long files, unused code, PROJECT.md's index) and the Later
-   milestone, once a month.
+1. **Finish #517.** He installs 2026.10.19.2 on the A9 (Settings, System, System
+   update), then the TV check, one step at a time, waiting for "go":
+   - A Genesis game (Sonic) fills a 4:3 shape, not stretched wide (#220).
+   - Open a system's grid: covers lift a little slower, 180 ms (HOME-06).
+   - Destroy All Humans! 2's page says "Disc can't be read" (#506).
+   - Start a game, open the Power menu, choose Restart: the picture fades
+     to black over about a second, silently, then restarts (#393).
+   - Super Mario Land signed in to RetroAchievements: save a state, play
+     on, load it; the log says "[ra] the state's achievement progress
+     restored" (#279).
+   - A PS3 game plays; RPCS3's log says "VSync Mode: Full" (read it, no TV).
+   - An N64 game plays without a hitch twice a second (#254).
+   - The usual: a game with sound.
+   Then merge on his go. It closes 22 issues (listed in #517); two commits
+   say "Fixes #473" and "Fixes #222" though both are only partly done, so
+   GitHub closes them too: reopen both at once with what is left (#473: the
+   power button while an emulator of its own has the screen; #222: the
+   retry fallback). Then strike from #485's list the "Add an account code
+   approved while closed" item (his call: works as is). #422 closes as not
+   a console fault: his server's PS1 Primal Rage file is the Saturn disc.
+   **#511, measured:** the 254 MB splash layer came out identical between
+   the two overnight images (19308fe, a760620), where it used to change
+   every time. The 70 MB OS layer changed, as it must: two scripts in
+   system_files/ changed between them. Its proof is the next image built
+   with no change under build_files/ or system_files/ (method in #517).
+2. **The priority list** of the 37 still open, as one short list for his
+   yes or no (drafted in the 2026-10-19 morning message): fix next, needs
+   the TV, waiting on others, needs his decision, close.
+3. **The automatic checks report only until 2026-10-25**, then fail a pull
+   request: read their first week's reports and fix what they find
+   (CONTRIBUTING.md, "What CI checks").
+4. **Review the docs for Cabinet Go**: Cabinet is now the pocket version
+   for handhelds, unfinished; the docs that call it "the Apple TV app"
+   (CONTRIBUTING.md, docs/CABINET.md, PROJECT.md's banner, README.md, the
+   site) need reviewing.
+5. **The monthly health check** starts after item 3.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
-- The 21 issues from the faults step (#471 to #493, each titled by its
-  fault), and the audit's older ones: #402,
-  "A one-file game whose file name begins with # or ? fails to download (the
-  name is cut before the server sees it)"; #404, "The launch worker writes
-  the job's entry path while the frame thread reads it"; #405,
-  "favorites.json is written from two threads through the same temporary
-  file with no lock"; #406, "Four background threads are never stopped at
-  exit (pairing, remove and sign out, reconnect, drive backfill)" (its
-  Add-account part is fixed in #470); #380, "The console follows any web
-  address in RomM's data, with the RomM sign-in attached".
-- #487, "CI, the bots and the tools: faults left", needs one thing only
-  MMagTech can do: the BASE_UPDATE_TOKEN secret, without which bot pull
-  requests start no checks.
-- #329, "Release notes for every update, and a way to see them from the
-  console"; #381, "Remote Play: stream with no screen connected"; #387, "A
-  cover fixed on RomM shows only after the console restarts"; #390,
-  "Headphones don't take over after a Remote Play session (waiting on
-  Sunshine)"; #391, "Headphones in at start get full volume"; #393, "Power
-  off and Restart cut the picture abruptly"; #181, "Updates and DLC as
-  separate files in RomM (Switch, PS3, Xbox 360)"; #411, "Connecting
-  Moonlight can start the game Home has focused"; #412, "The log names the
-  previous emulator when a PS2 game starts ("running Beetle Saturn")";
-  #417, "The diagnostic report stops downloading at about 2.5 MB (its ten
-  seconds are counted as 250 ms per wait)"; #422, "Primal Rage (PS1) will
-  not start: PCSX-ReARMed says its CHD is not a valid CD image"; #506, "A
-  PS2 disc PCSX2 cannot open starts as if it were playing, with no message"
-  (found headless while testing #505; the case is Destroy All Humans! 2,
-  whose CHD on his server was made with `createcd` from a DVD).
+- **His decisions:** #391 (headphones at full volume), #291 (the Rumble
+  row's place), #484's original-Xbox item (a second person blocked by
+  another's stranded save: he wants another way; the Xbox 360 way, saves
+  copied off to their owner at the next start, was offered), #288 and #339
+  (set aside; reasons in coreoptions.cpp and PROJECT.md question 34).
+- **The game page's launch messages, later** (MMagTech, 2026-10-19, at the
+  TV): "Disc can't be read" sits as a loose grey line under Download, as do
+  all ten or so reasons Play or Download fails ("Couldn't start this game",
+  "Not enough space", "No PS2 BIOS on your server", the keys and licence
+  ones). He wants their placement (the Play row's right end, in amber, was
+  offered; or the bottom pill) and their wording reviewed together, with a
+  way to cycle through each on the TV first, like `--notice-gallery`: he
+  has never seen half of them. Not an issue.
+- **Waiting on others:** #297 and #390 (Sunshine), #346 and #353 (RomM's
+  save channels; revisit around mid-January 2027), #487's
+  BASE_UPDATE_TOKEN secret (his), Xenia Edge taking Canary's Unreal tiling
+  fix (PROJECT.md, question 34).
+- **#228, sound dying:** investigated 2026-10-19 (PROJECT.md section 46, a
+  leading cause and the measurement that would confirm it, on the TV).
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on

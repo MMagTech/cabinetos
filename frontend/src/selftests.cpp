@@ -1,15 +1,26 @@
 #include "selftests.h"
 
+#include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "accounts.h"
+#include "covercache.h"
+#include "fileio.h"
 #include "firstrun.h"
+#include "pending.h"
+#include "prefs.h"
+#include "romm.h"
 #include "server.h"
 #include "storage.h"
 
@@ -138,10 +149,10 @@ int firstRunWriteTest() {
         };
         const std::vector<std::string> gone = {
             r + "/roms/snes/1 - Kept.sfc",       r + "/cache/snes/2 - Cached.sfc",
-            r + "/users/1 - A/saves/snes/1/x.srm", r + "/users/1 - A/pending/1-x.srm",
+            r + "/users/1 - A/saves/snes/1/x.srm", r + "/users/1 - A/pending/1-x.srm.pending",
             r + "/covers/srv_6005/a.jpg",        r + "/config/user.json",
             r + "/config/accounts.json",         home + "/.config/cabinetos/accounts/1.json",
-            home + "/.config/cabinetos/pin",     home + "/.config/cabinetos/romm.json",
+            home + "/.config/cabinetos/pin",
             // What was learned per game, by rom id: the next server's game 1
             // is another game (FILES-12).
             r + "/games/1.json",                 r + "/games/1.facts.json",
@@ -218,10 +229,13 @@ int accountsTest() {
         std::fprintf(stderr, "[accounts] could not make a scratch root\n");
         return 1;
     }
-    // Both halves have to move: the list follows the storage root, the tokens
-    // follow HOME. Missing either one writes into the real console.
+    // All three have to move: the list follows the storage root, the tokens
+    // follow HOME, and the drive search would make each person's empty
+    // CabinetOS/roms and cache folders on every plugged-in drive (#488).
+    // Missing any one writes into the real console.
     storage::setRoot(root);
     setenv("HOME", root, 1);
+    setenv("CABINETOS_DRIVES", (std::string(root) + "/drives").c_str(), 1);
     std::string serr;
     if (!storage::ensureTree(&serr)) {
         std::fprintf(stderr, "[accounts] scratch root unusable: %s\n", serr.c_str());
@@ -388,7 +402,150 @@ int firstRunRules() {
             fail("a fully configured machine could not finish setup", f);
     }
 
+    // WHICH SCHEME THE SERVER STEP TRIES FIRST (#479): http for an address
+    // that is the person's own, Tailscale's 100.64.0.0/10 included, and https
+    // for the rest. The wrong one first cost a try at every heartbeat.
+    const struct { const char* host; bool local; } schemes[] = {
+        {"100.101.1.2", true},   {"100.101.1.2:8080", true}, {"100.64.0.1", true},
+        {"100.127.255.254", true}, {"100.128.0.1", false},   {"100.63.0.1", false},
+        {"192.168.1.10:6005", true}, {"romm", true},         {"romm.example.com", false},
+    };
+    for (const auto& c : schemes) {
+        ++cases;
+        if (romm::looksLocal(c.host) != c.local) {
+            ++failures;
+            std::printf("  FAIL  looksLocal(\"%s\") is not %s\n", c.host,
+                        c.local ? "true" : "false");
+        }
+    }
+
     std::printf("first-run rules: %d fact combinations, %d failure%s\n", cases,
                 failures, failures == 1 ? "" : "s");
+    return failures == 0 ? 0 : 1;
+}
+
+// What a full disk or a cut write leaves behind (#482). Every file the
+// console replaces goes through cab::writeBytes; this proves the rules it
+// promises in fileio.h, and the callers with rules of their own on top:
+// pending markers, prefs::set and the cover cache's sweeps. A full disk is a
+// file size limit here (RLIMIT_FSIZE, with SIGXFSZ ignored so the write
+// fails rather than the process). A power cut cannot be made headless; the fsync is read, not run.
+int filesTest() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+    auto exists = [](const std::string& p) {
+        struct stat st{};
+        return ::stat(p.c_str(), &st) == 0;
+    };
+
+    char root[] = "/tmp/cabinetos-files-XXXXXX";
+    if (!mkdtemp(root)) {
+        std::fprintf(stderr, "[files] could not make a scratch root\n");
+        return 1;
+    }
+    setenv("CABINETOS_DRIVES", (std::string(root) + "/drives").c_str(), 1);
+    storage::setRoot(root);
+    std::string serr;
+    if (!storage::ensureTree(&serr)) {
+        std::fprintf(stderr, "[files] scratch root unusable: %s\n", serr.c_str());
+        return 1;
+    }
+    std::printf("scratch root  %s\n\n", root);
+
+    // 1. A good file, then a write the disk cannot take: the good file stays.
+    const std::string path = std::string(root) + "/a/b/good.json";
+    check(cab::writeBytes(path, std::string("{\"good\":true}\n")),
+          "a file is written, its folders made");
+    const std::vector<uint8_t> big(256 * 1024, 'x');
+    struct rlimit was{};
+    ::getrlimit(RLIMIT_FSIZE, &was);
+    void (*oldXfsz)(int) = std::signal(SIGXFSZ, SIG_IGN);
+    struct rlimit tight = was;
+    tight.rlim_cur = 64 * 1024;
+    ::setrlimit(RLIMIT_FSIZE, &tight);
+    const bool bigWrote = cab::writeBytes(path, big);
+    ::setrlimit(RLIMIT_FSIZE, &was);
+    std::signal(SIGXFSZ, oldXfsz);
+    check(!bigWrote, "a write the disk cannot hold says so");
+    const std::vector<uint8_t> after = cab::readBytes(path);
+    check(std::string(after.begin(), after.end()) == "{\"good\":true}\n",
+          "and the file it was replacing is untouched");
+    check(!exists(path + ".placing"), "and no temporary is left");
+
+    // 2. A credential is never readable by anybody else, not even briefly.
+    const std::string secret = std::string(root) + "/secret.json";
+    ::close(::open((secret + ".placing").c_str(), O_WRONLY | O_CREAT, 0644));
+    check(cab::writeBytes(secret, std::string("token\n"), 0600), "a 0600 file is written");
+    struct stat st{};
+    check(::stat(secret.c_str(), &st) == 0 && (st.st_mode & 0777) == 0600,
+          "with mode 0600, over a temporary a dead run left at 0644");
+
+    // 3. Pending markers: written whole, and a temporary is not one.
+    storage::User u;
+    u.id = 1;
+    u.name = "files-test";
+    cache::Owed o;
+    o.romId = 7;
+    o.emulator = "files-test";
+    o.fileName = "Game.srm";
+    o.localPath = std::string(root) + "/Game.srm";
+    cache::markPending(u, o, 123);
+    const std::string stray = storage::pendingDir(u) + "/8-Other.srm.pending.placing";
+    ::close(::open(stray.c_str(), O_WRONLY | O_CREAT, 0644));
+    const std::vector<cache::Owed> owed = cache::owed(u);
+    check(owed.size() == 1 && owed[0].romId == 7 && owed[0].fileName == "Game.srm",
+          "a marker reads back as what was owed");
+    check(cache::pendingCount(u) == 1, "a cut write's temporary is not counted as owed");
+
+    // 4. Two prefs::set at once keep both changes (Steam's thread sets one).
+    std::vector<std::thread> ts;
+    for (int t = 0; t < 8; ++t) {
+        ts.emplace_back([t] {
+            for (int i = 0; i < 50; ++i)
+                prefs::set("files_test_" + std::to_string(t), std::to_string(i));
+        });
+    }
+    for (std::thread& t : ts) t.join();
+    bool allKept = true;
+    for (int t = 0; t < 8; ++t)
+        allKept = allKept && prefs::get("files_test_" + std::to_string(t), "") == "49";
+    check(allKept, "eight threads setting their own key keep every last value");
+
+    // 5. The cover cache's sweeps (FILES-04, 05): the size sweep leaves the
+    // tile map and a cover being written, and the platform sweep removes a
+    // link without following it.
+    covercache::setServer("files-test");
+    const std::string covers = covercache::dir() + "/" + storage::safeSegment("files-test");
+    const std::string pic(1000, 'c');
+    const time_t now = std::time(nullptr);
+    auto aged = [&](const std::string& p, const std::string& body, time_t age) {
+        cab::writeBytes(p, body);
+        const struct timeval tv[2] = {{now - age, 0}, {now - age, 0}};
+        ::utimes(p.c_str(), tv);
+    };
+    aged(covers + "/tiles.tsv", "1\t2025-01-01\t3\tcover\n", 1000);
+    aged(covers + "/1/old.png", pic, 100);
+    aged(covers + "/1/new.png", pic, 50);
+    aged(covers + "/1/coming.png.part", pic, 0);
+    covercache::evict(1500);
+    check(!exists(covers + "/1/old.png") && exists(covers + "/1/new.png"),
+          "the size sweep removes the least recently used cover");
+    check(exists(covers + "/tiles.tsv"), "and leaves the tile map, though it is the oldest");
+    check(exists(covers + "/1/coming.png.part"), "and a cover still being written");
+    const std::string outside = std::string(root) + "/outside";
+    cab::writeBytes(outside + "/keep.txt", std::string("keep\n"));
+    ::symlink(outside.c_str(), (covers + "/99").c_str());
+    covercache::sweep({1});
+    struct stat lst{};
+    check(::lstat((covers + "/99").c_str(), &lst) != 0,
+          "a platform the server lost goes, though its folder is a link");
+    check(exists(outside + "/keep.txt") && exists(covers + "/1/new.png"),
+          "and what the link pointed at, and a live platform, stay");
+
+    storage::removeEntry(root);
+    std::printf("\nfiles: %d failure%s\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }

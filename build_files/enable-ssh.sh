@@ -10,7 +10,8 @@
 #
 #   File access        Settings, Storage. Port 22: SFTP to the saves and
 #                      games folders only, a password shown on the TV.
-#   Developer access   Settings, System. Port 2222: the full command line,
+#   Developer access   Settings, About (after seven presses on Version).
+#                      Port 2222: the full command line,
 #                      the same password (or a key). "When they turn it on,
 #                      they now are a developer. Same install."
 #

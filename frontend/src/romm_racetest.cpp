@@ -10,7 +10,7 @@
 // and the token a pairing hands back.
 //
 // AGAINST A STAND-IN, NEVER RomM. The stand-in at `address` (the
-// restructure's suite runs racemock.py, #398) answers these requests from
+// restructure's suite's stand-in, now tools/racemock.py) answers these requests from
 // memory: the heartbeat; any /api/roms page with one game, id 1, `race.sfc`
 // on platform 1, and that game by id; its cover; its content, whole or by a
 // range; a save upload; a state deletion; /api/collections, empty and with a

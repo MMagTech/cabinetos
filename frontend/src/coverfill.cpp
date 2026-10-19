@@ -9,7 +9,7 @@
 
 #include "covercache.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // STARTED AGAIN BY AN ACCOUNT SWITCH, which builds new tiles with no
 // covers. It used to run at boot only, so after a switch the Library's

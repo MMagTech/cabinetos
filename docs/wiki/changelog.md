@@ -4,6 +4,78 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.19.2 {#v2026-10-19-2}
+
+*19 October 2026*
+
+- **New:** save states keep your RetroAchievements progress. Loading a state
+  no longer starts every achievement's count over, here or on another
+  console, as RetroArch does. ([#279](https://github.com/MMagTech/cabinetos/issues/279))
+- **New:** Restart and Power off fade the screen to black over a second,
+  silently, instead of cutting the picture off. ([#393](https://github.com/MMagTech/cabinetos/issues/393))
+- **Fixed:** updates downloaded about 320 MB that had not changed. An update
+  now downloads only the parts that changed. ([#511](https://github.com/MMagTech/cabinetos/issues/511))
+- **Fixed:** Genesis games were drawn too wide, and a game that changes its
+  picture shape mid-game kept its first one. Games now use the shape they
+  ask for. ([#220](https://github.com/MMagTech/cabinetos/issues/220))
+- **Fixed:** N64 games stuttered about twice a second. They play smoothly
+  now, with rewind still there. ([#254](https://github.com/MMagTech/cabinetos/issues/254))
+- **Fixed:** PS3 games could drop pictures, because the emulator ignored the
+  console's VSync setting. VSync is on now.
+- **Fixed:** each N64, PSP, Dreamcast, GameCube or Wii game left some
+  graphics memory behind when it ended. It is all given back now. ([#489](https://github.com/MMagTech/cabinetos/issues/489))
+- **Fixed:** a PS2 disc the emulator cannot open started with nothing on the
+  screen. The game's page now says "Disc can't be read". ([#506](https://github.com/MMagTech/cabinetos/issues/506))
+- **Fixed:** a save state that failed said "No save states for this system".
+  It now says "Couldn't save the state". ([#222](https://github.com/MMagTech/cabinetos/issues/222))
+- **Fixed:** pressing Play again just as a game started, or cancelling a
+  download, could leave the screen black or carry on downloading. The game
+  starts, or the download stops. ([#472](https://github.com/MMagTech/cabinetos/issues/472))
+- **Fixed:** Sleep or Power off chosen while a game was starting could
+  restart the console instead, and over a PS3, Switch, Xbox or Wii U game
+  the Power menu slept before the game had closed. It now waits for the
+  game and closes it first. ([#473](https://github.com/MMagTech/cabinetos/issues/473))
+- **Fixed:** a system or collection of more than 500 games could come back
+  short, show games twice, or freeze the screen while it filled. It fills to
+  the end, once, while you move around. ([#471](https://github.com/MMagTech/cabinetos/issues/471))
+- **Fixed:** the picture froze while Search, Remote Play, Tailscale, Add a
+  controller or Wii Remote pairing waited, or as the console came back
+  online. These waits now happen behind the screen. ([#481](https://github.com/MMagTech/cabinetos/issues/481))
+- **Fixed:** with a server address typed without http or https, Offline
+  could flicker about once a minute. It now shows only when the server is
+  really gone. ([#479](https://github.com/MMagTech/cabinetos/issues/479))
+- **Fixed:** covers could be fetched from any web address in RomM's data,
+  with your RomM sign-in attached. The console now only connects to your
+  RomM server. ([#380](https://github.com/MMagTech/cabinetos/issues/380))
+- **Fixed:** Home's Favorites were in alphabetical order, stopped at the
+  first 40, and could lose a heart made offline or while Home reloaded. The
+  newest come first, all of them count, and an unsent heart stays. ([#476](https://github.com/MMagTech/cabinetos/issues/476))
+  ([#405](https://github.com/MMagTech/cabinetos/issues/405))
+- **Fixed:** with a RomM collection of your own named Favorites, the console
+  retried every five minutes to make its own. It no longer does. ([#474](https://github.com/MMagTech/cabinetos/issues/474))
+- **Fixed:** Wii Remotes could not pair when Linux named the Bluetooth radio
+  something other than hci0. They pair now. ([#303](https://github.com/MMagTech/cabinetos/issues/303))
+- **Fixed:** GameCube games RomM had no game code for kept their saves on
+  the console only. The console reads the code off the game and the saves
+  travel. ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** small faults with games: states piling up for games with `:` or
+  `+` in their file name, Resume doing nothing on a game this console can't
+  play, a failed screenshot stopping every later one, and a download
+  starting with no room for it. ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** after a full disk or a power cut, a sign-in, the PIN, the
+  server address or a save could be lost or cut. Files are now written
+  whole or not at all. ([#482](https://github.com/MMagTech/cabinetos/issues/482))
+- **Fixed:** small faults in Settings, first run and the screen shown while
+  the server doesn't answer: a console with no server showed six made-up
+  games, a failed account switch showed an internal error, held keys acted
+  again and again. Each now behaves as Settings does. ([#485](https://github.com/MMagTech/cabinetos/issues/485))
+- **Fixed:** the console could crash on its way out, and rarely a working
+  drive was listed as unusable or Eject named one drive and ejected
+  another. ([#406](https://github.com/MMagTech/cabinetos/issues/406)) ([#483](https://github.com/MMagTech/cabinetos/issues/483)) ([#404](https://github.com/MMagTech/cabinetos/issues/404))
+- **Fixed:** the diagnostic report could say Steam was set up after it was
+  removed, miss a server reached only over https, or never arrive on a slow
+  console. It matches the console now. ([#486](https://github.com/MMagTech/cabinetos/issues/486))
+
 ## 2026.10.18.7 {#v2026-10-18-7}
 
 *18 October 2026*

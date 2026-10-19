@@ -1,6 +1,6 @@
 // PlayStation 2, which is an emulator rather than a libretro core.
 //
-// WHAT THIS IS AND WHY IT IS NOT IN core.cpp. Twenty-one of this console's
+// WHAT THIS IS AND WHY IT IS NOT IN core.cpp. Most of this console's
 // emulators are libretro cores: the frontend loads a `.so`, calls `retro_run`
 // once per frame, and is handed back a picture and some samples. PCSX2 is a
 // whole emulator. It runs its own machine on its own thread and does not
@@ -62,6 +62,13 @@ bool startGame(const std::string& discPath, const std::string& biosDir,
                const std::string& scratchDir, const std::string& resourcesDir,
                float upscale, int anisotropy, bool widescreen,
                const std::string& discCode);
+
+// WHY THE MACHINE STOPPED BY ITSELF BEFORE IT RAN (#506), or empty while it
+// is starting, runs, or ended as asked. startGame returns as soon as PCSX2's
+// thread is started, before the machine is built, so a disc PCSX2 cannot
+// open is known only here: its thread ends with PCSX2's reason ("PCSX2
+// would not boot <disc>") and the machine never ran.
+std::string stoppedWhy();
 
 // Asks the game to stop and WAITS. Blocking is the point: PCSX2 flushes the
 // memory card during shutdown, so a card captured before this returns is the

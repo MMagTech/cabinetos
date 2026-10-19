@@ -23,10 +23,12 @@
 // scans: the fingerprint RetroAchievements knows the game by. The console never
 // reads the game file for it, so a .chd disc needs no disc reader here.
 //
-// THREADS. Everything here is called on the frame thread, except what the
-// PlayStation 2 frame callback does on PCSX2's CPU thread (rc_client's own
-// lock covers that, and it is where PCSX2's own achievements code does it).
-// Network answers are handed back to rc_client on the frame thread, in pump().
+// THREADS. Everything here runs on the frame thread, with two exceptions: the
+// PlayStation 2 frame callback runs on PCSX2's CPU thread (rc_client's own
+// lock covers that, as in PCSX2's own achievements code, and gFrameMutex
+// lets endGame wait out a frame's check that is running), and fetchBytes,
+// for the image cache's workers, runs on any thread. Network answers are
+// handed back to rc_client on the frame thread, in pump().
 
 #pragma once
 
@@ -86,9 +88,19 @@ bool coreReadable(const std::string& manifestCore);
 void beginGame(const std::string& raHash, const std::string& platformSlug, bool ps2);
 // Before the core unloads it.
 void endGame();
-// After a save state is loaded (not rewind): the memory jumped, so what each
-// achievement was waiting for starts again, as RetroArch does.
-void stateLoaded();
+// THE ACHIEVEMENT PROGRESS A SAVE STATE CARRIES (#279), as RetroArch's do
+// (cheevos/cheevos.c): rcheevos' own record of where each achievement and
+// leaderboard stands, counts and all (rc_client_serialize_progress_sized),
+// for the state's "ACHV" block (statefile.h). Empty when no game's
+// achievements are being checked, which leaves the state as it was.
+std::vector<uint8_t> progress();
+// After a save state is loaded (not rewind): the memory jumped. With the
+// progress the state carried, every achievement goes on from where it stood
+// when the state was saved (rc_client_deserialize_progress_sized). Without
+// it (a state from before #279, or saved by somebody not signed in), or when
+// rcheevos will not take it, what each was waiting for starts again
+// (rc_client_reset), as before.
+void stateLoaded(const uint8_t* progress, size_t size);
 // After the core ran this frame's frames (libretro only; PS2 calls itself).
 void frame();
 // Instead of frame() while the game is not running (the pause menu): keeps the
@@ -133,8 +145,8 @@ struct GameList {
 // still has it offline.
 void fetchList(const std::string& raHash, std::function<void(const GameList&)> done);
 
-// --ra-sample (main.cpp): signed in as "sample", a made-up set of 40 with 12
-// unlocked on every page, and one unlock five seconds into any game. Nothing
+// --ra-sample (cli.cpp; started in startup.cpp): signed in as "sample", a
+// made-up set of 40 with 12 unlocked on every page, and one unlock five seconds into any game. Nothing
 // is sent anywhere. For captures only.
 void useSample();
 

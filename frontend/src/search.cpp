@@ -12,11 +12,36 @@
 #include "cache.h"
 #include "catalog.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
-// Asks the server and hands the screen the answer. Shared by the live
-// typing loop and by `--screen search --query`, so a capture exercises the
-// same path a person does rather than a second implementation of it.
+// The answer, on the frame thread, which owns the store and the screen.
+// Shared by the typing loop's worker and by `--screen search --query`, so a
+// capture shows what a person's search shows.
+void App::showSearchAnswer(const SearchAnswer& a, bool ok, const std::string& err) {
+    if (!ok) {
+        // NOT "nothing matches". The console could not go and look, and
+        // saying the library holds nothing like it would be a lie told
+        // confidently. See SearchScreen::State.
+        std::fprintf(stderr, "[search] %s: %s\n", a.query.c_str(), err.c_str());
+        if (a.query == searchTyped) searchScreen.setFailed(err);
+        return;
+    }
+    std::vector<int> idx;
+    idx.reserve(a.found.size());
+    for (const auto& g : a.found) {
+        // Same rule as Home's shelf and a collection's grid: a result this
+        // console cannot start must not be offered. The heading's "12 of
+        // 52" is what accounts for the difference.
+        if (!catalog::playable(g)) continue;
+        idx.push_back(appendGame(lib, g));
+    }
+    std::fprintf(stderr, "[search] %s: %zu of %d\n", a.query.c_str(), idx.size(), a.total);
+    searchScreen.setResults(a.query, std::move(idx), a.total);
+}
+
+// Asks the drive at once when offline, and the server otherwise: on a worker
+// from the typing loop (pumpSearch), here only for `--screen search
+// --query`, whose capture has no frames to wait through.
 void App::runSearch(const std::string& q) {
     if (q.empty()) return;
     // OFFLINE (#88, MMagTech 2026-10-05): by name over the games on the
@@ -59,29 +84,12 @@ void App::runSearch(const std::string& q) {
         searchScreen.setResults(q, std::move(idx), n);
         return;
     }
-    std::vector<romm::Game> found;
+    SearchAnswer a;
+    a.query = q;
     std::string err;
-    int total = 0;
-    if (!liveClient.fetchRoms("search_term=" + romm::Client::encodeQueryValue(q),
-                              kSearchLimit, &found, &err, &total)) {
-        // NOT "nothing matches". The console could not go and look, and
-        // saying the library holds nothing like it would be a lie told
-        // confidently. See SearchScreen::State.
-        std::fprintf(stderr, "[search] %s: %s\n", q.c_str(), err.c_str());
-        searchScreen.setFailed(err);
-        return;
-    }
-    std::vector<int> idx;
-    idx.reserve(found.size());
-    for (const auto& g : found) {
-        // Same rule as Home's shelf and a collection's grid: a result this
-        // console cannot start must not be offered. The heading's "12 of
-        // 52" is what accounts for the difference.
-        if (!catalog::playable(g)) continue;
-        idx.push_back(appendGame(lib, g));
-    }
-    std::fprintf(stderr, "[search] %s: %zu of %d\n", q.c_str(), idx.size(), total);
-    searchScreen.setResults(q, std::move(idx), total);
+    const bool ok = liveClient.fetchRoms("search_term=" + romm::Client::encodeQueryValue(q),
+                                         kSearchLimit, &a.found, &err, &a.total);
+    showSearchAnswer(a, ok, err);
 }
 
 // Search's keyboard, docked under the results, holding what was typed:
@@ -113,7 +121,7 @@ void App::keyboardUp() {
     keyboard.moveFocus(0, -1);
 }
 
-// Search's half of keyboardResult (main.cpp), which calls it last.
+// Search's half of keyboardResult (input.cpp), which calls it last.
 void App::searchKeyboardResult(ui::KeyboardResult res) {
     if (res == ui::KeyboardResult::Committed) {
         if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
@@ -145,18 +153,32 @@ void App::pumpSearch(float dt) {
         // stretch where a screen that says nothing looks broken.
         searchScreen.setWaiting();
     }
+    {
+        SearchAnswer a;
+        std::string err;
+        bool ok = false;
+        if (searchJob.take(&a, &err, &ok) && a.query == searchTyped)
+            showSearchAnswer(a, ok, err);
+    }
     if (!searchPending.empty()) {
         searchDebounce -= dt;
-        if (searchDebounce <= 0.0f) {
+        // The drive answers at once and needs no worker; the server goes on
+        // one, and a query typed while one is out waits for it (job.h's
+        // start would join it here).
+        const bool drive = romm::serverAway() || libFromDrive;
+        if (searchDebounce <= 0.0f && (drive || !searchJob.busy())) {
             const std::string q = searchPending;
             searchPending.clear();
-            // BLOCKING, ON THE FRAME THREAD, AND MEASURED RATHER THAN
-            // ASSUMED: 40-80 ms against the reference server, which is
-            // a few dropped frames once the typing has already
-            // stopped. A worker thread would hide it and is what this
-            // wants if the wait is ever felt on a slower server; the
-            // shape to copy is ImageCache's, not a second event loop.
-            runSearch(q);
+            if (drive) {
+                runSearch(q);
+            } else {
+                searchJob.start([this, q](SearchAnswer& a, std::string& err) {
+                    a.query = q;
+                    return liveClient.fetchRoms(
+                        "search_term=" + romm::Client::encodeQueryValue(q), kSearchLimit,
+                        &a.found, &err, &a.total);
+                });
+            }
         }
     }
 }

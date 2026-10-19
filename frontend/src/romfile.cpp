@@ -201,7 +201,8 @@ int64_t unpackedSize(const std::string& path, const std::string& validExtensions
 
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
-                 std::string* primaryPath, Kind* kindOut, std::string* err) {
+                 std::string* primaryPath, Kind* kindOut, std::string* err,
+                 const std::atomic<bool>& cancel) {
     const Kind k = sniffFile(downloadedPath, err);
     if (kindOut) *kindOut = k;
 
@@ -249,6 +250,12 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
         int64_t written = 0;
         std::vector<char> buf(256 * 1024);
         for (;;) {
+            if (cancel.load()) {
+                std::fclose(f);
+                if (err) *err = "cancelled";
+                archive_read_free(a);
+                return false;
+            }
             const ssize_t got = archive_read_data(a, buf.data(), buf.size());
             if (got < 0) {
                 std::fclose(f);

@@ -14,7 +14,7 @@
 #include "shortcuts.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // THE DRIVES' NAMES, as Storage shows them: the main drive is
 // "CabinetOS", any other internal disk "Internal", one that can be
@@ -323,6 +323,7 @@ void App::buildSettings() {
     const std::vector<drives::Drive> found = drives::found();
     formatable.clear();
     ejectFormats.clear();
+    ejectPaths.clear();
     auto formatValue = [] {
         return std::string(drives::formatting() ? "Formatting\xE2\x80\xA6" : "Format");
     };
@@ -360,6 +361,7 @@ void App::buildSettings() {
         }
         store.push_back({id ? K::Action : K::Info, id, name, space, value});
         if (external) driveNames[kSetEject + static_cast<int>(i)] = name;
+        if (external) ejectPaths[kSetEject + static_cast<int>(i)] = locs[i];
         // STEAM'S SHARE, under the main drive, once it is set up (#223):
         // the main drive's own row leaves it out, and this says where it
         // went. The one place to grow it or remove Steam. MMagTech,
@@ -474,8 +476,6 @@ void App::buildSettings() {
 
 
     settingsScreen.setCategories(std::move(cats));
-    if (const int p = players::playerOf(settingsLastPad); p >= 0)
-        settingsScreen.mark(kSetPad + p);
 }
 
 void App::rebuildSettingsRows() { buildSettings(); }
@@ -516,9 +516,6 @@ void App::applySetting(const screens::Result& res) {
         pressFormat(res);
     } else if (res.value >= kSetEject) {
         pressEject(res);
-    } else if (res.value == SetAddController) {
-        sound::play(sound::Cue::Activate);
-        openPadWindow();
     } else if (res.value == SetWiiRemotes) {
         sound::play(sound::Cue::Activate);
         openWiiPanel();

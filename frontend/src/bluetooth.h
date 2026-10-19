@@ -61,6 +61,15 @@ struct Adapter {
 // person is left waiting for something that will never arrive.
 Adapter adapter();
 
+// THE RADIO BY ITS KERNEL NAME, "hci0", or empty with none (#303): for what
+// talks to it by name, bluez's object path and btmgmt's index. Linux numbers
+// adapters as they come, so the name is not fixed: the A9's own came back as
+// hci1 after its Bluetooth reset at boot (2026-10-09), and Wii Remotes,
+// looked for at hci0, could not be reached. The lowest number: with the one
+// onboard radio the console supports, that radio, whatever it is called.
+// cabinetos-wii-search picks the same way.
+std::string adapterName();
+
 // Switches the radio on. A console has no reason to have it off, but it may
 // well find it off, and a scan that silently returns nothing on a powered-down
 // adapter is the failure this prevents.
@@ -69,7 +78,7 @@ bool powerOn(std::string* err);
 // --- What is in range -------------------------------------------------------
 
 struct Device {
-    std::string address;      // "E4:17:D8:71:F1:ED" — the identity
+    std::string address;      // "AA:BB:CC:DD:EE:01" — the identity
     std::string name;         // "Pro Controller" — decoration, and untrusted
     bool paired = false;
     bool connected = false;
@@ -94,7 +103,9 @@ bool scan(int seconds, std::vector<Device>* out, std::string* err,
 // heard during it, described. `bt::scan` returns everything bluez has ever
 // seen, and on the A9 that listed an 8BitDo under the identity of a mode it
 // was no longer in, which could never answer (2026-09-26). Stopped early by
-// `cancel`, keeping what was heard until then. `onHeard`, if given, is told
+// `cancel`, it returns at once with `out` empty: what was heard until then
+// was told to `onHeard`, and describing it would cost a `bluetoothctl info`
+// per device while somebody waits on the cut (#481). `onHeard`, if given, is told
 // about each device the moment it is heard (and again when its name
 // arrives), so a list can fill while the round is still running: a window
 // that showed nothing for ten seconds looked stalled (MMagTech, 2026-09-26). False only when there is no

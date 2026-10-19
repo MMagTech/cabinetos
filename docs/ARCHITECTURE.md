@@ -49,14 +49,14 @@ is in the file named for its feature, and
 | Screens | `screens.h` (what they share), `libraryscreen.cpp`, `grid.cpp`, `searchscreen.cpp`, `detailscreen.cpp` (a game's page), `settings.cpp`, `accountpanel.cpp`, `qrlink.cpp`, `choice.cpp`, `pin.cpp`, `keyboard.cpp`, `downloads.cpp`, `manualview.cpp`, `achlist.cpp`, `startscreen.cpp` |
 | App code that draws its own screen | `home.cpp` (Home), `setup.cpp` (first run; its rules are `firstrun.cpp`, with `firstrun_internal.h`), `serverwait.cpp` (the wait for the server at start). These act as well as draw: first run pairs and joins networks, the wait talks to the server |
 | Drawing | `ui.h`/`ui.cpp` (the primitives), `design.h` (the design system's numbers), `motion.h`, `text.cpp`, `image.cpp` (covers), `imagecodec.cpp`, `card.h`, `panels.h`, `screenparts.cpp`, `look.cpp` (the menus' colour), `looks.cpp` (a system's screen looks), `backdrop.cpp`, `notice.cpp` and `noticegallery.h` (the short messages), `qr.cpp` and `qrtexture.h`, `timewords.cpp`, `capture.h` (the SIGUSR1 picture), `shaders.inc` |
-| The RomM client | `romm.h` (its face and its rules), `romm_types.h` (what it hands back), `romm_internal.h`, `romm_http.cpp` (every request goes out here), `romm_pairing.cpp`, `romm_library.cpp`, `romm_playdata.cpp`, `romm_codes.cpp`, `romm_racetest.cpp` |
+| The RomM client | `romm.h` (its face and its rules), `romm_types.h` (what it hands back), `romm_internal.h`, `romm_http.cpp` (every request goes out here, and only to the RomM server, #380), `romm_pairing.cpp`, `romm_library.cpp`, `romm_playdata.cpp`, `romm_codes.cpp`, `romm_racetest.cpp` |
 | Library data | `library.cpp` (the store of cards, the shelves), `catalog.cpp` and `catalog_internal.h` (which platforms play, on which core), `covercache.cpp`, `coverfill.cpp`, `gridfill.cpp`, `search.cpp`, `codecache.cpp` and `gametdb.cpp` (game codes and controller lists read off files), `samplelibrary.h` (the stand-in library) |
 | A launch and a game in play | `launch.cpp` (the frame thread's half), `launch_routes.cpp` (the worker), `play.cpp` (in play, and leaving), `pace.cpp` (the game frame), `pausemenu.cpp`, `gamesession.h`, `romfile.cpp` (what to hand a core), `disc.cpp`, `discs.cpp`, `rewind.cpp`, `states.cpp`, `rumble.cpp` |
 | The libretro host | `core.h`, `core.cpp`, `core_state.h`, `core_*.cpp` (discs, hardware rendering, input, memory, options, picture, PS2), `vkhost.cpp`, `vkhost_state.h`, `vkbridge.cpp`, `libretro.h` and `libretro_vulkan.h` (the libretro API, the RetroArch team's), and the console's three option tables: `coreoptions.cpp` (set on purpose for every game), `quality.cpp` (Picture quality) and `sysopts.cpp` (a system's pause-menu options); `screenfx.cpp` (screen looks) |
 | PlayStation 2 | `ps2.cpp`, `ps2window.cpp`, `overlaywin.cpp`, and `frontend/ps2/` (its `CabinetPS2Bios.cpp` chooses each game's BIOS by the game's region) |
 | Emulators run as programs | `standalone.h`, `standalone.cpp`, `standalone_play.cpp`, `standalone_eden.cpp`, `standalone_xemu.cpp`, `standalone_rpcs3.cpp`, `standalone_xenia.cpp`, `standalone_cemu.cpp`, `vpad.cpp`, `xtitles.cpp`, `xboxhdd.cpp`, `x360profile.cpp`, `dolphinprep.cpp` |
-| Saves and states | `savetable.cpp` (what each core writes, where, and its two tags on RomM: `emulatorTag` for states, `saveTag` for saves), `saves.cpp` (sending and restoring all three kinds of save: `syncSave`, `syncDirSave`, `syncFileSaves`), `dirsave.cpp` and `filesave.cpp` (their helpers), `states.cpp`, `savemirror.cpp`, `uploader.cpp` (the queue), `pending.cpp` (the markers), `offline_sync.cpp`, `playtime.cpp`, `favorites.cpp`; the requests themselves are in `romm_playdata.cpp` |
-| Storage | `storage.h` (where everything lives), `storage_internal.h`, `locations.cpp`, `cache.cpp`, `drives.cpp`, `drives_fs.cpp`, `udisks.cpp`, `users.cpp`, `accounts.cpp`, `accountremove.cpp`, `fileio.cpp`, `prefs.cpp` |
+| Saves and states | `savetable.cpp` (what each core writes, where, and its two tags on RomM: `emulatorTag` for states, `saveTag` for saves), `saves.cpp` (sending and restoring all three kinds of save: `syncSave`, `syncDirSave`, `syncFileSaves`), `dirsave.cpp` and `filesave.cpp` (their helpers), `states.cpp`, `statefile.cpp` (a state file's layout: the core's bytes alone, or RetroArch's RASTATE blocks with the achievement progress), `savemirror.cpp`, `uploader.cpp` (the queue), `pending.cpp` (the markers), `offline_sync.cpp`, `playtime.cpp`, `favorites.cpp`; the requests themselves are in `romm_playdata.cpp` |
+| Storage | `storage.h` (where everything lives), `storage_internal.h`, `locations.cpp`, `cache.cpp`, `drives.cpp`, `drives_fs.cpp`, `udisks.cpp`, `users.cpp`, `accounts.cpp`, `accountremove.cpp`, `fileio.cpp` (every file the console replaces goes through its `writeBytes`: a temporary, fsync, a rename), `prefs.cpp` |
 | Controllers | `players.cpp`, `controllers.cpp`, `bluetooth.cpp`, `btagent.h`, `battery.cpp`, `batteryrow.cpp`, `shortcuts.cpp`, `wiiremote.cpp` (starts the Wii bridge), `wiipair.cpp`, `wiipanel.cpp`, `wiimii.cpp`, `wii.cpp`, `wiiu.cpp` |
 | The machine | `net.cpp`, `wifi.cpp`, `power.cpp`, `power_menu.cpp`, `powerprofile.cpp`, `volume.cpp`, `sound.cpp`, `gpu.cpp`, `cpus.cpp`, `idle.cpp`, `proc.cpp` (running a program with no shell), `unit.cpp` (asking systemd for a root job), `update.cpp` (System update, the console's side), `files.cpp` (File access, the console's side), `server.cpp` and `serveraddress.cpp` (the RomM server this console belongs to) |
 | RetroAchievements | `achievements.cpp` (the sign-in and rcheevos' client; its console table names every system), `achievements_ui.cpp`, `ra_list.cpp`, `ra_net.cpp`, `ra_state.h` |
@@ -267,7 +267,7 @@ reaches a console".
 | Moving a core's pin | its `COMMIT` in `cores/build-core.sh`; in the same commit `cores/options/<core>.txt`, and the same commit in `licences/SOURCES` (then `tools/fetch-licences.py`) and `docs/LICENCES.md` |
 | An emulator run as a program | `standalone.h`, its `standalone_<name>.cpp`, its `build_files/install-*.sh` or `system_files/usr/share/cabinetos/flatpaks.list`, its row in `catalog.cpp` |
 | A RomM request or field | the client (`romm.h`, `romm_*.cpp`, `romm_types.h`); RomM's documentation and behaviour decide; the map of every request is #398's Part 5, section 48 (the audit's comments on #398 each start "Audit, Part N", and sections are numbered across the parts) |
-| Saves and states | `savetable.cpp` (what and where), `saves.cpp` (sending and restoring), `states.cpp`, `uploader.cpp` (the queue), `pending.cpp` (the markers), `romm_playdata.cpp` (the requests), `standalone_play.cpp` (emulators run as programs) |
+| Saves and states | `savetable.cpp` (what and where), `saves.cpp` (sending and restoring), `states.cpp`, `statefile.cpp` (what a state file holds), `uploader.cpp` (the queue), `pending.cpp` (the markers), `romm_playdata.cpp` (the requests), `standalone_play.cpp` (emulators run as programs) |
 | Something in the image (a package, a unit, a rule) | `build_files/`, `system_files/`; an image build, so it is proven on `testing` |
 | Something the console must do as root | a script in `system_files/usr/libexec/`, its unit, a polkit rule naming the unit, `unit::start` from the frontend, and a status file |
 | A command-line flag or a self-test | `cli.cpp` (the flag), `probes.cpp` (where a probe or test is called), the feature's own file for its test (`players.cpp`'s `players::test`), `selftests.cpp`, `testhooks.cpp`. There is no test framework: a test is a flag that exits with 0 when it passes |
@@ -299,12 +299,6 @@ Each with where it is recorded.
 
 ## 6. Known gaps
 
-- **The console follows any web address RomM's data hands it, with the
-  sign-in attached:** `Client::fetchBytes` (`romm_http.cpp`) takes a path
-  that starts with `http` as the whole address, sends the token and follows
-  redirects. This breaks the rule that the console connects only to fixed
-  places (CONTRIBUTING.md, "The rules"); it is #380 ("The console follows any
-  web address in RomM's data, with the RomM sign-in attached").
 - **The frame thread waits on the network during a launch:** `beginLaunch`
   loads the core, and `pumpLaunch` restores the game's saves from RomM and
   loads the game, all on the frame thread, behind the curtain
@@ -315,11 +309,6 @@ Each with where it is recorded.
   cache's key (`covercache.cpp`). They should move into the client.
   `ci/check-romm-paths.sh` lists them and fails a pull request that adds
   another.
-- **Threads not yet put right:** #404 ("The launch worker writes the job's
-  entry path while the frame thread reads it"), #405 ("favorites.json is
-  written from two threads through the same temporary file with no lock"),
-  #406 ("Four background threads are never stopped at exit (pairing, remove
-  and sign out, reconnect, drive backfill)").
 - **CI runs one self-test** (`--check-option-tables`); the others are run by
   hand. No Python is tested, and neither are `tools/` and `disk_config/`.
   A pull request to `main` never builds the cores, `frontend/ps2`, Cemu,
@@ -341,9 +330,9 @@ Each with where it is recorded.
 - **A fork's image carries the project's key and image name until the fork
   edits them:** they are written into tracked files (CONTRIBUTING.md,
   "Generate a signing key", lists them).
-- **Two test stand-ins are not in the repository:** the frame-time tool many
-  comments cite as `frames.py`, and `racemock.py`, which `--romm-race-test`
-  needs (`romm_racetest.cpp`).
+- **A test stand-in is not in the repository:** the frame-time tool many
+  comments cite as `frames.py`. (`racemock.py`, which `--romm-race-test`
+  needs, is `tools/racemock.py` since #488.)
 - **Not built yet:** choosing a different core for a game, and exporting
   (`detailscreen.cpp`'s note).
 - **The test instruments ship in the program**, run only by a flag.
@@ -351,7 +340,9 @@ Each with where it is recorded.
   sign-in tokens and the PIN live in `~/.config/cabinetos/` and Remote
   Play's files in `/var/lib/cabinetos`, whatever the storage root
   (`accounts.cpp`, `remoteplay.cpp`), so a headless test on a signed-in
-  console acts as that console's person.
+  console acts as that console's person. A scratch `HOME` and
+  `CABINETOS_DRIVES` separate the sign-in and the drives
+  (CONTRIBUTING.md, "Running and testing"); Remote Play's files stay.
 - **No documented way to run your own build on your own console**, and the
   environment variables a run off a console needs (`CABINETOS_SHADERS`,
   `CABINETOS_PAD_DB`, `CABINETOS_ASSETS`, `CABINETOS_STORAGE`,

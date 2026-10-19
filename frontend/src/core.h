@@ -176,7 +176,6 @@ public:
     // a reason on `error()`.
     bool load(const std::string& soPath);
     void unload();
-    bool loaded() const { return handle_ != nullptr; }
 
     // The directories are the ones given to setDirectories, and are re-applied
     // here for the cores that ask at load-game time instead.
@@ -383,6 +382,12 @@ public:
     // taken part-way through a retro_run is corrupt by definition.
     size_t stateSize() const;
     bool saveState(std::vector<uint8_t>& out);
+    // Whether this game's state save runs the emulated machine through a
+    // frame first, as Mupen64Plus-Next's does (#254): learned from the first
+    // save that made sound. Such a save counts in framesRun, runs the
+    // after-frame call and uses up a frame of runFor's budget, and the frame
+    // loop takes rewind's snapshots in place of a run rather than after one.
+    bool saveRunsFrame() const { return saveRunsFrame_; }
     // Returns false when the core rejects the bytes, which is the expected
     // failure for a state written by a different build of the same core — the
     // exact thing the manifest exists to prevent.
@@ -449,7 +454,12 @@ public:
     void setAfterFrame(void (*fn)()) { afterFrame_ = fn; }
     uint8_t* memoryPointer(unsigned id, size_t* size) const;
 
+    // What the core asked to be run at: at load, and again whenever it asks
+    // mid-game (SET_GEOMETRY, SET_SYSTEM_AV_INFO, #220), taken after the
+    // run that asked. The layout reads it every frame. A new sound rate also
+    // moves soundRateChanges(), so whoever feeds the speaker sets it again.
     const AVInfo& avInfo() const { return av_; }
+    unsigned soundRateChanges() const { return soundRateChanges_; }
     const std::string& coreName() const { return coreName_; }
     // The core's own answers about what it will open. Both come from
     // retro_get_system_info and neither is knowable from the platform: a
@@ -491,6 +501,7 @@ private:
     // loadGame's PlayStation 2 start (core_ps2.cpp).
     bool startPs2Game(const std::string& romPath, const std::string& systemDir,
                       const std::string& saveDir);
+    void takeAvAsked();
 
     void* handle_ = nullptr;
     bool gameLoaded_ = false;
@@ -499,6 +510,7 @@ private:
     bool blockExtract_ = false;
     bool needFullpath_ = false;
     AVInfo av_;
+    unsigned soundRateChanges_ = 0;
 
     GLuint texture_ = 0;
     unsigned frameWidth_ = 0, frameHeight_ = 0;
@@ -510,10 +522,12 @@ private:
     double accumulator_ = 0.0;
     double speed_ = 1.0;
     // The clock audioAhead measures against, and whether this core is braked
-    // by it. One core in twenty-one is. See runFor.
+    // by it. None is today (core.cpp, where governed_ is set); the switch
+    // stays. See runFor.
     double paceClock_ = 0.0;
     bool governed_ = false;
     uint64_t governorSkips_ = 0;
+    bool saveRunsFrame_ = false;   // see saveRunsFrame
 };
 
 }  // namespace cab

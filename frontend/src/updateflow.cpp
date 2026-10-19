@@ -10,7 +10,7 @@
 #include "power.h"
 #include "prefs.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 int64_t App::prefNum(const char* key) {
     return static_cast<int64_t>(std::strtoll(prefs::get(key, "0").c_str(), nullptr, 10));
@@ -145,13 +145,7 @@ void App::startUpdate(bool download, bool automatic) {
 // PIN. The same shape as "Update ready", so an update is: check,
 // Download, Restart now.
 void App::askUpdateDownload() {
-    std::string version = upd.version, detail;
-    int64_t size = upd.size;
-    if (upd.state != update::State::Available) {
-        version = prefs::get("update_found", "");
-        size = prefNum("update_size");
-    }
-    detail = version + " \xC2\xB7 " + updBytes(size);
+    const std::string detail = upd.version + " \xC2\xB7 " + updBytes(upd.size);
     askChoice("Update available", detail, {"Download", "Later"}, 0, [&](int k) {
         if (k != 0) return;
         askPin("Enter the PIN", "To update",
@@ -280,8 +274,12 @@ void App::pressUpdate() {
     // (behind the PIN: an update can be gigabytes and replaces
     // the system, so the owner decides when), restart, or
     // retry. Busy, it does nothing. docs/SETTINGS.md, System.
-    const bool available = upd.state == update::State::Available ||
-                           (upd.state == update::State::None && updFoundNewer());
+    // ONLY THIS BOOT'S ANSWER OPENS THE PANEL (#485, SETTINGS-19). With
+    // nothing run since the start, the row's "Update available" is the
+    // remembered check's, and the panel named its version and size while
+    // Download fetched whatever was newest by then. That press checks
+    // first, as any other, and the panel opens on the fresh answer.
+    const bool available = upd.state == update::State::Available;
     const bool retryDownload = upd.state == update::State::Failed && upd.download;
     if (upd.busy()) {
         sound::play(sound::Cue::Edge);

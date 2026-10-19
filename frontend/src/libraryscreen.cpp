@@ -181,7 +181,6 @@ LibraryScreen::Layout LibraryScreen::layout(float headingH) const {
 void LibraryScreen::tick(float dt) {
     appear_.tick(dt);
     for (auto& p : pillFocus_) p.tick(dt);
-    tabChange_.tick(dt);
     scroll_.tick(dt);
     for (auto& t : platforms_) t.focus.tick(dt);
     for (auto& t : collections_) t.focus.tick(dt);
@@ -305,9 +304,6 @@ Result LibraryScreen::key(Nav n) {
                 // means nothing.
                 tab_ = slot_;
                 rememberedTileSlot_ = 0;
-                tabChange_.retarget(0.0f, 0.0f);
-                tabChange_.elapsed = 0.0f;
-                tabChange_.retarget(1.0f, 0.220f);   // a segmented choice: 220 ms
                 scroll_.retarget(0.0f, design::kFocusDuration);
                 return {};
             }

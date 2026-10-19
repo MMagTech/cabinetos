@@ -24,6 +24,7 @@
 
 #include <systemd/sd-bus.h>
 
+#include "bluetooth.h"
 #include "proc.h"
 #include "unit.h"
 #include "wiiremote.h"
@@ -35,13 +36,12 @@ using Clock = std::chrono::steady_clock;
 
 constexpr const char* kSearchUnit = "cabinetos-wii-search.service";
 constexpr const char* kSearchState = "/run/cabinetos-wii-search.state";
-// The console's one radio. Dolphin and the kernel's own Wii Remote code use
-// the first adapter too.
-constexpr const char* kAdapter = "/org/bluez/hci0";
 constexpr const char* kAgentPath = "/cabinetos/wiiagent";
 
+// On the console's one radio, whatever Linux named it (bt::adapterName,
+// #303), as the search's helper picks it.
 std::string devicePath(const std::string& address) {
-    std::string p = std::string(kAdapter) + "/dev_" + address;
+    std::string p = "/org/bluez/" + bt::adapterName() + "/dev_" + address;
     for (char& c : p)
         if (c == ':') c = '_';
     return p;
@@ -245,6 +245,11 @@ bool pair(const std::string& address, std::string* err) {
     sd_bus* bus = nullptr;
     if (int r = sd_bus_open_system(&bus); r < 0) {
         if (err) *err = std::string("No system bus: ") + std::strerror(-r);
+        return false;
+    }
+    if (bt::adapterName().empty()) {
+        if (err) *err = "No Bluetooth";
+        sd_bus_unref(bus);
         return false;
     }
     PairState st;

@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // ---- The notification pill — see MenuNotice ------------------------
 //

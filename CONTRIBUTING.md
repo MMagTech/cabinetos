@@ -125,16 +125,28 @@ needs environment variables written down nowhere yet
 (docs/ARCHITECTURE.md, "Known gaps"). Always give it a scratch
 `--storage-root`: otherwise it writes into `/var/lib/cabinetos` when it
 can, or into the folder it was started in. On a console a scratch root
-does not separate the sign-in: the tokens and the PIN are in
-`~/.config/cabinetos/`, so the run acts as that console's signed-in
-person. Run it from `frontend/` (the stand-in library's covers are found
-from there; the cores then come from the image):
+does not separate the sign-in or the drives: the tokens and the PIN are
+in `~/.config/cabinetos/`, so the run acts as that console's signed-in
+person, and every mounted games drive is searched, so a run can play, keep
+or remove games on it. A scratch `HOME` and `CABINETOS_DRIVES` (the folder
+searched for drives) at an empty folder separate both. Run it from
+`frontend/` (the stand-in library's covers are found from there, and the
+cores from `../cores/build` when you have built some, else from the
+image):
 
 ```bash
+mkdir -p /tmp/scratch/home /tmp/scratch/drives
+HOME=/tmp/scratch/home CABINETOS_DRIVES=/tmp/scratch/drives \
 SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --no-setup \
-  --storage-root /tmp/scratch \
+  --storage-root /tmp/scratch/root \
   --screenshot /tmp/home.bmp --render-size 1920x1080 --frames 60
 ```
+
+Headless frames are not paced: 1,500 of them are about a second, so a
+test that waits for a game to print something needs 20,000 or more.
+`--nav` presses are dropped while the start-up screen is still down unless
+the run is a capture (`--screenshot`), and `--nav` does not reach first
+run's screens.
 
 `--no-setup` skips first run; on a machine with no server address it shows
 a stand-in library of six made-up games. The server is the first of
@@ -149,7 +161,9 @@ walking the route a person would, as do `--screen settings --tile N`,
 television size, so a small machine can check a 4K layout. `--setup` shows
 first run on a console that is already set up, and saves no server address,
 sign-in or finish marker (`setup.h`, `dryRun`), though its pairing step asks
-the server for a real code, which expires by itself. `--setup-step <name>`
+the server for a real code, which expires by itself: `--setup` walked to
+the pairing step reaches your real server, so point it at the read-only
+relay. `--setup-step <name>`
 opens it at `network`, `server`, `pair`, `controller` or `done`; Wi-Fi is
 part of `network`.
 
@@ -181,13 +195,15 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
+| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, and the cover sweeps spare the tile map, a cover being written and what a link points at |
 | `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, and the Wii's rumble in `wii.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (CI runs it as a step of its own) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
-under load, but only against a stand-in server that is not in the
-repository yet; do not point it at a real RomM.
+under load, against the stand-in server `tools/racemock.py <port>` only
+(start it, then `--romm-race-test 127.0.0.1:<port> 30`; it exits 0 when
+nothing went out wrong); do not point it at a real RomM.
 
-**Every flag is in `frontend/src/cli.cpp`**, 104 of them plus
+**Every flag is in `frontend/src/cli.cpp`**, 105 of them plus
 `--check-option-tables` in `main.cpp`; there is no `--help`.
 `frontend/README.md` holds the build recipe and the storage tree. What it
 said about running and the flags in September 2026 is history, in
@@ -201,11 +217,11 @@ sends the battery save and sends the file saves when it quits.
 write with 403, which is the safe way to test against a real library; point
 the console at it with `CABINETOS_ROMM=127.0.0.1:<port>` and a scratch
 `--storage-root`. Pairing needs writes, so the relay cannot sign anybody
-in: run it on a console already signed in to your server (the tokens are
-outside the storage root, above), copy the console's `config/*.json` into
-the scratch root's `config/`, and write `[]` to its `config/drives.json`,
-or downloads go to the real games drive (docs/lessons/testing.md, the
-bullet on the read-only relay). **Its upstream server comes from
+in: run it on a console already signed in to your server, with the real
+`HOME` on purpose (the tokens are there, above), copy the console's
+`config/*.json` into the scratch root's `config/`, and set
+`CABINETOS_DRIVES` to an empty folder, or downloads go to the real games
+drive (docs/lessons/testing.md, the bullet on the read-only relay). **Its upstream server comes from
 `CABINETOS_RELAY_UP`** (`http://<your server>:<port>`), and so does
 `tools/offline-relay.py`'s.
 
@@ -241,8 +257,10 @@ console is not written down yet (docs/ARCHITECTURE.md, "Known gaps").
 something besides `.md` files and `docs/`):
 
 - **Lint**: shellcheck over every `.sh` in `build_files/`, `ci/` and
-  `cores/`, and over every shell script in `system_files/` (picked by its
-  first line). `just lint` runs the same two commands.
+  `cores/`, over every shell script in `system_files/` (picked by its
+  first line), and over the installer's `%pre` and `%post` in
+  `disk_config/iso.toml`; and every Python file, the ones that ship
+  included, is parsed. `just lint` runs the first two commands.
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
   Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
   summarises the compiler's warnings, fails a new one, and lists the code
@@ -517,9 +535,6 @@ here, not reworded; follow the link for the full text.
 - **Every emulator uses Vulkan when it has a Vulkan renderer**, even where
   upstream defaults to OpenGL. OpenGL only where there is no Vulkan renderer,
   or where a measurement on real hardware shows it is better.
-
-The code breaks the first of these in one place today: #380 ("The console
-follows any web address in RomM's data, with the RomM sign-in attached").
 
 ### Duties that come with some changes
 

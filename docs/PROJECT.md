@@ -261,7 +261,8 @@ down. "Look now at" is where the code or a later decision moved on.
   2026-09-29, built 2026-09-30 (#192, "New systems 4: Xbox 360 (Xenia
   Edge)"). Edge's Sign In box stays, a known gap: the upstream ask
   (has207/xenia-edge#286) closed 2026-10-06 without the option. FSR for the
-  720p picture was tried on the TV 2026-10-18 and not shipped. Look now at:
+  720p picture was tried on the TV 2026-10-18 and not shipped. Multi-disc
+  (#339) was counted and set aside 2026-10-18. Look now at:
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
@@ -308,9 +309,9 @@ down. "Look now at" is where the code or a later decision moved on.
   #391.
 - **47. Interface sounds everywhere, and a calmer set, issue #389**
   ("Interface sounds on every screen and menu, not only some"). Decided at
-  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." A fade
-  on the way down is #393 ("Power off and Restart cut the picture
-  abruptly").
+  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." The
+  fade on the way down, #393 ("Power off and Restart cut the picture
+  abruptly"), decided 2026-10-18 and built.
 - **48. Same-name games, regions and versions, issue #383** ("Same-name
   games: show RomM's tags in the heading"). Decided 2026-10-14, built and
   judged on the TV the same day.
@@ -2084,6 +2085,18 @@ blocking audio write does. The two causes differ:
   the sound are timed from the same clock, so the cause is not known.
   Nobody reports it upstream; the nearest is mupen64plus-core#1176 (round
   50/60 Hz constants, no replies). #254.
+  **Found 2026-10-18 (#254): it was the console's own rewind.** The core's
+  `retro_serialize` runs the emulated machine to its next vertical
+  interrupt before it saves (libretro.c), so every half-second snapshot was
+  a whole N64 frame, sound and picture, that the console never counted:
+  581 `retro_run` calls per 600 VIs, and the core's own output was 735.46
+  samples per VI, exactly 44100/60 (a measuring build of the core on the
+  A9, not shipped). One frame in thirty is the 3.3%. The fix is a rule for
+  every core: a save that makes sound ran a frame, is counted as one, and
+  rewind's snapshot then takes the place of that refresh's run. Hydro
+  Thunder, locked, through a real-time sink: 17 to 19 frames held per 10 s
+  before, 0 after; sound per game frame +3.34% before, -0.02 to +0.07%
+  after. Rewind stays on N64, as decided on 2026-09-27.
 - **Dreamcast, from Flycast's source:** `retro_run` returns when the game
   draws a frame, not at each refresh, and a game that skipped one hands
   over two frames of sound (`shell/libretro/audiostream.cpp` says so).
@@ -15769,6 +15782,50 @@ the rest is recorded here):
   fallback would be `--guest_scheduler=false` for every game, measured on
   the A9 first.
 
+#### Multi-disc, issue #339: counted and set aside, 2026-10-18
+
+#339 is "Multi-disc on Xbox 360 (Xenia Edge)". Its recorded plan was (1)
+count the library, (2) check whether Edge changes discs properly, (3) fit it
+to #162's cache model. Step 1 is done; steps 2 and 3 were not started.
+
+**Counted** from libretro-database's `metadat/redump/Microsoft - Xbox
+360.dat` (DAT version 2026.10.07, 3,959 entries, about 1,950 titles once
+regions and revisions are folded): **52 titles have more than one disc, 2.7%
+of the library; 48 of them in English** (98 English releases, regions and
+revisions counted apart). The issue's "60 English titles" was high. Redump's
+own disc labels split them three ways:
+
+| Kind (Redump's label) | English titles | Which |
+|---|---|---|
+| Install disc and play disc ("Install Disc", "Content Install Disc", "Play Disc", "Game Disc") | 9 | Grand Theft Auto V, Forza Motorsport 3 (three editions) and 4, Call of Duty: Ghosts, Alien: Isolation, Saints Row IV National Treasure Edition, Guitar Hero Live, Watch Dogs |
+| One disc per mode ("Campaign", "Multiplayer", "Single Player") | 8 | Battlefield 3, Battlefield Hardline, Max Payne 3, Medal of Honor: Warfighter, Red Dead Redemption GOTY, Splinter Cell: Blacklist, and one release each of Assassin's Creed III and IV |
+| No label: the game itself decides | 30 | among them Lost Odyssey (4), Blue Dragon (3), Final Fantasy XIII (3), Star Ocean: The Last Hope (3), L.A. Noire (3; Complete Edition 4), Rage (3), Wolfenstein: The New Order (4), Mass Effect 2 and 3, Halo 4, Dead Space 2 and 3, Infinite Undiscovery, The Last Remnant, MagnaCarta 2, Metal Gear Solid V, Battlefield 4, Dragon Age: Inquisition, The Witcher 2 EE |
+
+Which of the unlabelled ones ask for a disc mid-story is not in the DAT and
+was not guessed. One Kinect title (Nat Geo TV, two volumes) completes the
+48. MMagTech's own server has 8 Xbox 360 games, none multi-disc (checked
+2026-10-12).
+
+**What Edge does**, from the 2026-09-29 reading above, not re-read at a
+newer pin: at `a7c39fa` its swap checks the disc number and lists the discs
+its own library knows with the same title id (`library/<TID>/game.toml`),
+else opens a desktop file picker; no m3u (xenia-canary#306, open).
+
+**Set aside, MMagTech 2026-10-18:** "This just seems to me like it's too
+small of a percentage of the library to even consider. Unless any of them
+are actual AAA hits, I almost say we just skip it and close it out unless
+someone brings it back up." The list does hold hits, but most of the big
+ones are the install or per-mode kind, not a swap in mid-story. Not built;
+#339 closes until someone asks for it again.
+
+**If it comes back, step 3 needs:** step 2 first (Edge's swap tried on the
+A9 with a two-disc game, and Edge's log since `a7c39fa` read for disc or
+m3u changes); each disc of a game fetched into one folder Edge's library
+scans, so its own list offers them and the desktop picker never opens; a
+separate look at the install-and-play kind, whose first disc installs data
+to the hard disk rather than being played; one save per game as #162 has
+it.
+
 ### 35. Wii (Dolphin), issue #173
 **Researched and decided with MMagTech 2026-09-30.** Research only; no code.
 
@@ -16466,8 +16523,34 @@ token (0600) and removed with the account.
 
 **Softcore only** (2026-10-05). Hardcore needs RetroAchievements to approve
 this frontend and keep every release to their checklist. Nothing hardcore is
-built, hidden or otherwise. States and rewind work as always; loading a state
-restarts what each achievement was waiting for, as RetroArch does.
+built, hidden or otherwise. States and rewind work as always.
+
+**A save state carries the achievement progress, as RetroArch's do (#279,
+"RetroAchievements: save states don't carry achievement progress as
+RetroArch's do"; MMagTech 2026-10-18, yes "as long as it's not something
+too hard"; built 2026-10-18).** RetroArch writes rcheevos' progress into
+each state (`rc_client_serialize_progress`, cheevos/cheevos.c) and puts it
+back on load (`rc_client_deserialize_progress_sized`); this console saved
+none and reset every achievement on a load, so a count over time started
+again and Resume could miss a trigger. Now the progress goes inside the
+state file in RetroArch's own layout (`frontend/src/statefile.h`, read off
+tasks/task_save.c): "RASTATE" and version 1, a "MEM " block with the core's
+bytes unchanged, an "ACHV" block, "END ". It reaches RomM inside the state,
+so another console resuming it gets it, and RetroArch loads such a file as
+its own. **Only a state with progress is wrapped**: nobody signed in, or a
+game with no set, writes the core's bytes alone as before, so those states
+load as always everywhere. Every state from before (core data alone)
+still loads and resets the achievements as before. A wrapped state on a
+console still on an older version is handed to the core whole, which
+cannot read it (a core that checks the size refuses it); every console
+updates, so that is a passing case. Progress loaded before rcheevos has the game's set (Play's Resume
+loads on the first frame) waits and is given the moment the set arrives.
+**Tested headless on the A9, 2026-10-18**, offline
+(`CABINETOS_RA_OFFLINE=1`, nothing sent), Super Mario Land: a state saved
+at frame 900 carried 5,392 bytes of progress (the file 32,312 bytes);
+loaded back at frame 1500, rcheevos' progress read back identical to the
+state's; RomM's state from 2026-10-06 (core data alone) loaded and reset as
+before; a state loaded before the set waited, then was restored identical.
 
 **During play: only the unlock, small.** A card fades in at the top right
 (the badge, "Achievement unlocked", the name) and fades out after four
@@ -17272,6 +17355,134 @@ returns the sound to the TV.
 **Open:** the volume goes back to full at every start (#351 above), on the
 default output. With headphones in at start, that is the headphones (#391, waiting, not built).
 
+#### Sound dying until a restart (#228): the 2026-10-18 failure, read from the A9's logs
+
+**Read overnight 2026-10-18, read-only**: the journal of the failing boot
+(`journalctl -b -2`), tonight's boot live, the PipeWire dump the finding
+session kept, and SDL 3.4.18's source (the A9's `SDL3-3.4.18-1.fc44`, read
+at the `release-3.4.18` tag). Nothing was changed or pressed on the console.
+The case: no sound in Spyro: Year of the Dragon at about 4:27 PM on
+2026.10.18.6, the app's stream linked to the TV and running, pw-top's ERR
+for it rising 47 a second, silence recorded from the TV's output (#228's
+comment of 2026-10-18).
+
+**What the log shows (Eastern time).** The app started at 15:53:02
+(`[sound] interface audio at 48000 Hz`) and sat on Home. 16:03:02 `[idle]
+dim -> blank after 600s without input`, 16:03:03 `[idle] display asleep:
+gamescope took it`. Nothing else touched PipeWire until the TV came back:
+16:26:31 `drm: current connector 'HDMI-A-1' disconnected`, back at 16:26:32,
+again at 16:26:37 and 16:26:38, then 16:26:44 `[idle] display awake:
+gamescope took it`. Spyro opened its sound at 16:27:25 (`[frontend] audio
+out at 44100 Hz`), and every ten-second line after it was normal (`[audio]
+30` to `54 ms waiting to play`; `sound per game frame +0.00%`, which since
+#398 reads -100.00% for a silent core, so the core made sound). PipeWire and
+WirePlumber log nothing at their default level, and the kernel logged
+nothing about sound after the probe at 15:52:57.
+
+- **The misses began at the blank.** 77,319 at the first reading (about
+  16:30 to 16:31; the dump is from 16:31) at 46.875 a second (48,000 /
+  1024) is 27.5 minutes: about 16:03:00 to 16:03:30, the blank, not the
+  TV's return.
+- **The silent stream was the one opened at start-up, never replaced.** The
+  dump of it (node 61) reads `object.serial` 61, `client.id` 60,
+  `node.loop.name` `SDLAudioP15`, `target.object`
+  `alsa_output.pci-0000_c6_00.1.hdmi-stereo`, driven by node 53. A serial
+  equal to its id is an object made before PipeWire had reused any id, and
+  tonight's boot starts the same way (the app's SDL device watcher is client
+  59; ids 60 and 61 are free now).
+- **Blanking the screen removes the TV's sound output.** Tonight's boot, read
+  at 22:30 with the screen asleep since 21:03:58: ELD `monitor_present 0`,
+  no HDMI sink, only `Dummy Output` (`auto_null`), the app's stream on it.
+  Dummy Output is pipewire-pulse's (`module-always-sink`,
+  `/usr/share/pipewire/pipewire-pulse.conf`), and pipewire-pulse runs only
+  once something speaks Pulse to it: tonight an overnight ssh session
+  started it at 21:04:26; in the failing boot it never ran
+  (`pipewire-pulse.socket` listening at 15:53:01, no `Started
+  pipewire-pulse.service`). **So from 16:03 to 16:26 the console had no
+  sound output at all.**
+- **Tonight SDL moved the app; on 2026-10-18 nothing moved it.** The app's
+  stream now is a new one (node 65, serial 139, `SDLAudioP27`,
+  `target.object` `auto_null`, ERR steady at 6): SDL replaced it when the
+  default output became Dummy Output, 28 s after the blank.
+
+**Why that is silence: SDL's "zombie" device.** When PipeWire removes a
+sink, SDL marks its device disconnected and swaps in stand-in functions;
+anything opened on the default output (both of the app's streams,
+`SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK` in `sound.cpp`, `startup.cpp` and
+`launch.cpp`) is "left on the zombie device for later migration", and moves
+only when PipeWire's `default.audio.sink` names a device SDL knows. With no
+sink there is nothing to move to. SDL's PipeWire stream stays open:
+WirePlumber relinks it (SDL leaves `node.dont-reconnect` unset; its
+`target.object` names the HDMI sink), PipeWire calls it every cycle, and
+SDL's callback mixes the app's sound into a scratch buffer and drops it (so
+the game's queue drains at the right speed and the `[audio]` and `[pace]`
+lines look normal) but never takes or hands back a PipeWire buffer
+(`ZombieGetDeviceBuf`, `ZombiePlayDevice`), so PipeWire counts a miss every
+cycle and plays silence. Spyro's stream, opened on the default at 16:27:25,
+joined the zombie too (SDL "pretends to open" a zombie device). Every
+reading of 2026-10-18 matches this, and a restart is a new process with a
+new SDL, which is why it brings the sound back.
+
+**Why the TV's return did not move it back: two candidates, not told
+apart.**
+1. **The returning sink reused the old one's PipeWire id.** SDL's PipeWire
+   backend names each device by the node's id (`PW_ID_TO_HANDLE(id)`), and
+   PipeWire gives a freed id to the next object; nothing else used PipeWire
+   in those 23 minutes. The sink at 16:31 was id 53, and the start-up sink
+   was very likely 53 too (assumed from tonight's boot, whose start-up
+   layout is the same and whose id 53 is a reused one, between the MIDI
+   ports and the camera device, beside four reused or free port ids). Two
+   devices then share one handle while the zombie is still alive, and SDL's
+   lookup of the new default (`SDL_FindPhysicalAudioDeviceByHandle`: first
+   match in a hash table, zombies not skipped) can return the zombie itself,
+   which is "already the default", so nothing moves. SDL asserts that
+   handles are unique (`SDL_AddAudioDevice`); the same family is open
+   upstream as libsdl-org/SDL#16133 ("SDL_audio.c assert in
+   SDL_AddAudioDevice when PC returns from sleep"), moved by SDL's
+   maintainer to 3.6.0.
+2. **The default arrived before SDL knew the sink.** SDL adds a new sink
+   only after a round trip to PipeWire (`hotplug_core_sync`) and looks the
+   new default up by name among the sinks it has finished adding
+   (`change_default_device`); a `default.audio.sink` that arrives first is
+   dropped and never retried.
+
+Both need the sink to vanish with no other output to fall back on, which is
+why it takes a blank (or anything else that removes the sink: restarting
+WirePlumber under the app gave the same 47 a second on 2026-10-14, testing
+lessons) and why most wakes still have sound. Earlier boots blanked and
+woke with no pipewire-pulse (00:40 to 07:06, then Battle Clash on snes9x at
+07:12; 08:32 to 10:09) and no silence was reported; not checked by ear.
+
+**Ruled out:** #280's chip power state (in force: `power_save_controller` N,
+both controllers active, no `Refused to change power state`); the image
+(2026.10.18.6 touches no sound code); volume and mute (1.00, not muted); the
+core (it made sound, above); the silent day's starved sound thread (the
+queue drained normally, so SDL's callback ran every cycle).
+
+**Not known:** whether #228's first case (2026-10-02, silence after a
+restart with the stream linked) was this too. A session start remakes the
+TV's sink within a second (testing lessons, 2026-10-11), which can leave the
+same zombie; no ERR was read that day.
+
+**The cheapest measurement.** On a boot where `systemctl --user is-active
+pipewire-pulse.service` says inactive (tonight's does not qualify: it is
+running, so Dummy Output catches the app), log `pw-mon` and `pw-metadata -m`
+on the A9 (both only watch) from before the blank to after the wake; let the
+screen blank on Home and the TV sleep, wake it, and read the app's stream in
+`pw-dump` and `pw-top`. Confirmed if the stream is still the start-up one
+(same `SDLAudioP` number and serial) with ERR rising 47 a second. The log
+then shows the old and new sink ids (equal: candidate 1) and how soon
+`default.audio.sink` was set after the new sink appeared (in the same
+instant: candidate 2 is possible). A test without the TV, `systemctl --user
+restart wireplumber` under the app, changes the console and is MMagTech's
+call.
+
+**Fix directions, not chosen or tried:** keep an output present while the
+TV sleeps, so SDL always has a default to move to (as pipewire-pulse's
+Dummy Output did tonight); have the app reopen its SDL sound when SDL
+reports the device removed or the screen wakes; SDL's own fix (#16133,
+3.6.0).
+
 ### 47. Interface sounds everywhere, and a calmer set, issue #389
 
 **Decided by MMagTech at the TV, 2026-10-14.** The interface sounds are
@@ -17283,8 +17494,25 @@ the Interface sounds level like every other cue.
 
 **No start-up or shut-down sound, ever** (his rule from the project's
 start: "one thing I hated about old systems... Sega! It scared the shit out
-of me"). Choosing Restart or Power off is silent; #393 is only about a
-possible fade on the way down.
+of me"). Choosing Restart or Power off is silent.
+
+**Restart and Power off fade to black, in silence (#393, MMagTech
+2026-10-18: "I would like a fade with no sound if it's not too hard to
+implement"; built 2026-10-18).** The curtain (`curtain.cpp`) comes down
+over a second (`design::kPowerFade`) over whatever is on screen, the Power
+menu and a paused game with it, then the game is left behind the black as
+before and logind is asked. The call is made on the clock, not on the
+picture, so a frame not drawn delays nothing, and it adds the second and
+nothing more. Nothing takes a press meanwhile. A refusal lifts the black and
+says it, as before (#241). Sleep does not fade: it comes back, and the
+picture would then have to be brought back up on waking. Over an emulator
+of its own the console's window is drawn over its frozen picture, so the
+fade should cover it, and the emulator is closed behind the black (not yet
+seen on the TV); over PCSX2's own window the curtain is one of the things
+the console draws over it. After the black the television shows what it
+showed before the change: the image's Plymouth reboot or power-off screen
+(plymouth-reboot.service ran on the A9's last restart), then the machine
+goes off.
 
 **The set is calmer.** The first set (Move 880 Hz over 1320 Hz) read as too
 jarring for a quiet, minimal screen. He chose, from samples played in the

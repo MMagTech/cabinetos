@@ -59,7 +59,9 @@ std::mutex gQueueLock;
 
 // Which of the kSyncIndices (vkhost_state.h) the core is on this frame;
 // present moves it on.
-uint32_t gSyncIndex = 0;
+// Atomic: the cores' render threads read it (getSyncIndex) while present
+// moves it on the GL thread (#483, EMU-03).
+std::atomic<uint32_t> gSyncIndex{0};
 
 retro_hw_render_interface_vulkan gInterface{};
 const retro_hw_render_context_negotiation_interface_vulkan* gNegotiation = nullptr;
@@ -104,8 +106,26 @@ void RETRO_CALLCONV setCommandBuffers(void* handle, uint32_t numCmd,
     }
 }
 
+// UNDER THE QUEUE LOCK (#483, EMU-05). vkDeviceWaitIdle needs every queue of
+// the device externally synchronised, and present() submits to the same queue
+// on the GL thread; Mesa's waits by submitting to the queue, so the two could
+// submit at once. paraLLEl-RDP's own device wait does the same (Granite's
+// Device::wait_idle_nolock, under its queue lock callback).
+//
+// IT CANNOT DEADLOCK THE CORES WE RUN ON VULKAN, read in their sources at the
+// pinned commits (2026-10-19): Dolphin (1a0f972, DolphinLibretro/Vulkan.cpp),
+// PPSSPP (c989c25, VulkanFrameData.cpp, VulkanContext.cpp), Flycast (a172e00,
+// vk_context_lr.h) and Mupen64Plus-Next's paraLLEl-RDP (f275caf, rdp.cpp,
+// device.cpp) hold lock_queue only around one submit or one idle wait, never
+// while calling wait_sync_index (from their image acquire, or paraLLEl's
+// begin_frame), and all hand set_image no semaphores, so present() holds the
+// lock only over GPU work already submitted. A new Vulkan core is checked the
+// same way. RetroArch's own wait_sync_index is empty (gfx/drivers/vulkan.c,
+// read at 07bd4ca): it waits in its swap instead, as present() does here.
 void RETRO_CALLCONV waitSyncIndex(void* handle) {
-    if (gDevice && gApi.deviceWaitIdle) gApi.deviceWaitIdle(gDevice);
+    if (!gDevice || !gApi.deviceWaitIdle) return;
+    std::lock_guard<std::mutex> lk(gQueueLock);
+    gApi.deviceWaitIdle(gDevice);
 }
 
 void RETRO_CALLCONV lockQueue(void* handle) { gQueueLock.lock(); }
@@ -183,18 +203,21 @@ bool chooseGpu(std::string* err) {
 // extensions".
 std::vector<const char*> gRequiredDeviceExtensions;
 
-// The three without which the picture cannot leave Vulkan at all. They are
+// The ones without which the picture cannot leave Vulkan at all. They are
 // passed to the core's create_device too, which is what the libretro contract
-// means by "the frontend will request certain extensions".
+// means by "the frontend will request certain extensions". The dmabuf one
+// only where the GPU has it: only the EGL route needs it (#489, EMU-02), and
+// asking for one the GPU lacks fails vkCreateDevice.
 //
 // VK_EXT_image_drm_format_modifier is deliberately NOT here. It was added,
-// measured and taken out again — see createShared for the numbers.
+// measured and taken out again — see createShared (vkbridge.cpp) for the numbers.
 void buildDeviceExtensionList() {
     gRequiredDeviceExtensions = {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
-        VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME,
     };
+    if (gpu::vulkan().externalMemoryDmaBuf)
+        gRequiredDeviceExtensions.push_back(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
 }
 
 bool createOwnDevice(std::string* err) {
@@ -589,15 +612,20 @@ void destroyContext() {
         gApi.destroyCommandPool(gDevice, gPool, nullptr);
         gPool = VK_NULL_HANDLE;
     }
-    // A device the CORE created is the core's to tear down — the contract puts
-    // destroy_device before the instance goes, and calling vkDestroyDevice on
-    // it ourselves would pull it out from under resources the core still holds.
+    // A DEVICE THE CORE CREATED IS STILL OURS TO DESTROY (#489, EMU-04). The
+    // contract: "Device provided to frontend is owned by the frontend, but any
+    // additional device resources must be freed by core in destroy_device
+    // callback" (libretro_vulkan.h). So the core frees its extras first, if it
+    // has a destroy_device, and the device goes as our own does. Every Vulkan
+    // core shipped passes none and left the device to us, and until this each
+    // N64, PSP, Dreamcast, GameCube or Wii game left one behind, measured on
+    // the A9 at about 1 MiB of VRAM and 0.7 MiB of GTT a game (Hydro Thunder,
+    // ten launches in one run; flat since).
+    // This runs after context_destroy and retro_unload_game (Core::unloadGame).
     if (gDevice != VK_NULL_HANDLE) {
-        if (gDeviceFromCore) {
-            if (gNegotiation && gNegotiation->destroy_device) gNegotiation->destroy_device();
-        } else if (gApi.destroyDevice) {
-            gApi.destroyDevice(gDevice, nullptr);
-        }
+        if (gDeviceFromCore && gNegotiation && gNegotiation->destroy_device)
+            gNegotiation->destroy_device();
+        if (gApi.destroyDevice) gApi.destroyDevice(gDevice, nullptr);
         gDevice = VK_NULL_HANDLE;
     }
     if (gSurface != VK_NULL_HANDLE && gApi.destroySurface) {

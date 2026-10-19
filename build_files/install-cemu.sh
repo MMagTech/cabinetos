@@ -12,7 +12,7 @@
 # LAID OUT AS AN INSTALL PREFIX: bin/Cemu, and share/Cemu/{gameProfiles,
 # resources}, where Cemu looks from where it is (wxStandardPaths::GetDataDir).
 # Its settings, log, shader cache and saves go where the console tells it
-# (standalone.cpp, prepareCemu), because /usr is read-only.
+# (standalone_cemu.cpp, prepareCemu), because /usr is read-only.
 #
 # Its licence is MPL-2.0; see docs/LICENCES.md.
 

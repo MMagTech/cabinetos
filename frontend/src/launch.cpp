@@ -46,9 +46,10 @@
 static float gPs2Upscale = -1.0f;
 static int gPs2Anisotropy = -1;
 
-// Set by main()'s parser. ONE DEFINITION OF EACH, HERE: a second copy of the
-// two statics in main.cpp would compile, the parser would write that copy, and
-// --ps2-upscale and --ps2-aniso would stop working without a word.
+// Set by the command line (cli.cpp). ONE DEFINITION OF EACH, HERE: a second
+// copy of the two statics anywhere else would compile, the parser would write
+// that copy, and --ps2-upscale and --ps2-aniso would stop working without a
+// word.
 void setPs2Upscale(float upscale) { gPs2Upscale = upscale; }
 void setPs2Anisotropy(int anisotropy) { gPs2Anisotropy = anisotropy; }
 
@@ -249,6 +250,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                         ? placed.entryPath
                         : cache::entryPathFor(location, game.platformFsSlug, game.id,
                                               job.title, kept);
+    job.location = location;
 
     const int id = game.id;
     const int platformId = game.platformId;
@@ -271,7 +273,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
 // Play, a refusal, the pickup of a finished job and its stages, and the busy
 // clock: members of the App (app.h), moved out of main.cpp in batch (f).
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 auto App::launchById(int romId) -> bool {
     // PRESSING PLAY ON SOMETHING ALREADY COMING JOINS IT — 2026-09-21.
@@ -295,8 +297,17 @@ auto App::launchById(int romId) -> bool {
         // SAID, NOT SILENT (#184): a press that did nothing looked like a
         // broken button. One download at a time until there is a queue.
         menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
-        return false;    // one at a time
+        // THE SAME GAME, ALREADY JOINED, is a press that counts (#484): false
+        // made the caller drop the state it had just picked, so a second
+        // Play from a state lost both presses' states.
+        return launchJob.romId == romId;
     }
+    // A JOB THE FRAME LOOP HAS NOT TAKEN YET is not replaced (#472): a
+    // second press while the curtain falls on a Ready game replaced it, and
+    // a replacement that ended in no game left the screen black. The press
+    // can only be for the same game, from its own page; it counts as taken,
+    // so a state or a Resume it asked for stays with the launch.
+    if (launchJob.waiting()) return launchJob.romId == romId;
     const romm::Game* g = nullptr;
     for (const auto& x : games) if (x.id == romId) { g = &x; break; }
     if (!g) { std::fprintf(stderr, "[launch] no game with id %d\n", romId); return false; }
@@ -310,6 +321,7 @@ auto App::launchById(int romId) -> bool {
         // touches the job, so refuseLaunch would name the last game.
         const catalog::Coverage cov = catalog::coverageFor(*g);
         if (cov.support == catalog::Support::Playable && cov.core) refuseLaunch(lerr);
+        else showWhyUnplayable(romId);
         return false;
     }
     launchJob.startedOn = static_cast<int>(here());
@@ -342,6 +354,22 @@ void App::refuseLaunch(const std::string& why) {
     else detailScreen.setNotice(why);
     sound::play(sound::Cue::Edge);
     curtain.retarget(0.0f, kCurtainUp);
+}
+
+// A GAME THIS CONSOLE CANNOT PLAY, pressed where Play is not greyed (Home's
+// Resume on a Vita game in RomM's history, or a Wii game that needs a Remote
+// with none paired): its page, which says why, and the edge sound (#484).
+// It did nothing on screen. Not refuseLaunch: the job was never touched, so
+// it names the last game launched.
+void App::showWhyUnplayable(int romId) {
+    sound::play(sound::Cue::Edge);
+    if (here() == Screen::Detail && detailScreen.game().romId == romId) return;
+    for (size_t i = 0; i < cards.size(); ++i) {
+        if (cards[i].id == romId) {
+            openDetailSoon(static_cast<int>(i));
+            return;
+        }
+    }
 }
 
 // A LAUNCH THAT DOES NOT START A GAME TAKES WHAT ITS PRESS ASKED FOR WITH
@@ -417,13 +445,16 @@ bool App::takeFinishedJob() {
         // will not load the game does (refuseLaunch): pressed on Home's
         // Resume, it said nothing anywhere (#398). A Download, a Play the
         // person walked away from and a cancel keep the page's notice.
-        const bool sayIt = launchJob.playWhenReady && !launchJob.cancel.load() &&
+        // A CANCEL SAYS NOTHING (#472): the person asked for it, and a
+        // transfer cut short by it fails in the same words as a real fault.
+        const bool cancelled = launchJob.cancel.load();
+        const bool sayIt = launchJob.playWhenReady && !cancelled &&
                            launchJob.startedOn == static_cast<int>(here());
         if (here() == Screen::Detail &&
             detailScreen.game().romId == launchJob.romId) {
             detailScreen.setKept(
                 cache::isKeptBy(storage::currentUser(), launchJob.romId));
-            if (!sayIt) detailScreen.setNotice(launchJob.message);
+            if (!sayIt) detailScreen.setNotice(cancelled ? std::string() : launchJob.message);
         }
         refreshKeeps();
         forgetLaunchAsks();
@@ -557,8 +588,9 @@ void App::prepareSaveDirAndDiscs(LaunchContext& c) {
         if (const char* region = catalog::gameCubeRegion(launchJob.titleId))
             oldGameCubeCard = c.saveDir + "/card." + region + ".raw";
         else
-            std::fprintf(stderr, "[save] RomM has no game code for this GameCube game, so its "
-                         "region and save folder are unknown; saves stay on this console\n");
+            std::fprintf(stderr, "[save] no game code for this GameCube game, from RomM or "
+                         "off its file, so its region and save folder are unknown; saves "
+                         "stay on this console\n");
     }
     if (c.dirSub && c.launchTag && liveClient.haveToken())
         restoreDirSave(liveClient, launchJob.romId, c.launchTag, c.saveDir + "/" + c.dirSub,

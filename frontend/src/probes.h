@@ -23,8 +23,7 @@ struct EarlyProbeOptions {
     bool volumeTestMode = false;
     bool playtimeTestMode = false;
     bool discTestMode = false;
-    int removeAccountId = 0;
-    bool removeAnyway = false;
+    bool filesTestMode = false;
     int padsSeconds = 0;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;
@@ -56,6 +55,8 @@ struct StorageProbeOptions {
     const char* serverCheckAddress = nullptr;
     int keepersRomId = 0;
     bool storageReport = false;
+    int removeAccountId = 0;
+    bool removeAnyway = false;
 };
 
 std::optional<int> storageProbe(const StorageProbeOptions& o);

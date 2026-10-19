@@ -57,9 +57,11 @@ bool Client::fetchSaves(int romId, std::vector<Asset>* out, std::string* err) {
 }
 
 bool Client::fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* out,
-                           std::string* err) {
+                           std::string* err, std::vector<int>* skipped) {
     out->clear();
+    if (skipped) skipped->clear();
     constexpr size_t kPerCall = 500;
+    bool anyAnswered = false;
     for (size_t at = 0; at < romIds.size(); at += kPerCall) {
         std::string q;
         for (size_t i = at; i < romIds.size() && i < at + kPerCall; ++i)
@@ -79,13 +81,25 @@ bool Client::fetchSavesFor(const std::vector<int>& romIds, std::vector<Asset>* o
             if (placed) {
                 for (Asset& a : got)
                     if (asked.count(a.romId)) out->push_back(std::move(a));
+                anyAnswered = true;
                 continue;
             }
         }
-        // One game at a time, as before RomM 5.3.
+        // One game at a time: a server before RomM 5.3, or a batched call
+        // that failed for any other reason. A game whose own request fails is
+        // skipped, not the whole list (#484, ROMM-30), once one has answered;
+        // a first failure with none answered is a server that is not there,
+        // and asking every game in turn would only wait out each one.
         for (size_t i = at; i < romIds.size() && i < at + kPerCall; ++i) {
             std::vector<Asset> one;
-            if (!fetchSaves(romIds[i], &one, err)) return false;
+            if (!fetchSaves(romIds[i], &one, err)) {
+                if (!anyAnswered) return false;
+                std::fprintf(stderr, "[romm] saves of %d not fetched: %s\n", romIds[i],
+                             err ? err->c_str() : "");
+                if (skipped) skipped->push_back(romIds[i]);
+                continue;
+            }
+            anyAnswered = true;
             for (Asset& a : one) a.romId = romIds[i];
             out->insert(out->end(), one.begin(), one.end());
         }
@@ -106,9 +120,10 @@ std::vector<uint8_t> Client::fetchAsset(const char* kind, int assetId) const {
 
 bool Client::uploadSave(int romId, const std::string& emulator, const std::string& fileName,
                         const std::vector<uint8_t>& data, std::string* err) const {
-    // overwrite=true is load-bearing: it replaces the server's copy of the same
-    // file name instead of stacking a row per upload, which is what keeps a PS1
-    // game at ONE memory card rather than one per session. Cabinet's note.
+    // RomM replaces the row with the same file name (and, on 5.4.0, the same
+    // emulator), which is what keeps a PS1 game at ONE memory card rather than
+    // one per session. overwrite=true is sent as Cabinet sends it; without a
+    // device_id RomM does nothing with it.
     const std::string path = "/api/saves?rom_id=" + std::to_string(romId) +
                              "&emulator=" + emulator + "&overwrite=true";
     return postMultipart(path, "saveFile", fileName, data, err);
@@ -147,8 +162,10 @@ bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
     return true;
 }
 
-bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) {
+bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err,
+                         bool* cannotMake) {
     *forbidden = false;
+    if (cannotMake) *cannotMake = false;
     std::vector<Collection> cols;
     if (!fetchCollections(&cols, err)) return false;
     // THEIR OWN Favorites. The list carries everyone's public collections
@@ -201,6 +218,9 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
         curl_easy_cleanup(c);
         if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
         if (status == 401 || status == 403) *forbidden = true;
+        // The name already taken (#474): RomM's own web page would meet the
+        // same refusal, so it is not ours to work around with another name.
+        if ((status == 409 || status == 500) && cannotMake) *cannotMake = true;
         if (status < 200 || status >= 300) {
             if (err) *err = "HTTP " + std::to_string(status) + " making the favourites";
             return false;

@@ -1,7 +1,7 @@
 // A launch: the job a Play or a Download press starts, and the call that
 // starts it. beginLaunch (launch.cpp) does the frame thread's half and starts
-// a worker that fetches the game (launch_routes.cpp); main() owns the one
-// LaunchJob and reads it every frame. Moved out of main.cpp in the
+// a worker that fetches the game (launch_routes.cpp); the App owns the one
+// LaunchJob (app.h) and reads it every frame. Moved out of main.cpp in the
 // restructure (#398).
 
 #pragma once
@@ -78,7 +78,14 @@ struct LaunchJob {
     // when somebody keeps it and `<location>/cache/<platform>/…` when nobody
     // does. One entry, named `<romId> - <title>` — a file when the game is a
     // single payload and a directory when its archive unpacked into several.
+    // The worker may rename it (a folder collapsed to one file, a file moved
+    // into a folder), so it is read only after the stage is Ready or Failed.
     std::string entryPath;
+    // THE DRIVE THE JOB WRITES TO, the location `entryPath` is under. Set by
+    // beginLaunch before the worker starts and never written by the worker,
+    // so the frame thread may read it while the job is busy: Eject asks it
+    // whether the download must stop first (#404).
+    std::string location;
     // ONE SPELLING OF A PLATFORM, EVERYWHERE. RomM's `fs_slug` — "Sony
     // Playstation", not "psx". See storage.h for why the short one lost.
     std::string platformFsSlug;
@@ -116,6 +123,13 @@ struct LaunchJob {
         return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking ||
                st == Stage::Installing;
     }
+    // Finished, and not yet taken by the frame loop (takeFinishedJob): a
+    // Ready game waits there while the curtain comes down. No new launch
+    // replaces it (#472).
+    bool waiting() const {
+        const Stage st = stage.load();
+        return st == Stage::Ready || st == Stage::Failed;
+    }
 };
 
 // Starts one; the comment above it in launch.cpp says what it decides. The
@@ -124,12 +138,12 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                  const std::string& coreDir, std::string* err,
                  bool playWhenReady = true, bool keepWhenReady = false);
 
-// --ps2-upscale and --ps2-aniso, from main()'s argument parser. The two values
+// --ps2-upscale and --ps2-aniso, from the command line (cli.cpp). The two values
 // live in launch.cpp, the only place that reads them; see the comment there.
 void setPs2Upscale(float upscale);
 void setPs2Anisotropy(int anisotropy);
-// --ps2-copy, defined in main.cpp beside the PS2 window and set by the
-// command line (cli.cpp).
+// --ps2-copy, defined beside the PS2 window (ps2window.cpp), which reads it,
+// and set by the command line (cli.cpp).
 extern bool gPs2Copy;
 
 // beginLaunch's worker, in launch_routes.cpp, run on job.worker and called by

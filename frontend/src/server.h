@@ -44,10 +44,8 @@ bool changeAddress(const std::string& from, const std::string& to, std::string* 
 // Saves on this console that never reached the server, across every account.
 // By design there are none: leaving a game uploads, and Settings is reached
 // with the server answering. One is left only when the server was away as a
-// game was quit and that game has not been played since. Nothing re-sends
-// them from the disk (the marker records only a size), so Sign out names them
-// and they go with everything else. Re-sending belongs with the offline
-// console, open question 22.
+// game was quit and nothing has sent it since. Counted by cache::pendingCount,
+// so only whole markers count, as Remove counts them (#482).
 int unsentSaves();
 
 // Signs out: writes the signed-out marker, and nothing else. The clearing is
@@ -62,8 +60,10 @@ bool signOut(std::string* err);
 // choices), every account's saves and states on this console, its covers, the
 // accounts and their tokens, the PIN, and the address. Keeps Wi-Fi,
 // controllers, BIOS and the console's own settings. A games drive that is not
-// plugged in keeps its games; they are that server's and nothing here will
-// use them.
+// plugged in keeps its games, and nothing marks them as the last server's:
+// plugged in later under a new server, they are matched to its games by rom
+// id (cache::findAll), and online the drive backfill writes the new server's
+// record over theirs (#484; what should become of them is not decided).
 void finishSignOut();
 
 }  // namespace server

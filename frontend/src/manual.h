@@ -52,8 +52,8 @@ bool looksLikePdf(const std::string& path);
 
 namespace romm { class Client; }
 
-// A game's manual downloaded off RomM into `dest`, on main.cpp's manual
-// worker. Moved out of main.cpp in the restructure (#398).
+// A game's manual downloaded off RomM into `dest`, on the game page's manual
+// worker (detail.cpp). Moved out of main.cpp in the restructure (#398).
 bool fetchManualFile(const romm::Client& client, const std::string& manualPath,
                      const std::string& dest, const std::function<bool()>& keepGoing,
                      std::string* err);

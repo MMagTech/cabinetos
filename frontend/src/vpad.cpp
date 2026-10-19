@@ -17,7 +17,7 @@ namespace {
 
 // pid.codes' open-source vendor ID and a product number nobody else ships, so
 // no real controller can ever be mistaken for one of these, and the console's
-// own SDL can be told to leave them alone (see main.cpp).
+// own SDL can be told to leave them alone (see startup.cpp).
 constexpr uint16_t kVendor = 0x1209;
 constexpr uint16_t kProduct = 0xCAB0;
 constexpr uint16_t kVersion = 0x0001;

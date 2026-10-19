@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -121,9 +122,13 @@ Kind sniffFile(const std::string& path, std::string* err = nullptr);
 int64_t unpackedSize(const std::string& path, const std::string& validExtensions,
                      bool blockExtract);
 
+// `cancel` is the launch's (#472): set, the unpacking stops between two
+// blocks and returns false, and what was written so far stays for the
+// launch's own clean-up, as after a failed read.
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
-                 std::string* primaryPath, Kind* kindOut, std::string* err);
+                 std::string* primaryPath, Kind* kindOut, std::string* err,
+                 const std::atomic<bool>& cancel);
 
 // Whether `fileName`'s extension is one the core lists ("bin|cue|chd").
 bool accepts(const std::string& validExtensions, const std::string& fileName);

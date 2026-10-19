@@ -6,7 +6,7 @@
 
 #include <utility>
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::askChoice(const std::string& title, const std::string& detail,
                     std::vector<std::string> options, int focus,

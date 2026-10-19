@@ -1,9 +1,11 @@
 #include "prefs.h"
 
 #include <cstdio>
+#include <mutex>
 
 #include <json-c/json.h>
 
+#include "fileio.h"
 #include "storage.h"
 
 namespace prefs {
@@ -44,21 +46,21 @@ void set(const std::string& key, const std::string& value) {
     // Read, change one key, write the lot: a file of a handful of words is
     // cheaper to rewrite than to reason about, and keys this build does not
     // know (written by a newer one) survive the round trip.
+    //
+    // ONE AT A TIME (#482). Steam's install and removal finish on their own
+    // thread and set a key there; two sets at once each read the same file,
+    // and the later write dropped the other's change.
+    static std::mutex m;
+    std::lock_guard<std::mutex> lock(m);
     json_object* o = load();
     json_object_object_add(o, key.c_str(), json_object_new_string(value.c_str()));
-    storage::makeDirs(storage::configDir());
-    const std::string tmp = path() + ".part";
-    if (FILE* f = std::fopen(tmp.c_str(), "wb")) {
-        std::fputs(json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY), f);
-        std::fputc('\n', f);
-        const bool ok = std::fflush(f) == 0;
-        std::fclose(f);
-        if (ok && std::rename(tmp.c_str(), path().c_str()) == 0)
-            std::fprintf(stderr, "[prefs] %s = %s\n", key.c_str(), value.c_str());
-        else
-            std::fprintf(stderr, "[prefs] could not write %s\n", path().c_str());
-    }
+    const std::string text =
+        std::string(json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY)) + "\n";
     json_object_put(o);
+    if (cab::writeBytes(path(), text))
+        std::fprintf(stderr, "[prefs] %s = %s\n", key.c_str(), value.c_str());
+    else
+        std::fprintf(stderr, "[prefs] could not write %s\n", path().c_str());
 }
 
 }  // namespace prefs

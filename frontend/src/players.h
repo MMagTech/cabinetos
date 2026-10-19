@@ -106,7 +106,7 @@ struct Pad {
     int player = -1;
     SDL_JoystickID id = 0;
     std::string name;      // as the pad gives it
-    std::string address;   // "E4:17:D8:71:F1:ED", Bluetooth only
+    std::string address;   // "AA:BB:CC:DD:EE:01", Bluetooth only
 };
 // The seated pads that are on, player one first.
 std::vector<Pad> connected();

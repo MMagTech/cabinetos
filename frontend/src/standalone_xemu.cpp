@@ -219,8 +219,11 @@ bool xboxMediaAt(const std::string& path, uint64_t at) {
 }
 
 // Cuts a full dump down to its game partition, in place, and notes the file
-// as installed at its original size so it is not fetched again.
-bool trimRedump(const std::string& entryPath, const std::string& name, std::string* message) {
+// as installed at its original size so it is not fetched again. A cancel
+// (Escape, an Eject, the console leaving) stops the copy between two blocks
+// and leaves the dump as it came (#472).
+bool trimRedump(const std::string& entryPath, const std::string& name,
+                const std::atomic<bool>& cancel, std::string* message) {
     const std::string path = entryPath + "/" + name;
     struct stat st;
     if (::stat(path.c_str(), &st) != 0) return false;
@@ -230,6 +233,7 @@ bool trimRedump(const std::string& entryPath, const std::string& name, std::stri
     bool ok = in && out && fseeko(in, static_cast<off_t>(kRedumpGameOffset), SEEK_SET) == 0;
     std::vector<char> buf(4 << 20);
     while (ok) {
+        if (cancel.load()) { ok = false; break; }
         const size_t n = std::fread(buf.data(), 1, buf.size(), in);
         if (n == 0) break;
         ok = std::fwrite(buf.data(), 1, n, out) == n;
@@ -251,12 +255,13 @@ bool trimRedump(const std::string& entryPath, const std::string& name, std::stri
 
 }  // namespace
 
-bool installXbox(const std::string& entryPath, std::string* romPath, std::string* message) {
+bool installXbox(const std::string& entryPath, const std::atomic<bool>& cancel,
+                 std::string* romPath, std::string* message) {
     for (const std::string& name : listDir(entryPath)) {
         if (name[0] == '.' || name == kXboxDrive) continue;
         const std::string p = entryPath + "/" + name;
         if (!isFile(p) || xboxMediaAt(p, 0)) continue;
-        if (xboxMediaAt(p, kRedumpGameOffset) && !trimRedump(entryPath, name, message))
+        if (xboxMediaAt(p, kRedumpGameOffset) && !trimRedump(entryPath, name, cancel, message))
             return false;
     }
     std::string pick;

@@ -27,6 +27,10 @@ namespace ui {
 // smoothed — a blurred module boundary is a module a camera cannot call.
 class QrTexture {
 public:
+    // Never copied: a copy would free the same texture twice (#488, HOME-11).
+    QrTexture() = default;
+    QrTexture(const QrTexture&) = delete;
+    QrTexture& operator=(const QrTexture&) = delete;
     ~QrTexture() { release(); }
 
     void set(const qr::Code& c) {

@@ -1,7 +1,8 @@
 // The RomM client's transport: every request goes out from here (get,
 // postJson and sendJson, postMultipart, fetchToFile, fetchBytes, fetchRange),
 // each on its own CURL handle, with the console-wide flag that says whether
-// the server is away. The client's other files (romm_pairing.cpp,
+// the server is away. One does not: setFavorite makes a person's first
+// Favorites collection on a handle of its own (romm_playdata.cpp). The client's other files (romm_pairing.cpp,
 // romm_library.cpp, romm_playdata.cpp, romm_codes.cpp) ask through these.
 // Moved out of romm.cpp in the restructure (#398).
 
@@ -11,11 +12,15 @@
 
 #include <curl/curl.h>
 
+#include <unistd.h>
+
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <functional>
 #include <mutex>
 
 namespace romm {
@@ -123,6 +128,58 @@ void noteTransport(void* handle, int code) {
     if (unreachable) setServerAway(true);
 }
 
+// THE CONSOLE CONNECTS ONLY TO ITS RomM SERVER (#380). An address that comes
+// out of RomM's data, or a redirect in an answer, is followed only while it
+// names the server the console was set up with: the same scheme, host and
+// port. Anywhere else would let whoever controls the data decide where every
+// console connects, with the person's sign-in attached. Refusals are logged
+// by path only, never the host (as [covers] lines are), since a report reads
+// this log and knows no host but the server's to hide.
+namespace {
+// "https://host:port", lower case: everything before the path.
+std::string originOf(const std::string& url) {
+    const size_t s = url.find("://");
+    if (s == std::string::npos) return {};
+    std::string o = url.substr(0, url.find_first_of("/?#", s + 3));
+    for (char& ch : o) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return o;
+}
+
+std::string pathOf(const std::string& url) {
+    const size_t s = url.find("://");
+    const size_t p = url.find('/', s == std::string::npos ? 0 : s + 3);
+    if (p == std::string::npos) return "/";
+    return url.substr(p, url.find_first_of("?#", p) - p);
+}
+
+// Performs the request on `c`, following a redirect only while it stays on
+// the server `base` names; `restart` empties what a redirect's own body put
+// in the sink. A redirect elsewhere is left as the answer (a 3xx, which
+// every caller counts as a failure) and its address in `*movedTo`.
+CURLcode performOnServer(CURL* c, const std::string& base, const std::function<void()>& restart,
+                         std::string* movedTo = nullptr) {
+    for (int hops = 0;; ++hops) {
+        const CURLcode rc = curl_easy_perform(c);
+        if (rc != CURLE_OK) return rc;
+        long status = 0;
+        curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+        char* next = nullptr;
+        curl_easy_getinfo(c, CURLINFO_REDIRECT_URL, &next);
+        if (status < 300 || status >= 400 || !next) return rc;
+        const std::string to = next;   // the handle owns `next`
+        if (originOf(to) != originOf(base)) {
+            if (movedTo) *movedTo = to;
+            else std::fprintf(stderr, "[romm] not followed: a redirect off the RomM server, "
+                                      "to %s\n", pathOf(to).c_str());
+            return rc;
+        }
+        if (hops >= 5) return rc;
+        if (restart) restart();
+        curl_easy_setopt(c, CURLOPT_URL, to.c_str());
+    }
+}
+}  // namespace
+
 Client::Client() { curl_global_init(CURL_GLOBAL_DEFAULT); }
 Client::~Client() = default;
 
@@ -136,7 +193,7 @@ bool Client::get(const std::string& path, std::string* body, std::string* err) c
 }
 
 bool Client::getAt(const Where& at, const std::string& path, std::string* body,
-                   std::string* err) const {
+                   std::string* err, bool report, std::string* movedTo) const {
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
     const std::string url = at.base + path;
@@ -150,11 +207,10 @@ bool Client::getAt(const Where& at, const std::string& path, std::string* body,
     curl_easy_setopt(c, CURLOPT_WRITEDATA, body);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, kTimeoutSec);
-    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
-    CURLcode rc = curl_easy_perform(c);
-    noteTransport(c, rc);
+    CURLcode rc = performOnServer(c, at.base, [body] { body->clear(); }, movedTo);
+    if (report || rc == CURLE_OK) noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     if (hdrs) curl_slist_free_all(hdrs);
@@ -165,7 +221,7 @@ bool Client::getAt(const Where& at, const std::string& path, std::string* body,
         if (err) *err = "not authorised: the token is missing, expired or lacks the scope";
         return false;
     }
-    if (status >= 400) {
+    if (status >= 300) {
         if (err) *err = "HTTP " + std::to_string(status) + " for " + path;
         return false;
     }
@@ -353,10 +409,13 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     // the low-speed limit below instead.
     curl_easy_setopt(c, CURLOPT_LOW_SPEED_LIMIT, 1024L);
     curl_easy_setopt(c, CURLOPT_LOW_SPEED_TIME, 60L);
-    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
-    const CURLcode rc = curl_easy_perform(c);
+    const CURLcode rc = performOnServer(c, at.base, [&sink] {
+        std::fflush(sink.f);
+        if (::ftruncate(fileno(sink.f), 0) == 0) std::rewind(sink.f);
+        sink.got = 0;
+    });
     noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
@@ -369,7 +428,7 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
         if (err) *err = "cancelled";
         return false;
     }
-    if (rc != CURLE_OK || status >= 400) {
+    if (rc != CURLE_OK || status >= 300) {
         std::remove(partPath.c_str());
         if (err) {
             *err = rc != CURLE_OK ? curl_easy_strerror(rc)
@@ -390,9 +449,18 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     CURL* c = curl_easy_init();
     if (!c) return data;
     // The path comes from the server and may carry anything; see encodeUrl.
+    // A whole address is taken only when it is on the RomM server, and a
+    // path must be one: "@host/x" after the address would name another host
+    // (#380).
     const Where at = where();
-    const std::string raw = (path.compare(0, 4, "http") == 0) ? path : at.base + path;
-    const std::string url = encodeUrl(raw);
+    const bool whole = path.find("://") != std::string::npos;
+    if (whole ? originOf(path) != originOf(at.base) : path.empty() || path[0] != '/') {
+        std::fprintf(stderr, "[covers] not asked: an address off the RomM server, %s\n",
+                     pathOf(path).c_str());
+        curl_easy_cleanup(c);
+        return data;
+    }
+    const std::string url = encodeUrl(whole ? path : at.base + path);
     curl_slist* hdrs = nullptr;
     if (!at.token.empty())
         hdrs = curl_slist_append(hdrs, ("Authorization: Bearer " + at.token).c_str());
@@ -402,17 +470,16 @@ std::vector<uint8_t> Client::fetchBytes(const std::string& path) const {
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &data);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, kTimeoutSec);
-    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
 
-    CURLcode rc = curl_easy_perform(c);
+    CURLcode rc = performOnServer(c, at.base, [&data] { data.clear(); });
     noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
     if (hdrs) curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
 
-    if (rc != CURLE_OK || status >= 400) {
+    if (rc != CURLE_OK || status >= 300) {
         // SAID, so a report shows why a picture is missing instead of a blank
         // tile and nothing in the log (#376). The path only, never the host or
         // the query; RomM's paths carry game numbers, not names.
@@ -467,9 +534,8 @@ std::vector<uint8_t> Client::fetchRange(const Game& g, uint64_t offset, size_t b
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &sink);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSec);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, kTimeoutSec);
-    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
     if (hdrs) curl_easy_setopt(c, CURLOPT_HTTPHEADER, hdrs);
-    const CURLcode rc = curl_easy_perform(c);
+    const CURLcode rc = performOnServer(c, at.base, [&data] { data.clear(); });
     noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);

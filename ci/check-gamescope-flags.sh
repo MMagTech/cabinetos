@@ -18,10 +18,11 @@
 # as the emulator option check built for #63.
 #
 # THE FLAGS ARE READ FROM THE SCRIPTS, not listed here, so a flag added to one
-# is checked without anyone remembering this file: every `--flag` from a line
-# that starts gamescope (`exec gamescope \` or `gamescope --...`) up to the bare
-# `--` that ends gamescope's own options, plus each backend named after
-# `--backend` or passed to run_gamescope. Short flags (`-W`) are not read, so
+# is checked without anyone remembering this file: every `--flag` after a
+# `gamescope` that starts it (`exec gamescope \` or `gamescope --...`) up to
+# the bare `--` that ends gamescope's own options, every `--flag` assigned to
+# a bash array expanded there (`${COMPOSED[@]...}`), plus each backend named
+# after `--backend` or passed to run_gamescope. Short flags (`-W`) are not read, so
 # the scripts use the long ones. Steam's session is gamescope-session-plus's
 # own, from the same base, and not ours to check.
 
@@ -44,16 +45,43 @@ missing=0
 for script in "${SCRIPTS[@]}"; do
     name="${script##*/}"
 
-    mapfile -t flags < <(awk '
+    # Words after `gamescope` up to the bare `--`: each long flag, and each
+    # bash array expanded there ("array NAME"), whose flags are read from its
+    # assignments below (COMPOSED=(--force-composition), vrr=(--adaptive-sync)).
+    mapfile -t words < <(awk '
         /^[[:space:]]*#/ { next }
-        /(^|[[:space:]])gamescope[[:space:]]+(\\|--)/ { inside = 1 }
-        inside {
+        {
             n = split($0, w, /[[:space:]]+/)
-            for (i = 1; i <= n; i++) {
+            i = 1
+            if (!inside) {
+                for (; i < n; i++) {
+                    if (w[i] == "gamescope" && (w[i + 1] == "\\" || w[i + 1] ~ /^--/)) {
+                        inside = 1
+                        i++
+                        break
+                    }
+                }
+                if (!inside) next
+            }
+            for (; i <= n; i++) {
                 if (w[i] == "--") { inside = 0; break }
                 if (w[i] ~ /^--[a-z][a-z0-9-]+$/) print w[i]
+                else if (match(w[i], /\$\{[A-Za-z_][A-Za-z0-9_]*\[@\]/))
+                    print "array " substr(w[i], RSTART + 2, RLENGTH - 5)
             }
         }' "${script}" | sort -u)
+    flags=()
+    for word in "${words[@]}"; do
+        if [[ "${word}" == array\ * ]]; then
+            array="${word#array }"
+            mapfile -t -O "${#flags[@]}" flags < <(grep -v '^[[:space:]]*#' "${script}" \
+                | grep -oE "(^|[^A-Za-z0-9_])${array}\+?=\([^)]*\)" \
+                | grep -oE -- '--[a-z][a-z0-9-]+' || true)
+        else
+            flags+=("${word}")
+        fi
+    done
+    mapfile -t flags < <(printf '%s\n' "${flags[@]}" | sort -u)
 
     mapfile -t backends < <(grep -v '^[[:space:]]*#' "${script}" \
         | grep -oE -- '(--backend|run_gamescope)[[:space:]]+"?[a-z]+"?' \

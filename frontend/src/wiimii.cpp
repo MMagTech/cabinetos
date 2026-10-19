@@ -67,7 +67,7 @@ void copyMiisInto(romm::Client& client, int platformId, const std::string& platf
     const std::string to = saveDir + "/User/Wii/" + wii::kMiiDatabase;
     storage::makeDirs(to.substr(0, to.find_last_of('/')));
     const std::string tmp = to + ".new";
-    if (!writeLocal(tmp, db) || std::rename(tmp.c_str(), to.c_str()) != 0) {
+    if (!cab::writeBytes(tmp, db) || std::rename(tmp.c_str(), to.c_str()) != 0) {
         std::fprintf(stderr, "[mii] could not copy the Miis into %s\n", to.c_str());
         std::remove(tmp.c_str());
         return;

@@ -184,6 +184,18 @@ std::deque<Job> stopWorker() {
     return left;
 }
 
+// JOINED AT EXIT HOWEVER THE PROGRAM ENDS (#406). shutdown stops the worker
+// on the way out of App::run, but a start-up that ends before that, after
+// init (the library did not load), left gWorker joinable, and its destructor
+// among the exit handlers ended the program in std::terminate (exit 134,
+// measured on the A9 with a server that fails /api/platforms). Defined after
+// the worker's statics, so it is destroyed before them.
+namespace {
+struct JoinAtExit {
+    ~JoinAtExit() { stopWorker(); }
+} gJoinAtExit;
+}  // namespace
+
 // The answers that have come back, run on the frame thread (pump).
 void runAnswers() {
     std::deque<std::function<void()>> ready;

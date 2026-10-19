@@ -5,7 +5,7 @@
 #include "app.h"
 
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::drawGround(bool gameUp, float dt) {
     if (gameUp) {
@@ -58,7 +58,7 @@ void App::drawGround(bool gameUp, float dt) {
     // thumbnail; the 810x1080 original costs about 1.5x the bytes and is
     // the only reason this looks like anything. romm_types.h has the
     // measurement.
-    if (!gameUp && here() != Screen::Detail) {
+    if (here() != Screen::Detail) {
         // The launch screen is excluded because it already IS this idea,
         // at full strength: a game's cover filled, blurred and scrimmed
         // across the whole screen. Two of them would fight.

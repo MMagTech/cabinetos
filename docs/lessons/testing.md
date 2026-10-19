@@ -245,8 +245,10 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 103, Left 105, Right 106, Return 28, Escape 1, Backspace 14) or
 `ydotool type '<server address>'`. The frontend takes a keyboard everywhere.
 
-- **The frontend's SIGUSR1 capture only works in the main loop.** First run
-  and the startup screen have loops of their own: use `gamescopectl
+- **The frontend's SIGUSR1 capture only works in the main loop, over a
+  picture it draws.** First run and the startup screen have loops of their
+  own, and during a PS2 game or one in an emulator of its own the picture is
+  another window's (the journal says `[capture] not taken`): use `gamescopectl
   screenshot` with `XDG_RUNTIME_DIR=/run/user/1000` and
   `GAMESCOPE_WAYLAND_DISPLAY` set to the NEWEST `gamescope-N` there; a
   session restart leaves the old socket behind and gamescopectl fails on it.
@@ -432,8 +434,8 @@ minute and guessing at it for twenty.
   `CABINETOS_RELAY_UP=http://<server>:<port> romm-readonly-relay.py 16006
   45=arcade:Arcade`, then
   `CABINETOS_ROMM=127.0.0.1:16006` headless with a scratch `--storage-root`
-  (copy `config/*.json`, and write `[]` to its `drives.json`, or downloads go
-  to the real games drive). #310 ("Arcade games in any RomM arcade folder
+  (copy `config/*.json`, and set `CABINETOS_DRIVES` to an empty folder, or
+  downloads go to the real games drive). #310 ("Arcade games in any RomM arcade folder
   show up, not only in folders named exactly FBNEO or MAME2003") was tested
   this way, 2026-10-10: a launch
   tried to upload Paperboy's NVRAM and the relay refused it.
@@ -536,10 +538,11 @@ minute and guessing at it for twenty.
   arguments also matches gamescope, whose command line carries them: that
   kill took gamescope with it.
 
-- **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `drives.json` `[]` keeps
-  downloads off it, but the frontend found `/run/media/cabinet/Games` and its
-  folder time moved (nothing was written). Check the real drive after a rig
-  run that keeps or removes games.
+- **A SCRATCH ROOT STILL SEES THE GAMES DRIVE.** `config/drives.json` is
+  only the memory behind the missing-drive line, and writing `[]` to it
+  kept nothing off the drive: the frontend found `/run/media/cabinet/Games`
+  and its folder time moved. `CABINETOS_DRIVES` at an empty folder is what
+  keeps a run off every drive (#488, FIRSTRUN-19).
 
 ### TWO GAMES AT DIFFERENT SOUND RATES, WITHOUT A RESTART — learned 2026-09-27
 

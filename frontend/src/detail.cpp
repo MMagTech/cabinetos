@@ -4,7 +4,6 @@
 #include "app.h"
 
 #include <dirent.h>
-#include <json-c/json.h>
 #include <sys/stat.h>
 
 #include <algorithm>
@@ -20,7 +19,7 @@
 #include "storage.h"
 #include "timewords.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::startDetailStates() {
     if (detailStates.busy.load() || !detailStates.wantRom) return;
@@ -262,6 +261,17 @@ void App::fetchManual(int romId, const std::string& manualPath, const std::strin
     });
 }
 
+// A MANUAL IS A PDF (#484, ROMM-06): RomM's docs say so (using/uploads), and
+// the viewer reads nothing else. A .md or .txt one, which RomM's own code also
+// takes, was offered on the game's page and never opened, and a game on a
+// drive fetched it and threw it away at every launch. So it is no manual.
+static bool pdfManual(const std::string& path) {
+    if (path.size() < 4) return false;
+    std::string end = path.substr(path.size() - 4);
+    for (char& ch : end) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return end == ".pdf";
+}
+
 // A GAME THAT IS ON A DRIVE GETS ITS MANUAL BESIDE IT, when it lands and
 // whenever it starts without one (a game downloaded before #364), so it
 // can be read with no server. Only while the server is here.
@@ -269,7 +279,7 @@ void App::manualBeside(int romId, const std::string& entryPath) {
     if (romm::serverAway() || entryPath.empty()) return;
     for (const auto& g : games) {
         if (g.id != romId) continue;
-        if (g.manualPath.empty() || !cache::findManual(romId).empty()) return;
+        if (!pdfManual(g.manualPath) || !cache::findManual(romId).empty()) return;
         const std::string title = g.name.empty() ? g.fsName : g.name;
         fetchManual(romId, g.manualPath, cache::manualPathFor(entryPath, romId, title),
                     false);
@@ -343,7 +353,7 @@ void App::openDetail(int cardIndex) {
         raReadable = !cov.core || ra::coreReadable(cov.core);
         d.playable = cov.support == catalog::Support::Playable;
         d.reason = cov.reason ? cov.reason : "not playable on this console";
-        detailManualPath = g.manualPath;
+        detailManualPath = pdfManual(g.manualPath) ? g.manualPath : std::string();
         detailManualTitle = g.name.empty() ? g.fsName : g.name;
         break;
     }
@@ -357,14 +367,8 @@ void App::openDetail(int cardIndex) {
     // yet sent says so.
     d.favorite = std::find(favorites.begin(), favorites.end(), cardIndex) != favorites.end();
     if (const storage::User& who = storage::currentUser(); who.valid()) {
-        if (json_object* arr = json_object_from_file(
-                (storage::userDir(who) + "/favorites.json").c_str())) {
-            if (json_object_is_type(arr, json_type_array))
-                for (size_t i = 0; i < json_object_array_length(arr); ++i)
-                    if (json_object_get_int(json_object_array_get_idx(arr, i)) == d.romId)
-                        d.favorite = true;
-            json_object_put(arr);
-        }
+        const std::vector<int> list = favoriteList(who);
+        if (std::find(list.begin(), list.end(), d.romId) != list.end()) d.favorite = true;
         const std::map<int, bool> owedFav = favOwed(who);
         if (auto it = owedFav.find(d.romId); it != owedFav.end()) d.favorite = it->second;
     }

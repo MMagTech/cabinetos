@@ -110,8 +110,9 @@ const Account* find(const std::vector<Account>& list, int id);
 // reference implementation's rule and the right one.
 //
 // Fails if `a` is not valid or the token is empty, because a half-written
-// account is worse than none — see `needsSetup` in firstrun.cpp, which decides
-// whether this console has been configured by looking for a token and a user.
+// account is worse than none: see firstrun::completion() (firstrun.h), which
+// decides whether this console has been configured by asking whether an
+// account is active.
 bool add(const Account& a, const std::string& token, std::string* err);
 
 // Forgets an account and its token.
@@ -208,7 +209,7 @@ bool recordPairing(romm::Client& client, Paired* out, std::string* err);
 //
 // **It is a deterrent against a sibling with a controller, which is the threat
 // it exists for.** It is NOT a secret against somebody with a shell, and it was
-// never going to be: developer mode hands out SSH deliberately, and open
+// never going to be: Developer access hands out SSH deliberately, and open
 // question 9 gives a person their own files over SFTP on purpose. Anybody who
 // can read this file could read the token beside it, which is worth more.
 //
@@ -241,9 +242,7 @@ void clearRaLogin(int id);
 
 // Every account on this console, their tokens and the PIN, for signing out of
 // the server they belong to (issue #61). The next account paired, in first
-// run, owns the console and sets its own PIN. Also the single token from
-// before accounts existed (~/.config/cabinetos/romm.json), because it is a
-// credential for the same server. True when nothing is left.
+// run, owns the console and sets its own PIN. True when nothing is left.
 bool forgetEveryone();
 
 }  // namespace accounts

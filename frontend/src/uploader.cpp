@@ -76,12 +76,17 @@ void Uploader::push(Job job) {
     o.localPath = job.localPath;
     o.shotName = job.shotName;
     o.shotPath = job.shotPath;
-    cache::markPending(storage::currentUser(), o, static_cast<int64_t>(job.data.size()));
+    if (!job.who.valid()) job.who = storage::currentUser();
+    cache::markPending(job.who, o, static_cast<int64_t>(job.data.size()));
     enqueue(std::move(job));
 }
 
-void Uploader::resendOwed() {
-    const std::vector<cache::Owed> list = cache::owed(storage::currentUser());
+void Uploader::resendOwed() { resendOwedFor(storage::currentUser()); }
+void Uploader::sendFavorites() { sendFavoritesFor(storage::currentUser()); }
+void Uploader::sendPlay() { sendPlayFor(storage::currentUser()); }
+
+void Uploader::resendOwedFor(const storage::User& who) {
+    const std::vector<cache::Owed> list = cache::owed(who);
     for (const cache::Owed& o : list) {
         Job j;
         j.romId = o.romId;
@@ -93,25 +98,28 @@ void Uploader::resendOwed() {
         j.shotName = o.shotName;
         j.shotPath = o.shotPath;
         j.resend = true;
+        j.who = who;
         enqueue(std::move(j));
     }
-    if (!playtime::owed(storage::currentUser()).empty()) sendPlay();
-    if (!favOwed(storage::currentUser()).empty()) sendFavorites();
+    if (!playtime::owed(who).empty()) sendPlayFor(who);
+    if (!favOwed(who).empty()) sendFavoritesFor(who);
 }
 
-void Uploader::sendFavorites() {
+void Uploader::sendFavoritesFor(const storage::User& who) {
     Job j;
     j.isFavorite = true;
     j.fileName = "favourites";
     j.resend = true;
+    j.who = who;
     enqueue(std::move(j));
 }
 
-void Uploader::sendPlay() {
+void Uploader::sendPlayFor(const storage::User& who) {
     Job j;
     j.isPlay = true;
     j.fileName = "play sessions";
     j.resend = true;
+    j.who = who;
     enqueue(std::move(j));
 }
 
@@ -194,14 +202,14 @@ void Uploader::run() {
 
         if (job.isFavorite) {
             std::string err;
-            const bool ok = sendFavoritesAs(*client_, storage::currentUser(), &err);
+            const bool ok = sendFavoritesAs(*client_, job.who, &err);
             if (!ok) std::fprintf(stderr, "[favorite] not sent, kept locally: %s\n", err.c_str());
             finished(job, ok, /*leftSomething=*/!ok);
             continue;
         }
         if (job.isPlay) {
             std::string err;
-            const bool ok = sendPlaySessions(&err);
+            const bool ok = sendPlaySessionsAs(*client_, job.who, &err);
             if (!ok) std::fprintf(stderr, "[playtime] not sent, kept locally: %s\n", err.c_str());
             finished(job, ok, /*leftSomething=*/!ok);
             continue;
@@ -217,7 +225,7 @@ void Uploader::run() {
             // The file it was owed from is gone (deleted by hand, or the
             // person removed). Nothing left to send, so nothing is owed.
             err = "its file is gone";
-            cache::clearPending(storage::currentUser(), job.romId, job.fileName);
+            cache::clearPending(job.who, job.romId, job.fileName);
         } else {
             ok = uploadOne(*client_, job.romId, job.isState, job.isScreenshot,
                            job.emulator, job.fileName, job.data, job.shotName, job.shot,
@@ -225,7 +233,7 @@ void Uploader::run() {
             // Cleared only on success. A failed upload leaves the marker,
             // which is the point: the file is still on disk, it still has
             // not reached RomM, and the console still owes it.
-            if (ok) cache::clearPending(storage::currentUser(), job.romId, job.fileName);
+            if (ok) cache::clearPending(job.who, job.romId, job.fileName);
         }
         if (ok && job.isState) rotate(job);
         if (ok && !job.isState && !job.isScreenshot) refreshSaveCopy(job);
@@ -246,7 +254,7 @@ void Uploader::run() {
 }
 
 void Uploader::refreshSaveCopy(const Job& job) {
-    const storage::User& u = storage::currentUser();
+    const storage::User& u = job.who;
     savemirror::forget(u, job.romId);
     std::vector<romm::Asset> rows;
     std::string err;
@@ -268,10 +276,9 @@ void Uploader::finished(const Job& job, bool ok, bool leftSomething) {
         if (leftSomething) owing_ = true;
         if (ok && queue_.empty()) owing_ = false;
     }
+    // THE RESEND IS QUEUED BEFORE THIS ONE IS COUNTED OFF (#483, FILES-09):
+    // in between, pending() read 0, and a switch of person could start while
+    // the worker was still listing what this person owes.
+    if (resendNow) resendOwedFor(job.who);
     --pending_;
-    if (resendNow) resendOwed();
-}
-
-bool Uploader::sendPlaySessions(std::string* err) {
-    return sendPlaySessionsAs(*client_, storage::currentUser(), err);
 }

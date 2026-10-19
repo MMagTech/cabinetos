@@ -485,7 +485,7 @@ bool Client::fetchRecent(int limit, std::vector<Game>* out, std::string* err) {
 bool Client::fetchFiltered(const char* filter, int limit, std::vector<Game>* out,
                            std::string* err) {
     out->clear();
-    const std::string path = "/api/roms?limit=" + std::to_string(limit) + filter;
+    const std::string path = "/api/roms?limit=" + std::to_string(limit) + filter + kLeanRoms;
     std::string body;
     if (!get(path, &body, err)) return false;
 

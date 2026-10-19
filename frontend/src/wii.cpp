@@ -15,8 +15,9 @@
 namespace wii {
 namespace {
 
-// Wii's controller list and the codes read off its files (gametdb.h,
-// codecache.h; wiiu.cpp has its own of each).
+// Wii's controller list and the codes read off its files, and GameCube's
+// codes too (gametdb.h, codecache.h; wiiu.cpp has its own of each). RomM
+// numbers every game on a server once, so one file by rom id holds both.
 cab::GameTdb gControls("CABINETOS_WII_CONTROLS", "/usr/share/cabinetos/wii-controls.txt", "wii",
                        "every Wii game needs a Remote");
 cab::CodeCache gCodes("wii-codes.txt");
@@ -32,6 +33,16 @@ std::string fourLetters(const unsigned char* p) {
         code.push_back(static_cast<char>(p[i]));
     }
     return code;
+}
+
+// Where a container keeps the disc's own header: a plain disc at 0, RVZ and
+// WIA at 0x58 (their copy of it), WBFS one sector in, CISO after its 0x8000
+// byte map. GCZ is compressed and has none to read.
+uint64_t discHeaderAt(const unsigned char* b) {
+    if (std::memcmp(b, "RVZ\x01", 4) == 0 || std::memcmp(b, "WIA\x01", 4) == 0) return 0x58;
+    if (std::memcmp(b, "WBFS", 4) == 0 && b[8] < 32) return uint64_t(1) << b[8];
+    if (std::memcmp(b, "CISO", 4) == 0) return 0x8000;
+    return 0;
 }
 
 }  // namespace
@@ -50,11 +61,15 @@ std::string codeFromHeader(const unsigned char* b, size_t n) {
                                            : align(ticket + ticketSize) + 0x18C;
         return at + 8 <= n ? fourLetters(b + at + 4) : std::string();
     }
-    uint64_t disc = 0;
-    if (std::memcmp(b, "RVZ\x01", 4) == 0 || std::memcmp(b, "WIA\x01", 4) == 0) disc = 0x58;
-    else if (std::memcmp(b, "WBFS", 4) == 0 && b[8] < 32) disc = uint64_t(1) << b[8];
-    else if (std::memcmp(b, "CISO", 4) == 0) disc = 0x8000;
+    const uint64_t disc = discHeaderAt(b);
     if (disc + 0x20 > n || be32(b + disc + 0x18) != 0x5D1C9EA3u) return {};
+    return fourLetters(b + disc);
+}
+
+std::string gameCubeCodeFromHeader(const unsigned char* b, size_t n) {
+    if (n < 0x20) return {};
+    const uint64_t disc = discHeaderAt(b);
+    if (disc + 0x20 > n || be32(b + disc + 0x1C) != 0xC2339F3Du) return {};
     return fourLetters(b + disc);
 }
 

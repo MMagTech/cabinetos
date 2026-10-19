@@ -6,6 +6,7 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
@@ -36,8 +37,15 @@ bool isDir(const std::string& p) {
 // Whether we could actually write there, asked by writing rather than by
 // reading a permission bit — a read-only mount and a directory owned by root
 // both look fine to access(2) in ways that differ by filesystem.
+//
+// A NAME NO OTHER CALL SHARES (#483, FILES-01): two threads asking at once
+// made the same probe with O_EXCL, and the one that lost was told a good
+// drive could not be written. A probe a crash left behind no longer
+// answers for the drive either.
 bool writable(const std::string& dir) {
-    const std::string probe = dir + "/.cabinetos-write-test";
+    static std::atomic<unsigned> n{0};
+    const std::string probe = dir + "/.cabinetos-write-test." + std::to_string(::getpid()) +
+                              "." + std::to_string(n.fetch_add(1));
     const int fd = ::open(probe.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
     if (fd < 0) return false;
     ::close(fd);
@@ -248,8 +256,8 @@ std::string safeSegment(const std::string& s) {
         const unsigned char u = static_cast<unsigned char>(c);
         // Everything above ASCII passes through: this is UTF-8 and those bytes
         // are the tail of a multi-byte character. Replacing them turns a
-        // Japanese title into a row of underscores, which sanitisedStem in
-        // main.cpp already learned the hard way.
+        // Japanese title into a row of underscores, which sanitisedStem
+        // (fileio.cpp) already learned the hard way.
         if (u >= 0x80 || std::isalnum(u) || std::strchr(" -_().,'!&+[]", c) != nullptr)
             out += c;
         else

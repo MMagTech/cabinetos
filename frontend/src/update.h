@@ -4,7 +4,7 @@
 // the session may start and nothing else (61-cabinetos-update.rules). This
 // side starts them, reads the one status file they write, and knows which
 // version it is running. What any of that MEANS on screen, and when a check
-// may run, is the app's (main.cpp), the same division every module here
+// may run, is the app's (updateflow.cpp), the same division every module here
 // keeps.
 
 #pragma once

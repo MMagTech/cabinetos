@@ -3,10 +3,10 @@
 // main() was one function: its locals were the console's whole state and its
 // lambdas reached them through [&]. They are the members and member functions
 // of this struct now, in main()'s order and unchanged, so the next batches can
-// move one feature at a time into its own file. The bodies are in main.cpp
-// and, from batch (d) on, in the feature files (cli.cpp, startup.cpp,
-// home.cpp and the rest: `grep -n 'App::name(' frontend/src/*.cpp` finds
-// one); main.cpp's main() builds one App and calls run(), which is
+// move one feature at a time into its own file. main.cpp holds only main()
+// and run(); every other body is in the file named for its job (cli.cpp,
+// startup.cpp, home.cpp and the rest: `grep -n 'App::name(' frontend/src/*.cpp`
+// finds one). main() builds one App and calls run(), which is
 // main()'s old body: the start-up in today's order, the frame loop, the
 // teardown, the restart, each a call where its statements have moved.
 //
@@ -57,6 +57,7 @@
 #include "grid.h"
 #include "idle.h"
 #include "image.h"
+#include "job.h"
 #include "keyboard.h"
 #include "libraryscreen.h"
 #include "look.h"
@@ -65,6 +66,7 @@
 #include "panels.h"
 #include "pin.h"
 #include "players.h"
+#include "power.h"
 #include "playtime.h"
 #include "qrlink.h"
 #include "remoteplay.h"
@@ -132,11 +134,9 @@ struct App {
     // Integer scaling for a game's picture: OFF by default since 2026-09-21,
     // so every system fills the height. See the draw site for what that trades.
     bool integerScaling = false;
-    // THE SWITCH SETTINGS WILL OWN, as a flag until Settings exists. MMagTech:
-    // *"a navigation sound of some sort would be nice and later we have the
-    // option in settings to turn it off."* The off half is built now so that
-    // when the screen arrives it has something to set rather than something to
-    // implement.
+    // INTERFACE SOUNDS, Settings' row in Display and Sound (SetInterfaceSounds).
+    // MMagTech: *"a navigation sound of some sort would be nice and later we
+    // have the option in settings to turn it off."*
     // --ui-sound overrides the saved level for this run only, for tests.
     bool uiSoundFlag = false;
     const char* uiSoundLevels = nullptr;
@@ -363,6 +363,8 @@ struct App {
     // checks disc.h's rules with no core and no server.
     std::string discScriptText;
     bool discTestMode = false;
+    // --files-test: what survives a full disk, through cab::writeBytes (#482).
+    bool filesTestMode = false;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
@@ -502,29 +504,11 @@ struct App {
     // never a single index: `focused` used to index the shelf, and that is only
     // the same number while the shelf is the only thing on screen.
     //
-    //   row 0   the hero      slot 0 the card, slot 1 the Resume pill
-    //   row 1   Recent
-    //   row 2   Favorites, when there are any
-    //
-    // The hero takes focus on arrival, which is what "resume-first" means: the
-    // thing you were playing is already under the cursor.
-    // THE TOP BAR IS A ROW, above the hero. It is drawn OVER the hero's top
-    // edge rather than above it, because Home has 60 points of slack and a bar
-    // costs about 105 — docs/PROJECT.md priced the three options as "either
-    // the bar fits, or Home's hero comes down, or the bar goes elsewhere", and
-    // overlaying it is "elsewhere". It is the only one that does not undo
-    // Home fitting on one screen.
-    //
-    // Always visible rather than revealed by pressing Up. Up from the hero is
-    // a dead input today and it is tempting to spend it, but a console that
-    // hides Settings behind an undiscoverable gesture is constraint 3 — the
-    // one about leaving somebody stuck — and showing it costs nothing.
-    //
-    // No "Home" item: Home is the root and Back returns to it, so a
-    // destination that does nothing when you are already there only teaches
-    // people the bar is decorative. Cabinet's iOS reaches the same shape from
-    // the other side, three destinations with Settings demoted, on the rule
-    // that "reach should track frequency".
+    // Home is two rows, Recent and Favorites (Row, below), and opens on the
+    // first card of Recent, which is what "resume-first" means: the thing you
+    // were playing is already under the cursor. The top bar is not one of
+    // Home's rows: its focus is the app's (barFocused, barSlot, below), and
+    // Home is its first item (#127).
     // THE HERO ROW IS GONE — 2026-09-21.
     //
     // Home was bar / hero / Recent / Favorites, where the hero was the most
@@ -602,9 +586,7 @@ struct App {
     int focusRow = RowRecent;
     int focusSlot = 0;
     // Home is taller than the screen once there are two shelves, so it scrolls
-    // to follow focus — the same as tvOS, which puts Home in a ScrollView. The
-    // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
-    // under it.
+    // to follow focus — the same as tvOS, which puts Home in a ScrollView.
     design::Animated scrollY;
     int homeTopRow();
     void homeFromTheStart();
@@ -692,7 +674,19 @@ struct App {
     // and the heading says how many matched, so a query that is too broad
     // says so rather than pretending the first forty are all of it.
     static constexpr int kSearchLimit = 40;
+    // THE SERVER IS ASKED ON A WORKER (#481, HOME-22). On the frame thread
+    // a slow or vanishing server froze the keyboard, the sound and every
+    // animation until it answered, up to 30 s. One at a time: a query typed
+    // while one is out waits for it, and an answer for anything but what
+    // the box says now is dropped.
+    struct SearchAnswer {
+        std::string query;
+        std::vector<romm::Game> found;
+        int total = 0;
+    };
+    cab::Job<SearchAnswer> searchJob;
     void runSearch(const std::string& q);
+    void showSearchAnswer(const SearchAnswer& a, bool ok, const std::string& err);
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
     //
@@ -734,26 +728,37 @@ struct App {
     // and on the screen, for the same reason the cover fill returns paths:
     // appending to the store from another thread would race every screen that
     // draws from it.
+    //
+    // ONE PER TILE, AND NEVER JOINED ON THE FRAME THREAD WHILE IT WORKS
+    // (#471). A request cannot be cut half way, so a filler told to stop
+    // finishes the page it is on; that page is still added to its tile, and
+    // the filler is joined once it has ended (drainGridPages) or at exit.
+    // Joined on the spot, opening a tile while another filled froze the
+    // picture for the page in flight. `quit` and `running` change only
+    // under `m`, so a filler told to stop can be told to carry on without
+    // a page being fetched twice (openTile).
     struct GridFill {
+        std::string tileQuery;   // the tile it fills (Tile::query)
+        unsigned readId = 0;     // and which reading of it (Tile::readId)
         std::mutex m;
         std::vector<romm::Game> arrived;
-        std::atomic<bool> running{false};
-        std::atomic<bool> quit{false};
-        std::string tileQuery;   // the tile being filled (Tile::query)
+        bool running = true;
+        bool quit = false;
         std::thread th;
-        void stop() {
-            quit.store(true);
-            if (th.joinable()) th.join();
-            quit.store(false);
-            std::lock_guard<std::mutex> lk(m);
-            arrived.clear();
-        }
     };
-    GridFill gridFill;
+    std::vector<std::unique_ptr<GridFill>> gridFills;
+    // The tile the grid screen was last opened on, and which reading of it.
+    std::string gridTileQuery;
+    unsigned gridReadId = 0;
     struct GridFillStop {
-        GridFill& f;
-        ~GridFillStop() { f.stop(); }
-    } gridFillStop{gridFill};
+        std::vector<std::unique_ptr<GridFill>>& fills;
+        ~GridFillStop() {
+            for (auto& f : fills) {
+                { std::lock_guard<std::mutex> lk(f->m); f->quit = true; }
+            }
+            for (auto& f : fills) if (f->th.joinable()) f->th.join();
+        }
+    } gridFillStop{gridFills};
 
     // THE SWEEP AND THE EVICTION, BEHIND EVERYTHING, ONCE PER BOOT.
     //
@@ -846,7 +851,14 @@ struct App {
     struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
         backStart[cab::vpad::kMaxPlayers];
     // A screenshot being written by gamescope, which takes about two seconds.
-    struct { std::string path, name; int romId = 0; int64_t size = -1; } standaloneShot;
+    // askedMs and checkedMs are SDL_GetTicks: when it was asked for, and when
+    // its size was last looked at (pumpStandaloneShot).
+    struct {
+        std::string path, name;
+        int romId = 0;
+        int64_t size = -1;
+        uint64_t askedMs = 0, checkedMs = 0;
+    } standaloneShot;
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
@@ -862,6 +874,9 @@ struct App {
         std::atomic<bool> running{false}, ready{false};
         int forAccount = 0;
         Library lib;
+        bool liveOk = false;   // the live client answered at the server too
+        std::string why;       // and why not
+        bool failing = false;  // the last load came back empty (said once)
         ~OnlineLoad() { if (th.joinable()) th.join(); }
     };
     OnlineLoad onlineLoad;
@@ -892,7 +907,11 @@ struct App {
         bool leaving = false;
     };
     std::vector<BatterySlot> batterySlots;
-    Uint64 batteryRowAt = 0;   // when the bar last drew it (SDL ticks, ms)
+    // Whether the bar laid the row out this frame, and the frame before: a
+    // row that was not on screen a frame ago arrives in place. Counted in
+    // frames, not 200 ms, so a slow frame is not taken for the bar having
+    // been away (#484, PLAY-07).
+    bool batteryRowNow = false, batteryRowBefore = false;
     AchievementToast raToast;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
@@ -1016,6 +1035,21 @@ struct App {
     // mid-upload has sent nothing, and the save would sit owed until morning.
     bool restPending = false;
     uint64_t restWaitStart = 0;
+    // SLEEP, RESTART OR POWER OFF CHOSEN WHILE THE GAME CANNOT BE LEFT YET
+    // (#473): a core still building its machine, or an emulator of its own
+    // that was asked to close. Done once the game is left (pumpExit,
+    // finishStandalone); finishExit forgets it, so any other way out of the
+    // game takes it with it.
+    std::optional<power::Action> powerAfterExit;
+    // RESTART OR POWER OFF FADING TO BLACK (#393): chosen, the picture
+    // fading over design::kPowerFade, and the game left and the machine
+    // asked once it is over (pollPower). Nothing takes a press meanwhile
+    // (handleEvent). Cleared only by a refusal, which lifts the curtain.
+    bool poweringDown = false;
+    std::optional<power::Action> powerFade;
+    uint64_t powerFadeAt = 0;
+    void powerLeave(power::Action act);
+    void powerAct(power::Action act);
     int ovCount();
     void ovStep(int delta);
     const char* ovLabel(int i);
@@ -1196,10 +1230,6 @@ struct App {
     // or 0 for neither; the frame loop repeats it.
     int letterHeld = 0;
     float letterHeldFor = 0.0f, letterNext = 0.0f;
-    // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
-    // pressing a second direction takes over rather than queueing, so a person
-    // rolling their thumb around the pad never ends up with two repeats
-    // fighting each other.
     // THE CURTAIN. 0 is clear, 1 is black over everything. See design.h.
     design::Animated curtain;
     // An account switch waiting behind the curtain; see pumpSwitch.
@@ -1249,6 +1279,10 @@ struct App {
     int arriveFrames = 0;
     Uint64 arriveHeldAt = 0;
 
+    // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
+    // pressing a second direction takes over rather than queueing, so a person
+    // rolling their thumb around the pad never ends up with two repeats
+    // fighting each other.
     bool navHeld = false;
     screens::Nav heldNav = screens::Nav::Down;
     float heldFor = 0.0f, nextRepeat = 0.0f;
@@ -1270,8 +1304,10 @@ struct App {
     //
     // `askPin` is the one door every protected action goes through: with no
     // PIN set it simply goes ahead, which is the rule that with no PIN every
-    // account can do everything. Wi-Fi, Sign out, Change server address,
-    // Remove an account and File access call it when they are built.
+    // account can do everything. Every protected action calls it: Wi-Fi, the
+    // server address, adding, removing and signing out accounts, File and
+    // Developer access, Remote Play, Downloads and updates among them
+    // (`grep -n askPin frontend/src/*.cpp`).
     screens::PinScreen pinScreen;
     std::function<void()> pinThen;
     // FIVE WRONG TRIES, THEN THIRTY SECONDS. Enough to forgive fumbling with
@@ -1356,6 +1392,7 @@ struct App {
     Uint64 shortcutTakenAt = 0;
     std::vector<drives::Drive> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name
+    std::map<int, std::string> ejectPaths;   // an Eject row's id -> its location
     // An Eject row's id -> its drive in `formatable`, when Format is offered
     // beside Eject.
     std::map<int, size_t> ejectFormats;
@@ -1398,7 +1435,7 @@ struct App {
     int64_t filesSaidAt = 0;
     bool filesPanelWhenOn = false;   // open the panel once root says it is on
     bool filesWant = false;
-    // ---- Developer access (docs/SETTINGS.md, System; issue #134) -----------
+    // ---- Developer access (docs/SETTINGS.md, About; issue #134) ------------
     //
     // The full command line over SSH on port 2222, off by default, and off
     // means cabinetos-developer.service is not running (MMagTech,
@@ -1413,6 +1450,7 @@ struct App {
     int64_t devSaidAt = 0;
     bool devPanelWhenOn = false;
     int64_t devNewPassAt = 0;   // the panel comes back once a new password is made
+    std::string devOldPass;     // the one it replaces, to tell when it has been
     std::string devFailed;      // a refusal or a start that failed, said in the row
     bool devWant = false;
     bool devShown = false;
@@ -1544,6 +1582,10 @@ struct App {
         std::string address;  // the Remote paired, once done
         bool fresh = false, done = false;
         std::atomic<bool> stop{false};
+        // Until the worker has returned. A pairing cannot be stopped half
+        // way, so Back leaves it to finish behind the panel (#481,
+        // SETTINGS-23), and a new window waits for it.
+        std::atomic<bool> running{false};
         std::thread th;
         void quit() {
             stop = true;
@@ -1575,7 +1617,8 @@ struct App {
     // pressed, which is how two identical pads are told apart), then Add a
     // controller. Pressing a pad gives it another number (the two swap) or
     // forgets a Bluetooth pad; a lone wired pad has neither. After either,
-    // back to this panel, on the same pad.
+    // back to this panel, on the same row (after a swap that row is the other
+    // pad: the rows are in seat order).
     std::vector<players::Pad> padsShown;
     bool padsPanelSeenOpen = false;
     int padsPanelGen = -1;
@@ -1699,13 +1742,23 @@ struct App {
     // their own login (they are never the person signed in: accounts::remove
     // refuses that), and only then deletes. Off the frame thread, because a
     // server that does not answer costs curl's whole timeout.
+    // STOPPED AND JOINED, NOT DETACHED (#406): a send still running at exit
+    // ran on into the program's teardown. `stop` ends it after the file on
+    // the wire (sendOwedBeforeRemoving); the destructor joins, so the App
+    // never ends holding it.
     struct RemoveJob {
         std::mutex m;
         std::atomic<bool> running{false};
+        std::atomic<bool> stop{false};
         bool finished = false;
         int left = 0;   // still owed after trying
         accounts::Account who;
         bool everyone = false;   // Sign out: every account's, then leave
+        std::thread th;
+        ~RemoveJob() {
+            stop = true;
+            if (th.joinable()) th.join();
+        }
     };
     std::shared_ptr<RemoveJob> removeJob = std::make_shared<RemoveJob>();
     void finishRemove(const accounts::Account& who);
@@ -1817,6 +1870,7 @@ struct App {
     void pumpLeave();
     void pumpArrive();
     void refuseLaunch(const std::string& why);
+    void showWhyUnplayable(int romId);
     void startStandalone(const cab::standalone::Emulator& emu);
     static void dropPressesFromClosing();
     void finishStandalone();
@@ -1866,6 +1920,7 @@ struct App {
     void finishExit();
     void exitToHome();
     void pumpExit();
+    void watchPs2Start();
 
     // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
     // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
@@ -1877,6 +1932,7 @@ struct App {
     void powerCue(sound::Cue c);
     void closeOverlay(bool cue = true);
     void powerActivate(PowerItem item);
+    void backToPauseMenu();
     void standaloneScreenshot();
     void pumpStandaloneShot();
     void stepChoice(int slot, int delta, bool wrap);
@@ -2036,6 +2092,8 @@ struct App {
     void drawCurtain(float sc);
     // gridfill.cpp
     void drainGridPages();
+    bool takeGridPages(GridFill& f, bool toScreen);
+    void fillGrid(screens::Tile& t);
     void openTile(const screens::Result& res);
     // about.cpp
     void pressCredits();
@@ -2098,6 +2156,7 @@ struct App {
     void stateHooks();
     void noticeGalleryHook(float dt);
     void captureFrame(int dw, int dh);
+    void refuseCaptureOverAnotherWindow(const char* whose);
     // discrig.cpp
     void parseDiscScript();
     void runDiscScript();
