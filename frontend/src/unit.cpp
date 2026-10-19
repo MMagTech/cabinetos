@@ -1,6 +1,7 @@
 #include "unit.h"
 
 #include <systemd/sd-bus.h>
+#include <unistd.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -61,6 +62,21 @@ std::string state(const char* name) {
     }
     sd_bus_unref(bus);
     return out;
+}
+
+bool awaitOneshot(const char* name, double seconds, const std::function<bool()>& done) {
+    bool seenRunning = false;
+    const int looks = static_cast<int>(seconds * 4.0);
+    for (int i = 0; i < looks; ++i) {
+        if (done()) return true;
+        const std::string st = state(name);
+        const bool running =
+            st == "activating" || st == "active" || st == "reloading" || st == "deactivating";
+        if (running) seenRunning = true;
+        else if (st == "failed" || seenRunning || i >= 4) break;
+        usleep(250 * 1000);
+    }
+    return done();
 }
 
 }  // namespace unit
