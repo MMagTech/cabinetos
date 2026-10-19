@@ -57,6 +57,7 @@
 #include "grid.h"
 #include "idle.h"
 #include "image.h"
+#include "job.h"
 #include "keyboard.h"
 #include "libraryscreen.h"
 #include "look.h"
@@ -692,7 +693,19 @@ struct App {
     // and the heading says how many matched, so a query that is too broad
     // says so rather than pretending the first forty are all of it.
     static constexpr int kSearchLimit = 40;
+    // THE SERVER IS ASKED ON A WORKER (#481, HOME-22). On the frame thread
+    // a slow or vanishing server froze the keyboard, the sound and every
+    // animation until it answered, up to 30 s. One at a time: a query typed
+    // while one is out waits for it, and an answer for anything but what
+    // the box says now is dropped.
+    struct SearchAnswer {
+        std::string query;
+        std::vector<romm::Game> found;
+        int total = 0;
+    };
+    cab::Job<SearchAnswer> searchJob;
     void runSearch(const std::string& q);
+    void showSearchAnswer(const SearchAnswer& a, bool ok, const std::string& err);
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
     //
