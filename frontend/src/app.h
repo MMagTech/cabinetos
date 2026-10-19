@@ -1440,6 +1440,7 @@ struct App {
     int64_t devSaidAt = 0;
     bool devPanelWhenOn = false;
     int64_t devNewPassAt = 0;   // the panel comes back once a new password is made
+    std::string devOldPass;     // the one it replaces, to tell when it has been
     std::string devFailed;      // a refusal or a start that failed, said in the row
     bool devWant = false;
     bool devShown = false;
