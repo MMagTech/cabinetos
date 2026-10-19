@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <set>
 
 #include "fileio.h"
 
@@ -27,6 +28,14 @@
 // lock, so two writers never share the `.part` file, and a press during a
 // reload is not written over by the list the reload read before it.
 static std::mutex gFavMutex;
+
+// PEOPLE RomM WILL NOT MAKE A FAVOURITES COLLECTION FOR (#474), by folder,
+// under the lock. Someone who already owns an ordinary collection named
+// Favorites has none flagged, and RomM refuses the one the first heart asks
+// for. Asking every five minutes changes nothing, so it is said once and
+// not asked again until their next heart or the next start; the hearts stay
+// on this console and owed meanwhile.
+static std::set<std::string> gFavParked;
 
 static std::string listPath(const storage::User& u) { return storage::userDir(u) + "/favorites.json"; }
 
@@ -84,6 +93,7 @@ std::vector<int> favoriteList(const storage::User& u) {
 
 void pressFavorite(const storage::User& u, int romId, bool on) {
     std::lock_guard<std::mutex> lock(gFavMutex);
+    gFavParked.erase(storage::userDir(u));
     std::vector<int> ids = listLocked(u);
     ids.erase(std::remove(ids.begin(), ids.end(), romId), ids.end());
     if (on) ids.insert(ids.begin(), romId);
@@ -106,14 +116,29 @@ void keepFavorites(const storage::User& u, std::vector<int> ids) {
 }
 
 // Every favourite `who` owes, sent; each stops being owed once the server has
-// it, unless it was pressed again meanwhile.
+// it, unless it was pressed again meanwhile. True also when RomM will not make
+// their Favorites collection (gFavParked): nothing more is worth sending now.
 bool sendFavoritesAs(romm::Client& c, const storage::User& who, std::string* err) {
+    {
+        std::lock_guard<std::mutex> lock(gFavMutex);
+        if (gFavParked.count(storage::userDir(who))) return true;
+    }
     for (const auto& [romId, on] : favOwed(who)) {
-        bool forbidden = false;
-        if (!c.setFavorite(romId, on, &forbidden, err)) {
+        bool forbidden = false, cannotMake = false;
+        if (!c.setFavorite(romId, on, &forbidden, err, &cannotMake)) {
             if (forbidden)
                 std::fprintf(stderr, "[favorite] RomM refused: this console was paired "
                                      "before favourites needed collections.write\n");
+            if (cannotMake) {
+                std::lock_guard<std::mutex> lock(gFavMutex);
+                gFavParked.insert(storage::userDir(who));
+                std::fprintf(stderr, "[favorite] RomM would not make a Favorites collection "
+                                     "(%s): a collection by that name may already be "
+                                     "theirs; kept on this console, tried again at the "
+                                     "next heart or start\n",
+                             err ? err->c_str() : "");
+                return true;
+            }
             return false;
         }
         std::lock_guard<std::mutex> lock(gFavMutex);

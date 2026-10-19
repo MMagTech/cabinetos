@@ -231,8 +231,12 @@ public:
     // this adds the game to it or takes it out (`POST`/`DELETE
     // /api/collections/<id>/roms`), making the collection first if they have
     // none. Needs the `collections.write` scope; `*forbidden` says the
-    // pairing lacks it, which only pairing again can mend.
-    bool setFavorite(int romId, bool on, bool* forbidden, std::string* err);
+    // pairing lacks it, which only pairing again can mend. `*cannotMake`
+    // says RomM refused to make that collection (#474): it answers 500 on
+    // 5.3.1 and 409 on 5.4.0 when the person already owns an ordinary
+    // collection named Favorites, which asking again does not mend.
+    bool setFavorite(int romId, bool on, bool* forbidden, std::string* err,
+                     bool* cannotMake = nullptr);
 
     // A screenshot into this person's gallery on RomM 5.1 (`POST
     // /api/screenshots?rom_id=`: stored under the user, private until shared),

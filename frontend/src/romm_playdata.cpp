@@ -147,8 +147,10 @@ bool Client::deleteStates(const std::vector<int>& ids, std::string* err) const {
     return true;
 }
 
-bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) {
+bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err,
+                         bool* cannotMake) {
     *forbidden = false;
+    if (cannotMake) *cannotMake = false;
     std::vector<Collection> cols;
     if (!fetchCollections(&cols, err)) return false;
     // THEIR OWN Favorites. The list carries everyone's public collections
@@ -201,6 +203,9 @@ bool Client::setFavorite(int romId, bool on, bool* forbidden, std::string* err) 
         curl_easy_cleanup(c);
         if (rc != CURLE_OK) { if (err) *err = curl_easy_strerror(rc); return false; }
         if (status == 401 || status == 403) *forbidden = true;
+        // The name already taken (#474): RomM's own web page would meet the
+        // same refusal, so it is not ours to work around with another name.
+        if ((status == 409 || status == 500) && cannotMake) *cannotMake = true;
         if (status < 200 || status >= 300) {
             if (err) *err = "HTTP " + std::to_string(status) + " making the favourites";
             return false;
