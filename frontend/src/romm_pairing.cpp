@@ -75,11 +75,27 @@ bool looksLocal(const std::string& host) {
 // THE CANDIDATE IS ASKED WITHOUT BECOMING THE ADDRESS, and is made the
 // address only once it has answered, so a request on another thread never
 // goes to a candidate that is about to be put back (#398, batch i).
+//
+// THE SERVER MAY SEND THE CONSOLE ELSEWHERE, ONCE, HERE (#380). A reverse
+// proxy that moves http to https, or an address typed as a number to the
+// server's name, answers the heartbeat with a redirect; the address it names
+// is then the server's, for every request after. Nowhere else is a redirect
+// off the server followed, so this is the only place the console's server
+// can change, and only to where the server itself said.
 bool Client::probe(const std::string& candidate, bool report) {
     Where at = where();
     at.base = candidate;
     std::string body;
-    if (!getAt(at, "/api/heartbeat", &body, nullptr, report)) return false;
+    std::string movedTo;
+    static const std::string kHeartbeat = "/api/heartbeat";
+    for (int moves = 0;; ++moves) {
+        movedTo.clear();
+        if (getAt(at, kHeartbeat, &body, nullptr, report, &movedTo)) break;
+        if (moves >= 2 || movedTo.size() <= kHeartbeat.size() ||
+            movedTo.compare(movedTo.size() - kHeartbeat.size(), kHeartbeat.size(), kHeartbeat) != 0)
+            return false;
+        at.base = movedTo.substr(0, movedTo.size() - kHeartbeat.size());
+    }
 
     json_object* root = json_tokener_parse(body.c_str());
     if (!root) return false;
@@ -88,7 +104,10 @@ bool Client::probe(const std::string& candidate, bool report) {
     const std::string version = hasSystem ? jstr(sys, "VERSION") : std::string();
     json_object_put(root);
     std::lock_guard<std::mutex> lock(mu_);
-    base_ = candidate;
+    if (at.base != candidate && at.base != base_)
+        std::fprintf(stderr, "[romm] the server sent the console to another address; "
+                             "that one is used\n");
+    base_ = at.base;
     if (hasSystem) serverVersion_ = version;
     return true;
 }

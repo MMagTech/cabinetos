@@ -307,9 +307,11 @@ private:
     Where where() const;
     // get, sent to whatever `at` names. probe asks a candidate this way
     // without making it the address until it has answered, and says whether
-    // what it met is reported (`report`, as probe's).
+    // what it met is reported (`report`, as probe's). A redirect off the
+    // server is not followed (#380); with `movedTo` its address is put there
+    // instead of logged.
     bool getAt(const Where& at, const std::string& path, std::string* body,
-               std::string* err, bool report = true) const;
+               std::string* err, bool report = true, std::string* movedTo = nullptr) const;
 
     // GUARDS THE THREE BELOW. Nothing is done while holding it but a copy or
     // an assignment, never a request (see the head of this file).
