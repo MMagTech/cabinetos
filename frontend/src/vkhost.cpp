@@ -190,7 +190,7 @@ std::vector<const char*> gRequiredDeviceExtensions;
 // means by "the frontend will request certain extensions".
 //
 // VK_EXT_image_drm_format_modifier is deliberately NOT here. It was added,
-// measured and taken out again — see createShared for the numbers.
+// measured and taken out again — see createShared (vkbridge.cpp) for the numbers.
 void buildDeviceExtensionList() {
     gRequiredDeviceExtensions = {
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,

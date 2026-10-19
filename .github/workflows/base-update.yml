@@ -7,7 +7,8 @@
 #
 # So this workflow does the work a bot cannot: it diffs the new base's package
 # manifest against the one committed at the last bump, classifies the result
-# against ci/base-watch.txt, and labels the pull request RELEVANT or ROUTINE.
+# against ci/base-watch.txt, and names the pull request RELEVANT or ROUTINE in
+# its title.
 # The pull request also lists its own checks, for the areas that changed
 # only, and carries update notes people can read (2026-10-09). The reasoning
 # lives in ci/check-base-update.sh and ci/base-report.py.

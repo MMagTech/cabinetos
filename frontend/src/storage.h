@@ -14,20 +14,27 @@
 //
 // docs/PROJECT.md, open question 18, decided the shape. This is it:
 //
-//   <location>/
-//   ├── roms/<platform>/<romId> - <name>      kept games                shared
-//   ├── cache/<platform>/<romId> - <name>     pulled games              shared
-//   ├── bios/                                 firmware from RomM        shared
-//   ├── users/
-//   │   └── <id> - <name>/
-//   │       ├── saves/<platform>/<romId>/<core>/
-//   │       ├── states/<platform>/<romId>/<core>/
-//   │       ├── screenshots/
-//   │       ├── keeps/                        which games this person pinned
-//   │       ├── pending/                      what has not reached RomM yet
-//   │       └── config/
+//   <root>/
+//   ├── roms/<platform>/<romId> - <name>     kept games
+//   ├── cache/<platform>/<romId> - <name>    pulled games, the only thing eviction touches
+//   ├── bios/                                firmware from RomM, and the cores' system directory
+//   ├── games/                               what the console knows of each game on its drives
+//   ├── covers/<server>/                     cover art
+//   ├── emulators/<name>/                    each separate emulator's own files
+//   ├── wii-remote-miis/                     the Wii bridge's Miis
+//   ├── users/<id> - <name>/
+//   │   ├── saves/<platform>/<romId>/<core>/
+//   │   ├── states/<platform>/<romId>/<core>/
+//   │   ├── screenshots/<romId>/
+//   │   ├── keeps/                           which games this person kept
+//   │   ├── pending/                         what has not reached RomM yet
+//   │   └── server-saves/<romId>/            RomM's saves as last seen, for play offline
 //   ├── config/
-//   └── logs/
+//   ├── logs/
+//   └── reports/
+//
+// A games drive gets its own roms/ and cache/ (frontend/README.md has the
+// rest).
 //
 // The vocabulary is RetroArch's and RetroBat's — `roms`, `saves`, `states`,
 // `bios`, `config` — because somebody who has used either already knows where
@@ -78,8 +85,8 @@ namespace storage {
 // --- Where the root is ------------------------------------------------------
 //
 // `/var/lib/cabinetos` on a console, and the directory the binary was started
-// in on a development machine, because the test VM runs the frontend out of a
-// home directory and has no business writing to /var/lib.
+// in on a development machine that cannot write /var/lib (give it a scratch
+// --storage-root instead: CONTRIBUTING.md, "Running and testing").
 //
 // Resolution order: what `--storage-root` said, then $CABINETOS_STORAGE, then
 // /var/lib/cabinetos if it can be created and written, then the working
@@ -214,7 +221,8 @@ int64_t treeBytes(const std::string& path);
 bool exists(const std::string& path);
 
 // Deletes a file or a whole directory. True when it is gone. For signing out,
-// which clears a server's games and people; nothing else should need it.
+// which clears a server's games and people, and for --files-test's scratch
+// root; nothing else should need it.
 bool removeEntry(const std::string& path);
 
 }  // namespace storage

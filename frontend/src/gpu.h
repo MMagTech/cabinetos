@@ -10,8 +10,8 @@
 // already states and what docs/PROJECT.md open question 20 asks for. This is
 // the one place that goes and looks.
 //
-// WHAT IT IS FOR, IN PRODUCT TERMS. Three of the twenty-one cores draw with
-// hardware and take whatever the host offers. The two heavy systems do not
+// WHAT IT IS FOR, IN PRODUCT TERMS. Several of the cores draw with hardware
+// and take whatever the host offers. The two heavy systems do not
 // have that luxury: PCSX2's graphics synthesiser refuses an OpenGL ES context
 // outright — measured on the A9, `OpenGL is not supported. Only OpenGL 3.2 was
 // found` — and Dolphin renders from a thread of its own, which GLES cannot

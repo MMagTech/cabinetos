@@ -6,10 +6,10 @@
 #
 # Two outputs:
 #
-#   qcow2        A virtual machine disk. This is what proves Phase 1 is done —
-#                boot it and confirm you reach a console prompt.
+#   qcow2        A virtual machine disk, for testing the image in a VM: boot
+#                it and confirm the console comes up.
 #   anaconda-iso An installer ISO. Write it to a USB stick and install to the
-#                target machine. See README.md.
+#                target machine. See CONTRIBUTING.md, "Building".
 #
 # Run manually, ONCE PER RELEASE, not per update. The ISO carries the whole
 # image, but an installed console updates itself from GHCR from then on, so an

@@ -2,6 +2,7 @@
 
 #include "accounts.h"
 #include "core.h"
+#include "fileio.h"
 #include "ps2.h"
 #include "ra_state.h"
 #include "storage.h"
@@ -98,13 +99,8 @@ std::string keptPath(const std::string& name, int account) {
 void keepAnswer(const std::string& name, const std::string& body, int account) {
     if (account <= 0 || body.empty()) return;
     const std::string path = keptPath(name, account);
-    const std::string part = path + ".part";
-    FILE* f = std::fopen(part.c_str(), "wb");
-    if (!f) return;
-    ::fchmod(::fileno(f), 0600);
-    std::fwrite(body.data(), 1, body.size(), f);
-    std::fclose(f);
-    std::rename(part.c_str(), path.c_str());
+    if (!cab::writeBytes(path, body, 0600))
+        std::fprintf(stderr, "[ra] could not keep %s\n", path.c_str());
 }
 
 namespace {
@@ -869,7 +865,7 @@ void idle() {
     rc_client_idle(gClient);
 }
 
-// The sample unlock, counted in the frame loop's own calls (main.cpp calls
+// The sample unlock, counted in the frame loop's own calls (pace.cpp calls
 // frame() or idle() every frame of a game).
 void sampleTick() {
     if (!gSample || ++gSampleFrames != 300) return;

@@ -8,8 +8,8 @@
 #
 # The frontend itself was not held to that standard and should have been. Until
 # this existed, `cabinetos-frontend` had only ever been compiled on the test VM —
-# the same single-machine dependency, in the one program that has to load all
-# twenty cores.
+# the same single-machine dependency, in the one program that has to load
+# every core.
 #
 # What this asserts is modest and worth having: the tree compiles from a bare
 # checkout, in the same Fedora 44 container the cores and the VM use, with the
@@ -30,7 +30,7 @@
 # twice for one change. `branches-ignore` leaves exactly the gap build.yml
 # does not reach and removes the overlap. **Do not narrow it back to
 # `branches: [main]`**; that is the original hole. See build-core.yml, where
-# the same change removed twenty-one duplicated jobs rather than one.
+# the same change removed a duplicated job per core rather than one.
 
 name: Build frontend
 
@@ -135,7 +135,7 @@ jobs:
       # somebody puts a build on a machine without having to reproduce it.
       #
       # The `bin/` is the payload layout ci/stage-image-payload.sh expects, so
-      # a merged download of this artifact and the twenty-one core artifacts
+      # a merged download of this artifact and the core artifacts
       # already has the shape it wants.
       - name: Stage it
         run: |

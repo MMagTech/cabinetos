@@ -13,7 +13,7 @@
 # is applied here, at boot, whatever the screen is doing. The app still starts and stops them
 # from Settings as before; starting one that is already running does nothing.
 #
-# The keys are the app's (frontend/src/main.cpp, prefs::get): "on" means on,
+# The keys are the app's (frontend/src/prefs.cpp, prefs::get): "on" means on,
 # anything else or no file means off, as the app reads them. Tailscale runs
 # only while Remote Play is on too, as the app has it.
 #

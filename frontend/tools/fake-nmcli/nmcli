@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A TEST DOUBLE FOR nmcli, and nothing else in the program is faked.
 #
-# The A9 is on a cable and the VM has no radio, so the one state neither machine
-# can reach is the one that matters most: offline, with Wi-Fi hardware, where
+# The test machines cannot easily reach the one state that matters most:
+# offline, with Wi-Fi hardware, where
 # the network gate has no skip and joining is the only way forward. This answers
 # nmclis terse queries as such a machine would, so net.cpps real parsing, the
 # real state machine and the real screens all run.

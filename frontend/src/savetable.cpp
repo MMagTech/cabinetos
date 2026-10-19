@@ -23,8 +23,8 @@ namespace catalog {
 const char* emulatorTag(const char* core) {
     if (!core) return nullptr;
     // Cabinet's own strings, from RommApp/RommApp/Native/NativeCore.swift.
-    // Only cores whose CabinetOS build matches Cabinet's configuration appear
-    // here; see the header.
+    // Every core that has states appears here; the last three by decision,
+    // whether or not the build matches (below).
     struct { const char* core; const char* tag; } kTags[] = {
         // Pinned at d9d6cd06, no build arguments on any platform, and the
         // save-state portability result was proved with this core.
@@ -408,7 +408,7 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
     // extension and their contents are not interchangeable, which is exactly
     // why this keeps them apart instead of treating "the arcade save" as one
     // thing. The stem is the set name — `lethalen`, `smashtv` — because that
-    // is what the core was handed; see the note in main.cpp about why an
+    // is what the core was handed; see the note in launch_routes.cpp about why an
     // arcade entry keeps the server's own file name.
     //
     // BY THE CORE THE GAME RUNS IN, not by the folder (#310): a generic

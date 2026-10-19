@@ -176,7 +176,6 @@ public:
     // a reason on `error()`.
     bool load(const std::string& soPath);
     void unload();
-    bool loaded() const { return handle_ != nullptr; }
 
     // The directories are the ones given to setDirectories, and are re-applied
     // here for the cores that ask at load-game time instead.
@@ -510,7 +509,8 @@ private:
     double accumulator_ = 0.0;
     double speed_ = 1.0;
     // The clock audioAhead measures against, and whether this core is braked
-    // by it. One core in twenty-one is. See runFor.
+    // by it. None is today (core.cpp, where governed_ is set); the switch
+    // stays. See runFor.
     double paceClock_ = 0.0;
     bool governed_ = false;
     uint64_t governorSkips_ = 0;

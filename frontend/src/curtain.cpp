@@ -128,8 +128,9 @@ void App::startCurtain() {
 
 // ---- The curtain, over everything --------------------------------
 //
-// Last, and over the keyboard and the in-game overlay as well: it is
-// not part of any screen, it is the screen going away. See design.h.
+// Over the screens and the in-game overlay; the keyboard and the dim are
+// drawn after it (frame.cpp). It is not part of any screen, it is the
+// screen going away. See design.h.
 void App::drawCurtain(float sc) {
     {
         const float c = curtain.value();

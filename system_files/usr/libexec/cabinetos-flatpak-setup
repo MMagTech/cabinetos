@@ -10,7 +10,8 @@
 # pin in the image actually reach the disk. See docs/PROJECT.md open question 21.
 #
 # IT MUST NOT BE FATAL. A console whose first boot fails because Flathub is
-# unreachable is a worse product than one whose PS3 support arrives late. Every
+# unreachable is a worse product than one whose Xbox or Switch support arrives
+# late. Every
 # failure here is logged and the unit still succeeds; the timer retries later.
 # The one thing this must never do is stop the machine reaching its frontend.
 #
@@ -19,9 +20,10 @@
 
 set -uo pipefail   # deliberately NOT -e: see above, no single failure aborts
 
-# Overridable so this can be exercised against a scratch installation rather
-# than the machine's own. The service sets none of them and gets the defaults;
-# nothing but a test should ever pass these.
+# Overridable so this can be exercised by hand against a scratch installation
+# rather than the machine's own: a test hook kept on purpose, with no test in
+# the repository that sets them (#492). The service sets none of them and
+# gets the defaults; nothing but a test by hand should ever pass these.
 MANIFEST="${CABINETOS_FLATPAK_MANIFEST:-/usr/share/cabinetos/flatpaks.list}"
 STATE_DIR="${CABINETOS_FLATPAK_STATE:-/var/lib/cabinetos}"
 STAMP="${STATE_DIR}/flatpaks-installed"
@@ -66,7 +68,7 @@ log "  manifest ${manifest_hash:0:12}  image ${image_id:0:19}"
 # The remote.
 # ---------------------------------------------------------------------------
 #
-# Bazzite ships a filtered flathub remote and all three emulators pass its
+# Bazzite ships a filtered flathub remote and both emulators pass its
 # filter, so this only has to make sure it exists and is enabled rather than
 # define it. `|| true` throughout: a machine that cannot reach Flathub should
 # fall through to the install loop, fail there, and be retried by the timer.

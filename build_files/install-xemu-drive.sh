@@ -2,7 +2,7 @@
 #
 # Put xemu's blank Xbox hard drive into the image, at
 # /usr/share/cabinetos/xemu/xbox_hdd.qcow2. Every Xbox game gets a copy of it
-# in its own folder the first time it is played (standalone.cpp, prepareXemu).
+# in its own folder the first time it is played (standalone_xemu.cpp, prepareXemu).
 #
 # WHICH DRIVE. xemu's own: an 8 GB drive, formatted, holding only the
 # open-source xemu-dashboard (xemu-project/xemu-dashboard) and nothing of

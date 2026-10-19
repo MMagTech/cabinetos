@@ -1,6 +1,6 @@
 // The stand-in library: six made-up games, shown with --no-setup on a console
-// with no server address, and loaded by --evict-test. main.cpp is its only
-// user. Moved out of main.cpp in the restructure (#398).
+// with no server address. startup.cpp is its only user. Moved out of main.cpp
+// in the restructure (#398).
 
 #pragma once
 

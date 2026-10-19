@@ -370,7 +370,7 @@ std::optional<int> App::startStartupScreen() {
         // of it saying nothing would be a picture of a state that lasts a
         // fraction of a second.
         setup::showWaiting(waitDeps, "Loading your library. 640 games");
-        renderer.saveFrame(shotPath ? shotPath : "/tmp/cabinetos-startup.bmp", dw, dh);
+        renderer.saveFrame(shotPath, dw, dh);
         renderer.shutdown();
         SDL_Quit();
         return 0;

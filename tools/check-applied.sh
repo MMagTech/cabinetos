@@ -61,9 +61,13 @@ list_with_game() {   # <core file stem> <list name> <glob of a game in the cache
         note "$list: no game in the cache to list it with ($glob)"
         return
     fi
+    # Only name<TAB>default<TAB>values lines, on both sides, as
+    # cores/check-options.sh compares them: a core printing to stdout while it
+    # loads is not an option (PCSX ReARMed's "Using 32-bit LUT").
     now=$("${SSH[@]}" "cd /tmp/check-applied && timeout 120 ./core-options \
-        /usr/lib/cabinetos/cores/${so}_libretro.so --game \"$game\" 2>/dev/null")
-    if diff -u "$ROOT/cores/options/$list.txt" <(printf '%s\n' "$now") >/tmp/check-applied.diff; then
+        /usr/lib/cabinetos/cores/${so}_libretro.so --game \"$game\" 2>/dev/null | grep -P '\t'")
+    if diff -u <(grep $'\t' "$ROOT/cores/options/$list.txt") <(printf '%s\n' "$now") \
+        >/tmp/check-applied.diff; then
         ok "$list: $(printf '%s\n' "$now" | grep -c .) options, as listed"
     else
         bad "$list: its options differ from cores/options/$list.txt"
@@ -80,7 +84,11 @@ list_with_game fbneo fbneo_libretro '/var/lib/cabinetos/cache/FBNEO/*/*.zip'
 
 # --- 2. What the last launch of each emulator took ---------------------------
 say "== the last launch of each emulator"
-J() { "${SSH[@]}" "sudo -S journalctl -o cat --since '-14 days' < /var/lib/cabinetos-files/password 2>/dev/null | grep -F -- \"$1\" | tail -1"; }
+# As `cabinet`, which reads the journal (it is in wheel on an installed
+# console), the way tools/base-checks.sh reads it: no sudo, so a console that
+# never had File access's password still gets its PS2 checks. -a: the
+# journal holds a few binary lines, and grep would stop at "binary file".
+J() { "${SSH[@]}" "journalctl -o cat --since '-14 days' 2>/dev/null | grep -aF -- \"$1\" | tail -1"; }
 E=/var/lib/cabinetos/emulators
 
 # PS2: our own line says what PCSX2 applied, read back from its config.

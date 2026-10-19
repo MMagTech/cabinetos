@@ -27,7 +27,8 @@ USER = os.environ.get("USER") or "cabinet"
 STEAM = os.path.expanduser("~/.local/share/Steam")
 FILES = [os.path.join(STEAM, "steamapps", "libraryfolders.vdf"),
          os.path.join(STEAM, "config", "libraryfolders.vdf")]
-# Where the console's drives are mounted (frontend/src/storage.cpp).
+# Where the console's drives are mounted (frontend/src/locations.cpp,
+# driveSearchPaths).
 SEARCH = [os.path.join("/run/media", USER), "/var/mnt"]
 
 
@@ -105,7 +106,7 @@ def dump(items, depth=0):
     return "".join(out)
 
 
-# THE DRIVE'S NAME AS THE CONSOLE'S STORAGE SAYS IT (frontend/src/main.cpp,
+# THE DRIVE'S NAME AS THE CONSOLE'S STORAGE SAYS IT (frontend/src/settingsflow.cpp,
 # locationNames): "External" for a drive that can be unplugged, "Internal"
 # for any other, and with two of a kind the drive's own name after it,
 # "External (Games)". Steam shows a library's label in place of its path

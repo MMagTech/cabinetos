@@ -134,7 +134,8 @@ std::vector<cab::DirEntry> listDirSave(const GameSession& sess) {
     return out;
 }
 
-// A directory save, zipped and sent: PSP, Switch, PS3, Xbox and Xbox 360. See
+// A directory save, zipped and sent: PSP, Wii, GameCube, and the folder saves
+// of the five separate emulators (Switch, PS3, Xbox, Xbox 360, Wii U). See
 // dirsave.h for why the archive is a zip and where it is rooted.
 //
 // THE WHOLE TREE, whenever anything in it changed. It used to be only the
@@ -175,7 +176,7 @@ void syncDirSave(GameSession& sess, Uploader& up) {
     // that only exists in a pending upload is a save that can be lost.
     const std::string name = sanitisedStem(sess.title) + ".zip";
     const std::string path = sess.saveDir + "/" + name;
-    if (!writeLocal(path, zip)) {
+    if (!cab::writeBytes(path, zip)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }
@@ -189,8 +190,8 @@ void syncDirSave(GameSession& sess, Uploader& up) {
     up.push(std::move(job));
 }
 
-// A GAME WHOSE SAVES NEVER GOT ZIPPED: Xbox 360 and Wii U, where the emulator
-// writes straight into the person's folder and a note says a game is running there
+// A GAME WHOSE SAVES NEVER GOT ZIPPED: Xbox 360, Wii U, Switch and PS3, where
+// the emulator writes straight into the person's folder and a note says a game is running there
 // (standalone::beforeStart). The console went down, or the frontend did,
 // before the end of the game. The whole folder goes up now, as if the game
 // had just ended with everything changed, and is owed until it lands, so the
@@ -244,8 +245,9 @@ void finishInterruptedSave(const cab::standalone::Emulator& emu,
 // a restore takes the newest row for the tag whatever it is called, so the new
 // one wins from the first save onward — and the orphan can be deleted by hand.
 //
-// PSP IS THE ONE EXCEPTION AND IT IS DELIBERATE. Its row is still
-// `<title>.zip`, because the reference's own PSP row is an Apple archive
+// DIRECTORY SAVES ARE THE EXCEPTION: every save that is a folder (syncDirSave)
+// keeps its `<title>.zip` row. For PSP that is deliberate, because the
+// reference's own PSP row is an Apple archive
 // wearing an `.srm` extension and the fixed build that writes a zip instead
 // has not been seen from here yet. Renaming ours onto that row would overwrite
 // a save with a container the other end may not read. docs/NEXT-SESSION.md
@@ -486,7 +488,7 @@ void syncFileSaves(GameSession& sess, Uploader& up) {
                 ? macSaveRowName(sess.romId, f.spec.region)
                 : saveRowName(sess.fsStem, f.spec.coreRowName, f.spec.region);
         const std::string local = sess.saveDir + "/" + name;
-        if (f.spec.inSystemDir && !writeLocal(local, data)) {
+        if (f.spec.inSystemDir && !cab::writeBytes(local, data)) {
             std::fprintf(stderr, "[save] could not write %s — leaving the card in %s\n",
                          local.c_str(), written.c_str());
             continue;
@@ -519,7 +521,7 @@ void syncSave(GameSession& sess, Uploader& up) {
 
     const std::string name = saveRowName(sess.fsStem, std::string(), "srm");
     const std::string path = sess.saveDir + "/" + name;
-    if (!writeLocal(path, ram)) {
+    if (!cab::writeBytes(path, ram)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }

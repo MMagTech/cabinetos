@@ -3,7 +3,7 @@
 # CabinetOS image build.
 #
 # Called from the Containerfile with build_files/ mounted at /ctx and
-# system_files/ mounted at /system_files.
+# system_files/ inside it, at /ctx/system_files.
 #
 # The gaming stack comes from Bazzite and is kept as-is; the desktop and Steam
 # are stripped out, and the session is wired in. The console itself, the
@@ -19,11 +19,27 @@ log "CabinetOS build starting"
 log "base: $(grep '^PRETTY_NAME=' /usr/lib/os-release | cut -d= -f2-)"
 
 # ---------------------------------------------------------------------------
+# Every package this build installs is stamped with the base's own time.
+# ---------------------------------------------------------------------------
+#
+# MEASURED 2026-10-18 (#511): 2026.10.18.6 and .7, built from the same
+# build_files/ and system_files/, had OS layers that differed in only the
+# rpm database, in the four packages this build installs (Steam's session
+# from terra, Sunshine and miniupnpc), because rpm records the time it
+# installed each one; and in dnf's countme files (removed at the end). That
+# gave the 70 MB layer a new digest in every image, so every update
+# downloaded it. rpm takes that time from SOURCE_DATE_EPOCH when it is set
+# (tried on the A9: INSTALLTIME and INSTALLTID both follow it), so this
+# build gives it the newest install time already in the base: the same for
+# every build on one base, and still a real date.
+SOURCE_DATE_EPOCH="$(rpm -qa --qf '%{INSTALLTIME}\n' | sort -n | tail -1)"
+export SOURCE_DATE_EPOCH
+log "packages installed here are stamped ${SOURCE_DATE_EPOCH}, the base's newest install time"
+
+# ---------------------------------------------------------------------------
 # Overlay any files from system_files/ onto the image.
 # ---------------------------------------------------------------------------
 #
-# Empty in Phase 1. Phase 2 uses this for the session units and autologin
-# configuration.
 # NOTE THE PATH. The Containerfile's ctx stage does `COPY system_files
 # /system_files`, and that whole stage is bind-mounted at /ctx — so the files
 # land at /ctx/system_files, not /system_files.
@@ -158,8 +174,9 @@ grep -q 'non-commercial' /usr/share/licenses/cabinetos/LICENCES.md || {
 # invisible when it is missing. Wi-Fi configuration works on the reference
 # machine today WITHOUT it — the session user is in `wheel` and Bazzite grants
 # the action to that group — so a build that silently dropped this file would
-# ship a console that works until the day Phase 6 tightens developer mode and
-# takes the session user out of `wheel`. Then Wi-Fi stops being configurable,
+# ship a console that works until the session user leaves `wheel` (installed
+# consoles have it: disk_config/iso.toml) or Bazzite drops its rule. Then
+# Wi-Fi stops being configurable,
 # with no error anywhere near the cause. See docs/PROJECT.md open question 17.
 POLKIT_RULE=/usr/share/polkit-1/rules.d/60-cabinetos-network.rules
 if [[ -s "${POLKIT_RULE}" ]]; then
@@ -214,8 +231,8 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # ---------------------------------------------------------------------------
 #
 # Runs after the strip scripts, so it can assert that nothing they removed took
-# openssh-server with it. See the warning at the top of enable-ssh.sh: this is a
-# development affordance that Phase 6 must take away again.
+# openssh-server with it. See enable-ssh.sh: sshd is installed, and nothing
+# listens until someone at the TV turns File access or Developer access on.
 /ctx/enable-ssh.sh
 
 # ---------------------------------------------------------------------------
@@ -230,7 +247,8 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # Repair repository definitions.
 # ---------------------------------------------------------------------------
 #
-# Last, so it sees the final state. A repo whose GPG key was never shipped
+# After everything that adds or removes a repository, so it sees the final
+# state. A repo whose GPG key was never shipped
 # breaks any operation that reads all repos — which is what building an
 # installer ISO does. See the script for the full reasoning.
 /ctx/fix-repos.sh
@@ -257,16 +275,18 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # HDMI-CEC.
 # ---------------------------------------------------------------------------
 #
-# Runs last, after everything that could remove a package. CEC is a hard
-# requirement and every package it needs looks like cruft in a package list —
-# this fails the build rather than letting one quietly disappear.
+# After everything that could remove a package. HDMI-CEC is shelved
+# (docs/PROJECT.md open question 31, 2026-09-24), but its packages are
+# kept installable for the day it comes back, and every one looks like cruft
+# in a package list: this reinstalls one that went, and fails the build if it
+# cannot.
 /ctx/require-cec.sh
 
 # ---------------------------------------------------------------------------
 # Frontend runtime libraries.
 # ---------------------------------------------------------------------------
 #
-# Same reasoning and the same position in the order: last, after anything that
+# Same reasoning and the same position in the order: after anything that
 # could have removed a package. The frontend links against these, and they are
 # in the base image incidentally rather than by declared dependency.
 /ctx/require-frontend-libs.sh
@@ -280,7 +300,8 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # these ran before the strip, where they could not see what it removed.
 #
 # NOTHING ELSE WOULD CATCH THESE GOING MISSING. ci/base-watch.txt watches shared
-# LIBRARIES, and require-frontend-libs.sh reads `ldd` — so a strip pass that took
+# LIBRARIES, require-frontend-libs.sh checks libraries by name and
+# install-frontend.sh reads `ldd`; none sees a command. So a strip pass that took
 # NetworkManager or polkit out would leave a green build, a binary that links
 # perfectly, and a console that cannot see a Wi-Fi network or say why. They are
 # a real dependency of frontend/src/net.cpp and they are invisible to every
@@ -312,9 +333,9 @@ done
 # frontend/src/gpu.cpp opens libvulkan.so.1 by hand rather than linking it, so
 # that the binary still starts on a machine with no Vulkan and says so. That is
 # the right behaviour and it costs the one check that would have caught its
-# absence: `ldd` on the frontend does not name it, so
-# require-frontend-libs.sh cannot see it and ci/base-watch.txt has nothing to
-# watch.
+# absence: `ldd` on the frontend does not name it, so install-frontend.sh's
+# sweep cannot see it (require-frontend-libs.sh could list it by name, and
+# this check is where it is named instead).
 #
 # WITHOUT IT, PLAYSTATION 2 AND GAMECUBE SIMPLY DO NOT PLAY, and the console
 # says only "this core wants Vulkan and no libvulkan.so.1 on this machine" —
@@ -361,6 +382,12 @@ done
 # itself is what the rpm database and packages-after-strip.txt record.
 rm -f /usr/lib/sysimage/libdnf5/transaction_history.sqlite*
 log "removed dnf's transaction history, which is dated and would change this layer every build"
+
+# And dnf's state in /var/lib/dnf, which the base does not have: a countme
+# file per repository this build fetched from, holding the week it ran
+# (#511), and a lock. /var in an image reaches only a console installed from
+# it, and nothing on a console runs dnf.
+rm -rf /var/lib/dnf
 
 # And what dnf and the SELinux tools leave in /run. `bootc container lint`
 # warns about it (nonempty-run-tmp), and it was always there; the rechunk used

@@ -4,16 +4,15 @@
 #  DO NOT REMOVE ANYTHING LISTED IN THIS FILE.
 # ===========================================================================
 #
-# HDMI-CEC is a HARD REQUIREMENT for CabinetOS. The console must be able to turn
-# the television on, and be woken by it. That is not a convenience — it is a
-# large part of what separates "a console" from "a computer under the telly",
-# and the product is defined by that difference.
+# HDMI-CEC IS SHELVED (MMagTech, 2026-09-24; docs/PROJECT.md open question
+# 31): nothing turns the television on or is woken by it today. Its packages
+# are kept installable for the day it comes back.
 #
 # Everything here looks like desktop or HTPC cruft to someone reading a package
 # list, and every one of these is exactly the sort of thing a future strip pass
-# would delete without a second thought. Hence this file: it names each one, and
-# FAILS THE BUILD if any of them goes missing, whether that is our doing or an
-# upstream Bazzite change.
+# would delete without a second thought. Hence this file: it names each one,
+# reinstalls a package that went, and FAILS THE BUILD if that fails or a rule
+# or unit is gone, whether that is our doing or an upstream Bazzite change.
 #
 # If you are here because the build failed, do not "fix" it by deleting the
 # check. Work out what removed the package and stop that instead.
@@ -54,7 +53,7 @@ for pkg in libcec v4l-utils linux-cec linuxconsoletools; do
     if is_installed "${pkg}"; then
         log "  ok: ${pkg} ($(rpm -q --qf '%{VERSION}' "${pkg}"))"
     else
-        log "  MISSING: ${pkg} — HDMI-CEC is a hard requirement, reinstalling"
+        log "  MISSING: ${pkg}, kept for HDMI-CEC, reinstalling"
         if dnf5 -y install "${pkg}"; then
             log "  recovered: ${pkg}"
         else

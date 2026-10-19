@@ -106,9 +106,14 @@ void App::runDiscScript() {
                              : b == "left" ? bit(cab::Left) : b == "right" ? bit(cab::Right)
                              : b == "l" ? bit(cab::L) : b == "r" ? bit(cab::R)
                              : b == "l2" ? bit(cab::L2) : b == "r2" ? bit(cab::R2) : 0u;
-            discScript.pad = m;
-            discScript.padUntil = now + static_cast<uint64_t>(std::max(1, frames));
-            say("");
+            // A mistyped button presses nothing and says so, as --nav does.
+            if (m == 0u) {
+                say("UNKNOWN button " + b);
+            } else {
+                discScript.pad = m;
+                discScript.padUntil = now + static_cast<uint64_t>(std::max(1, frames));
+                say("");
+            }
         } else if (verb == "shot") {
             // The game's own frame, the menu never in it, as a PNG.
             std::string name;
@@ -140,16 +145,25 @@ void App::runDiscScript() {
             // nav up|down|left|right|a|b, into whatever has the press.
             std::string k;
             in >> k;
-            const screens::Nav n = k == "up" ? screens::Nav::Up : k == "down" ? screens::Nav::Down
-                                 : k == "left" ? screens::Nav::Left
-                                 : k == "right" ? screens::Nav::Right
-                                 : k == "b" ? screens::Nav::Back : screens::Nav::Activate;
-            if (choiceScreen.isOpen()) navigate(n);
-            else if (n == screens::Nav::Up) ovStep(-1);
-            else if (n == screens::Nav::Down) ovStep(+1);
-            else if (n == screens::Nav::Activate) overlayActivate();
-            else if (n == screens::Nav::Back) closeOverlay();
-            say(choiceScreen.isOpen() ? "panel: " + choiceScreen.title() : "");
+            // Anything else is refused, not read as A: in the pause menu a
+            // stray A can be Exit to Home.
+            if (k != "up" && k != "down" && k != "left" && k != "right" && k != "a" &&
+                k != "b") {
+                say("UNKNOWN nav " + k);
+            } else {
+                const screens::Nav n = k == "up"     ? screens::Nav::Up
+                                     : k == "down"  ? screens::Nav::Down
+                                     : k == "left"  ? screens::Nav::Left
+                                     : k == "right" ? screens::Nav::Right
+                                     : k == "b"     ? screens::Nav::Back
+                                                    : screens::Nav::Activate;
+                if (choiceScreen.isOpen()) navigate(n);
+                else if (n == screens::Nav::Up) ovStep(-1);
+                else if (n == screens::Nav::Down) ovStep(+1);
+                else if (n == screens::Nav::Activate) overlayActivate();
+                else if (n == screens::Nav::Back) closeOverlay();
+                say(choiceScreen.isOpen() ? "panel: " + choiceScreen.title() : "");
+            }
         } else if (verb == "close") {
             if (choiceScreen.isOpen()) choiceScreen.close();
             if (overlayOpen) closeOverlay();

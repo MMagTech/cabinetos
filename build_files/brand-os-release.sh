@@ -2,7 +2,7 @@
 #
 # Name CabinetOS in /usr/lib/os-release (#137; docs/PROJECT.md open question 7).
 #
-#   brand-os-release.sh <version>
+#   brand-os-release.sh [version]
 #
 # THE COSMETIC FIELDS ONLY. NAME, PRETTY_NAME, VERSION, the boot menu's name,
 # the default hostname and the links change. Every identifier stays Bazzite's:
@@ -11,12 +11,17 @@
 # Blue's own tools, and changing them breaks those, not the look. LOGO stays
 # until there is a CabinetOS logo to point at.
 #
-# Run in the image's last layer with the version, so the one file that changes
-# every build is small and changes there.
+# RUN TWICE (#511). Without a version, in the boot splash layer just before
+# the initramfs is rebuilt: everything but the version, so the initramfs's
+# copy of this file names CabinetOS and is the same in every image (with the
+# version in it, the 250 MB initramfs differed in every image and every
+# update downloaded it again). With the version, in the version layer after
+# it, so the one file that changes every build is small and changes there.
+# Without a version, VERSION stays the base's until the second run.
 
 set -euo pipefail
 
-VERSION="${1:?usage: brand-os-release.sh <version>}"
+VERSION="${1:-}"
 FILE=/usr/lib/os-release
 REPO="https://github.com/MMagTech/cabinetos"
 
@@ -37,9 +42,11 @@ set_field() {
 }
 
 set_field NAME "CabinetOS"
-set_field PRETTY_NAME "CabinetOS ${VERSION}"
-set_field VERSION "${VERSION}"
-set_field BOOTLOADER_NAME "CabinetOS ${VERSION}"
+set_field PRETTY_NAME "CabinetOS${VERSION:+ ${VERSION}}"
+if [[ -n "${VERSION}" ]]; then
+    set_field VERSION "${VERSION}"
+fi
+set_field BOOTLOADER_NAME "CabinetOS${VERSION:+ ${VERSION}}"
 set_field DEFAULT_HOSTNAME "cabinetos"
 set_field HOME_URL "${REPO}"
 set_field DOCUMENTATION_URL "${REPO}"

@@ -14,8 +14,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 
+#include "fileio.h"
 #include "storage.h"
 
 namespace cache {
@@ -33,6 +35,14 @@ std::string markerName(int romId, const std::string& fileName) {
     return s + ".pending";
 }
 
+// Only a marker counts: not a dotfile, and not a temporary writeBytes left
+// when the power went halfway through writing one.
+bool isMarker(const char* name) {
+    static const char kSuffix[] = ".pending";
+    const size_t n = std::strlen(name), k = sizeof kSuffix - 1;
+    return name[0] != '.' && n > k && std::strcmp(name + n - k, kSuffix) == 0;
+}
+
 }  // namespace
 
 void markPending(const storage::User& u, const Owed& o, int64_t bytes) {
@@ -40,20 +50,23 @@ void markPending(const storage::User& u, const Owed& o, int64_t bytes) {
     storage::makeDirs(storage::pendingDir(u));
     const std::string path = storage::pendingDir(u) + "/" + markerName(o.romId, o.fileName);
     // One "key value" per line after the byte count. Values are file names
-    // and paths, which never hold a newline.
-    if (FILE* f = std::fopen(path.c_str(), "wb")) {
-        std::fprintf(f, "%lld\n", static_cast<long long>(bytes));
-        std::fprintf(f, "kind %s\n", o.isScreenshot ? "screenshot" : o.isState ? "state" : "save");
-        std::fprintf(f, "rom %d\n", o.romId);
-        std::fprintf(f, "emulator %s\n", o.emulator.c_str());
-        std::fprintf(f, "name %s\n", o.fileName.c_str());
-        std::fprintf(f, "local %s\n", o.localPath.c_str());
-        if (!o.shotName.empty()) {
-            std::fprintf(f, "shotname %s\n", o.shotName.c_str());
-            std::fprintf(f, "shot %s\n", o.shotPath.c_str());
-        }
-        std::fclose(f);
+    // and paths, which never hold a newline. Through writeBytes (#482): a
+    // marker written in place and cut by a power cut was an empty file that
+    // owed() skipped and pendingCount still counted, so the save was never
+    // sent and Sign out said something was owed for good.
+    std::string text = std::to_string(static_cast<long long>(bytes)) + "\n";
+    text += std::string("kind ") +
+            (o.isScreenshot ? "screenshot" : o.isState ? "state" : "save") + "\n";
+    text += "rom " + std::to_string(o.romId) + "\n";
+    text += "emulator " + o.emulator + "\n";
+    text += "name " + o.fileName + "\n";
+    text += "local " + o.localPath + "\n";
+    if (!o.shotName.empty()) {
+        text += "shotname " + o.shotName + "\n";
+        text += "shot " + o.shotPath + "\n";
     }
+    if (!cab::writeBytes(path, text))
+        std::fprintf(stderr, "[upload] could not write the marker %s\n", path.c_str());
 }
 
 std::vector<Owed> owed(const storage::User& u) {
@@ -63,7 +76,7 @@ std::vector<Owed> owed(const storage::User& u) {
     DIR* d = ::opendir(dir.c_str());
     if (!d) return {};
     while (struct dirent* e = ::readdir(d)) {
-        if (e->d_name[0] == '.') continue;
+        if (!isMarker(e->d_name)) continue;
         const std::string path = dir + "/" + e->d_name;
         FILE* f = std::fopen(path.c_str(), "rb");
         if (!f) continue;
@@ -125,7 +138,7 @@ int pendingCount(const storage::User& u) {
     if (!d) return 0;
     int n = 0;
     while (struct dirent* f = ::readdir(d))
-        if (f->d_name[0] != '.') ++n;
+        if (isMarker(f->d_name)) ++n;
     ::closedir(d);
     return n;
 }
@@ -137,7 +150,7 @@ int64_t pendingBytes() {
         DIR* d = ::opendir(dir.c_str());
         if (!d) continue;
         while (struct dirent* f = ::readdir(d)) {
-            if (f->d_name[0] == '.') continue;
+            if (!isMarker(f->d_name)) continue;
             if (FILE* fh = std::fopen((dir + "/" + f->d_name).c_str(), "rb")) {
                 long long n = 0;
                 if (std::fscanf(fh, "%lld", &n) == 1 && n > 0) total += n;

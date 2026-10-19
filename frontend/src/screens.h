@@ -9,7 +9,7 @@
 // reached from the Library, and until this existed 1100 playable games had
 // exactly fifty of them reachable — the ones Home happened to show.
 //
-// WHY THESE ARE NOT IN main.cpp. Each screen owns focus, scroll and remembered
+// WHY THESE ARE NOT IN THE APP. Each screen owns focus, scroll and remembered
 // state that only it understands, and the alternative is one function holding
 // four screens' worth of indices at once. What they deliberately do NOT own is
 // anything that touches the network, the disk or a core: a screen returns an

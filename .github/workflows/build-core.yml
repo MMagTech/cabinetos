@@ -27,11 +27,11 @@ name: Build cores
 # its steps is the point: there is one place a core is built, and it is the
 # place that asserts the pinned revision.
 #
-# WHICH IS WHY THIS NO LONGER RUNS ITSELF ON MAIN. build.yml runs on every
-# pull request aimed at main and on every push to it, its path filter skips
-# documentation only and can therefore never skip a change under `cores/`, and
-# it calls this workflow — so a `pull_request`/`push` trigger here as well
-# meant the same twenty-one core builds queued TWICE for one change. That is
+# WHICH IS WHY THIS NO LONGER RUNS ITSELF ON MAIN. build.yml calls this
+# workflow on every push to main and testing (not on its pull requests), and
+# its path filter skips documentation only and can therefore never skip a
+# change under `cores/`, so a `push` trigger here as well meant the same core
+# builds queued TWICE for one change. That is
 # not merely wasteful: a runner has a concurrency cap, so the duplicate starves
 # the image build of the runners it is waiting for, and it doubled the wall
 # clock of the change that introduced it. Cancelling one by hand then leaves a
@@ -193,8 +193,8 @@ jobs:
 
       # Pulled, not built — see the builder job above for why. The fallback is
       # not decoration: a pull request from a fork gets a read-only token, so
-      # the builder job cannot publish, and without this the twenty core builds
-      # would all fail in a way that reads as twenty broken cores.
+      # the builder job cannot publish, and without this every core build
+      # would fail in a way that reads as every core broken.
       - name: Fetch the builder container
         id: builder
         run: |
@@ -216,8 +216,8 @@ jobs:
       # by a tag.
       #
       # Why it is worth the machinery: PPSSPP alone is eight and a half
-      # minutes, FBNeo nearly seven, and build.yml now builds all twenty-one
-      # before every image. That was about half the wall clock of a change
+      # minutes, FBNeo nearly seven, and build.yml builds every core before
+      # every image. That was about half the wall clock of a change
       # that touched a shell script and could not possibly have altered a
       # core.
       #
@@ -258,11 +258,11 @@ jobs:
       #
       # This used to upload `cores/build/*.so` and `cores/system/` as two
       # globs, and an artifact's internal root is the least common ancestor of
-      # the files actually found — so the twenty cores with no system files got
+      # the files actually found — so the cores with no system files got
       # an artifact rooted at `cores/build` and PPSSPP got one rooted at
       # `cores`. Two different layouts under one naming scheme, which nothing
-      # noticed while nothing downloaded them. The image build downloads all
-      # twenty-one and merges them, so it does now.
+      # noticed while nothing downloaded them. The image build downloads every
+      # one and merges them, so it does now.
       #
       # This is also the layout ci/stage-image-payload.sh takes.
       - name: Stage it
@@ -270,7 +270,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifact/cores artifact/system
           cp cores/build/*.so artifact/cores/
-          # Empty for twenty of the twenty-one. PPSSPP's system files are not a
+          # Empty for all but PPSSPP and Dolphin. PPSSPP's system files are not a
           # console's firmware and do not come from RomM — they ship with the
           # emulator — so they are part of what this job produces, and a core
           # artifact without them is a core that boots a game with no fonts.

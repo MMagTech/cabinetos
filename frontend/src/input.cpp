@@ -315,7 +315,7 @@ void App::handleEvent(const SDL_Event& e) {
             }
             if (e.key.key == SDLK_RETURN || e.key.key == SDLK_SPACE) {
                 pressing = true;
-                if (!playing) navigate(screens::Nav::Activate);
+                navigate(screens::Nav::Activate);
             }
             break;
         case SDL_EVENT_KEY_UP:

@@ -256,8 +256,8 @@ std::string safeSegment(const std::string& s) {
         const unsigned char u = static_cast<unsigned char>(c);
         // Everything above ASCII passes through: this is UTF-8 and those bytes
         // are the tail of a multi-byte character. Replacing them turns a
-        // Japanese title into a row of underscores, which sanitisedStem in
-        // main.cpp already learned the hard way.
+        // Japanese title into a row of underscores, which sanitisedStem
+        // (fileio.cpp) already learned the hard way.
         if (u >= 0x80 || std::isalnum(u) || std::strchr(" -_().,'!&+[]", c) != nullptr)
             out += c;
         else

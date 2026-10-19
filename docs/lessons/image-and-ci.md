@@ -74,6 +74,19 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   any "TV off, TV on" test with nobody at the TV, and check the sound output
   (`wpctl status`, `/proc/asound/card0/eld#0.0`), not only the picture size.
 
+- **A LAYER WHOSE CONTENT DID NOT CHANGE CAN STILL GET A NEW DIGEST, AND
+  THE CONSOLE DOWNLOADS IT AGAIN** (#511, "Every update downloads about 310
+  MB that did not change"). Two causes, found 2026-10-18: the initramfs's
+  copy of os-release carried the version (the 254 MB boot splash layer),
+  and rpm stamps each package this build installs with the time it ran
+  (the 70 MB OS layer). To find the file: the console keeps every layer of
+  its two deployments as an ostree ref, so on the A9 `ostree refs
+  --repo=/sysroot/ostree/repo | grep container/blob`, then `ostree diff`
+  the two refs of the layer (digests from `skopeo inspect --raw`). It reads
+  only what is already there and downloads nothing. **And a `podman build`
+  on the A9 FROM a local image needs `--pull=never`:** without it, it began
+  pulling 12 GB over his slow line.
+
 ## Workflows and checks
 
 - **An artifact's internal root is the least common ancestor of the files it

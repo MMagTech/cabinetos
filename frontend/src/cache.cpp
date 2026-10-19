@@ -16,6 +16,8 @@
 
 #include <json-c/json.h>
 
+#include "fileio.h"
+
 namespace cache {
 namespace {
 
@@ -347,7 +349,8 @@ int64_t evictUntilFree(const std::string& location, int64_t needBytes,
     int64_t freed = 0;
     for (const Entry& e : candidates(location)) {
         if (have + freed >= target) break;
-        // The running game. Its file is open, and deleting it would be the one
+        // The game being launched or running. Its file is open or about to
+        // be, and deleting it would be the one
         // eviction a person could actually notice.
         if (protectRomId != 0 && e.romId == protectRomId) continue;
         if (!removeTree(e.path)) continue;
@@ -480,16 +483,7 @@ bool keep(const storage::User& u, int romId, const std::string& record,
     // it is not. A half-written record is a kept game that cannot be read back,
     // which is the worst of both: the space is protected and the game is not
     // launchable offline.
-    const std::string tmp = path + ".part";
-    FILE* f = std::fopen(tmp.c_str(), "wb");
-    if (!f) {
-        if (err) *err = "could not write the keep record";
-        return false;
-    }
-    const bool ok = std::fwrite(record.data(), 1, record.size(), f) == record.size();
-    std::fclose(f);
-    if (!ok || ::rename(tmp.c_str(), path.c_str()) != 0) {
-        ::unlink(tmp.c_str());
+    if (!cab::writeBytes(path, record)) {
         if (err) *err = "could not write the keep record";
         return false;
     }

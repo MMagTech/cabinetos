@@ -12,8 +12,8 @@
 #
 # Usage: ci/next-version.sh [--strict] <registry/image>
 #   --strict  fail if the registry cannot be read, rather than guess. Used for
-#             every build that publishes; a pull request build, which
-#             publishes nothing, guesses.
+#             every build that publishes; without it (a run by hand) a
+#             registry it cannot read makes it guess.
 
 set -euo pipefail
 

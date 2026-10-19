@@ -23,10 +23,12 @@
 // scans: the fingerprint RetroAchievements knows the game by. The console never
 // reads the game file for it, so a .chd disc needs no disc reader here.
 //
-// THREADS. Everything here is called on the frame thread, except what the
-// PlayStation 2 frame callback does on PCSX2's CPU thread (rc_client's own
-// lock covers that, and it is where PCSX2's own achievements code does it).
-// Network answers are handed back to rc_client on the frame thread, in pump().
+// THREADS. Everything here runs on the frame thread, with two exceptions: the
+// PlayStation 2 frame callback runs on PCSX2's CPU thread (rc_client's own
+// lock covers that, as in PCSX2's own achievements code, and gFrameMutex
+// lets endGame wait out a frame's check that is running), and fetchBytes,
+// for the image cache's workers, runs on any thread. Network answers are
+// handed back to rc_client on the frame thread, in pump().
 
 #pragma once
 
@@ -133,8 +135,8 @@ struct GameList {
 // still has it offline.
 void fetchList(const std::string& raHash, std::function<void(const GameList&)> done);
 
-// --ra-sample (main.cpp): signed in as "sample", a made-up set of 40 with 12
-// unlocked on every page, and one unlock five seconds into any game. Nothing
+// --ra-sample (cli.cpp; started in startup.cpp): signed in as "sample", a
+// made-up set of 40 with 12 unlocked on every page, and one unlock five seconds into any game. Nothing
 // is sent anywhere. For captures only.
 void useSample();
 

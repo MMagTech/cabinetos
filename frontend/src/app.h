@@ -3,10 +3,10 @@
 // main() was one function: its locals were the console's whole state and its
 // lambdas reached them through [&]. They are the members and member functions
 // of this struct now, in main()'s order and unchanged, so the next batches can
-// move one feature at a time into its own file. The bodies are in main.cpp
-// and, from batch (d) on, in the feature files (cli.cpp, startup.cpp,
-// home.cpp and the rest: `grep -n 'App::name(' frontend/src/*.cpp` finds
-// one); main.cpp's main() builds one App and calls run(), which is
+// move one feature at a time into its own file. main.cpp holds only main()
+// and run(); every other body is in the file named for its job (cli.cpp,
+// startup.cpp, home.cpp and the rest: `grep -n 'App::name(' frontend/src/*.cpp`
+// finds one). main() builds one App and calls run(), which is
 // main()'s old body: the start-up in today's order, the frame loop, the
 // teardown, the restart, each a call where its statements have moved.
 //
@@ -133,11 +133,9 @@ struct App {
     // Integer scaling for a game's picture: OFF by default since 2026-09-21,
     // so every system fills the height. See the draw site for what that trades.
     bool integerScaling = false;
-    // THE SWITCH SETTINGS WILL OWN, as a flag until Settings exists. MMagTech:
-    // *"a navigation sound of some sort would be nice and later we have the
-    // option in settings to turn it off."* The off half is built now so that
-    // when the screen arrives it has something to set rather than something to
-    // implement.
+    // INTERFACE SOUNDS, Settings' row in Display and Sound (SetInterfaceSounds).
+    // MMagTech: *"a navigation sound of some sort would be nice and later we
+    // have the option in settings to turn it off."*
     // --ui-sound overrides the saved level for this run only, for tests.
     bool uiSoundFlag = false;
     const char* uiSoundLevels = nullptr;
@@ -364,6 +362,8 @@ struct App {
     // checks disc.h's rules with no core and no server.
     std::string discScriptText;
     bool discTestMode = false;
+    // --files-test: what survives a full disk, through cab::writeBytes (#482).
+    bool filesTestMode = false;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;
@@ -503,29 +503,11 @@ struct App {
     // never a single index: `focused` used to index the shelf, and that is only
     // the same number while the shelf is the only thing on screen.
     //
-    //   row 0   the hero      slot 0 the card, slot 1 the Resume pill
-    //   row 1   Recent
-    //   row 2   Favorites, when there are any
-    //
-    // The hero takes focus on arrival, which is what "resume-first" means: the
-    // thing you were playing is already under the cursor.
-    // THE TOP BAR IS A ROW, above the hero. It is drawn OVER the hero's top
-    // edge rather than above it, because Home has 60 points of slack and a bar
-    // costs about 105 — docs/PROJECT.md priced the three options as "either
-    // the bar fits, or Home's hero comes down, or the bar goes elsewhere", and
-    // overlaying it is "elsewhere". It is the only one that does not undo
-    // Home fitting on one screen.
-    //
-    // Always visible rather than revealed by pressing Up. Up from the hero is
-    // a dead input today and it is tempting to spend it, but a console that
-    // hides Settings behind an undiscoverable gesture is constraint 3 — the
-    // one about leaving somebody stuck — and showing it costs nothing.
-    //
-    // No "Home" item: Home is the root and Back returns to it, so a
-    // destination that does nothing when you are already there only teaches
-    // people the bar is decorative. Cabinet's iOS reaches the same shape from
-    // the other side, three destinations with Settings demoted, on the rule
-    // that "reach should track frequency".
+    // Home is two rows, Recent and Favorites (Row, below), and opens on the
+    // first card of Recent, which is what "resume-first" means: the thing you
+    // were playing is already under the cursor. The top bar is not one of
+    // Home's rows: its focus is the app's (barFocused, barSlot, below), and
+    // Home is its first item (#127).
     // THE HERO ROW IS GONE — 2026-09-21.
     //
     // Home was bar / hero / Recent / Favorites, where the hero was the most
@@ -603,9 +585,7 @@ struct App {
     int focusRow = RowRecent;
     int focusSlot = 0;
     // Home is taller than the screen once there are two shelves, so it scrolls
-    // to follow focus — the same as tvOS, which puts Home in a ScrollView. The
-    // hero alone is 420 of a 1080 canvas; Recent and Favorites do not both fit
-    // under it.
+    // to follow focus — the same as tvOS, which puts Home in a ScrollView.
     design::Animated scrollY;
     int homeTopRow();
     void homeFromTheStart();
@@ -1204,10 +1184,6 @@ struct App {
     // or 0 for neither; the frame loop repeats it.
     int letterHeld = 0;
     float letterHeldFor = 0.0f, letterNext = 0.0f;
-    // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
-    // pressing a second direction takes over rather than queueing, so a person
-    // rolling their thumb around the pad never ends up with two repeats
-    // fighting each other.
     // THE CURTAIN. 0 is clear, 1 is black over everything. See design.h.
     design::Animated curtain;
     // An account switch waiting behind the curtain; see pumpSwitch.
@@ -1257,6 +1233,10 @@ struct App {
     int arriveFrames = 0;
     Uint64 arriveHeldAt = 0;
 
+    // HELD-DIRECTION REPEAT. One direction at a time, which is what a d-pad is:
+    // pressing a second direction takes over rather than queueing, so a person
+    // rolling their thumb around the pad never ends up with two repeats
+    // fighting each other.
     bool navHeld = false;
     screens::Nav heldNav = screens::Nav::Down;
     float heldFor = 0.0f, nextRepeat = 0.0f;
@@ -1278,8 +1258,10 @@ struct App {
     //
     // `askPin` is the one door every protected action goes through: with no
     // PIN set it simply goes ahead, which is the rule that with no PIN every
-    // account can do everything. Wi-Fi, Sign out, Change server address,
-    // Remove an account and File access call it when they are built.
+    // account can do everything. Every protected action calls it: Wi-Fi, the
+    // server address, adding, removing and signing out accounts, File and
+    // Developer access, Remote Play, Downloads and updates among them
+    // (`grep -n askPin frontend/src/*.cpp`).
     screens::PinScreen pinScreen;
     std::function<void()> pinThen;
     // FIVE WRONG TRIES, THEN THIRTY SECONDS. Enough to forgive fumbling with
@@ -1407,7 +1389,7 @@ struct App {
     int64_t filesSaidAt = 0;
     bool filesPanelWhenOn = false;   // open the panel once root says it is on
     bool filesWant = false;
-    // ---- Developer access (docs/SETTINGS.md, System; issue #134) -----------
+    // ---- Developer access (docs/SETTINGS.md, About; issue #134) ------------
     //
     // The full command line over SSH on port 2222, off by default, and off
     // means cabinetos-developer.service is not running (MMagTech,
@@ -1584,7 +1566,8 @@ struct App {
     // pressed, which is how two identical pads are told apart), then Add a
     // controller. Pressing a pad gives it another number (the two swap) or
     // forgets a Bluetooth pad; a lone wired pad has neither. After either,
-    // back to this panel, on the same pad.
+    // back to this panel, on the same row (after a swap that row is the other
+    // pad: the rows are in seat order).
     std::vector<players::Pad> padsShown;
     bool padsPanelSeenOpen = false;
     int padsPanelGen = -1;

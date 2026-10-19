@@ -9,14 +9,15 @@
 # will dlopen or link, and if one goes missing the console does not start.
 #
 # They are in the Bazzite base today, but INCIDENTALLY: `rpm -q --whatrequires`
-# reports nothing depending on either, which means nothing is stopping an
+# reports nothing depending on most of them, which means nothing is stopping an
 # upstream change from dropping them. That is precisely the situation
 # require-cec.sh exists for, so this follows the same pattern — name each one,
 # say why, and FAIL THE BUILD if it disappears.
 #
 # If you are here because the build failed, do not "fix" it by deleting the
-# check. Either work out what removed the package, or install it explicitly in
-# Containerfile and move it out of this list.
+# check. Either work out what removed the package, or install the package
+# explicitly in a script build.sh runs (never a new Containerfile RUN: only
+# build.sh's step has dnf's cache mounts) and move it out of this list.
 #
 # ---------------------------------------------------------------------------
 # WHY EACH ONE
@@ -73,7 +74,7 @@ if [ "$missing" -ne 0 ]; then
 One of the libraries the frontend links against is not in the image.
 
 Read the top of build_files/require-frontend-libs.sh before changing anything.
-The fix is to install the package explicitly in Containerfile, NOT to delete
+The fix is to install the package in a script build.sh runs, NOT to delete
 the check: a console that cannot reach its library is not a console.
 MSG
     exit 1

@@ -56,7 +56,7 @@ is in the file named for its feature, and
 | PlayStation 2 | `ps2.cpp`, `ps2window.cpp`, `overlaywin.cpp`, and `frontend/ps2/` (its `CabinetPS2Bios.cpp` chooses each game's BIOS by the game's region) |
 | Emulators run as programs | `standalone.h`, `standalone.cpp`, `standalone_play.cpp`, `standalone_eden.cpp`, `standalone_xemu.cpp`, `standalone_rpcs3.cpp`, `standalone_xenia.cpp`, `standalone_cemu.cpp`, `vpad.cpp`, `xtitles.cpp`, `xboxhdd.cpp`, `x360profile.cpp`, `dolphinprep.cpp` |
 | Saves and states | `savetable.cpp` (what each core writes, where, and its two tags on RomM: `emulatorTag` for states, `saveTag` for saves), `saves.cpp` (sending and restoring all three kinds of save: `syncSave`, `syncDirSave`, `syncFileSaves`), `dirsave.cpp` and `filesave.cpp` (their helpers), `states.cpp`, `savemirror.cpp`, `uploader.cpp` (the queue), `pending.cpp` (the markers), `offline_sync.cpp`, `playtime.cpp`, `favorites.cpp`; the requests themselves are in `romm_playdata.cpp` |
-| Storage | `storage.h` (where everything lives), `storage_internal.h`, `locations.cpp`, `cache.cpp`, `drives.cpp`, `drives_fs.cpp`, `udisks.cpp`, `users.cpp`, `accounts.cpp`, `accountremove.cpp`, `fileio.cpp`, `prefs.cpp` |
+| Storage | `storage.h` (where everything lives), `storage_internal.h`, `locations.cpp`, `cache.cpp`, `drives.cpp`, `drives_fs.cpp`, `udisks.cpp`, `users.cpp`, `accounts.cpp`, `accountremove.cpp`, `fileio.cpp` (every file the console replaces goes through its `writeBytes`: a temporary, fsync, a rename), `prefs.cpp` |
 | Controllers | `players.cpp`, `controllers.cpp`, `bluetooth.cpp`, `btagent.h`, `battery.cpp`, `batteryrow.cpp`, `shortcuts.cpp`, `wiiremote.cpp` (starts the Wii bridge), `wiipair.cpp`, `wiipanel.cpp`, `wiimii.cpp`, `wii.cpp`, `wiiu.cpp` |
 | The machine | `net.cpp`, `wifi.cpp`, `power.cpp`, `power_menu.cpp`, `powerprofile.cpp`, `volume.cpp`, `sound.cpp`, `gpu.cpp`, `cpus.cpp`, `idle.cpp`, `proc.cpp` (running a program with no shell), `unit.cpp` (asking systemd for a root job), `update.cpp` (System update, the console's side), `files.cpp` (File access, the console's side), `server.cpp` and `serveraddress.cpp` (the RomM server this console belongs to) |
 | RetroAchievements | `achievements.cpp` (the sign-in and rcheevos' client; its console table names every system), `achievements_ui.cpp`, `ra_list.cpp`, `ra_net.cpp`, `ra_state.h` |
@@ -330,9 +330,9 @@ Each with where it is recorded.
 - **A fork's image carries the project's key and image name until the fork
   edits them:** they are written into tracked files (CONTRIBUTING.md,
   "Generate a signing key", lists them).
-- **Two test stand-ins are not in the repository:** the frame-time tool many
-  comments cite as `frames.py`, and `racemock.py`, which `--romm-race-test`
-  needs (`romm_racetest.cpp`).
+- **A test stand-in is not in the repository:** the frame-time tool many
+  comments cite as `frames.py`. (`racemock.py`, which `--romm-race-test`
+  needs, is `tools/racemock.py` since #488.)
 - **Not built yet:** choosing a different core for a game, and exporting
   (`detailscreen.cpp`'s note).
 - **The test instruments ship in the program**, run only by a flag.
@@ -340,7 +340,9 @@ Each with where it is recorded.
   sign-in tokens and the PIN live in `~/.config/cabinetos/` and Remote
   Play's files in `/var/lib/cabinetos`, whatever the storage root
   (`accounts.cpp`, `remoteplay.cpp`), so a headless test on a signed-in
-  console acts as that console's person.
+  console acts as that console's person. A scratch `HOME` and
+  `CABINETOS_DRIVES` separate the sign-in and the drives
+  (CONTRIBUTING.md, "Running and testing"); Remote Play's files stay.
 - **No documented way to run your own build on your own console**, and the
   environment variables a run off a console needs (`CABINETOS_SHADERS`,
   `CABINETOS_PAD_DB`, `CABINETOS_ASSETS`, `CABINETOS_STORAGE`,

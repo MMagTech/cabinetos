@@ -92,8 +92,8 @@ constexpr float kOverlayButtonFocusShadowAlpha = 0.45f;
 // panels share: the PIN pad (pin.cpp) and the question panel (choice.cpp).
 // Both tried the keyboard's black glass (*"forgotten about"*) and the account
 // panel's frosted glass (*"too frosted or washed out"*) first; MMagTech,
-// 2026-09-24. `a` fades the whole thing. The pause menu itself still builds
-// its own in main.cpp, from these same constants.
+// 2026-09-24. `a` fades the whole thing. The pause menu itself builds its
+// own (pausemenu.cpp), from these same constants.
 inline ui::Rect menuPanel(float x, float y, float w, float h, float a) {
     ui::Color fill = look::surface();
     fill.a = kOverlayPanelFill * a;

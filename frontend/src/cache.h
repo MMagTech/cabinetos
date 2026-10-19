@@ -194,8 +194,8 @@ std::vector<Entry> candidates(const std::string& location);
 // Deletes least-recently-used games until `needBytes` are free, plus a margin so
 // the next few launches cost nothing. Returns the number of bytes freed.
 //
-// `protectRomId` is the game currently running, which is never a candidate
-// however old its entry looks. Pass 0 when nothing is running.
+// `protectRomId` is the game being launched or running, which is never a
+// candidate however old its entry looks. Pass 0 when there is none.
 //
 // It stops when it runs out of candidates rather than failing: the caller
 // checks whether there is now enough room, because "not enough space" is a

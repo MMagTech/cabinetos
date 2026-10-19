@@ -15,7 +15,7 @@
 //     rescan.
 //
 // What this file does not know: the core. Inserting and starting over are
-// the app's (main.cpp), through Core's disk control (core.h).
+// the app's (discs.cpp), through Core's disk control (core.h).
 
 #pragma once
 

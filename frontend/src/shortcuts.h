@@ -4,7 +4,8 @@
 //
 // OFF BY DEFAULT, one switch in Settings. With it on, a tap of the shortcut
 // button opens the pause menu and holding it with a second button runs a
-// shortcut. The combinations are fixed (main.cpp, where the pads are read).
+// shortcut. The combinations are fixed (play.cpp, readGameInput, where the
+// pads are read).
 //
 // THE BUTTON IS SET BY PRESSING IT, and it is read RAW: the joystick's own
 // button number, not the gamepad mapping. That is the point of it. On the A9,

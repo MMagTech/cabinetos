@@ -315,8 +315,8 @@ void App::drawPauseScrim() {
 // rendered. That is the direct payoff of hosting cores in process
 // rather than launching them.
 //
-// Drawn after presentScene because the panel is glass, and it reads the
-// game's own picture through itself.
+// Drawn after presentScene, so it is over the game's picture. The panel is
+// solid, not glass (below).
 void App::drawPauseMenu(float sc) {
     const float ovl = overlayFade.value();
     // NOT UNDER A QUESTION ASKED FROM IT (Change disc, #162): the panel
