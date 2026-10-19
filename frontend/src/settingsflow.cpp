@@ -457,6 +457,10 @@ void App::buildSettings() {
                                base.empty() ? "" : "Bazzite " + base, version};
         v.pressable = true;
         about.push_back(v);
+        // WHAT'S NEW (#329): under Version, its name and nothing else; the
+        // screen it opens has the code to the What's new page (MMagTech,
+        // 2026-10-19).
+        about.push_back({K::Action, SetWhatsNew, "What's new", "", ""});
         about.push_back({K::Action, SetHowTo, "How to", "", ""});
         about.push_back({K::Action, SetCredits, "Credits and licenses", "", ""});
         // DEVELOPER ACCESS: one row, as File access; everything a computer
@@ -556,6 +560,8 @@ void App::applySetting(const screens::Result& res) {
         pressDownloads();
     } else if (res.value == SetReport) {
         pressReport();
+    } else if (res.value == SetWhatsNew) {
+        pressWhatsNew();
     } else if (res.value == SetHowTo) {
         pressHowTo();
     } else if (res.value == SetCredits) {

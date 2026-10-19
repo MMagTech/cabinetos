@@ -882,6 +882,19 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   version file, Bazzite's `/usr/share/ublue-os/image-info.json`, and the
   booted deployment's `.origin`. **Built, #72 ("Settings: About (version,
   credits, licences)").** MMagTech, 2026-09-25.
+- **What's new** (#329, "Release notes for every update, and a way to see
+  them from the console"; decided with MMagTech 2026-10-19): one row under
+  Version, its name and nothing else. A opens a screen in the link screen's
+  shape (`qrlink.h`, as the diagnostic report's): "What's new", "Scan to
+  read what changed.", the address, and a large QR code with the cabinet in
+  its middle; B goes back. The code is the What's new page itself,
+  `https://mmagtech.github.io/cabinetos/wiki/changelog.html`, with no
+  version in it: whoever updates is already on the newest, the top of the
+  page is the newest entry, and the link never has to change. Made once by
+  tools/make-wiki-qr.py, as How to's Wiki code is (level H, version 6). No
+  notes on the first start after an update (the one-time notice was
+  dropped, 2026-10-12). The GitHub release for each update stays by hand,
+  on his go. **Built.**
 - **How to** (#314, built 2026-10-10, judged on the TV): the controls, in
   Settings' own shape, a section per row on the left and its lines as rows
   on the right, nothing to press. In a game (pause menu by both sticks, a

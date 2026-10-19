@@ -1,5 +1,5 @@
-// About: How to, the page of what every control does (#314) (#398,
-// restructure batch e).
+// About: What's new (#329), How to, the page of what every control does
+// (#314), and Credits and licenses (#398, restructure batch e).
 
 #include "app.h"
 
@@ -83,5 +83,17 @@ void App::pressCredits() {
 
 void App::pressHowTo() {
     openHowTo();
+    sound::play(sound::Cue::Activate);
+}
+
+void App::pressWhatsNew() {
+    // The page itself, not a version on it: whoever updates is already on
+    // the newest, and the newest is the top of the page (MMagTech,
+    // 2026-10-19). The code never changes, so it is made once
+    // (tools/make-wiki-qr.py), and B is the way back.
+    whatsNewScreen.open();
+    whatsNewScreen.setText("What's new", {"Scan to read what changed."}, "");
+    whatsNewScreen.setBaked(wikiqr::Which::WhatsNew);
+    stack.push_back(Screen::WhatsNew);
     sound::play(sound::Cue::Activate);
 }

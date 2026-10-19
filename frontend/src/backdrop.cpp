@@ -88,7 +88,8 @@ void App::drawGround(bool gameUp, float dt) {
             else if (!lastLitArt.empty())
                 want = lastLitArt;
         } else if (here() == Screen::AddAccount || here() == Screen::TailscaleSignIn ||
-                   here() == Screen::Report || here() == Screen::HowTo) {
+                   here() == Screen::Report || here() == Screen::WhatsNew ||
+                   here() == Screen::HowTo) {
             // **A TEXT SCREEN GETS THE PLAIN GRADIENT.** MMagTech,
             // 2026-09-22: *"i preferred the purple background that went
             // with the first run setup better. The current background

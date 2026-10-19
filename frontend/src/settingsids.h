@@ -11,7 +11,8 @@ enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                  SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                  SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                  SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
-                 SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads };
+                 SetPairedDevices, SetTailscale, SetReport, SetHowTo, SetPads,
+                 SetWhatsNew };
 // One Eject row per USB drive: this plus the drive's index in
 // storage::locations() when the rows were built.
 static constexpr int kSetEject = 100;
