@@ -52,4 +52,5 @@ Rows appear only where they apply:
 Press the PC's **power button** (or **Start** on Home) for **Sleep**,
 **Restart** and **Power off**, plus **Switch to Steam** outside a game. In a
 game it opens with **Resume** first. Anything other than Resume leaves the game
-properly first, saves included.
+properly first, saves included. Restart and Power off fade the picture to
+black over a second first, without a sound.

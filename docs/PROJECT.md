@@ -308,9 +308,9 @@ down. "Look now at" is where the code or a later decision moved on.
   #391.
 - **47. Interface sounds everywhere, and a calmer set, issue #389**
   ("Interface sounds on every screen and menu, not only some"). Decided at
-  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." A fade
-  on the way down is #393 ("Power off and Restart cut the picture
-  abruptly").
+  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." The
+  fade on the way down, #393 ("Power off and Restart cut the picture
+  abruptly"), decided 2026-10-18 and built.
 - **48. Same-name games, regions and versions, issue #383** ("Same-name
   games: show RomM's tags in the heading"). Decided 2026-10-14, built and
   judged on the TV the same day.
@@ -17283,8 +17283,25 @@ the Interface sounds level like every other cue.
 
 **No start-up or shut-down sound, ever** (his rule from the project's
 start: "one thing I hated about old systems... Sega! It scared the shit out
-of me"). Choosing Restart or Power off is silent; #393 is only about a
-possible fade on the way down.
+of me"). Choosing Restart or Power off is silent.
+
+**Restart and Power off fade to black, in silence (#393, MMagTech
+2026-10-18: "I would like a fade with no sound if it's not too hard to
+implement"; built 2026-10-18).** The curtain (`curtain.cpp`) comes down
+over a second (`design::kPowerFade`) over whatever is on screen, the Power
+menu and a paused game with it, then the game is left behind the black as
+before and logind is asked. The call is made on the clock, not on the
+picture, so a frame not drawn delays nothing, and it adds the second and
+nothing more. Nothing takes a press meanwhile. A refusal lifts the black and
+says it, as before (#241). Sleep does not fade: it comes back, and the
+picture would then have to be brought back up on waking. Over an emulator
+of its own the console's window is drawn over its frozen picture, so the
+fade should cover it, and the emulator is closed behind the black (not yet
+seen on the TV); over PCSX2's own window the curtain is one of the things
+the console draws over it. After the black the television shows what it
+showed before the change: the image's Plymouth reboot or power-off screen
+(plymouth-reboot.service ran on the A9's last restart), then the machine
+goes off.
 
 **The set is calmer.** The first set (Move 880 Hz over 1320 Hz) read as too
 jarring for a quiet, minimal screen. He chose, from samples played in the

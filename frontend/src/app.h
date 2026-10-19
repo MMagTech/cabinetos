@@ -1034,6 +1034,14 @@ struct App {
     // finishStandalone); finishExit forgets it, so any other way out of the
     // game takes it with it.
     std::optional<power::Action> powerAfterExit;
+    // RESTART OR POWER OFF FADING TO BLACK (#393): chosen, the picture
+    // fading over design::kPowerFade, and the game left and the machine
+    // asked once it is over (pollPower). Nothing takes a press meanwhile
+    // (handleEvent). Cleared only by a refusal, which lifts the curtain.
+    bool poweringDown = false;
+    std::optional<power::Action> powerFade;
+    uint64_t powerFadeAt = 0;
+    void powerLeave(power::Action act);
     void powerAct(power::Action act);
     int ovCount();
     void ovStep(int delta);
