@@ -495,16 +495,16 @@ here, not reworded; follow the link for the full text.
   (docs/PROJECT.md, "Dreamcast, PSP and N64 draw right", 2026-09-27). The A9
   is the reference console. The same rule opens with a Cabinet clause that
   the next point overtakes.
-- **Cabinet, the Apple TV app CabinetOS came from, is a reference, not a
-  constraint.** PROJECT.md's banner says to read docs/CABINET.md before
-  designing anything. Since 2026-10-11 "Cabinet on Apple platforms is no
+- **Cabinet, the retired Apple TV app CabinetOS came from, is a reference,
+  not a constraint.** Since 2026-10-11 "Cabinet on Apple platforms is no
   longer a constraint" (docs/PROJECT.md, open question 12b, the GameCube save
   decision, #344, "GameCube: a save restored from RomM never reaches Dolphin
   (card.raw vs card.USA.raw)"); it is newer than the rule above. One thing
   stays: the save tags already on RomM (`savetable.cpp`, many in Cabinet's
-  spelling) are what existing saves are filed under, so changing one hides
-  those saves from the console. docs/CABINET.md is worth reading for how a problem was solved
-  before; Cabinet's own source is not required reading.
+  spelling) are what existing saves are filed under, and Cabinet Go, its
+  unfinished pocket version, will read them, so changing one hides those
+  saves. docs/CABINET.md says what Cabinet is now; docs/history/CABINET.md
+  is worth reading for how a problem was solved before.
 - **Emulators favour stability over the newest version**: a pin moves only
   for something a player gets, and the question is asked out loud on the
   issue or pull request (docs/PROJECT.md, "Constraints and principles", 8).

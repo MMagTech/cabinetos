@@ -396,8 +396,7 @@ comments, which the faults step fixes. Until then, trust the code:
   does not have; `selftests.cpp` says `--first-run-rules` runs in CI (it does
   not); `samplelibrary.h` says main.cpp is its only user (startup.cpp is);
   `cores/check-options.sh` names catalog.cpp for what is now
-  `coreoptions.cpp`; `catalog.cpp` says Cabinet's manifest is the source of
-  truth for its table; `cores/build-core.sh` says core pins follow Cabinet's
+  `coreoptions.cpp`; `cores/build-core.sh` says core pins follow Cabinet's
   manifest and "are not to be updated here", which predates both Cabinet
   ceasing to be a constraint (2026-10-11) and the stability rule for moving
   pins (docs/PROJECT.md, "Constraints and principles", 8, 2026-10-14), which

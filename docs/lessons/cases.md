@@ -43,8 +43,8 @@ uses this console's own row naming; see open question 12b for why that is
 deliberate.
 
 **SIX OF THE SEVEN CARDS ON THE SERVER WERE EMPTY** and were deleted at
-MMagTech's request on 2026-09-20. Cabinet for Mac uploads a card on first play
-regardless of content and has no freshness rule for either platform — the same
+MMagTech's request on 2026-09-20. Cabinet for Mac uploaded a card on first play
+regardless of content and had no freshness rule for either platform — the same
 fault `catalog.h` [now `savetable.h`] records for Dreamcast, worse ratio. **CabinetOS now refuses**;
 both rules are measured and in `filesave.cpp`.
 
@@ -153,7 +153,7 @@ the baseline taken at launch, so it is the console saying *this game wrote
 something*. On the server, `Crazy Taxi 2 (USA) (Cabinet).srm` now reads
 `updated 2026-09-20T02:48:19Z` against a `created 2026-08-16` — **the same row
 overwritten rather than a second one**, 131072 bytes, tagged `flycast-native`,
-which is the row an Apple TV already reads.
+which is the row Cabinet on the Apple TV read.
 
 **It could not have happened a day earlier**, and that is worth keeping: the
 Dreamcast's accelerator and brake are its analogue triggers, and this console

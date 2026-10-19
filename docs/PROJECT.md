@@ -10,12 +10,12 @@
 > nobody says them. This file is the specification and is authoritative; that
 > one is the handover. Rewrite it at the end of a session.
 >
-> **`docs/CABINET.md` is the companion to this file.** Cabinet already ships on
-> iOS, tvOS and macOS and has answered most of what CabinetOS runs into. Read it
-> before designing anything, and read Cabinet's own source before inventing an
-> answer — it is not checked out here, so clone it. Doing this piecemeal, a
-> question at a time, produced several half-right answers that had to be
-> corrected.
+> **Cabinet, the Apple TV, iPhone and Mac app CabinetOS was ported from, is
+> retired.** Until 2026-10-19 this note called it shipping and its source
+> required reading. What Cabinet is now: docs/CABINET.md (Cabinet Go,
+> unfinished). The map of the Apple apps' source: docs/history/CABINET.md.
+> Where a line below says Cabinet or tvOS does something, it describes the
+> apps as they were.
 >
 > Rules for maintaining this document:
 > - When a phase is finished, change its status and say what actually shipped,
@@ -31,8 +31,8 @@
 > than an edit, as the rules above say. Since 2026-10-11 (open question 12b,
 > #344, "GameCube: a save restored from RomM never reaches Dolphin (card.raw vs
 > card.USA.raw)"), Cabinet is a reference, not a constraint: read
-> docs/CABINET.md for how a problem was solved before; Cabinet's own source
-> is not required reading.
+> docs/history/CABINET.md for how a problem was solved before; Cabinet's own
+> source is not required reading.
 
 ---
 
@@ -51,11 +51,13 @@ code cites them more than a hundred times.
 - **Hardware**: the target, and the reference console (an A9 Max since
   2026-09-17).
 - **The backend model**: RomM is the single source of truth for the library.
-- **The frontend**: one visual language with the Cabinet apps.
+- **The frontend**: one visual language with the Cabinet apps, as first
+  planned.
 - **Reference implementations and upstreams**: what to read before
   inventing anything.
 - **The update model**: one version number for the whole system.
-- **Emulation**: native emulators, how Cabinet does it, core parity.
+- **Emulation**: native emulators, how Cabinet did it, core parity (overtaken
+  since 2026-10-11).
 - **How Cabinet hosts cores**: read from Cabinet's source; the shape of one
   C++ frontend with cores as data.
 - **Controls: what CabinetOS inherits, and what it cannot**: players, the
@@ -639,6 +641,10 @@ can be continued on CabinetOS and vice versa. This bidirectional continuity is
 the single most valuable feature of the product and should be treated as such
 when trading off scope.
 
+**2026-10-19:** the Apple TV app is retired. The continuity now runs between
+CabinetOS consoles, and with Cabinet Go when it comes, which will read the same
+save rows (docs/CABINET.md).
+
 ---
 
 ## The frontend
@@ -646,6 +652,10 @@ when trading off scope.
 The frontend matches the existing Cabinet apps in visual language, navigation
 feel and motion, so that the Apple TV app and CabinetOS read as one product
 rather than two things that share a name.
+
+**2026-10-19:** the Apple TV app is retired, and since 2026-10-11 Cabinet is a
+reference, not a constraint. The look stays as it was taken; nothing has to
+keep matching an Apple app.
 
 Screens:
 
@@ -668,6 +678,10 @@ hostage to an upstream project's design decisions.
 ## Reference implementations and upstreams
 
 Future sessions should look here before inventing anything.
+
+**2026-10-19:** Cabinet's rows below are a map of an archived repository
+(https://github.com/MMagTech/cabinet, its apps retired; docs/CABINET.md). Since
+2026-10-11 it is a reference, not the source of truth the first row calls it.
 
 | What | Where | Why it matters |
 |---|---|---|
@@ -734,6 +748,8 @@ than defaults on hardware of that class.
 
 ### How Cabinet does it today
 
+**2026-10-19:** did, until its Apple apps were retired (docs/CABINET.md).
+
 **Cabinet on tvOS runs native cores in-process.** You select a game, Cabinet
 pulls the ROM from RomM, and injects it into an emulator core running inside the
 app. There is no handoff to a second application and no separate launcher step.
@@ -754,6 +770,12 @@ natural. See open question 12, which is about what happens for the systems where
 in-process is not viable.
 
 ### Core parity is a hard constraint
+
+**Overtaken.** Since 2026-10-11 Cabinet is a reference, not a constraint, and
+since 2026-10-14 a core's pin moves only for something a player gets
+("Constraints and principles", 8). Cabinet's Apple apps are retired; the
+`emulator` tags stay shared, so a state's tag still says which core wrote it
+(`frontend/src/savetable.cpp`).
 
 **CabinetOS must use the same cores as Cabinet, at the same versions.**
 
@@ -5415,7 +5437,8 @@ here.
 
 **It degrades exactly the right way.** Keep enough games and the cache shrinks
 to nothing, at which point every un-kept game downloads, plays, and is dropped
-on the way out — which is precisely what Cabinet's Mac does today, and it ships.
+on the way out, which is precisely what Cabinet's Mac does today, and it ships
+(2026-10-19: did; the Mac app is retired).
 Keep so many that nothing fits at all and the download refuses and says so,
 which is the one failure this policy ever shows anybody.
 

@@ -5,8 +5,8 @@ page lists what is in there, where it came from, the exact commit it was built
 from, and under what terms.
 
 Modelled on Cabinet's `docs/licenses.md`, which had already solved this. The
-commits below are **CabinetOS's**, not Cabinet's — eleven cores are pinned to a
-different revision than Cabinet's iOS build ships, and the pins here are the
+commits below are **CabinetOS's**, not Cabinet's: eleven cores are pinned to a
+different revision than Cabinet's iOS build shipped, and the pins here are the
 ones `cores/build-core.sh` asserts at build time.
 
 **CabinetOS ships no games and no BIOS files, with one exception: the Vectrex
@@ -45,8 +45,8 @@ obligation lands only on **distribution**: pass on the same freedoms, and make
 the corresponding source available.
 
 **The cores are `dlopen`ed rather than statically linked**, which is a narrower
-coupling than Cabinet's build has, but the conservative reading is the same one
-Cabinet states about itself: the distributed image is a combined work under
+coupling than Cabinet's build had, but the conservative reading is the same one
+Cabinet stated about itself: the distributed image is a combined work under
 those terms. The corresponding source for every GPL component is the upstream
 commit named below, unmodified except where `cores/build-core.sh` says
 otherwise, and that script is in this repository so anyone can reproduce the
@@ -122,7 +122,7 @@ of the finished `.so` and fails the build if it does not match.
 | mGBA | Game Boy Advance | MPL 2.0 | [libretro/mgba](https://github.com/libretro/mgba) | `e31759b24e7a` |
 
 **Not carried from Cabinet:** `gw-libretro` (Game & Watch) and `vemulator`
-(Dreamcast VMU minigames) are iOS-only in Cabinet by decision and are not built
+(Dreamcast VMU minigames) were iOS-only in Cabinet by decision and are not built
 here. See `frontend/src/catalog.cpp`.
 
 ## Files shipped inside the image that are not cores

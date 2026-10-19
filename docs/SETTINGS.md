@@ -90,7 +90,7 @@ status here to Built.
   to press. MMagTech, 2026-09-24. **Built.**
 - **One PIN, not one per person**, kept after comparing consoles on
   2026-09-24: PlayStation and Xbox let each person lock their own account;
-  Nintendo and Apple TV (and so Cabinet) have only the one console PIN.
+  Nintendo and Apple TV have only the one console PIN, as Cabinet had.
   **Later, if wanted:** an optional lock per account that guards switching
   into it, added beside the owner PIN without changing it.
 - **Dropped: offering a PIN when the second account is added.** Built and
@@ -969,7 +969,7 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
 
 ## In the pause menu, per system (not Settings)
 
-Every option Cabinet offers is kept, only moved here, because the picture is
+Every option Cabinet offered is kept, only moved here, because the picture is
 right there and the choice is about a system:
 
 - **Virtual Boy:** 3D glasses (Off, red and blue, red and cyan, red and
@@ -989,7 +989,7 @@ right there and the choice is about a system:
     that flicker), and **Atari 2600 flicker blending: no row, fixed on
     Medium ghosting** (`ghost_75`; Average still strobed Ms. Pac-Man's
     ghosts and Heavy trailed, judged on the TV 2026-10-02). Each checked on a game known to flicker before it ships.
-  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet draws
+  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet drew
     each cartridge's sheet from its own images, none of which is built here.
     Its own issue, after the first release.
 - **How the rows behave:** centred like every other button, "Screen: Red",

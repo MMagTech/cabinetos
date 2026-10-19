@@ -124,7 +124,7 @@ CabinetOS ships no games, no BIOS and no keys. All of them come from your own
 RomM server.
 
 CabinetOS's look comes from [Cabinet](https://github.com/MMagTech/cabinet),
-the Apple TV app. The `Containerfile`, `Justfile`, `disk_config/` and `.github/workflows/` are derived
+the retired Apple TV app it began as. The `Containerfile`, `Justfile`, `disk_config/` and `.github/workflows/` are derived
 from the [Universal Blue image template](https://github.com/ublue-os/image-template)
 (Apache-2.0).
 
