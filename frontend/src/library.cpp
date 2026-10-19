@@ -13,7 +13,7 @@
 #include "favorites.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT: Card and colorForTitle, as main.cpp names them
+using namespace design;   // NOLINT: Card and colorForTitle (card.h)
 
 // What a game's card says while its grid shows it greyed, or nothing.
 //

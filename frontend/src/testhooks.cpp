@@ -16,7 +16,7 @@
 #include "noticegallery.h"
 #include "saves.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Opening straight onto a screen, for a capture. This walks the SAME route
 // a person would: the Library is entered, a tile is opened, the launch

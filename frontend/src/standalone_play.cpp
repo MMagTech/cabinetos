@@ -18,7 +18,7 @@
 #include "shortcuts.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // THE GAME IS ON THE DISK AND ITS EMULATOR IS ITS OWN APPLICATION: start
 // it and let it have the television. The curtain is already down, so the

@@ -46,9 +46,10 @@
 static float gPs2Upscale = -1.0f;
 static int gPs2Anisotropy = -1;
 
-// Set by main()'s parser. ONE DEFINITION OF EACH, HERE: a second copy of the
-// two statics in main.cpp would compile, the parser would write that copy, and
-// --ps2-upscale and --ps2-aniso would stop working without a word.
+// Set by the command line (cli.cpp). ONE DEFINITION OF EACH, HERE: a second
+// copy of the two statics anywhere else would compile, the parser would write
+// that copy, and --ps2-upscale and --ps2-aniso would stop working without a
+// word.
 void setPs2Upscale(float upscale) { gPs2Upscale = upscale; }
 void setPs2Anisotropy(int anisotropy) { gPs2Anisotropy = anisotropy; }
 
@@ -272,7 +273,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
 // Play, a refusal, the pickup of a finished job and its stages, and the busy
 // clock: members of the App (app.h), moved out of main.cpp in batch (f).
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 auto App::launchById(int romId) -> bool {
     // PRESSING PLAY ON SOMETHING ALREADY COMING JOINS IT — 2026-09-21.

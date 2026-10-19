@@ -9,7 +9,7 @@
 #include "cache.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Human-readable bytes, for the one refusal a person is ever shown.
 std::string App::gigabytes(int64_t b) {

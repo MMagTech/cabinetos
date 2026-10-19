@@ -1,6 +1,6 @@
 // PlayStation 2, which is an emulator rather than a libretro core.
 //
-// WHAT THIS IS AND WHY IT IS NOT IN core.cpp. Twenty-one of this console's
+// WHAT THIS IS AND WHY IT IS NOT IN core.cpp. Most of this console's
 // emulators are libretro cores: the frontend loads a `.so`, calls `retro_run`
 // once per frame, and is handed back a picture and some samples. PCSX2 is a
 // whole emulator. It runs its own machine on its own thread and does not

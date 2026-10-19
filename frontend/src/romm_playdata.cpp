@@ -120,9 +120,10 @@ std::vector<uint8_t> Client::fetchAsset(const char* kind, int assetId) const {
 
 bool Client::uploadSave(int romId, const std::string& emulator, const std::string& fileName,
                         const std::vector<uint8_t>& data, std::string* err) const {
-    // overwrite=true is load-bearing: it replaces the server's copy of the same
-    // file name instead of stacking a row per upload, which is what keeps a PS1
-    // game at ONE memory card rather than one per session. Cabinet's note.
+    // RomM replaces the row with the same file name (and, on 5.4.0, the same
+    // emulator), which is what keeps a PS1 game at ONE memory card rather than
+    // one per session. overwrite=true is sent as Cabinet sends it; without a
+    // device_id RomM does nothing with it.
     const std::string path = "/api/saves?rom_id=" + std::to_string(romId) +
                              "&emulator=" + emulator + "&overwrite=true";
     return postMultipart(path, "saveFile", fileName, data, err);

@@ -7,7 +7,7 @@
 enum SettingId { SetAddAccount = 1, SetInterfaceSounds, SetPinSet, SetPinChange,
                  SetPinOff, SetRemoveAccount, SetScreenOff, SetWifi, SetServer,
                  SetUpdate, SetUpdateCheck, SetCredits, SetFiles, SetDownloads,
-                 SetAddController, SetShortcuts, SetShortcutButton, SetAppearance,
+                 SetShortcuts, SetShortcutButton, SetAppearance,
                  SetDarkHours, SetColour, SetRumble, SetPictureQuality,
                  SetWiiRemotes, SetSteam, SetSteamShow, SetRetroAchievements,
                  SetAchievementSound, SetDeveloper, SetVersion, SetRemotePlay,
@@ -18,5 +18,3 @@ static constexpr int kSetEject = 100;
 // One Format row per drive whose row formats it: this plus its index in
 // `formatable`, the drives as they were when the rows were built.
 static constexpr int kSetFormat = 200;
-// One row per connected controller: this plus its player, 0-based.
-static constexpr int kSetPad = 300;

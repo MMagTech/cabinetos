@@ -12,7 +12,7 @@
 #include "batteryrow.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 namespace {
 // The step from one destination's start to the next: its width plus this.

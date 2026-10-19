@@ -368,7 +368,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // What is missing, and what the install will need on top: each
         // file not yet installed may cost its size again while it goes
         // in. Counted for every large file rather than by a `.pkg` name,
-        // which a PKG does not always have (standalone.cpp, isPkg).
+        // which a PKG does not always have (standalone_rpcs3.cpp, isPkg).
         std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
         int64_t fetchBytes = 0, installBytes = 0;
         for (const romm::RomFile& f : files) {

@@ -9,7 +9,7 @@
 
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 bool App::runSteamJob(const std::string& busy, std::function<void()> work,
                       std::function<void()> finish) {

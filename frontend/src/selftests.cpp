@@ -152,7 +152,7 @@ int firstRunWriteTest() {
             r + "/users/1 - A/saves/snes/1/x.srm", r + "/users/1 - A/pending/1-x.srm.pending",
             r + "/covers/srv_6005/a.jpg",        r + "/config/user.json",
             r + "/config/accounts.json",         home + "/.config/cabinetos/accounts/1.json",
-            home + "/.config/cabinetos/pin",     home + "/.config/cabinetos/romm.json",
+            home + "/.config/cabinetos/pin",
             // What was learned per game, by rom id: the next server's game 1
             // is another game (FILES-12).
             r + "/games/1.json",                 r + "/games/1.facts.json",

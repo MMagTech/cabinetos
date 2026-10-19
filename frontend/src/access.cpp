@@ -9,7 +9,7 @@
 #include "prefs.h"
 #include "unit.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // File access on or off. A refusal is said in the row, as the update
 // row does; otherwise "Turning on…" until root answers.

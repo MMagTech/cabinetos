@@ -109,7 +109,7 @@ struct Emulator {
     bool cacheInGame;
     // ASKED TO CLOSE THROUGH ITS WINDOW, as a person closing it would, rather
     // than by SIGTERM: RPCS3 has no handler for SIGTERM and simply dies, where
-    // a close asks the game to stop first.
+    // a close asks the game to stop first. Set for RPCS3, Xenia and Cemu.
     bool closesByWindow;
     // BACK AND START TOGETHER OPEN THE EMULATOR'S OWN MENU (xemu: for pads
     // with no Guide button), which nothing can turn off. So the console holds

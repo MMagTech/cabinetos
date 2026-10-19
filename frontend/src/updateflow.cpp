@@ -10,7 +10,7 @@
 #include "power.h"
 #include "prefs.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 int64_t App::prefNum(const char* key) {
     return static_cast<int64_t>(std::strtoll(prefs::get(key, "0").c_str(), nullptr, 10));

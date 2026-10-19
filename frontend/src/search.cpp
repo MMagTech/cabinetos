@@ -12,7 +12,7 @@
 #include "cache.h"
 #include "catalog.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // The answer, on the frame thread, which owns the store and the screen.
 // Shared by the typing loop's worker and by `--screen search --query`, so a
@@ -121,7 +121,7 @@ void App::keyboardUp() {
     keyboard.moveFocus(0, -1);
 }
 
-// Search's half of keyboardResult (main.cpp), which calls it last.
+// Search's half of keyboardResult (input.cpp), which calls it last.
 void App::searchKeyboardResult(ui::KeyboardResult res) {
     if (res == ui::KeyboardResult::Committed) {
         if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);

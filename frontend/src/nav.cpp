@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 App::Screen App::here() { return stack.back(); }
 
@@ -24,9 +24,9 @@ App::Screen App::here() { return stack.back(); }
 // bumper that teleported out of them would lose somebody's place rather
 // than move them. Back is what leaves those, and it already does.
 //
-// NO WRAPPING. With two destinations built, wrapping would make L1 and R1
-// do the same thing, which teaches nobody anything. When Search and
-// Settings exist this walks four and the question can be asked again.
+// NO WRAPPING. The bumpers walk the four destinations, Home, Library,
+// Search and Settings, and stop at the ends with the edge sound
+// (switchDestination).
 // GOING TO A DESTINATION RESETS TO ITS ROOT, which is what makes the bar a
 // tab strip rather than a stack of pushes. Walking into a platform's grid
 // and then pressing R1 twice must not leave that grid buried under two more
@@ -274,20 +274,8 @@ void App::drawScreenGlass(bool gameUp, float sc) {
 }
 
 void App::resetContentFade() {
-    // THE DOWNLOAD PANEL IS GONE — 2026-09-21.
-    //
-    // It was a glass panel over a 45% scrim in the middle of the screen,
-    // and the thing that settled it is that IT NEVER BLOCKED ANYTHING:
-    // `inputOwner` knows about the keyboard, the overlay and a running
-    // game and has never known about a download, so every key still
-    // reached the screen underneath. It was obstruction with no behaviour
-    // behind it, which is the worst of both.
-    //
-    // MMagTech, asked whether it should be its own window or shown on the
-    // normal screen, chose the screen. Progress is on the ROW that started
-    // it — see DetailScreen::setProgress — and, for somebody who walked
-    // away from it, in the corner of the top bar below.
-
+    // Download progress is on the row that started it
+    // (DetailScreen::setProgress) and in the bar's corner, not in a panel.
     renderer.setContentFade(1.0f);
     renderer.setContentOffsetY(0.0f);
 }

@@ -147,7 +147,6 @@ private:
     int rememberedTileSlot_ = 0;
     design::Animated appear_;
     design::Animated pillFocus_[2];
-    design::Animated tabChange_;
     design::Animated scroll_;
 };
 

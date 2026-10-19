@@ -12,7 +12,7 @@
 #include "screenfx.h"
 #include "sysopts.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 bool App::remoteOnlyHere() {
     return playing && sessionNeedsRemote && players::streaming();

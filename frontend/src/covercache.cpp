@@ -27,8 +27,8 @@ Stats gStats;
 // platform logo, a stand-in library's file on disk — and those are then never
 // cached rather than filed under a guess.
 //
-//   /assets/romm/resources/roms/15/569/cover/small.png?ts=2025-03-11 06:56:03
-//                               ^pid ^rid       ^size      ^version
+//   /assets/romm/resources/roms/1/2/cover/small.png?ts=2025-01-01 00:00:00
+//                               ^pid ^rid    ^size      ^version
 bool parse(const std::string& key, std::string* pid, std::string* rid,
            std::string* size, std::string* version) {
     const std::string marker = "/resources/roms/";

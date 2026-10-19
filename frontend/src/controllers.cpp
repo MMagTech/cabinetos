@@ -10,7 +10,7 @@
 
 #include "shortcuts.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::padWindowRows(std::vector<std::string>* names, std::vector<std::string>* values) {
     // Not the pads already playing: they are in Controllers. A pad bluez
@@ -301,13 +301,12 @@ bool App::interceptControllers(const SDL_Event& e) {
         return true;
     }
     // WHICH PAD IS WHICH: the pad last pressed has a dot on its row
-    // in Controllers (players.h). With shortcuts on, the Shortcut
-    // button row follows it too.
+    // in the Controllers panel (padsPanelRows). With shortcuts on, the
+    // Shortcut button row follows it too.
     if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && here() == Screen::Settings)
-        if (const int p = players::playerOf(e.gbutton.which); p >= 0) {
+        if (players::playerOf(e.gbutton.which) >= 0) {
             const bool moved = settingsLastPad != e.gbutton.which;
             settingsLastPad = e.gbutton.which;
-            settingsScreen.mark(kSetPad + p);
             if (moved && shortcuts::enabled()) buildSettings();
         }
     return false;

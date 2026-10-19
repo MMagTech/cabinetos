@@ -16,7 +16,7 @@
 #include "catalog.h"
 #include "firstrun.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 std::optional<int> App::waitForServer(char** argv) {
     std::string err;

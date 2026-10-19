@@ -19,7 +19,7 @@
 #include "vkhost.h"
 #include "wii.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // A PRESS THAT ARRIVED WHILE A GAME CLOSED IS DROPPED, from every
 // controller, on both ways home (a core here, an emulator of its own).
@@ -429,7 +429,7 @@ bool App::readGameInput(cab::Core& core) {
     // stepped by this loop at all: it runs its own machine on a thread
     // of its own and would carry on playing behind the menu exactly as
     // every core did before 2026-09-19. It has to be TOLD. A no-op for
-    // all twenty-one libretro cores, so it is stated unconditionally
+    // every libretro core, so it is stated unconditionally
     // rather than behind a test somebody has to remember.
     stateHoldJustEnded = false;
     if (fastForward && !session.snapshots) {

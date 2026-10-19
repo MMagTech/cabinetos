@@ -10,7 +10,7 @@
 #include "accountremove.h"
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // SWITCHING WHO THE CONSOLE IS. Open question 26, and the half that
 // `accounts::activate` deliberately does not do.

@@ -86,8 +86,9 @@ public:
     // credential, so it does not belong anywhere near the repository.
     bool loadToken(const std::string& path);
 
-    // Step one of pairing. Asks for read-only scopes only; anything that writes
-    // is requested separately, when something actually needs to write.
+    // Step one of pairing. Asks for the scopes in kScopes (romm_pairing.cpp):
+    // the reads, and the three writes the console makes (its saves, states
+    // and screenshots as assets, time played and favourites).
     bool beginPairing(Pairing* out, std::string* err);
 
     // Step two, called on the pairing's own interval.
@@ -183,7 +184,7 @@ public:
     //
     // PLAY HISTORY LIVES ON THE SERVER, not on the console. A game played on an
     // Apple TV is recent here the moment this console is paired, which is what
-    // makes a hero possible on a machine that has never launched anything.
+    // fills Recent on a machine that has never launched anything.
     bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
     // The games marked favourite, in RomM's title order: RomM keeps no date
@@ -228,8 +229,9 @@ public:
                      const std::vector<uint8_t>& shot = {}) const;
 
     // Removes states, and each one's picture with it (RomM 5.1,
-    // `POST /api/states/delete`). Only the signed-in user's; RomM refuses the
-    // whole request if one id is not theirs.
+    // `POST /api/states/delete`). Only the signed-in user's. RomM deletes in
+    // order and stops at the first id that is not theirs (404), so the ones
+    // before it are gone.
     bool deleteStates(const std::vector<int>& ids, std::string* err) const;
 
     // MAKES A GAME ONE OF THIS PERSON'S FAVOURITES, OR NOT (#267). On RomM 5

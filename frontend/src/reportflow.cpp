@@ -7,7 +7,7 @@
 
 #include "storage.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // THE DIAGNOSTIC REPORT: made, then served while its screen is up.
 // Leaving the screen stops the link; a report finished after the

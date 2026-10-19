@@ -24,7 +24,7 @@
 #include "update.h"
 #include "xboxhdd.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 std::optional<int> App::parseCommandLine(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {

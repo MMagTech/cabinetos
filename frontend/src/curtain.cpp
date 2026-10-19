@@ -8,7 +8,7 @@
 
 #include "powerprofile.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 void App::startLeaving(Leave what, const std::string& label) {
     leaving = what;

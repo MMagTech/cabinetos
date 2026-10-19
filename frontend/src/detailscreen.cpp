@@ -60,8 +60,8 @@ void DetailScreen::rebuildRows() {
         else
             rows_.push_back({Action::Download, "Download", ""});
     }
-    // A different save state, a different core and an export belong here too.
-    // They are not built yet and a row that does nothing is worse than no row.
+    // A different core and an export belong here too. They are not built yet
+    // and a row that does nothing is worse than no row.
 }
 
 void DetailScreen::setFacts(Facts f) { facts_ = std::move(f); }

@@ -10,7 +10,7 @@
 
 #include "catalog.h"
 
-using namespace design;   // NOLINT, as main.cpp names them
+using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 // Adds a filler's pages to its tile, and with `toScreen` to the grid on
 // screen too. Applied here because this thread owns the store and the
