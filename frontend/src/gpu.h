@@ -77,8 +77,10 @@ struct VulkanCaps {
     // EGL_EXT_image_dma_buf_import, EGL_EXT_image_dma_buf_import_modifiers and
     // EGL_MESA_image_dma_buf_export are all there on radeonsi.
     //
-    // Without these three a Vulkan core could run and could never be SEEN, so
-    // they are part of "is Vulkan available", not a detail below it.
+    // Without a way out a Vulkan core could run and could never be SEEN, so
+    // the fd extension is part of "is Vulkan available", not a detail below
+    // it. The dmabuf one is needed only by the EGL route; the preferred route
+    // (a GL memory object over an opaque fd) does without it (#489, EMU-02).
     bool externalMemoryFd = false;      // VK_KHR_external_memory_fd
     bool externalMemoryDmaBuf = false;  // VK_EXT_external_memory_dma_buf
     bool drmFormatModifier = false;     // VK_EXT_image_drm_format_modifier

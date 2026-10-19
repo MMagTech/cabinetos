@@ -217,11 +217,13 @@ void probe() {
     gCaps.externalMemoryDmaBuf = has(exts, VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
     gCaps.drmFormatModifier = has(exts, VK_EXT_IMAGE_DRM_FORMAT_MODIFIER_EXTENSION_NAME);
 
-    // A device with no way to hand a picture to EGL can run a core and can
-    // never show one, so it does not count as available. See gpu.h.
-    if (!gCaps.externalMemoryFd || !gCaps.externalMemoryDmaBuf) {
+    // A device with no way to hand a picture to GL can run a core and can
+    // never show one, so it does not count as available. See gpu.h. The
+    // preferred route (a GL memory object over an opaque fd) needs only the
+    // fd extension; the dmabuf one is for the EGL route alone (#489, EMU-02).
+    if (!gCaps.externalMemoryFd) {
         gCaps.reason =
-            "this Vulkan device cannot export an image as a dmabuf, so nothing "
+            "this Vulkan device cannot export an image's memory, so nothing "
             "it drew could reach the screen";
     } else {
         gCaps.available = true;
@@ -252,8 +254,8 @@ std::string versionString(uint32_t packed) {
 void report() {
     const VulkanCaps& v = vulkan();
     std::printf("Vulkan\n");
-    std::printf("  looked for  libvulkan.so.1, a non-software device, and the two\n");
-    std::printf("              extensions that let a rendered image reach EGL\n");
+    std::printf("  looked for  libvulkan.so.1, a non-software device, and the\n");
+    std::printf("              extension that lets a rendered image reach GL\n");
     if (!v.available) {
         std::printf("  NOT USABLE  %s\n", v.reason.c_str());
         if (!v.deviceName.empty()) {
@@ -271,7 +273,7 @@ void report() {
                 v.computeUnits, v.topClockMhz);
     std::printf("  api         %s\n", versionString(v.apiVersion).c_str());
     std::printf("  external memory fd      yes\n");
-    std::printf("  external memory dma_buf yes\n");
+    std::printf("  external memory dma_buf %s\n", v.externalMemoryDmaBuf ? "yes" : "no");
     std::printf("  drm format modifier     %s\n", v.drmFormatModifier ? "yes" : "no");
 }
 
