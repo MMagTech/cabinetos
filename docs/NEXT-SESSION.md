@@ -42,8 +42,11 @@ open, are in #517's body.
    - A PS3 game plays; RPCS3's log says "VSync Mode: Full" (read it, no TV).
    - An N64 game plays without a hitch twice a second (#254).
    - The usual: a game with sound.
-   Then merge on his go. It closes 22 issues (listed in #517); afterwards
-   reopen none, and strike from #485's list the "Add an account code
+   Then merge on his go. It closes 22 issues (listed in #517); two commits
+   say "Fixes #473" and "Fixes #222" though both are only partly done, so
+   GitHub closes them too: reopen both at once with what is left (#473: the
+   power button while an emulator of its own has the screen; #222: the
+   retry fallback). Then strike from #485's list the "Add an account code
    approved while closed" item (his call: works as is). #422 closes as not
    a console fault: his server's PS1 Primal Rage file is the Saturn disc.
    **#511, measured:** the 254 MB splash layer came out identical between
