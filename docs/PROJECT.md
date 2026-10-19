@@ -308,9 +308,9 @@ down. "Look now at" is where the code or a later decision moved on.
   #391.
 - **47. Interface sounds everywhere, and a calmer set, issue #389**
   ("Interface sounds on every screen and menu, not only some"). Decided at
-  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." A fade
-  on the way down is #393 ("Power off and Restart cut the picture
-  abruptly").
+  the TV 2026-10-14, built. "No start-up or shut-down sound, ever." The
+  fade on the way down, #393 ("Power off and Restart cut the picture
+  abruptly"), decided 2026-10-18 and built.
 - **48. Same-name games, regions and versions, issue #383** ("Same-name
   games: show RomM's tags in the heading"). Decided 2026-10-14, built and
   judged on the TV the same day.
@@ -16478,8 +16478,34 @@ token (0600) and removed with the account.
 
 **Softcore only** (2026-10-05). Hardcore needs RetroAchievements to approve
 this frontend and keep every release to their checklist. Nothing hardcore is
-built, hidden or otherwise. States and rewind work as always; loading a state
-restarts what each achievement was waiting for, as RetroArch does.
+built, hidden or otherwise. States and rewind work as always.
+
+**A save state carries the achievement progress, as RetroArch's do (#279,
+"RetroAchievements: save states don't carry achievement progress as
+RetroArch's do"; MMagTech 2026-10-18, yes "as long as it's not something
+too hard"; built 2026-10-18).** RetroArch writes rcheevos' progress into
+each state (`rc_client_serialize_progress`, cheevos/cheevos.c) and puts it
+back on load (`rc_client_deserialize_progress_sized`); this console saved
+none and reset every achievement on a load, so a count over time started
+again and Resume could miss a trigger. Now the progress goes inside the
+state file in RetroArch's own layout (`frontend/src/statefile.h`, read off
+tasks/task_save.c): "RASTATE" and version 1, a "MEM " block with the core's
+bytes unchanged, an "ACHV" block, "END ". It reaches RomM inside the state,
+so another console resuming it gets it, and RetroArch loads such a file as
+its own. **Only a state with progress is wrapped**: nobody signed in, or a
+game with no set, writes the core's bytes alone as before, so those states
+load as always everywhere. Every state from before (core data alone)
+still loads and resets the achievements as before. A wrapped state on a
+console still on an older version is handed to the core whole, which
+cannot read it (a core that checks the size refuses it); every console
+updates, so that is a passing case. Progress loaded before rcheevos has the game's set (Play's Resume
+loads on the first frame) waits and is given the moment the set arrives.
+**Tested headless on the A9, 2026-10-18**, offline
+(`CABINETOS_RA_OFFLINE=1`, nothing sent), Super Mario Land: a state saved
+at frame 900 carried 5,392 bytes of progress (the file 32,312 bytes);
+loaded back at frame 1500, rcheevos' progress read back identical to the
+state's; RomM's state from 2026-10-06 (core data alone) loaded and reset as
+before; a state loaded before the set waited, then was restored identical.
 
 **During play: only the unlock, small.** A card fades in at the top right
 (the badge, "Achievement unlocked", the name) and fades out after four
@@ -17423,8 +17449,25 @@ the Interface sounds level like every other cue.
 
 **No start-up or shut-down sound, ever** (his rule from the project's
 start: "one thing I hated about old systems... Sega! It scared the shit out
-of me"). Choosing Restart or Power off is silent; #393 is only about a
-possible fade on the way down.
+of me"). Choosing Restart or Power off is silent.
+
+**Restart and Power off fade to black, in silence (#393, MMagTech
+2026-10-18: "I would like a fade with no sound if it's not too hard to
+implement"; built 2026-10-18).** The curtain (`curtain.cpp`) comes down
+over a second (`design::kPowerFade`) over whatever is on screen, the Power
+menu and a paused game with it, then the game is left behind the black as
+before and logind is asked. The call is made on the clock, not on the
+picture, so a frame not drawn delays nothing, and it adds the second and
+nothing more. Nothing takes a press meanwhile. A refusal lifts the black and
+says it, as before (#241). Sleep does not fade: it comes back, and the
+picture would then have to be brought back up on waking. Over an emulator
+of its own the console's window is drawn over its frozen picture, so the
+fade should cover it, and the emulator is closed behind the black (not yet
+seen on the TV); over PCSX2's own window the curtain is one of the things
+the console draws over it. After the black the television shows what it
+showed before the change: the image's Plymouth reboot or power-off screen
+(plymouth-reboot.service ran on the A9's last restart), then the machine
+goes off.
 
 **The set is calmer.** The first set (Move 880 Hz over 1320 Hz) read as too
 jarring for a quiet, minimal screen. He chose, from samples played in the

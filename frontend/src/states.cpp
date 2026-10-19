@@ -15,6 +15,7 @@
 #include "imagecodec.h"
 #include "proc.h"
 #include "screenparts.h"
+#include "statefile.h"
 #include "storage.h"
 
 // A SAVE STATE GOES IN ON ITS OWN DISC (#162 item 9). The disc is in the
@@ -42,8 +43,18 @@ bool loadStateOnItsDisc(GameSession& sess, const std::string& name,
             return false;
         }
     }
-    const bool ok = cab::Core::shared().loadState(bytes);
+    // THE CORE'S BYTES, AND THE ACHIEVEMENT PROGRESS BESIDE THEM when the
+    // state carries it (#279, statefile.h): RetroArch's blocks, or core
+    // data alone, as every state before #279 is.
+    statefile::Parts parts;
+    if (!statefile::split(bytes, &parts)) return false;
+    cab::Core& core = cab::Core::shared();
+    const bool ok = parts.wrapped
+                        ? core.loadState(std::vector<uint8_t>(parts.core, parts.core + parts.coreSize))
+                        : core.loadState(bytes);
     if (ok && !sess.discs.empty()) syncDiscFromCore(sess);
+    // The memory jumped, and what each achievement was waiting for with it.
+    if (ok) ra::stateLoaded(parts.progress, parts.progressSize);
     return ok;
 }
 
@@ -74,6 +85,10 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
         }
         return;
     }
+    // WITH THE ACHIEVEMENT PROGRESS (#279), as RetroArch's states carry it,
+    // so a state resumed here or on another console goes on counting where
+    // it stopped. None to carry, and the core's bytes go alone, as before.
+    st = statefile::join(st, ra::progress());
     // Named with a timestamp because states accumulate on purpose; a save
     // overwrites, a state does not.
     //
@@ -503,7 +518,6 @@ void App::loadPendingStates() {
     if (stateLoad.loaded) {
         stateLoad.loaded = false;
         rewindKeep.reset();   // the history led somewhere else
-        ra::stateLoaded();    // and so did what each achievement was waiting for
         rewindLastFrame = cab::Core::shared().framesRun();
         closeOverlay();
         stateHold = true;

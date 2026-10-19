@@ -1,6 +1,7 @@
 // The Power menu and the power button: Sleep, Restart and Power off, the
-// game left first, the button borrowed at start, and logind's warnings
-// answered every frame (#398, restructure batch f).
+// fade to black before the last two (#393), the game left first, the
+// button borrowed at start, and logind's warnings answered every frame
+// (#398, restructure batch f).
 
 #include "app.h"
 
@@ -34,9 +35,27 @@ void App::powerActivate(PowerItem item) {
                                                   : power::Action::PowerOff;
     std::fprintf(stderr, "[power] %s chosen%s\n", power::name(act),
                  playing || standalonePaused ? " from a game; leaving it first" : "");
-    // Restart and Power off are silent here: how the console sounds and
-    // looks on its way down is #393's. Sleep clicks like any choice.
-    if (act == power::Action::Rest) powerCue(sound::Cue::Activate);
+    if (act == power::Action::Rest) {
+        // Sleep clicks like any choice.
+        powerCue(sound::Cue::Activate);
+        powerLeave(act);
+        return;
+    }
+    // RESTART AND POWER OFF FADE TO BLACK FIRST, IN SILENCE (#393; no
+    // sound on the way down, ever, #389). Over whatever is on the screen,
+    // this menu and a paused game with it, so the game is still paused
+    // under the black and is left behind it once the fade is over
+    // (pollPower). Sleep does not fade: it comes back, and the picture
+    // would then have to be brought back up on waking.
+    poweringDown = true;
+    powerFade = act;
+    powerFadeAt = SDL_GetTicksNS();
+    curtain.retarget(1.0f, kPowerFade);
+}
+
+// The game left, then the choice made: at once for Sleep, after the fade
+// for Restart and Power off.
+void App::powerLeave(power::Action act) {
     // A GAME STILL STARTING IS LEFT THE WAY EXIT TO HOME LEAVES IT (#473,
     // PLAY-12): unloaded while its core builds the machine, PPSSPP dies,
     // and the console started again instead of sleeping or powering off.
@@ -68,6 +87,9 @@ void App::powerAct(power::Action act) {
         restPending = true;
         restWaitStart = SDL_GetTicksNS();
     } else {
+        // ON BLACK (#393): leaving a game lifts the curtain onto Home, and
+        // the machine goes down on the fade's black, not on Home.
+        curtain.settle(1.0f);
         // A restart or a power-off stops this process on its way down, and
         // the uploads just queued are drained then — PR #50.
         power::act(act);
@@ -86,6 +108,7 @@ void App::backToPauseMenu() {
 // OVER AN EMULATOR OF ITS OWN, PAUSED, IT IS THE MENU OVER A GAME (#473,
 // PLAY-32): Resume first, no Steam, silent, as over any other game.
 void App::openPowerMenu() {
+    if (poweringDown) return;
     const bool game = playing || standalonePaused;
     if (overlayOpen && powerMenu) {
         if (remoteOnlyHere()) backToPauseMenu();
@@ -134,15 +157,30 @@ void App::borrowPowerButton() {
 }
 
 // Every frame: a wake noticed, a Restart, Power off or Sleep that logind
-// refused said, and logind's warning that the machine is going down.
+// refused said, the end of the fade before Restart and Power off, and
+// logind's warning that the machine is going down.
 void App::pollPower() {
     // Kept current every frame, so it can tell a wake the moment one
     // happens rather than only when a key asks.
     power::justWoke();
     // A restart, power off or rest that logind refused (#241), said in the
     // pill rather than left looking frozen. Pressing again tries again.
-    if (const std::string no = power::refusal(); !no.empty())
+    if (const std::string no = power::refusal(); !no.empty()) {
+        // The fade's black goes, or nobody would see the pill (#393).
+        if (poweringDown) {
+            poweringDown = false;
+            curtain.retarget(0.0f, kCurtainUp);
+        }
         menuNotice.say(no, Tone::Problem);
+    }
+    // THE FADE IS OVER (#393): the game is left and the machine asked. On
+    // the clock, not on the picture, so a frame that was not drawn delays
+    // nothing.
+    if (powerFade && (SDL_GetTicksNS() - powerFadeAt) / 1e9 >= kPowerFade) {
+        const power::Action act = *powerFade;
+        powerFade.reset();
+        powerLeave(act);
+    }
 
     // THE MACHINE IS ABOUT TO GO DOWN OR SLEEP, and logind is holding it
     // for us. Leave the game the one way games are left — finishExit, every

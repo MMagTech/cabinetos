@@ -85,13 +85,13 @@ void App::pumpLeave() {
 // a game.
 //
 // ANYTHING ELSE THAT WANTS THE CURTAIN TAKES IT. A game launched as the
-// console starts, or a press on Play during the lift, brings it down as
-// its own; from then on it is theirs, and this stops drawing the startup
+// console starts, a press on Play during the lift, or Restart or Power off
+// (#393), brings it down as its own; from then on it is theirs, and this stops drawing the startup
 // screen on it.
 void App::pumpArrive() {
     if (!arriving) return;
     if (launchJob.stage.load() != LaunchJob::Stage::Idle || switchPendingId ||
-        leaving != Leave::None || (arriveLifting && curtain.to > 0.0f)) {
+        leaving != Leave::None || poweringDown || (arriveLifting && curtain.to > 0.0f)) {
         arriving = false;
         return;
     }
