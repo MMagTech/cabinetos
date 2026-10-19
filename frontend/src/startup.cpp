@@ -884,6 +884,11 @@ int App::shutDown(char** argv) {
     if (uploader.pending() > 0)
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
+    // A STEAM DOWNLOAD IS CANCELLED, not waited for (#485, SETTINGS-04):
+    // SteamJobStop joins its thread as the App goes, and the download script
+    // ends only on a cancel or its parent gone. Cancelled, proc::run stops it
+    // and the join returns within about two seconds.
+    if (steamInstall) steamInstall->cancel = true;
     // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
     // still running at exit ends the process with abort().
     remoteplay::watch(false);
