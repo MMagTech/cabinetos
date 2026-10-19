@@ -1,3 +1,5 @@
+**History, moved here from docs/CABINET.md on 2026-10-19.** It describes Cabinet's Apple apps (Apple TV, iPhone and Mac), the RomM client CabinetOS was ported from, as they were until 2026-10-11, read from their source on 2026-09-14 with notes to 2026-09-23. Since 2026-10-11 Cabinet is a reference, not a constraint, and the apps are now retired: where this says Cabinet ships or does something, read "did". What Cabinet is now, and what CabinetOS still shares with it: [docs/CABINET.md](../CABINET.md).
+
 # What Cabinet already solves
 
 > **Read this before designing anything.** Cabinet ships on iOS, tvOS and macOS
