@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""The wiki's QR code with the cabinet in the middle (#314, How to > Wiki).
+"""The wiki's QR codes with the cabinet in the middle: the wiki itself (#314,
+How to > Wiki) and its What's new page (#329, About > What's new).
 
-WHY IT IS MADE HERE AND NOT ON THE CONSOLE. The address never changes, so the
-code is made once, by segno (a tested encoder), at error correction H: a
+WHY THEY ARE MADE HERE AND NOT ON THE CONSOLE. The addresses never change, so
+each code is made once, by segno (a tested encoder), at error correction H: a
 third of the code can be lost and it still reads, which is what lets the
 cabinet cover its middle. The console's own encoder (qr.cpp) stays at level M
 for the codes it makes at run time (pairing, Tailscale, the diagnostic
-report) and is not touched. MMagTech, 2026-10-10.
+report) and is not touched. MMagTech, 2026-10-10. What's new's code is the
+bare page, with no version in it: whoever updates is already on the newest
+version, the top of the page is the newest entry, and the link never has to
+change (MMagTech, 2026-10-19).
 
-What it writes: frontend/src/wikiqr.h, the modules as rows of text, and the
-patch in the middle (in modules) that the console fills with white and the
-cabinet. With --preview PATH, a picture of the code as the console draws it,
-and both OpenCV readers must decode it at TV-photo sizes or this fails.
+What it writes: frontend/src/wikiqr.h, each code's modules as rows of text,
+and the patch in its middle (in modules) that the console fills with white
+and the cabinet. The wiki's lines are the ones it had before What's new's
+were added, so its code has not changed. With --preview PATH, a picture of
+each code as the console draws it (the wiki's at PATH, What's new's beside
+it with -whatsnew before the extension), and both OpenCV readers must decode
+each at TV-photo sizes or this fails.
 
     python3 tools/make-wiki-qr.py --preview /tmp/wiki-qr.png
 """
@@ -22,16 +29,28 @@ import sys
 
 import segno
 
-URL = "https://mmagtech.github.io/cabinetos/wiki/"
-# The patch, in modules, centred: white, then a purple tile (the startup
-# screen's purple, so the cream cabinet stands out, MMagTech 2026-10-10), then
-# the cabinet. 14% of the code: MEASURED as the largest that reads exactly as
-# well as a plain level-H code (9x11, 11x13 and 13x15 all did; 15x17 lost a
-# reader at two sizes; 17x19 read at none). Clear of the finder, timing and
-# alignment patterns.
-PATCH_W, PATCH_H = 13, 15
-# The tile and the cabinet inside the patch, in modules. The console draws
-# them from these (wikiqrview.cpp), so the preview is what the TV shows.
+# Each code: its names' prefix in wikiqr.h (the wiki's has none, as it always
+# had), what it is for, its address, and its patch in modules, centred. The
+# patch is white, then a purple tile (the startup screen's purple, so the
+# cream cabinet stands out, MMagTech 2026-10-10), then the cabinet. Each is
+# MEASURED, against a plain level-H code of the same version at the sizes
+# below, as the largest that reads exactly as well, and is clear of the
+# finder, timing and alignment patterns. The wiki's (version 5): 14% of the
+# code (9x11, 11x13 and 13x15 all read as the plain code did; 15x17 lost a
+# reader at two sizes; 17x19 read at none). What's new's (version 6, as its
+# address is too long for version 5 at level H): the same 13x15, 11.6% of a
+# larger code, so the cabinet is the same size in modules (2026-10-19:
+# 11x13 and 13x15 read as the plain code did at every size; 15x17 failed two
+# sizes the plain code read, 17x19 three).
+CODES = (
+    ("", "THE WIKI (#314, How to > Wiki)",
+     "https://mmagtech.github.io/cabinetos/wiki/", 13, 15),
+    ("WhatsNew", "WHAT'S NEW (#329, About > What's new)",
+     "https://mmagtech.github.io/cabinetos/wiki/changelog.html", 13, 15),
+)
+# The tile and the cabinet inside the patch, in modules, the same for every
+# code. The console draws them from these (wikiqrview.cpp), so the preview is
+# what the TV shows.
 WHITE_RADIUS, TILE_INSET, TILE_RADIUS = 1.2, 0.5, 1.4
 CABINET_TOP, CABINET_SHORT = 1.2, 2.4      # from the patch's top; patch height minus this
 PURPLE = (0x3A, 0x22, 0x68)                # ui::palette::kBackdropTop
@@ -41,40 +60,55 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "frontend", "src", "wikiqr.h")
 
 
-def make():
-    q = segno.make(URL, error="h", micro=False, boost_error=False)
+def make(url, patch_w, patch_h):
+    q = segno.make(url, error="h", micro=False, boost_error=False)
     rows = [[1 if m else 0 for m in row] for row in q.matrix]
     n = len(rows)
-    px = (n - PATCH_W) // 2
-    py = (n - PATCH_H) // 2
+    px = (n - patch_w) // 2
+    py = (n - patch_h) // 2
     return q, rows, n, px, py
 
 
-def write_header(q, rows, n, px, py):
+def block(prefix, what, url, patch_w, patch_h, q, rows, n, px, py):
+    """One code's lines in wikiqr.h. The wiki's carries the patch's drawing,
+    which every code shares; its lines are as they were before What's new's
+    were added."""
+    k = "k" + prefix
     lines = ["".join("#" if m else "." for m in r) for r in rows]
     body = ",\n".join('    "%s"' % l for l in lines)
+    size = f"{k}Size"
+    out = f"// {what}: version {q.version}.\n"
+    out += f'constexpr const char* {k}Url = "{url}";\n'
+    out += f"constexpr int {size} = {n};\n"
+    if not prefix:
+        out += ("// The patch the console fills with white, a purple tile and the cabinet, in\n"
+                "// modules, and how those sit in it.\n")
+    else:
+        out += "// The patch, in modules; it is drawn as the wiki's is.\n"
+    out += (f"constexpr int {k}PatchX = {px}, {k}PatchY = {py}, "
+            f"{k}PatchW = {patch_w}, {k}PatchH = {patch_h};\n")
+    if not prefix:
+        out += (f"constexpr float kWhiteRadius = {WHITE_RADIUS}f, kTileInset = {TILE_INSET}f, "
+                f"kTileRadius = {TILE_RADIUS}f;\n"
+                f"constexpr float kCabinetTop = {CABINET_TOP}f, kCabinetShort = {CABINET_SHORT}f;\n")
+    out += "// One string per row, '#' dark.\n"
+    out += f"constexpr const char* {k}Rows[{size}] = {{\n{body}\n}};\n"
+    return out
+
+
+def write_header(made):
+    blocks = "\n".join(block(*code, *m) for code, m in zip(CODES, made))
     text = f"""// GENERATED by tools/make-wiki-qr.py. Do not edit; run the tool.
 //
-// The wiki's address as a QR code, version {q.version}, error correction H, so
-// the cabinet can cover the patch in its middle and it still reads. Made once
-// because the address never changes; qr.cpp is not used for it.
+// The wiki's addresses as QR codes, error correction H, so the cabinet can
+// cover the patch in each one's middle and it still reads. Made once because
+// the addresses never change; qr.cpp is not used for them.
 
 #pragma once
 
 namespace wikiqr {{
 
-constexpr const char* kUrl = "{URL}";
-constexpr int kSize = {n};
-// The patch the console fills with white, a purple tile and the cabinet, in
-// modules, and how those sit in it.
-constexpr int kPatchX = {px}, kPatchY = {py}, kPatchW = {PATCH_W}, kPatchH = {PATCH_H};
-constexpr float kWhiteRadius = {WHITE_RADIUS}f, kTileInset = {TILE_INSET}f, kTileRadius = {TILE_RADIUS}f;
-constexpr float kCabinetTop = {CABINET_TOP}f, kCabinetShort = {CABINET_SHORT}f;
-// One string per row, '#' dark.
-constexpr const char* kRows[kSize] = {{
-{body}
-}};
-
+{blocks}
 }}  // namespace wikiqr
 """
     with open(OUT, "w") as f:
@@ -105,7 +139,7 @@ def cabinet(draw, x, y, h):
     R(303, 795, 419, 55, 14, (0xD7, 0xD1, 0xC8))
 
 
-def render(rows, n, px, py, module):
+def render(rows, n, px, py, patch_w, patch_h, module):
     from PIL import Image, ImageDraw
     side = (n + 2 * QUIET) * module
     img = Image.new("RGB", (side, side), "white")
@@ -117,14 +151,14 @@ def render(rows, n, px, py, module):
                 d.rectangle([X, Y, X + module - 1, Y + module - 1], fill="black")
     # The patch: white, the purple tile, then the cabinet.
     X, Y = (px + QUIET) * module, (py + QUIET) * module
-    d.rounded_rectangle([X, Y, X + PATCH_W * module, Y + PATCH_H * module],
+    d.rounded_rectangle([X, Y, X + patch_w * module, Y + patch_h * module],
                         radius=module * WHITE_RADIUS, fill="white")
     t = TILE_INSET * module
-    d.rounded_rectangle([X + t, Y + t, X + PATCH_W * module - t, Y + PATCH_H * module - t],
+    d.rounded_rectangle([X + t, Y + t, X + patch_w * module - t, Y + patch_h * module - t],
                         radius=module * TILE_RADIUS, fill=PURPLE)
-    ch = (PATCH_H - CABINET_SHORT) * module
+    ch = (patch_h - CABINET_SHORT) * module
     cw = ch * 527.0 / 720.0
-    cabinet(d, X + (PATCH_W * module - cw) / 2, Y + CABINET_TOP * module, ch)
+    cabinet(d, X + (patch_w * module - cw) / 2, Y + CABINET_TOP * module, ch)
     return img
 
 
@@ -139,34 +173,49 @@ def decodes(img):
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--preview")
-    args = ap.parse_args()
-    q, rows, n, px, py = make()
-    write_header(q, rows, n, px, py)
-    print(f"version {q.version}, {n}x{n}, level {q.error}, patch {PATCH_W}x{PATCH_H} at {px},{py} "
-          f"({100.0 * PATCH_W * PATCH_H / (n * n):.1f}% of the modules)")
-    if not args.preview:
-        return 0
+def check(big, n, url):
+    """The console's size and photo-of-a-TV sizes, smaller and softened. A
+    phone runs one reader, so a size passes when either reads it. Measured
+    2026-10-10: a PLAIN level-H code of the same version fails the same sizes
+    as the wiki's (it is denser than level M's version 3), so the cabinet
+    costs nothing over level H itself; under 140 px both fail. The sizes are
+    the wiki's code's (45 modules with the quiet zone), scaled to this code's
+    modules, so each module gets the same pixels: a larger version needs a
+    larger photo. What's new's version 6 at the wiki's 140 px fails plain as
+    it does with the cabinet (2026-10-19), and reads at 152. Returns how many
+    sizes failed."""
     from PIL import Image, ImageFilter
-    big = render(rows, n, px, py, 20)
-    big.save(args.preview)
-    # The console's size and photo-of-a-TV sizes, smaller and softened. A
-    # phone runs one reader, so a size passes when either reads it. Measured
-    # 2026-10-10: a PLAIN level-H code of the same version fails the same
-    # sizes as this one (it is denser than level M's version 3), so the
-    # cabinet costs nothing over level H itself; under 140 px both fail.
     failed = 0
     for width, blur in ((900, 0), (300, 0), (220, 0.5), (160, 0.6), (140, 0.7)):
+        width = round(width * (n + 2 * QUIET) / 45)
         im = big.resize((width, width), Image.LANCZOS)
         if blur:
             im = im.filter(ImageFilter.GaussianBlur(blur))
         got = decodes(im)
-        ok = any(text == URL for _, text in got)
+        ok = any(text == url for _, text in got)
         failed += not ok
         print(f"  {'ok  ' if ok else 'FAIL'} at {width}px{' blurred' if blur else ''}: "
-              + ", ".join(f"{n} {'read' if t == URL else 'no'}" for n, t in got))
+              + ", ".join(f"{n} {'read' if t == url else 'no'}" for n, t in got))
+    return failed
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--preview")
+    args = ap.parse_args()
+    made = [make(url, w, h) for _, _, url, w, h in CODES]
+    write_header(made)
+    failed = 0
+    for (prefix, _, url, w, h), (q, rows, n, px, py) in zip(CODES, made):
+        print(f"{prefix or 'Wiki'}: {url}")
+        print(f"version {q.version}, {n}x{n}, level {q.error}, patch {w}x{h} at {px},{py} "
+              f"({100.0 * w * h / (n * n):.1f}% of the modules)")
+        if not args.preview:
+            continue
+        big = render(rows, n, px, py, w, h, 20)
+        root, ext = os.path.splitext(args.preview)
+        big.save(root + ("-" + prefix.lower() if prefix else "") + ext)
+        failed += check(big, n, url)
     return 1 if failed else 0
 
 

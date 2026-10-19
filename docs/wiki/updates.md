@@ -9,7 +9,8 @@ from Flathub, at the versions the image names.) A small change downloads small.
 ## Update the console
 
 Settings, **System**, **System update**. What each update changed:
-[What's new](changelog.md).
+[What's new](changelog.md), also on the console: Settings, **About**,
+**What's new**, then scan the code with your phone.
 
 1. The row checks and says *Up to date* or *Update available*, with the new
    version and its size.

@@ -1,15 +1,17 @@
 // The link screen: a QR code and a code to approve on a phone. The app holds
-// three, for adding an account, the Tailscale sign-in and the diagnostic
-// report, and does the asking itself. Moved out of screens.h in the
+// four, for adding an account, the Tailscale sign-in, the diagnostic report
+// and What's new, and does the asking itself. Moved out of screens.h in the
 // restructure (#398); what every screen shares is in screens.h.
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "qrtexture.h"
 #include "screens.h"
+#include "wikiqrview.h"
 
 namespace screens {
 
@@ -38,6 +40,10 @@ public:
     // approve on a phone, as adding an account is. Its own title and line;
     // adding an account keeps the ones below.
     void setText(std::string title, std::vector<std::string> lines, std::string busy);
+    // WHAT'S NEW (#329): a code the tool made once (wikiqrview.h), drawn with
+    // the cabinet over its middle as How to's Wiki is, instead of one encoded
+    // here. Nothing to wait for, so the screen is never busy.
+    void setBaked(wikiqr::Which which);
 
     void tick(float dt);
     Result key(Nav n);
@@ -52,6 +58,8 @@ private:
     std::string code_;
     std::string error_;
     bool busy_ = false;
+    // Set while the code is one the tool made, so its patch is drawn.
+    std::optional<wikiqr::Which> baked_;
     ui::QrTexture qr_;
     design::Animated appear_;
 };
