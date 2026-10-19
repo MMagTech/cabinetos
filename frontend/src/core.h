@@ -449,7 +449,12 @@ public:
     void setAfterFrame(void (*fn)()) { afterFrame_ = fn; }
     uint8_t* memoryPointer(unsigned id, size_t* size) const;
 
+    // What the core asked to be run at: at load, and again whenever it asks
+    // mid-game (SET_GEOMETRY, SET_SYSTEM_AV_INFO, #220), taken after the
+    // run that asked. The layout reads it every frame. A new sound rate also
+    // moves soundRateChanges(), so whoever feeds the speaker sets it again.
     const AVInfo& avInfo() const { return av_; }
+    unsigned soundRateChanges() const { return soundRateChanges_; }
     const std::string& coreName() const { return coreName_; }
     // The core's own answers about what it will open. Both come from
     // retro_get_system_info and neither is knowable from the platform: a
@@ -491,6 +496,7 @@ private:
     // loadGame's PlayStation 2 start (core_ps2.cpp).
     bool startPs2Game(const std::string& romPath, const std::string& systemDir,
                       const std::string& saveDir);
+    void takeAvAsked();
 
     void* handle_ = nullptr;
     bool gameLoaded_ = false;
@@ -499,6 +505,7 @@ private:
     bool blockExtract_ = false;
     bool needFullpath_ = false;
     AVInfo av_;
+    unsigned soundRateChanges_ = 0;
 
     GLuint texture_ = 0;
     unsigned frameWidth_ = 0, frameHeight_ = 0;

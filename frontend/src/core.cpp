@@ -49,6 +49,19 @@ std::string gSystemDir, gSaveDir;
 unsigned gRotation = 0;
 bool gRotationAnnounced = false;
 
+// A NEW SHAPE OR RATE ASKED FOR MID-GAME (#220): SET_GEOMETRY (the
+// picture's size and aspect, the maximum kept) and SET_SYSTEM_AV_INFO (the
+// frame and sound rates too). Dolphin sends the first when a GameCube game
+// switches to widescreen, and both when it moves between 50 and 60 Hz
+// (DolphinLibretro/Main.cpp at the pinned 1a0f97270b, lines 343-380).
+// Refused, the game went on drawn at its first shape: a widescreen game
+// squeezed into 4:3. Held here and taken after the retro_run that asked
+// (Core::takeAvAsked), so nothing changes in the middle of a frame.
+bool gGeometryAsked = false;
+retro_game_geometry gGeometry{};
+bool gTimingAsked = false;
+retro_system_timing gTiming{};
+
 // The core writes into its own buffer and reuses it between calls, so a frame
 // is copied out rather than referenced.
 std::vector<uint8_t> gFrame;
@@ -113,6 +126,20 @@ bool environment(unsigned cmd, void* data) {
             const unsigned r = *static_cast<const unsigned*>(data);
             if (r > 3) return false;
             gRotation = r;
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_SET_GEOMETRY:
+            gGeometry = *static_cast<const retro_game_geometry*>(data);
+            gGeometryAsked = true;
+            return true;
+
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
+            const auto* av = static_cast<const retro_system_av_info*>(data);
+            gGeometry = av->geometry;
+            gGeometryAsked = true;
+            gTiming = av->timing;
+            gTimingAsked = true;
             return true;
         }
 
@@ -590,6 +617,9 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 
     retro_system_av_info av{};
     g.get_system_av_info(&av);
+    // Whatever was asked for while loading, get_system_av_info has the last
+    // word on now.
+    gGeometryAsked = gTimingAsked = false;
     av_.fps = av.timing.fps > 0 ? av.timing.fps : 60.0;
     av_.sampleRate = av.timing.sample_rate > 0 ? av.timing.sample_rate : 44100.0;
     av_.baseWidth = av.geometry.base_width;
@@ -811,7 +841,42 @@ void Core::step() {
     // calls per frame for nothing.
     if (gHWWanted && !gHWVulkan && !gHWDesktop) restoreGLState();
     ++gFramesRun;
+    takeAvAsked();
     if (afterFrame_) afterFrame_();
+}
+
+// A shape or a rate the core asked for during the run just made (#220).
+void Core::takeAvAsked() {
+    if (!gGeometryAsked && !gTimingAsked) return;
+    if (gGeometryAsked) {
+        gGeometryAsked = false;
+        if (gGeometry.base_width > 0 && gGeometry.base_height > 0) {
+            av_.baseWidth = gGeometry.base_width;
+            av_.baseHeight = gGeometry.base_height;
+        }
+        av_.aspectRatio = gGeometry.aspect_ratio > 0.0f ? gGeometry.aspect_ratio : 0.0f;
+        // A NEW MAXIMUM ONLY FOR A PICTURE IN MEMORY, which is copied at
+        // whatever size each frame comes. A hardware core's target was built
+        // from the maximum at load; RetroArch rebuilds its video driver for a
+        // bigger one, and this host does not.
+        if (!gHWWanted && gGeometry.max_width > 0 && gGeometry.max_height > 0) {
+            av_.maxWidth = gGeometry.max_width;
+            av_.maxHeight = gGeometry.max_height;
+        }
+    }
+    if (gTimingAsked) {
+        gTimingAsked = false;
+        if (gTiming.fps > 0) av_.fps = gTiming.fps;
+        if (gTiming.sample_rate > 0 && gTiming.sample_rate != av_.sampleRate) {
+            av_.sampleRate = gTiming.sample_rate;
+            // The governor's clock counted the old rate's samples; started
+            // again from now at the new one, as runFrame does.
+            paceClock_ = static_cast<double>(gAudioFrames) / av_.sampleRate;
+            ++soundRateChanges_;
+        }
+    }
+    std::fprintf(stderr, "[core] now %ux%u, %.4f fps, %.0f Hz, aspect %.4f\n", av_.baseWidth,
+                 av_.baseHeight, av_.fps, av_.sampleRate, av_.aspectRatio);
 }
 
 bool Core::uploadFrame() {
