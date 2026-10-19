@@ -115,6 +115,7 @@ void App::openDevPanel() {
                                     [&](int c) {
                                         if (c != 0) { openDevPanel(); return; }
                                         std::string why;
+                                        devOldPass = files::password();
                                         if (!files::newPassword(&why)) {
                                             menuNotice.say("Couldn't make a new password",
                                                            Tone::Problem);
@@ -206,10 +207,19 @@ void App::pollAccess() {
                     openDevPanel();
             }
         }
-        if (devNewPassAt != 0 && now - devNewPassAt >= 1) {
-            devNewPassAt = 0;
-            if (here() == Screen::Settings && !choiceScreen.isOpen() && !pinScreen.isOpen())
-                openDevPanel();
+        // BACK ONCE THE NEW PASSWORD IS THERE, not a second later (#485,
+        // SETTINGS-27): root's oneshot deletes the old file and then writes
+        // the new one, and a panel reopened on the clock could show the old
+        // password, or none, while the new one was being made. Ten seconds at
+        // most, as the other rows wait.
+        if (devNewPassAt != 0) {
+            const std::string pass = files::password();
+            if ((!pass.empty() && pass != devOldPass) || now - devNewPassAt > 10) {
+                devNewPassAt = 0;
+                devOldPass.clear();
+                if (here() == Screen::Settings && !choiceScreen.isOpen() && !pinScreen.isOpen())
+                    openDevPanel();
+            }
         }
     }
 }

@@ -57,6 +57,7 @@
 #include "grid.h"
 #include "idle.h"
 #include "image.h"
+#include "job.h"
 #include "keyboard.h"
 #include "libraryscreen.h"
 #include "look.h"
@@ -673,7 +674,19 @@ struct App {
     // and the heading says how many matched, so a query that is too broad
     // says so rather than pretending the first forty are all of it.
     static constexpr int kSearchLimit = 40;
+    // THE SERVER IS ASKED ON A WORKER (#481, HOME-22). On the frame thread
+    // a slow or vanishing server froze the keyboard, the sound and every
+    // animation until it answered, up to 30 s. One at a time: a query typed
+    // while one is out waits for it, and an answer for anything but what
+    // the box says now is dropped.
+    struct SearchAnswer {
+        std::string query;
+        std::vector<romm::Game> found;
+        int total = 0;
+    };
+    cab::Job<SearchAnswer> searchJob;
     void runSearch(const std::string& q);
+    void showSearchAnswer(const SearchAnswer& a, bool ok, const std::string& err);
 
     // THE TILE COVERS, FETCHED BEHIND HOME RATHER THAN BEFORE IT.
     //
@@ -715,26 +728,37 @@ struct App {
     // and on the screen, for the same reason the cover fill returns paths:
     // appending to the store from another thread would race every screen that
     // draws from it.
+    //
+    // ONE PER TILE, AND NEVER JOINED ON THE FRAME THREAD WHILE IT WORKS
+    // (#471). A request cannot be cut half way, so a filler told to stop
+    // finishes the page it is on; that page is still added to its tile, and
+    // the filler is joined once it has ended (drainGridPages) or at exit.
+    // Joined on the spot, opening a tile while another filled froze the
+    // picture for the page in flight. `quit` and `running` change only
+    // under `m`, so a filler told to stop can be told to carry on without
+    // a page being fetched twice (openTile).
     struct GridFill {
+        std::string tileQuery;   // the tile it fills (Tile::query)
+        unsigned readId = 0;     // and which reading of it (Tile::readId)
         std::mutex m;
         std::vector<romm::Game> arrived;
-        std::atomic<bool> running{false};
-        std::atomic<bool> quit{false};
-        std::string tileQuery;   // the tile being filled (Tile::query)
+        bool running = true;
+        bool quit = false;
         std::thread th;
-        void stop() {
-            quit.store(true);
-            if (th.joinable()) th.join();
-            quit.store(false);
-            std::lock_guard<std::mutex> lk(m);
-            arrived.clear();
-        }
     };
-    GridFill gridFill;
+    std::vector<std::unique_ptr<GridFill>> gridFills;
+    // The tile the grid screen was last opened on, and which reading of it.
+    std::string gridTileQuery;
+    unsigned gridReadId = 0;
     struct GridFillStop {
-        GridFill& f;
-        ~GridFillStop() { f.stop(); }
-    } gridFillStop{gridFill};
+        std::vector<std::unique_ptr<GridFill>>& fills;
+        ~GridFillStop() {
+            for (auto& f : fills) {
+                { std::lock_guard<std::mutex> lk(f->m); f->quit = true; }
+            }
+            for (auto& f : fills) if (f->th.joinable()) f->th.join();
+        }
+    } gridFillStop{gridFills};
 
     // THE SWEEP AND THE EVICTION, BEHIND EVERYTHING, ONCE PER BOOT.
     //
@@ -843,6 +867,9 @@ struct App {
         std::atomic<bool> running{false}, ready{false};
         int forAccount = 0;
         Library lib;
+        bool liveOk = false;   // the live client answered at the server too
+        std::string why;       // and why not
+        bool failing = false;  // the last load came back empty (said once)
         ~OnlineLoad() { if (th.joinable()) th.join(); }
     };
     OnlineLoad onlineLoad;
@@ -873,7 +900,11 @@ struct App {
         bool leaving = false;
     };
     std::vector<BatterySlot> batterySlots;
-    Uint64 batteryRowAt = 0;   // when the bar last drew it (SDL ticks, ms)
+    // Whether the bar laid the row out this frame, and the frame before: a
+    // row that was not on screen a frame ago arrives in place. Counted in
+    // frames, not 200 ms, so a slow frame is not taken for the bar having
+    // been away (#484, PLAY-07).
+    bool batteryRowNow = false, batteryRowBefore = false;
     AchievementToast raToast;
 
     // The in-game overlay: a scrim, a panel and buttons drawn over the game
@@ -1404,6 +1435,7 @@ struct App {
     int64_t devSaidAt = 0;
     bool devPanelWhenOn = false;
     int64_t devNewPassAt = 0;   // the panel comes back once a new password is made
+    std::string devOldPass;     // the one it replaces, to tell when it has been
     std::string devFailed;      // a refusal or a start that failed, said in the row
     bool devWant = false;
     bool devShown = false;
@@ -1535,6 +1567,10 @@ struct App {
         std::string address;  // the Remote paired, once done
         bool fresh = false, done = false;
         std::atomic<bool> stop{false};
+        // Until the worker has returned. A pairing cannot be stopped half
+        // way, so Back leaves it to finish behind the panel (#481,
+        // SETTINGS-23), and a new window waits for it.
+        std::atomic<bool> running{false};
         std::thread th;
         void quit() {
             stop = true;
@@ -2040,6 +2076,8 @@ struct App {
     void drawCurtain(float sc);
     // gridfill.cpp
     void drainGridPages();
+    bool takeGridPages(GridFill& f, bool toScreen);
+    void fillGrid(screens::Tile& t);
     void openTile(const screens::Result& res);
     // about.cpp
     void pressCredits();

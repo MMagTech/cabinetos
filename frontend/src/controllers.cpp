@@ -51,9 +51,13 @@ void App::padWindowRefresh() {
     choiceScreen.replace(names, values, none ? "This console has no Bluetooth" : padDetail);
 }
 
+// NOT JOINED HERE (#481, SETTINGS-08): the worker's bluetoothctl takes a
+// moment to end, and joining held the window on the screen while it did.
+// The next open joins it (by then long finished), or the exit does.
 void App::closePadWindow() {
     padWindowOpen = false;
-    padWin.quit();
+    padWin.stop = true;
+    padWin.cut = true;
     padPairingName.clear();
 }
 
@@ -103,6 +107,9 @@ void App::openPadWindow() {
     padWin.th = std::thread([&pw = padWin]() {
         while (!pw.stop) {
             pw.cut = false;
+            // A quit landing between the test above and the line before
+            // would have its cut erased and wait out a ten-second round.
+            if (pw.stop) break;
             std::string address;
             {
                 std::lock_guard<std::mutex> lk(pw.m);

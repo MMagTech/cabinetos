@@ -285,9 +285,20 @@ void App::followServer(float dt) {
                 romm::Client c;
                 std::string e;
                 Library fresh;
-                if (c.setAddress(address, &e) && accounts::loadActiveToken(c))
+                bool live = false;
+                if (c.setAddress(address, &e) && accounts::loadActiveToken(c)) {
                     fresh = loadLibrary(c);
+                    // THE LIVE CLIENT IS POINTED AT THE SERVER HERE TOO, NOT
+                    // ON THE FRAME THREAD (#481, ROMM-37): its setAddress
+                    // asks /api/heartbeat, up to 5 s per scheme tried (30 if
+                    // the server connects and does not answer), and it froze
+                    // Home when the server went again in between. The
+                    // client's address is set under its own lock.
+                    if (!fresh.platformTiles.empty()) live = liveClient.setAddress(c.baseUrl(), &e);
+                }
                 onlineLoad.lib = std::move(fresh);
+                onlineLoad.liveOk = live;
+                onlineLoad.why = e;
                 onlineLoad.ready = true;
                 onlineLoad.running = false;
             });
@@ -296,13 +307,23 @@ void App::followServer(float dt) {
             !launchJob.busy() && uploader.pending() == 0) {
             onlineLoad.ready = false;
             if (onlineLoad.th.joinable()) onlineLoad.th.join();
-            std::string e;
-            if (onlineLoad.forAccount != accounts::activeId() ||
-                onlineLoad.lib.platformTiles.empty()) {
+            if (onlineLoad.forAccount != accounts::activeId()) {
                 std::fprintf(stderr, "[offline] library not loaded; trying again\n");
-            } else if (!liveClient.setAddress(rommAddress, &e)) {
-                std::fprintf(stderr, "[offline] the server went again: %s\n", e.c_str());
+            } else if (onlineLoad.lib.platformTiles.empty()) {
+                // A SERVER BACK WHOSE LIBRARY DOES NOT LOAD (its sign-in
+                // refused, or nothing here it can show) is asked again a
+                // minute later, not every five seconds for the life of the
+                // process, and said once (#485, FIRSTRUN-07).
+                if (!onlineLoad.failing)
+                    std::fprintf(stderr, "[offline] library not loaded; trying again "
+                                         "every minute\n");
+                onlineLoad.failing = true;
+                onlineAgainClock = -55.0f;
+            } else if (!onlineLoad.liveOk) {
+                std::fprintf(stderr, "[offline] the server went again: %s\n",
+                             onlineLoad.why.c_str());
             } else {
+                onlineLoad.failing = false;
                 adoptUser(liveClient);
                 lib = std::move(onlineLoad.lib);
                 libraryScreen.build(platformTiles, collectionTiles);

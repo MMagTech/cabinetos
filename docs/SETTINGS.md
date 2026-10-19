@@ -741,7 +741,10 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
     "Update available" / "2026.09.28 · 0.9 MB" / **Download** · Later, and
     the row opens it again; Download goes to the PIN. Without it the second
     press that downloads was nowhere on screen (MMagTech on the TV,
-    2026-09-25). A weekly check stays quiet: the pill only.
+    2026-09-25). A weekly check stays quiet: the pill only. After a
+    restart the row still says "Update available" from the last check, and
+    pressing it checks again first (Checking…), so the panel names what
+    Download will fetch, not what was newest then (#485, SETTINGS-19).
     Up to date / "Checked today" (both kinds of check write that line;
     "yesterday", "3 days ago" by the calendar).
     Checking…. Update available / "2026.09.28 · 0.9 MB": the size is shown,

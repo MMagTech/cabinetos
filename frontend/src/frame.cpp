@@ -21,6 +21,8 @@ using namespace design;   // NOLINT, as main.cpp names them
 // recorded in the audit (Part 2, 3.14 item 12), not changed here.
 void App::runFrameLoop() {
     while (running) {
+        batteryRowBefore = batteryRowNow;   // settleBatteryRow (PLAY-07)
+        batteryRowNow = false;
         // Full speed while any game runs, balanced on Home (powerprofile.h).
         powerprofile::update(playing || standaloneRun.active());
         // RetroAchievements' network answers, on this thread (achievements.h).
@@ -48,11 +50,16 @@ void App::runFrameLoop() {
 
         // Idle, once a frame. The timers only ever deepen here; input() is
         // what lifts them, above.
-        idleFrame(dt, playing && !overlayOpen && !stateHold, kScreenOff[screenOffIndex].seconds);
+        // A GAME ON SCREEN is one running: not under the menu, not held on
+        // its state's "Press A to continue", and not frozen waiting for a
+        // state picked on its page to arrive (#484, PLAY-16), which is when
+        // the game itself stands still (pace.cpp).
+        const bool gameOnScreen = playing && !overlayOpen && !stateHold && !stateHoldWaiting;
+        idleFrame(dt, gameOnScreen, kScreenOff[screenOffIndex].seconds);
         // TIME PLAYED (#128): the same test the dim uses for "a game is on
         // screen". Written down once a minute, so a power cut loses at most
         // one.
-        playClock.tick(dt, playing && !overlayOpen && !stateHold);
+        playClock.tick(dt, gameOnScreen);
         if (playClock.active() && (playCheckpointClock += dt) >= 60.0f) {
             playCheckpointClock = 0.0f;
             playtime::checkpoint(storage::currentUser(), playClock.now(playtime::wallMs()));
@@ -73,6 +80,19 @@ void App::runFrameLoop() {
             cab::Core& core = cab::Core::shared();
             const bool rewinding = readGameInput(core);
             runGameFrame(core, dt, rewinding);
+            // A CORE THAT MOVED ITS SOUND RATE MID-GAME (#220): the speaker
+            // is set to it again, as at the launch (openSoundAndPace), or
+            // the sound would play at the old rate's speed.
+            static unsigned soundRateSeen = 0;
+            if (core.soundRateChanges() != soundRateSeen) {
+                soundRateSeen = core.soundRateChanges();
+                SDL_AudioSpec src{};
+                src.format = SDL_AUDIO_S16;
+                src.channels = 2;
+                src.freq = static_cast<int>(core.avInfo().sampleRate);
+                if (audioStream && SDL_SetAudioStreamFormat(audioStream, &src, nullptr))
+                    std::fprintf(stderr, "[frontend] audio in at %d Hz\n", src.freq);
+            }
         }
 
         downloadHook();
@@ -125,6 +145,7 @@ void App::runFrameLoop() {
         switchText.tick(dt);
         menuNotice.tick(dt);
         tickRaToast(dt);
+        remoteplay::answered();
         // ---- System update: root's answers, the weekly check, the panel ----
         updPoll -= dt;
         tickUpdateTimer(dt);

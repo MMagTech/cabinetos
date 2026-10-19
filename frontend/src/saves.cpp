@@ -69,8 +69,23 @@ void restoreDirSave(romm::Client& client, int romId, const char* tag,
     // an Xbox save recovered after a power cut was queued, the game started
     // again at once, and the server's older zip came down over it. The same
     // rule the battery save already keeps (pending.h, isPending).
-    const std::string name = sanitisedStem(title) + ".zip";
-    if (cache::isPending(storage::currentUser(), romId, name)) {
+    std::string name = sanitisedStem(title) + ".zip";
+    bool owedUp = cache::isPending(storage::currentUser(), romId, name);
+    // AND UNDER WHATEVER NAME IT WAS OWED (#484, ROMM-15). The zip is named
+    // from RomM's title when the game ended, and a rematch or a rescan on
+    // RomM since changes the title, so the name built today missed it and
+    // the server's older zip was unpacked over the newer save.
+    if (!owedUp) {
+        for (const cache::Owed& o : cache::owed(storage::currentUser())) {
+            if (o.romId != romId || o.isState || o.isScreenshot || o.fileName.size() < 4 ||
+                o.fileName.compare(o.fileName.size() - 4, 4, ".zip") != 0)
+                continue;
+            owedUp = true;
+            name = o.fileName;
+            break;
+        }
+    }
+    if (owedUp) {
         std::fprintf(stderr, "[save] %s is still on its way up; keeping this console's\n",
                      name.c_str());
         return;

@@ -104,14 +104,21 @@ void watch(bool on) {
     {
         std::lock_guard<std::mutex> lk(gRunM);
         if (gWatching == on) return;
-        gWatching = on;
+        if (!on) gWatching = false;
     }
     gRunCv.notify_all();
-    if (on) {
-        gThread = std::thread(loop);
-        return;
+    if (!on) return;
+    if (gThread.joinable()) gThread.join();   // the last watch's, maybe still asking
+    {
+        std::lock_guard<std::mutex> lk(gRunM);
+        gWatching = true;
     }
+    gThread = std::thread(loop);
+}
+
+void join() {
     if (gThread.joinable()) gThread.join();
+    if (gLogin.joinable()) gLogin.join();
 }
 
 Status last() {
@@ -126,6 +133,7 @@ int generation() {
 
 void startLogin(bool again) {
     cancelLogin();
+    if (gLogin.joinable()) gLogin.join();
     {
         std::lock_guard<std::mutex> lk(gLoginM);
         gLoginWhy.clear();
@@ -159,7 +167,6 @@ void startLogin(bool again) {
 
 void cancelLogin() {
     gLoginCancel = true;
-    if (gLogin.joinable()) gLogin.join();
     gLoginRunning = false;
 }
 

@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
+#include <dirent.h>
 #include <unistd.h>
 
 #include "btagent.h"
@@ -141,6 +143,23 @@ std::vector<Device> describe(std::vector<Device> found) {
 
 bool available() { return proc::run({"bluetoothctl", "--version"}, 5).ok(); }
 
+std::string adapterName() {
+    DIR* d = ::opendir("/sys/class/bluetooth");
+    if (!d) return {};
+    long best = -1;
+    while (const dirent* e = ::readdir(d)) {
+        // "hci0", not "hci0:256", a connection's entry beside it.
+        const char* n = e->d_name;
+        if (std::strncmp(n, "hci", 3) != 0 || !std::isdigit(static_cast<unsigned char>(n[3])))
+            continue;
+        char* end = nullptr;
+        const long i = std::strtol(n + 3, &end, 10);
+        if (*end == '\0' && (best < 0 || i < best)) best = i;
+    }
+    ::closedir(d);
+    return best < 0 ? std::string() : "hci" + std::to_string(best);
+}
+
 Adapter adapter() {
     Adapter a;
     if (!available()) return a;
@@ -252,6 +271,9 @@ bool listen(int seconds, std::vector<Device>* out, std::string* err,
     const proc::Result r = proc::run(
         {"bluetoothctl", "--timeout", std::to_string(seconds), "scan", "on"}, seconds + 15,
         cancel, onLine);
+    // CUT SHORT: whoever cut it is waiting (a window closing, a pairing
+    // asked for), and every device heard was told to onHeard already.
+    if (cancel && cancel->load()) return true;
     // Every line about a device names it: "[NEW] Device E4:17:D8:3D:DB:BE
     // 8BitDo Lite 2", "[CHG] Device 63:95:E1:A8:D2:1C RSSI: ...", with
     // colour codes around the tag. The address after "Device " is the thing.

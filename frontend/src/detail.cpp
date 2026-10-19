@@ -261,6 +261,17 @@ void App::fetchManual(int romId, const std::string& manualPath, const std::strin
     });
 }
 
+// A MANUAL IS A PDF (#484, ROMM-06): RomM's docs say so (using/uploads), and
+// the viewer reads nothing else. A .md or .txt one, which RomM's own code also
+// takes, was offered on the game's page and never opened, and a game on a
+// drive fetched it and threw it away at every launch. So it is no manual.
+static bool pdfManual(const std::string& path) {
+    if (path.size() < 4) return false;
+    std::string end = path.substr(path.size() - 4);
+    for (char& ch : end) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return end == ".pdf";
+}
+
 // A GAME THAT IS ON A DRIVE GETS ITS MANUAL BESIDE IT, when it lands and
 // whenever it starts without one (a game downloaded before #364), so it
 // can be read with no server. Only while the server is here.
@@ -268,7 +279,7 @@ void App::manualBeside(int romId, const std::string& entryPath) {
     if (romm::serverAway() || entryPath.empty()) return;
     for (const auto& g : games) {
         if (g.id != romId) continue;
-        if (g.manualPath.empty() || !cache::findManual(romId).empty()) return;
+        if (!pdfManual(g.manualPath) || !cache::findManual(romId).empty()) return;
         const std::string title = g.name.empty() ? g.fsName : g.name;
         fetchManual(romId, g.manualPath, cache::manualPathFor(entryPath, romId, title),
                     false);
@@ -342,7 +353,7 @@ void App::openDetail(int cardIndex) {
         raReadable = !cov.core || ra::coreReadable(cov.core);
         d.playable = cov.support == catalog::Support::Playable;
         d.reason = cov.reason ? cov.reason : "not playable on this console";
-        detailManualPath = g.manualPath;
+        detailManualPath = pdfManual(g.manualPath) ? g.manualPath : std::string();
         detailManualTitle = g.name.empty() ? g.fsName : g.name;
         break;
     }

@@ -23,7 +23,12 @@ void App::openWiiPairWindow() {
     choiceScreen.setStaysOpen(true);
     choiceScreen.setFixedWidth(kPadWindowWidth);
     wiiPairOpen = true;
+    wiiPair.running = true;
     wiiPair.th = std::thread([&job = wiiPair]() {
+        struct Ended {
+            std::atomic<bool>& r;
+            ~Ended() { r = false; }
+        } ended{job.running};
         auto say = [&](const std::string& d) {
             std::lock_guard<std::mutex> lk(job.m);
             job.detail = d;
@@ -54,8 +59,12 @@ void App::openWiiPairWindow() {
     });
 }
 
+// NOT JOINED HERE (#481, SETTINGS-23): wiiremote::pair takes no stop, so a
+// Back during "Pairing..." held the picture until the pairing ended, up to
+// about a minute. The search stops at once; a pairing finishes behind the
+// panel, and Pair a Wii Remote waits for it (openWiiPanelAt's press).
 void App::closeWiiPairWindow() {
-    wiiPair.quit();
+    wiiPair.stop = true;
     wiiPairOpen = false;
 }
 
@@ -102,6 +111,11 @@ void App::openWiiPanelAt(int focus) {
             return;
         }
         if (i == pairAt) {
+            if (wiiPair.running) {   // the last one's pairing is still ending
+                sound::play(sound::Cue::Edge);
+                openWiiPanelAt(pairAt);
+                return;
+            }
             choiceScreen.close();
             openWiiPairWindow();
             return;

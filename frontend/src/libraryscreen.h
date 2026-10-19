@@ -42,6 +42,17 @@ struct Tile {
     // milliseconds; 0 for never. A grid reopened a while later is read again
     // (App::openTile, #387).
     unsigned long long loadedAtMs = 0;
+    // HOW FAR THE SERVER'S LIST HAS COME, so a big grid left before its
+    // later pages all arrived carries on from there when opened again
+    // (#471). `fetched` counts every game the server sent, kept or not: a
+    // collection's games this console cannot play are left out of `cards`,
+    // and the next page starts after them. `total` is the server's count.
+    // `readId` names this reading, new each time the first page is read
+    // (loadTileGames), so a page of an older reading or of a library since
+    // replaced is never added to it (App::drainGridPages).
+    size_t fetched = 0;
+    size_t total = 0;
+    unsigned readId = 0;
     design::Animated focus;
 };
 

@@ -310,8 +310,10 @@ std::optional<int> App::runFirstRun() {
             // Back from Sign out: the network is set up and stays, so the
             // server step (docs/SETTINGS.md, Network).
             opts.startStep = setupStep ? setupStep
-                             : done.why == firstrun::Why::SignedOut ? "server"
-                                                                    : nullptr;
+                             : done.why == firstrun::Why::SignedOut ||
+                                       done.why == firstrun::Why::NoServer
+                                 ? "server"
+                                 : nullptr;
             opts.signedOut = done.why == firstrun::Why::SignedOut;
             // A capture of a setup screen must never write a marker or an
             // address: it is a photograph, and the machine it is taken on is
@@ -321,16 +323,29 @@ std::optional<int> App::runFirstRun() {
             opts.frames = shotAfterFrames;
             opts.renderWidth = renderW;
             opts.renderHeight = renderH;
-            const setup::Outcome outcome = setup::run(deps, opts);
-            if (outcome != setup::Outcome::Completed) {
-                renderer.shutdown();
-                SDL_Quit();
-                return 0;
+            if (done.why == firstrun::Why::NoServer)
+                std::fprintf(stderr, "[first-run] set up, but no server address is set: "
+                                     "asking for one\n");
+            for (;;) {
+                const setup::Outcome outcome = setup::run(deps, opts);
+                if (outcome != setup::Outcome::Completed) {
+                    renderer.shutdown();
+                    SDL_Quit();
+                    return 0;
+                }
+                // Setup writes the address; pick it up, because the resolution
+                // done before SDL started ran on a console that had none.
+                resolvedAddress = firstrun::serverAddress();
+                rommAddress = resolvedAddress.empty() ? nullptr : resolvedAddress.c_str();
+                // NOT LEFT WITH NONE (#485, FIRSTRUN-06): an address that
+                // could not be saved at the server step is asked for again,
+                // rather than starting on the stand-in library. A capture
+                // writes nothing, so it is let through.
+                if (rommAddress || opts.dryRun) break;
+                std::fprintf(stderr, "[first-run] finished with no server address saved: "
+                                     "asking again\n");
+                opts.startStep = "server";
             }
-            // Setup writes the address; pick it up, because the resolution done
-            // before SDL started ran on a console that had none.
-            resolvedAddress = firstrun::serverAddress();
-            rommAddress = resolvedAddress.empty() ? nullptr : resolvedAddress.c_str();
         } else if (done.why == firstrun::Why::AdoptedExisting && done.when.empty()) {
             // Adopted, and no marker on disk yet — so write one. An empty
             // `when` is exactly the case where the answer came from looking at
@@ -474,13 +489,16 @@ std::optional<int> App::connectToServer(char** argv) {
         if (const std::optional<int> rc = waitForServer(argv)) return rc;
         // WHOEVER PLAYED LAST. The active account's token is what this console
         // starts as — open question 26, decision 2. No account means a machine
-        // that has not been paired, which is first run's job and not something
-        // to paper over here.
-        if (!accounts::loadActiveToken(liveClient)) {
-            std::fprintf(stderr,
-                         "[romm] no account on this console — pair first with "
-                         "--romm-probe --romm-pair\n");
-            return 1;
+        // that has not been paired, which is first run's job; one that got
+        // past it (its accounts emptied by hand, a token file lost) STARTS TO
+        // AN EMPTY HOME AND SAYS SO (#485), as a refused sign-in does
+        // (FIRSTRUN-23, below). It exited, and the session started it again
+        // two seconds later, for ever, with nothing on the screen; Settings'
+        // Add an account, the way back, was never reached.
+        const bool noAccount = !accounts::loadActiveToken(liveClient);
+        if (noAccount) {
+            std::fprintf(stderr, "[romm] no account on this console; starting to an empty Home\n");
+            startProblem = "No account on this console";
         }
         // THE LIST IS HELD IN A NAMED LOCAL AND IT HAS TO BE. `accounts::find`
         // returns a pointer INTO the vector it is given — which is why it takes
@@ -511,7 +529,9 @@ std::optional<int> App::connectToServer(char** argv) {
         setup::showWaiting(waitDeps, kLoadingLine);
         startupShown = true;
         std::string platformsErr;
-        lib = libFromDrive ? offlineLibrary() : loadLibrary(liveClient, &platformsErr);
+        lib = libFromDrive ? offlineLibrary()
+              : noAccount  ? Library{}
+                           : loadLibrary(liveClient, &platformsErr);
         // The references above name lib's own members, so there is nothing to
         // copy out any more.
 
@@ -531,7 +551,7 @@ std::optional<int> App::connectToServer(char** argv) {
         // reached. Home starts empty instead and says which. Anything else
         // (the server gone again, an HTTP error) still exits, so the next
         // start waits for the server.
-        if (platformTiles.empty() && !libFromDrive) {
+        if (platformTiles.empty() && !libFromDrive && !noAccount) {
             const bool refused = platformsErr.rfind("not authorised", 0) == 0;
             if (!refused && !platformsErr.empty()) {
                 std::fprintf(stderr, "[romm] the library did not load: %s\n",
@@ -884,11 +904,18 @@ int App::shutDown(char** argv) {
     if (uploader.pending() > 0)
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
+    // A STEAM DOWNLOAD IS CANCELLED, not waited for (#485, SETTINGS-04):
+    // SteamJobStop joins its thread as the App goes, and the download script
+    // ends only on a cancel or its parent gone. Cancelled, proc::run stops it
+    // and the join returns within about two seconds.
+    if (steamInstall) steamInstall->cancel = true;
     // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
     // still running at exit ends the process with abort().
     remoteplay::watch(false);
+    remoteplay::join();
     tailscale::watch(false);
     tailscale::cancelLogin();
+    tailscale::join();
     if (tsWorker.joinable()) tsWorker.join();
     stopReport();
     // AND ADD AN ACCOUNT'S PAIRING (#398, SETTINGS-03; part of #406). It was

@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -62,6 +63,20 @@ std::mutex gRunM;
 std::condition_variable gRunCv;
 std::thread gThread;
 bool gWatching = false;
+// later()'s work, under gRunM, and its answers, under gM.
+struct Work {
+    std::function<bool()> work;
+    std::function<void(bool)> then;
+};
+std::deque<Work> gTodo;
+std::vector<std::pair<std::function<void(bool)>, bool>> gDone;
+
+void run(Work& w) {
+    const bool ok = w.work();
+    if (!w.then) return;
+    std::lock_guard<std::mutex> lk(gM);
+    gDone.emplace_back(std::move(w.then), ok);
+}
 
 std::string login() {
     std::ifstream f(kLoginFile);
@@ -169,16 +184,33 @@ void refresh() {
     ++gGeneration;
 }
 
-// The log every half second, so a handoff is quick; the API every two.
+// The log every half second, so a handoff is quick; the API every two; the
+// app's own calls as they come. What was asked before off is still done,
+// and the lists are emptied here, after the last call, not by watch(false).
 void loop() {
     std::unique_lock<std::mutex> lk(gRunM);
-    for (int tick = 0; gWatching; ++tick) {
+    for (int tick = 0;; ++tick) {
+        while (!gTodo.empty()) {
+            Work w = std::move(gTodo.front());
+            gTodo.pop_front();
+            lk.unlock();
+            run(w);
+            lk.lock();
+        }
+        if (!gWatching) break;
         lk.unlock();
         readLog();
         if (tick % 4 == 0) refresh();
         lk.lock();
-        gRunCv.wait_for(lk, std::chrono::milliseconds(500), [] { return !gWatching; });
+        gRunCv.wait_for(lk, std::chrono::milliseconds(500),
+                        [] { return !gWatching || !gTodo.empty(); });
     }
+    lk.unlock();
+    stopReadingLog();
+    std::lock_guard<std::mutex> g(gM);
+    gPaired.clear();
+    gWaiting.clear();
+    ++gGeneration;
 }
 
 }  // namespace
@@ -187,20 +219,44 @@ void watch(bool on, bool fresh) {
     {
         std::lock_guard<std::mutex> lk(gRunM);
         if (gWatching == on) return;
-        gWatching = on;
+        if (!on) gWatching = false;
     }
     gRunCv.notify_all();
-    if (on) {
-        startReadingLog(fresh);
-        gThread = std::thread(loop);
-        return;
+    if (!on) return;
+    join();   // the last watch's thread, which may still be ending
+    startReadingLog(fresh);
+    {
+        std::lock_guard<std::mutex> lk(gRunM);
+        gWatching = true;
     }
+    gThread = std::thread(loop);
+}
+
+void join() {
     if (gThread.joinable()) gThread.join();
-    stopReadingLog();
-    std::lock_guard<std::mutex> lk(gM);
-    gPaired.clear();
-    gWaiting.clear();
-    ++gGeneration;
+}
+
+void later(std::function<bool()> work, std::function<void(bool)> then) {
+    Work w{std::move(work), std::move(then)};
+    {
+        std::lock_guard<std::mutex> lk(gRunM);
+        if (gWatching) {
+            gTodo.push_back(std::move(w));
+            gRunCv.notify_all();
+            return;
+        }
+    }
+    run(w);
+}
+
+void answered() {
+    std::vector<std::pair<std::function<void(bool)>, bool>> done;
+    {
+        std::lock_guard<std::mutex> lk(gM);
+        if (gDone.empty()) return;
+        done.swap(gDone);
+    }
+    for (auto& [then, ok] : done) then(ok);
 }
 
 bool sessionOpen() {

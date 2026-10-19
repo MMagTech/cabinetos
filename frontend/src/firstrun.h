@@ -79,6 +79,8 @@ enum class Why {
     Completed,       // the marker says somebody walked the flow
     AdoptedExisting, // no marker, but the machine was already set up by hand
     SignedOut,       // signed out in Settings; first run opens at the server
+    NoServer,        // the marker says done, but no server address is set
+                     // anywhere; first run opens at the server (#485)
 };
 
 struct Completion {
