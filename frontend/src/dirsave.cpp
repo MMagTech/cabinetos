@@ -63,10 +63,8 @@ bool makeParents(const std::string& path) {
     return true;
 }
 
-// An archive is data that arrived over a network, so its own names decide
-// nothing about where bytes land. Anything absolute or with a ".." component is
-// refused outright rather than sanitised, because a rewritten path is a guess
-// at what somebody meant.
+}  // namespace
+
 bool safeRelPath(const std::string& p) {
     if (p.empty() || p.front() == '/') return false;
     size_t start = 0;
@@ -80,8 +78,6 @@ bool safeRelPath(const std::string& p) {
     }
     return true;
 }
-
-}  // namespace
 
 std::vector<DirEntry> listTree(const std::string& root) {
     std::vector<DirEntry> out;

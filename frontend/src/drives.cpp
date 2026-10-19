@@ -158,17 +158,30 @@ struct Watcher {
         }
     }
 
-    // Waits for the helper, up to ten seconds: it is a mkdir.
+    // Waits for the helper, up to ten seconds: it is a mkdir, so the first
+    // look usually finds the folder. NOT TEN SECONDS WHEN IT CANNOT (#481,
+    // FILES-08): on a drive mounted read-only (filesystem errors) or full,
+    // the helper's mkdir fails, and every start waited the whole ten seconds
+    // before the window opened, since the first look at the drives is on the
+    // main thread (start). Read-only is known before asking, from the mount;
+    // otherwise the wait ends when the unit has (unit::awaitOneshot).
     void claim(const std::string& at) {
+        struct statvfs v;
+        if (::statvfs(at.c_str(), &v) == 0 && (v.f_flag & ST_RDONLY)) {
+            std::fprintf(stderr, "[drives] %s is mounted read-only; CabinetOS/ cannot be made\n",
+                         at.c_str());
+            return;
+        }
         std::string why;
         if (!unit::start(kClaimUnit, &why)) {
             std::fprintf(stderr, "[drives] could not ask for CabinetOS/ on %s: %s\n", at.c_str(),
                          why.c_str());
             return;
         }
-        for (int i = 0; i < 40 && !isDirectory(at + "/CabinetOS"); ++i) usleep(250 * 1000);
+        const bool made =
+            unit::awaitOneshot(kClaimUnit, 10.0, [&] { return isDirectory(at + "/CabinetOS"); });
         std::fprintf(stderr, "[drives] CabinetOS/ on %s %s\n", at.c_str(),
-                     isDirectory(at + "/CabinetOS") ? "made by the helper" : "not made");
+                     made ? "made by the helper" : "not made");
     }
 
     bool usable(const std::string& mountedAt) {

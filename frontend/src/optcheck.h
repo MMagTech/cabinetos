@@ -16,8 +16,8 @@
 //
 // Exits 0 when everything fits, 1 with one line per misfit otherwise.
 //
-// Not checked: PCSX2's options (catalog::optionOverrides names three), since
-// PCSX2 is not a libretro core and has no list in cores/options/.
+// PCSX2 is not here: it runs in the console's own host, which takes no core
+// options (coreoptions.cpp's header), and has no list in cores/options/.
 
 #pragma once
 

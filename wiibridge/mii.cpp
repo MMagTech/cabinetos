@@ -8,7 +8,6 @@
 #include "bridge.h"
 
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -77,8 +76,12 @@ bool miiStore(int light, const std::vector<uint8_t>& data) {
 // A READ OF THE MII AREA (0x17, EEPROM), answered from the file in 16-byte
 // reports as a Remote answers, a little apart: a Remote's own come over
 // Bluetooth about a millisecond apart, and the kernel keeps only 64 reports
-// for a reader that falls behind. Only a read wholly inside the area; one
-// that crosses its edge goes to the Remote and is said in the log.
+// for a reader that falls behind. They go one at a time from the bridge's
+// loop (miiAnswer), which holds this Remote till the last is out, so no other
+// Remote waits for them (#480). Only a read wholly inside the area; one that
+// crosses its edge goes to the Remote and is said in the log.
+constexpr auto kMiiGap = std::chrono::milliseconds(1);
+
 bool miiRead(Remote& r, const uint8_t* d, size_t n) {
     if (n < 7 || d[0] != 0x17 || (d[1] & 0x04)) return false;
     const unsigned addr = (unsigned(d[2]) << 16) | (unsigned(d[3]) << 8) | d[4];
@@ -97,12 +100,20 @@ bool miiRead(Remote& r, const uint8_t* d, size_t n) {
         uint8_t rep[22] = {0x21, r.btn1, r.btn2, static_cast<uint8_t>((len - 1) << 4),
                            static_cast<uint8_t>(at >> 8), static_cast<uint8_t>(at)};
         std::memcpy(rep + 6, data.data() + (at - kMiiStart), len);
-        toGame(r, rep, sizeof rep);
-        ::usleep(1000);
+        r.miiAnswers.left.emplace_back(rep, rep + sizeof rep);
     }
     std::fprintf(stderr, "[wiibridge] %s: Miis read for player %d (0x%04x+%u), from the console\n",
                  r.uniq.c_str(), light, addr, size);
     return true;
+}
+
+void miiAnswer(Remote& r) {
+    Paced& p = r.miiAnswers;
+    if (p.left.empty() || std::chrono::steady_clock::now() < p.due) return;
+    const std::vector<uint8_t> rep = std::move(p.left.front());
+    p.left.pop_front();
+    toGame(r, rep.data(), rep.size());
+    p.due = std::chrono::steady_clock::now() + kMiiGap;
 }
 
 // A WRITE TO THE MII AREA (0x16, EEPROM): into the file, acknowledged, and kept

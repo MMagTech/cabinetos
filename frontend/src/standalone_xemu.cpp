@@ -309,7 +309,7 @@ bool xemuBeforeStart(const Emulator& e, const std::string& entryPath, const std:
     // writes to the drive. Until the game runs the drive holds nothing their
     // folder lacks, and a note beside a drive a stop left half written had
     // the next start copy it back over their saves (#398, EMU-15).
-    if (!writeFile(entryPath + "/" + kPlayingNote, note)) {
+    if (!writePlayingNote(entryPath, note)) {
         *err = "could not mark " + entryPath + " as playing";
         return false;
     }
@@ -324,7 +324,7 @@ bool xemuAfterEnd(const Emulator& e, const std::string& entryPath, const std::st
         // The note stays: the saves are still only on the drive.
         return false;
     }
-    ::unlink((entryPath + "/" + kPlayingNote).c_str());
+    removePlayingNote(entryPath);
     return true;
 }
 

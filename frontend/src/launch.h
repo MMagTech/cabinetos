@@ -14,7 +14,9 @@
 
 #include "disc.h"
 #include "romm.h"
+#include "saves.h"
 #include "standalone.h"
+#include "storage.h"
 
 // A launch in progress, off the frame thread.
 //
@@ -110,6 +112,12 @@ struct LaunchJob {
     std::string corePath;
     std::string title;
     std::string message;
+    // THE GAME'S SAVES AS RomM HOLDS THEM, fetched by the worker once the game
+    // is on the disk (#481, LAUNCH-17; saves.h, SaveFetch), and for a Wii game
+    // the Mii Channel's. The stages behind the curtain restore from these and
+    // ask the server nothing. Released once the game is up.
+    SaveFetch saves;
+    SaveFetch miiSaves;
 
     std::thread worker;
 
@@ -148,9 +156,10 @@ extern bool gPs2Copy;
 
 // beginLaunch's worker, in launch_routes.cpp, run on job.worker and called by
 // nothing else. Its parameters are the thread's captures: job and client by
-// reference, the other twelve copies.
+// reference, the other thirteen copies (`user`, the person pressing Play, is
+// copied because the worker must not read the current one).
 void launchWorker(LaunchJob& job, romm::Client& client, int id, int platformId,
                   std::string slug, std::string fsSlug, std::string fsName,
                   const cab::standalone::Emulator* emu, std::string entryPath,
                   std::string location, std::string validExts, bool blockExtract,
-                  int64_t expectedSize, bool multiFile);
+                  int64_t expectedSize, bool multiFile, storage::User user);

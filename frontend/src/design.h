@@ -491,9 +491,9 @@ constexpr float kGridCoverRadius = 12.0f;
 // What is lost is real and worth writing down: a platform grid is where you
 // look for something you do NOT recognise by its art, and forty covers with no
 // names is a harder screen than forty with them. The focused title answers it
-// one at a time. If that turns out not to be enough, this is the number to put
-// back to 2 — and then the covers have to shrink to about 183 to pay for it.
-constexpr int kGridCaptionLines = 0;
+// one at a time. If that turns out not to be enough, captions come back as
+// code (git has the two-line caption that was here until #492), and the covers
+// shrink to about 183 to pay for it.
 // The letter index down the right of a grid: the width of its glass column,
 // room for the bar's focus capsule round one Title 3 letter and a margin.
 constexpr float kLetterIndexWidth = 96.0f;
@@ -584,14 +584,6 @@ constexpr float kScrimOverlay = 0.55f;
 // consistent across a library that is not consistent.
 inline float blurToTexels(float sourceWidth, float texels) {
     return std::log2(std::max(1.0f, sourceWidth / std::max(1.0f, texels)));
-}
-
-// The caption rides down by half of (scale - 1) times the cover height, because
-// a scale about the centre advances the bottom edge by exactly that much, which
-// otherwise buries the caption underneath it. The +2 is the reference
-// implementation's own breathing room. If kFocusScale changes, this follows.
-inline float captionSlide(float focusAmount, float coverHeight) {
-    return focusAmount * (coverHeight * (kFocusScale - 1.0f) * 0.5f + 2.0f);
 }
 
 }  // namespace design

@@ -261,7 +261,9 @@ Read before working on a core, an emulator, input, saves or states.
   one `Mcd001.ps2` in the system directory — a card that belongs to no rom and
   therefore cannot be synced at all. **`pcsx2_analog_mode1` DEFAULTS TO OFF**,
   which is the DualShock's analogue mode disabled and reads as dead sticks.
-  Both are in `catalog::optionOverrides` now.
+  That was the libretro core. The console's own PCSX2 host reads no core
+  options: it is handed one card per game and sets the analogue mode itself
+  (`frontend/ps2/CabinetPS2Host.cpp`), so the overrides went (#492, 2026-10-19).
 
 - **ROMM MATCHES A SAVE ROW BY FILENAME ALONE, AND THE MAC'S SPELLING IS
   DIFFERENT FROM THIS CONSOLE'S.** `cabinet-604.ps2` against

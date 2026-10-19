@@ -80,6 +80,14 @@ bool zipTree(const std::string& root, const std::vector<std::string>& relPaths,
 bool unzipTree(const std::vector<uint8_t>& data, const std::string& root,
                std::string* err);
 
+// Whether an archive member's name may be written under the folder it is
+// unpacked into. An archive is data that arrived over a network, so its own
+// names decide nothing about where bytes land: anything absolute or with a
+// ".." component is refused outright rather than sanitised, because a
+// rewritten path is a guess at what somebody meant. unzipTree and a game's
+// archive (romfile.cpp, prepareFile) both go by it.
+bool safeRelPath(const std::string& p);
+
 // Whether these bytes are a zip. Sniffed, never inferred from the name: the
 // reference implementation's PSP saves are an Apple archive wearing an `.srm`
 // extension, so the name says nothing at all about what is inside.

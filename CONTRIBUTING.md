@@ -86,7 +86,10 @@ podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make
 ```
 
 Unlike the frontend's, its Makefile lists its source files by hand: a new
-file there must be added to `wiibridge/Makefile`.
+file there must be added to `wiibridge/Makefile`. `make test` there builds
+and runs its one test, `wiibridge/pacing-test.cpp` (#480): two Remotes on
+socket pairs through the bridge's own loop, no hardware. CI does not run
+it yet.
 
 **A libretro core:** `cores/build-core.sh <core>` from the repository root,
 where `<core>` is the name of one of its `case` arms (the same 22 names as
@@ -144,9 +147,10 @@ SDL_VIDEODRIVER=offscreen ./build/cabinetos-frontend --no-setup \
 
 Headless frames are not paced: 1,500 of them are about a second, so a
 test that waits for a game to print something needs 20,000 or more.
-`--nav` presses are dropped while the start-up screen is still down unless
-the run is a capture (`--screenshot`), and `--nav` does not reach first
-run's screens.
+`--nav <presses>` walks the screens after start-up through the same door a
+pad uses; it skips the start-up screen's lift as a capture does, or its
+presses would land on a Home nobody can see yet and be dropped. It does not
+reach first run's screens, which run before it.
 
 `--no-setup` skips first run; on a machine with no server address it shows
 a stand-in library of six made-up games. The server is the first of
@@ -162,8 +166,9 @@ television size, so a small machine can check a 4K layout. `--setup` shows
 first run on a console that is already set up, and saves no server address,
 sign-in or finish marker (`setup.h`, `dryRun`), though its pairing step asks
 the server for a real code, which expires by itself: `--setup` walked to
-the pairing step reaches your real server, so point it at the read-only
-relay. `--setup-step <name>`
+the pairing step, or `--setup --setup-step pair`, reaches your real server,
+so point it at the read-only relay, which refuses that request (a POST), unless
+a real code is what you are checking. `--setup-step <name>`
 opens it at `network`, `server`, `pair`, `controller` or `done`; Wi-Fi is
 part of `network`.
 
@@ -195,7 +200,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--playtime-test` | time played: the clock and what is reported to RomM |
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
-| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, and the cover sweeps spare the tile map, a cover being written and what a link points at |
+| `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, the cover sweeps spare the tile map, a cover being written and what a link points at, and a game's archive keeps its folders and refuses a name outside them or one that comes twice |
 | `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, and the Wii's rumble in `wii.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (CI runs it as a step of its own) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
@@ -301,7 +306,13 @@ is not that one. A report only: it never fails the job.
 
 **A pull request to `main` never builds the image**, the cores, PCSX2 (and
 so `frontend/ps2`), Cemu or Sunshine; a mistake there first shows when the
-maintainer pushes to `testing`. A pull request into any other branch runs
+maintainer pushes to `testing`. That includes the check of each core's
+options against `cores/options/` (`cores/check-options.sh`, which
+`cores/build-core.sh` runs on every core it builds or takes from the
+cache): a pull request to `main` that moves a core's pin passes, and a
+difference in its options shows at the testing push. Dolphin's and FBNeo's
+lists need a game loaded, so `tools/check-applied.sh` compares them on the
+reference console. A pull request into any other branch runs
 `build-frontend.yml`, `build-core.yml`, `build-pcsx2.yml`, `build-cemu.yml`
 and `build-sunshine.yml` when it touches their paths (each workflow's
 `paths:` list).
@@ -347,9 +358,9 @@ day it fails. A new check that can fail starts the same way, with that
 date set a week ahead in its pull request.
 
 **Not checked by CI:** the frontend's tests that need a screen, a core or a
-server, the shell scripts under `tools/` and `disk_config/`, any Python
-(including the diagnostic report's privacy scrubber), and the workflows
-themselves. Run what your change touches yourself and say so.
+server, the shell scripts under `tools/`, what any Python does (Lint only
+parses it, so the diagnostic report's privacy scrubber is never run), and
+the workflows themselves. Run what your change touches yourself and say so.
 
 **The proof of a change is its testing image**, judged on the reference
 console. That step is the maintainer's.

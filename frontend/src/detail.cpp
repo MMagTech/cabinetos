@@ -96,7 +96,7 @@ void App::startDetailStates() {
         // offline (savesFor); or this console's own when that is newer and
         // still waiting to upload (#88).
         std::string savedAt;
-        if (!saveTag.empty() && savesFor(liveClient, romId, &all, &err))
+        if (!saveTag.empty() && savesFor(liveClient, who, romId, &all, &err))
             for (const romm::Asset& a : all)
                 if (a.emulator == saveTag && a.updatedAt > savedAt) savedAt = a.updatedAt;
         const std::vector<cache::Owed> owedHere = cache::owed(who);

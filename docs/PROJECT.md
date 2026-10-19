@@ -75,7 +75,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 51 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 52 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -315,6 +315,11 @@ down. "Look now at" is where the code or a later decision moved on.
 - **48. Same-name games, regions and versions, issue #383** ("Same-name
   games: show RomM's tags in the heading"). Decided 2026-10-14, built and
   judged on the TV the same day.
+- **49. PS Vita (Vita3K), issue #198** ("Research: PS Vita through Vita3K,
+  and whether touch rules it out"). Researched 2026-10-19, not decided: the
+  first four tests pass on paper; recommended no for now, because Sony's
+  PS TV list assumes a touch pointer Vita3K lacks (Vita3K/Vita3K#3707), and
+  no gyro. The A9 hand test waits for a time he names.
 
 ---
 
@@ -1120,6 +1125,11 @@ again**, because the display path is different.
 
 Applied to every core the governor made things worse (it slowed N64 down). It is
 Flycast-only, by measurement.
+
+**Removed, 2026-10-19** (#492, "Code nothing runs: the dead code the audit
+found", MMagTech's decision): the governor had been off for every core since
+2026-09-27, when the speaker began pacing every core (RetroArch's audio sync,
+`pace.cpp`), and nothing could turn it on. Its switch, clock and log line went.
 
 ### Video: two paths, and one of them is free on Linux
 
@@ -7701,6 +7711,11 @@ to **disabled**, which is the DualShock's analog mode off — the sticks do
 nothing. Exactly the class of silent fault *An unanswered core option is not
 the default* exists for.
 
+**Removed, 2026-10-19** (#492): the three `pcsx2_*` answers in
+`catalog::optionOverrides` were for the libretro core. The console's own PCSX2
+host reads no core options; it is handed one card per game, named from the rom
+(`core_ps2.cpp`), and sets the pads' analogue mode itself (`CabinetPS2Host.cpp`).
+
 #### Game & Watch will not be built — decided 2026-09-20
 
 171 games, and **the largest excluded row in the library by a distance.**
@@ -8525,6 +8540,11 @@ today. PPSSPP is the one core left unbuilt and is the next one to find out
 about — and `catalog.cpp`'s `hwRender` flag is kept in place for it, also
 because that table is positional and removing a field silently re-assigns every
 row below it.
+
+**Removed, 2026-10-19** (#492, MMagTech's decision): `NeedsHardwareRender` and
+the `hwRender` flag both went, with nothing answering or reading either. A core
+asking for a context this machine cannot serve is refused as it loads
+(`core_hwrender.cpp`), and the launch says so as for any core that will not load.
 
 **What running them found that building them could not**, again:
 
@@ -15826,6 +15846,125 @@ separate look at the install-and-play kind, whose first disc installs data
 to the hard disk rather than being played; one save per game as #162 has
 it.
 
+**The audit of the 30 unlabelled titles, 2026-10-19.** MMagTech asked for it
+before he decides anything on #339, which stays open in the Later milestone;
+he does not want to work on the feature now. Research only, nothing built
+and no machine used. The same text is a comment on #339. Sources are in the
+last column and under the tables.
+
+**Swap in the middle of the story: 15 of the 30.** Eleven have a press,
+publisher or developer statement that the story runs on a later disc. Four
+rest on thin evidence: Infinite Undiscovery, The Last Remnant, MagnaCarta 2,
+Dead Space 3. The other 15 are 6 install, 2 per mode, 2 extra content, 1
+compilation of separate games and 4 not determined.
+
+**Well known, of the 15:** by Metacritic 80 or more, or 1 million or more
+sold or shipped by a publisher figure, 7 are: Final Fantasy XIII, Mass
+Effect 2, Mass Effect 3, The Witcher 2, L.A. Noire, Dead Space 2,
+Castlevania: Lords of Shadow. Lost Odyssey (78), Blue Dragon (79) and Dead
+Space 3 (78) are one or two points under.
+
+**Not determined:** whether Rage (3 discs), Wolfenstein: The New Order (4)
+and L.A. Noire: The Complete Edition (what the 4th disc holds) ask for a
+swap, and what each Adidas miCoach disc holds: not found. Where in the story
+the swap falls is also not found, or forum posts only, for Lost Odyssey,
+Star Ocean, Infinite Undiscovery, The Last Remnant, MagnaCarta 2, Mass
+Effect 3, The Witcher 2, Dead Space 2 and 3, and Deus Ex: Director's Cut.
+
+| Title | Discs | Mid-story swap, or install / extra | Sales | Metacritic (Xbox 360, critics) | Source |
+|---|---|---|---|---|---|
+| Lost Odyssey | 4 | **Swap.** Four dual-layer DVDs (IGN via Wikipedia); a review says the discs are mainly for story progress and the world sits on disc 4. No source I read states the prompt, or where it falls | North America debut 203,000 (Feb 2008, IGN, 13 Mar 2008); Japan 109,517 (Famitsu, Apr 2010); both via Wikipedia | 78 (68) | [Wikipedia](https://en.wikipedia.org/wiki/Lost_Odyssey), [review](https://turnbasedlovers.com/review/throwback-review-lost-odyssey/), [Metacritic](https://www.metacritic.com/game/lost-odyssey/critic-reviews/?platform=xbox-360) |
+| Blue Dragon | 3 | **Swap.** Three DVDs; a review says the story only picks up on the second DVD | Japan 203,740 to 27 Dec 2007 (Famitsu, Enterbrain); elsewhere not found | 79 (56) | [NBC News review](https://www.nbcnews.com/id/wbna20877110), [Wikipedia](https://en.wikipedia.org/wiki/Blue_Dragon_(video_game)), [Game Developer](https://www.gamedeveloper.com/game-platforms/-i-blue-dragon-i-tops-lifetime-xbox-360-software-sales-in-japan), [Metacritic](https://www.metacritic.com/game/blue-dragon/critic-reviews/?platform=xbox-360) |
+| Final Fantasy XIII | 3 | **Swap, twice.** A Square Enix representative: two swaps in the whole game (Game Informer, 2 Feb 2010). RPGSite's review: each disc change is at the end of a chapter | 5.5 million worldwide, all platforms (Square Enix, to 31 Mar 2010); US March 2010, Xbox 360 493,900 (NPD) | 82 (54) | [Game Informer](https://gameinformer.com/b/news/archive/2010/02/02/news-final-fantasy-xiii-shipping-on-three-360-discs.aspx), [RPGSite](https://www.rpgsite.net/review/2921-final-fantasy-xiii-xbox-360-review), [Game Informer sales](https://gameinformer.com/b/news/archive/2010/05/18/ff-xiii-sells-millions-square-enix-reports-best-year-ever.aspx), [PCWorld](https://www.pcworld.com/article/512182/march_2010_game_sales.html), [Metacritic](https://www.metacritic.com/game/final-fantasy-xiii/critic-reviews/?platform=xbox-360) |
+| Star Ocean: The Last Hope | 3 | **Swap, and back.** IGN's review (via Wikipedia): you change discs to travel between planets later in the game. WorthPlaying: swap as you progress; side quests, other planets and a bonus dungeon are on disc 2, synthesis on disc 3. First swap: not found | 450,000 worldwide to May 2009 (Square Enix); Japan 208,438 (Famitsu, Apr 2010) | 72 (56) | [Wikipedia](https://en.wikipedia.org/wiki/Star_Ocean:_The_Last_Hope), [WorthPlaying](https://worthplaying.com/article/2009/3/10/reviews/59685-xbox-360-review-star-ocean-the-last-hope/), [Metacritic](https://www.metacritic.com/game/star-ocean-the-last-hope/critic-reviews/?platform=xbox-360) |
+| Infinite Undiscovery | 2 | **Swap, thin.** Square Enix said two discs (Engadget, 21 Aug 2008); a review has the hero "come into his own during the second disk". No source states the prompt | Shipped to 30 Sep 2008: Japan 120,000, North America 200,000, Europe 90,000 (Square Enix) | 68 (60) | [Engadget](https://www.engadget.com/2008-08-21-x08-infinite-undiscovery-discovered-on-two-discs.html), [WorthPlaying](https://worthplaying.com/article/2008/9/11/reviews/54729-xbox-360-review-infinite-undiscovery/), [Wikipedia](https://en.wikipedia.org/wiki/Infinite_Undiscovery), [Metacritic](https://www.metacritic.com/game/infinite-undiscovery/critic-reviews/?platform=xbox-360) |
+| The Last Remnant | 2 | **Swap, thin.** Forum posts only: disc 2 starts after the boss at the end of the sewers. No press source for the discs | 580,000, all versions (Xbox 360 and PC), to 31 Mar 2009 (Square Enix, via Gamasutra) | 66 (49) | [Steam forum](https://steamcommunity.com/app/23310/discussions/0/1734336452562619909/), [Wikipedia](https://en.wikipedia.org/wiki/The_Last_Remnant), [Metacritic](https://www.metacritic.com/game/the-last-remnant/critic-reviews/?platform=xbox-360) |
+| MagnaCarta 2 | 2 | **Swap, thin.** A review has a boss "early in the second disc"; where the discs change: not found | Not found (VGChartz estimate 0.30 million, undated) | 69 (49) | [WorthPlaying](https://worthplaying.com/article/2009/10/23/reviews/69634-xbox-360-review-magnacarta-2/), [VGChartz](https://www.vgchartz.com/game/33696/magna-carta-2/), [Metacritic](https://www.metacritic.com/game/magna-carta-2/critic-reviews/?platform=xbox-360) |
+| Mass Effect 2 | 2 | **Swap, twice.** Disc 1, then disc 2 for the middle (about a third in), then disc 1 for the end. A hard drive install does not remove it (BioWare via IGN, Kotaku, 25 Jan 2010) | US January 2010, Xbox 360 572,100 (NPD) | 96 (98) | [Kotaku](https://kotaku.com/mass-effect-2-has-some-fancy-disc-swapping-action-upda-5456070), [Game Informer](https://gameinformer.com/b/news/archive/2010/02/11/news-nintendo-continues-to-dominate-in-january-npd-sales-data), [Metacritic](https://www.metacritic.com/game/mass-effect-2/critic-reviews/?platform=xbox-360) |
+| Mass Effect 3 | 2 | **Swap.** Game Informer's reviewer swapped five times, against once or twice in Mass Effect 2 (review, 5 Mar 2012). Where: forum posts only, and they disagree | US March 2012, Xbox 360 943,000 (Microsoft's Aaron Greenberg) | 93 (74) | [Game Informer review](https://gameinformer.com/games/mass_effect_3/b/xbox360/archive/2012/03/05/emotion-runs-high-in-shepard-39-s-farewell), [Engadget](https://www.engadget.com/2012-04-12-march-npd-mass-effect-3-tops-sales-year-over-year-decline-cont.html), [Metacritic](https://www.metacritic.com/game/mass-effect-3/critic-reviews/?platform=xbox-360) |
+| Dragon Age: Inquisition | 2 | **Install.** Disc 1 is the mandatory install, disc 2 is played. Forum posts and EA help text only; no swap reported | All platforms: over 12 million (EA's Mark Darrah, Sept 2024); Xbox 360 alone not found | None (page shows 1 review) | [forum](https://www.xpgamesaves.com/threads/tutorial-dragon-age-inquisition-installation.114073/), [Wikipedia](https://en.wikipedia.org/wiki/Dragon_Age:_Inquisition), [Metacritic](https://www.metacritic.com/game/xbox-360/dragon-age-inquisition/) |
+| The Witcher 2: Enhanced Edition | 2 | **Swap, once.** RPGSite's review (16 Apr 2012): "one disc swap at a point during the story". Where: not found (a forum post says the end of chapter 2) | 1.7 million, platforms not stated (Eurogamer, 30 May 2012, via Wikipedia) | 88 (82) | [RPGSite](https://www.rpgsite.net/review/3060-the-witcher-2-enhanced-edition-review), [Wikipedia](https://en.wikipedia.org/wiki/The_Witcher_2:_Assassins_of_Kings), [Metacritic](https://www.metacritic.com/game/the-witcher-2-assassins-of-kings-enhanced-edition/critic-reviews/?platform=xbox-360) |
+| L.A. Noire | 3 | **Swap, twice.** GameRevolution (7 May 2011) quotes Rockstar: two swaps at natural breaks between cases. MCV (6 May 2011) quotes Rockstar's Jeronimo Barrera on three Xbox discs and words it as one swap. Wikipedia: three discs, six before compression | About 4 million in the first month, Xbox 360 and PS3; almost 5 million shipped by Dec 2011; about 7.5 million by Sep 2017 (Wikipedia) | 89 (83) | [GameRevolution](https://www.gamerevolution.com/news/463-la-noire-ships-on-3-xbox-360-discs), [MCV](https://www.mcvuk.com/business-news/consoles/la-noire-pushes-xbox-disc-limits/), [Wikipedia](https://en.wikipedia.org/wiki/L.A._Noire), [Metacritic](https://www.metacritic.com/game/l-a-noire/critic-reviews/?platform=xbox-360) |
+| L.A. Noire: The Complete Edition | 4 | **Not found.** The three-disc story swaps would apply; what the 4th disc holds is not found. Forum posts disagree (a desk per disc with the DLC cases, or extra material) | Not found | None | [Steam forum](https://steamcommunity.com/app/110800/discussions/0/3844431603865372716), [TrueAchievements](https://www.trueachievements.com/forum/viewthread.aspx?tid=114801) |
+| Rage | 3 | **Not found.** Wikipedia says three DVDs on Xbox 360 (from a 2009 pre-release article, now gone); what each disc holds and any swap: not found | Not found (VGChartz estimate 1.60 million, undated) | 81 (77) | [Wikipedia](https://en.wikipedia.org/wiki/Rage_(video_game)), [VGChartz](https://www.vgchartz.com/game/25458/rage/?region=All), [Metacritic](https://www.metacritic.com/game/rage/critic-reviews/?platform=xbox-360) |
+| Wolfenstein: The New Order | 4 | **Not found.** No public source found for the four discs or what they hold | Europe, all platforms: almost 400,000 physical copies to June 2014 (Wikipedia); Xbox 360 not found (VGChartz estimate 0.38 million, undated) | None (page shows 1 review) | [Wikipedia](https://en.wikipedia.org/wiki/Wolfenstein:_The_New_Order), [VGChartz](https://www.vgchartz.com/game/72128/wolfenstein-the-new-order/?region=All), [Metacritic](https://www.metacritic.com/game/xbox-360/wolfenstein-the-new-order/) |
+| Halo 4 | 2 | **Install.** Disc 1 launches the game; disc 2 installs the multiplayer content (Wikipedia). No story swap reported | Microsoft: US$220 million on day one, $300 million in week one (money, not units) | 87 (87) | [Wikipedia](https://en.wikipedia.org/wiki/Halo_4), [Metacritic](https://www.metacritic.com/game/halo-4/critic-reviews/?platform=xbox-360) |
+| Dead Space 2 | 2 | **Swap.** Digit's review: the campaign spans two discs on Xbox 360. Where: forum posts say chapter 6 to 7 | EA: nearly 2 million shipped in week one, all platforms (via Wikipedia); 4 million sold worldwide by 2017 | 90 (83) | [Digit review](https://www.digit.in/reviews/general/dead-space-2-review-3266.html), [Wikipedia](https://en.wikipedia.org/wiki/Dead_Space_2), [Metacritic](https://www.metacritic.com/game/dead-space-2/critic-reviews/?platform=xbox-360) |
+| Dead Space 3 | 2 | **Swap, thin.** A news post says the single-player part needs two discs (relaying another site, no EA quote). Where: forum posts say chapter 8 to 9 | North America, Feb 2013, all platforms: 605,000 (GameSpot via Game Informer) | 78 (68) | [N4G](https://n4g.com/news/1166604/dead-space-3-will-feature-two-discs-on-xbox-360), [Game Informer](https://gameinformer.com/b/news/archive/2013/03/15/dead-space-3-tops-npd-charts-xbox-360-shows-strong-sales), [Metacritic](https://www.metacritic.com/game/dead-space-3/critic-reviews/?platform=xbox-360) |
+| Battlefield 4 | 2 | **Per mode.** One disc multiplayer, one single player (disc 1 is multiplayer per VideoGamer); a 2 GB install is required first (JustPushStart, 28 Oct 2013) | More than 7 million, platforms not stated (bfcentral.net, 1 May 2014, via Wikipedia) | 79 (21) | [JustPushStart](https://www.justpushstart.com/blog/2013/10/28/battlefield-4-xbox-360-requires-2gb-mandatory-installation/), [VideoGamer](https://www.videogamer.com/news/battlefield-4-xbox-360-requires-14-4gb-install-for-optimal-performance/), [Wikipedia](https://en.wikipedia.org/wiki/Battlefield_4), [Metacritic](https://www.metacritic.com/game/battlefield-4/critic-reviews/?platform=xbox-360) |
+| Batman: Arkham City, Game of the Year Edition | 2 | **Extra.** Warner's announcement (23 Apr 2012) says the five earlier DLC packs are on the disc; that the second disc holds them is from forum posts only | Base game, all platforms: 6 million shipped (Warner Bros., 9 Feb 2012); the Game of the Year Edition alone: not found | 94 (87), base game | [Gaming Nexus](https://www.gamingnexus.com/News/26304/Batman-Arkham-City-to-get-GOTY-edition), [GamingBolt](https://gamingbolt.com/batman-arkham-city-ships-6-million-copies), [Metacritic](https://www.metacritic.com/game/batman-arkham-city/critic-reviews/?platform=xbox-360) |
+| Batman: Arkham Origins | 2 | **Per mode, thin.** Disc 1 campaign, disc 2 online multiplayer; forum posts and one low-quality site only | Not found (VGChartz estimate 1.90 million, undated) | 74 (46) | [Orbis Patches](https://orbispatches.com/gaming-faq/why-does-arkham-origins-have-2-discs), [VGChartz](https://www.vgchartz.com/game/71971/batman-arkham-origins/?region=All), [Metacritic](https://www.metacritic.com/game/batman-arkham-origins/critic-reviews/?platform=xbox-360) |
+| Castlevania: Lords of Shadow | 2 | **Swap, which an install removes.** Engadget (26 Aug 2010): install disc 1 and keep disc 2 in, no more swaps; without it you swap, also to revisit earlier levels. Forum posts say the swap still comes | 1 million shipped, PS3 and Xbox 360 (Konami, 22 Nov 2010) | 83 (70) | [Engadget](https://www.engadget.com/2010-08-26-how-disc-swapping-works-in-castlevania-lords-of-shadow-for-xbox.html), [Gematsu](https://gematsu.com/2010/11/castlevania-lords-of-shadows-ships-a-million), [Metacritic](https://www.metacritic.com/game/castlevania-lords-of-shadow/critic-reviews/?platform=xbox-360) |
+| Star Wars: The Force Unleashed, Ultimate Sith Edition | 2 | **Extra.** Disc 1 is the game; disc 2 holds three bonus missions (Jedi Temple, Tatooine, Hoth) (WorthPlaying review, 15 Nov 2009) | LucasArts: 7 million worldwide, all platforms, to 23 Feb 2010 (the game, not this edition) | None for this edition (base game 73) | [WorthPlaying](https://worthplaying.com/article/2009/11/15/reviews/70233-xbox-360-review-star-wars-the-force-unleashed-ultimate-sith-edition/), [Engadget](https://www.engadget.com/2010-02-23-star-wars-the-force-unleashed-has-sold-seven-million-copies.html), [Metacritic](https://www.metacritic.com/game/star-wars-the-force-unleashed/critic-reviews/?platform=xbox-360) |
+| Metal Gear Solid V: The Phantom Pain | 2 | **Install.** Disc 1 is a mandatory install, disc 2 is played. Forum posts and a hobby blog only; no swap reported | All platforms: over 6 million shipped by Dec 2015 (IGN, via Wikipedia); Xbox 360 alone not found | None (page shows none) | [forum](https://gamefaqs.gamespot.com/boards/681903-metal-gear-solid-v-the-phantom-pain/72320643), [Wikipedia](https://en.wikipedia.org/wiki/Metal_Gear_Solid_V:_The_Phantom_Pain), [Metacritic](https://www.metacritic.com/game/metal-gear-solid-v-the-phantom-pain/critic-reviews/?platform=xbox-360) |
+| Metal Gear Solid HD Collection | 2 | **Separate games.** Disc 1: Metal Gear, Metal Gear 2, Metal Gear Solid 2, Metal Gear Solid 3. Disc 2: Peace Walker (Redump disc pages) | Not found (VGChartz estimate 0.70 million, undated) | 90 (19) | [Redump disc 1](https://redump.org/disc/50573/), [Redump disc 2](https://redump.org/disc/50063/), [VGChartz](https://www.vgchartz.com/game/70523/metal-gear-solid-hd-collection/?region=All), [Metacritic](https://www.metacritic.com/game/metal-gear-solid-hd-collection/critic-reviews/?platform=xbox-360) |
+| Middle-earth: Shadow of Mordor | 2 | **Install.** Disc 1 is a 1.7 GB install, disc 2 is played. Forum posts only; no swap reported | Xbox 360 alone: 145,447 to the week ending 29 Nov 2014 (VGChartz); all platforms 2.45 million then | None (page shows none) | [forum](https://gamefaqs.gamespot.com/boards/739524-middle-earth-shadow-of-mordor/70569547), [VGChartz](https://www.vgchartz.com/article/252478/middle-earth-shadow-of-mordor-sales-top-24m-units-worldwide-ps4-xbox-one-xbox-360-ps3-pc/), [Metacritic](https://www.metacritic.com/game/middle-earth-shadow-of-mordor/critic-reviews/?platform=xbox-360) |
+| The Crew | 2 | **Install.** Disc 1 is the install disc, disc 2 is played. Forum posts only; an open-world racer with no story | 2 million shipped by 1 Jan 2015, platforms not stated (Ubisoft, via Wikipedia) | None (page shows none) | [forum](https://www.se7ensins.com/forums/threads/the-crew-how-to-install-when-using-xk3y.1254928/), [Wikipedia](https://en.wikipedia.org/wiki/The_Crew_(video_game)), [Metacritic](https://www.metacritic.com/game/the-crew/critic-reviews/?platform=xbox-360) |
+| Dark Souls II: Scholar of the First Sin | 2 | **Install.** Disc 1 prints "Installation Disc"; the game is played from disc 2. What else is on each disc: not settled | Not found for this edition | None for this edition | [Redump disc 1](https://redump.org/disc/38984/), [retailer listing](https://www.bitgvideogames.com/products/dark-souls-2-scholar-of-the-first-sin-new-xbox-360-games), [Metacritic](https://www.metacritic.com/game/dark-souls-ii-scholar-of-the-first-sin/critic-reviews/?platform=xbox-360) |
+| Deus Ex: Human Revolution, Director's Cut | 2 | **Swap.** RPGSite (24 Jan 2014): the Xbox 360 version "now comes on two discs", the disc changes "smartly and conveniently spread". Where: not found | Not found for the Director's Cut | None (3 reviews) | [RPGSite](https://www.rpgsite.net/review/3252-deus-ex-human-revolution-directors-cut-review), [Metacritic](https://www.metacritic.com/game/deus-ex-human-revolution-directors-cut/critic-reviews/?platform=xbox-360) |
+| Adidas miCoach | 2 | **Not found.** A fitness trainer with no story; two discs confirmed, what each holds not found | Not found | 54 (6) | [Blogcritics](https://blogcritics.org/xbox-360-review-adidas-micoach/), [Metacritic](https://www.metacritic.com/game/adidas-micoach/critic-reviews/?platform=xbox-360) |
+
+One more title is in the 48 English ones: **Kinect Nat Geo TV: America the
+Wild**, 2 discs, labelled Volume 1 and Volume 2 by Redump. Eight half-hour
+episodes, four per disc, no story, so no mid-story swap. Sales not found.
+Metacritic 78 (7). Sources: [Redump disc 1](https://redump.org/disc/57821/),
+[Redump disc 2](https://redump.org/disc/57822/), [Pure Xbox
+review](https://www.purexbox.com/reviews/2012/10/kinect_nat_geo_tv_360),
+[Metacritic](https://www.metacritic.com/game/kinect-nat-geo-tv/critic-reviews/?platform=xbox-360).
+
+**The 17 titles Redump does label.** Fifteen are what the label says. Two
+are not "one disc per mode": Max Payne 3 and Splinter Cell: Blacklist split
+the single-player campaign across the two discs and ask for the second in
+the middle of the story. Max Payne 3 is a [Rockstar support
+page](https://support.rockstargames.com/articles/7dctuxl5eli4UDBA0uNeEk/problems-switching-to-disc-2-in-max-payne-3-for-xbox-360):
+at a certain point the story stops and says to insert disc 2; a
+[walkthrough](https://www.trueachievements.com/game/Max-Payne-3/walkthrough/4)
+puts it after Chapter VI. Metacritic 86 (80); 4 million shipped by May 2013
+(VideoGamer, via Wikipedia). Splinter Cell: Blacklist is forum posts only
+(disc 1 holds campaign part 1, disc 2 part 2; the prompt comes at Special
+Missions HQ after Abandoned Mill); Metacritic 82 (58); sales not found.
+
+| Title | Discs | Kind, as the label says | Source |
+|---|---|---|---|
+| Grand Theft Auto V | 2 | Install: disc 1 is a one-time install (about 8 GB), disc 2 is played; no switching after | [Rockstar](https://support.rockstargames.com/articles/70WBCPVYJF1twEcuaxYH98/grand-theft-auto-v-xbox-360-and-ps3-installation-requirements) |
+| Forza Motorsport 3 | 2 | Install: disc 2 holds extra cars and tracks copied to the drive; a swap only with no hard drive | [Wikipedia](https://en.wikipedia.org/wiki/Forza_Motorsport_3), [MCV](https://mcvuk.com/business-news/forza-3-to-come-on-two-dvds/) |
+| Forza Motorsport 3: Ultimate Collection | 2 | Install: same layout, disc 2 holds all the DLC to date | [Wikipedia](https://en.wikipedia.org/wiki/Forza_Motorsport_3), [forum](https://gamefaqs.gamespot.com/boards/948030-forza-motorsport-3/57370229) |
+| Forza Motorsport 4 | 2 | Install: disc 2 is about 2.8 GB of car packs | [GamerGen](https://gamergen.com/actualites/forza-4-taille-installation-revelee-11282-1), [VGChartz review](https://www.vgchartz.com/game/45656/forza-motorsport-4/reviews/257404/) |
+| Call of Duty: Ghosts | 2 | Install: disc 2 is installed once (about 3 GB), disc 1 plays campaign and multiplayer | [Activision](https://support.activision.com/uk/en/call-of-duty--ghosts/articles/call-of-duty-ghosts-two-disc-overview) |
+| Alien: Isolation | 2 | Install: disc 1 mandatory install, disc 2 played (forum only) | [forum](https://gamefaqs.gamespot.com/boards/751157-alien-isolation/70293330) |
+| Saints Row IV: National Treasure Edition | 2 | Install: one disc installs the DLC and updates, the other is the base game (community wiki) | [Saints Row wiki](https://saintsrow.fandom.com/wiki/Saints_Row_IV) |
+| Guitar Hero Live | 2 | Install by Redump's label only; no source says what the install disc does | [Wikipedia](https://en.wikipedia.org/wiki/Guitar_Hero_Live) (no mention) |
+| Watch Dogs | 2 | Install: disc 1 install, disc 2 played (the creative director to VideoGamer) | [VideoGamer](https://www.videogamer.com/?p=41231) |
+| Battlefield 3 | 2 | Per mode: disc 1 multiplayer and co-op, disc 2 campaign (EA via Shacknews) | [Shacknews](https://www.shacknews.com/article/70148/battlefield-3-is-two-discs-on-xbox-360) |
+| Battlefield Hardline | 2 | Per mode, with install: disc 1 install and multiplayer, disc 2 single player (forum only) | [forum](https://gamefaqs.gamespot.com/boards/802005-battlefield-hardline/71564130) |
+| Max Payne 3 | 2 | **Swap, not per mode:** disc 1 chapters I to VI and multiplayer, disc 2 chapters VII to the end | [Rockstar](https://support.rockstargames.com/articles/7dctuxl5eli4UDBA0uNeEk/problems-switching-to-disc-2-in-max-payne-3-for-xbox-360) |
+| Medal of Honor: Warfighter | 2 | Per mode: disc 1 multiplayer, disc 2 campaign (forum only; the Korean disc print says so) | [forum](https://gamefaqs.gamespot.com/boards/662222-medal-of-honor-warfighter/64406440) |
+| Red Dead Redemption: Game of the Year | 2 | Per mode and extra: disc 1 the base game, disc 2 Undead Nightmare and multiplayer | [Rockstar](https://support.rockstargames.com/articles/68TgrDbg5OusKHb90tEcjo/information-about-playing-the-undead-nightmare-disc-as-a-stand-alone-game) |
+| Splinter Cell: Blacklist | 2 | **Swap, not per mode:** campaign part 1 with multiplayer on disc 1, part 2 on disc 2 (forum only) | [forum](https://gamefaqs.gamespot.com/boards/672913-tom-clancys-splinter-cell-blacklist/68037544) |
+| Assassin's Creed III | 2 | Per mode: disc 1 single player, disc 2 multiplayer (forum only) | [forum](https://gamefaqs.gamespot.com/boards/662288-assassins-creed-iii/65651747) |
+| Assassin's Creed IV: Black Flag | 2 | Per mode: disc 1 single player, disc 2 multiplayer (forum only) | [forum](https://gamefaqs.gamespot.com/boards/705967-assassins-creed-iv-black-flag/67612836) |
+
+How to read it. **Swap** means the story or campaign continues on a later
+disc and the game asks for it. **Install** means an extra disc copied to the
+hard drive and the other disc played. **Per mode** means single player and
+multiplayer on separate discs. **Extra** means bonus or downloadable
+content. **Thin** means no press or publisher source for the swap itself.
+Disc counts are Redump's (DAT 2026.10.07); every public source that gave a
+count agreed. Sales are public figures only, with who gave them and the
+platforms when stated; "VGChartz estimate" is VGChartz's own undated figure
+for the Xbox 360 version. US figures are NPD. Metacritic is the Xbox 360
+page, read 2026-10-19; "None" means the page shows no Metascore. The Star
+Ocean figure is Wikipedia's 450,000 citing Square Enix's briefing of 19 May
+2009; a helper reading an archive copy of that briefing's chart saw 420,000
+for the year to March 2009. The search tool's limit ended the search before
+Rage, Wolfenstein: The New Order and L.A. Noire: The Complete Edition were
+searched for their discs, so "not found" for those three means not found in
+Wikipedia and a few pages, not that none exists. Forza Motorsport 3:
+Ultimate Edition (Japan, Asia) also has two discs and is not among the
+English titles. Pages a research helper read that were not opened again:
+Rockstar's support pages (Max Payne 3, GTA V, Red Dead Redemption),
+Activision's, the Redump disc pages and the forum threads.
+
 ### 35. Wii (Dolphin), issue #173
 **Researched and decided with MMagTech 2026-09-30.** Research only; no code.
 
@@ -17623,3 +17762,254 @@ read cannot be told from one the console showed wrong (MMagTech, 2026-10-14:
 "if we think we need to include it to better help troubleshoot ... include
 it"). He tells his Discord users it is there; if they push back, it is
 discussed again.
+
+### 49. PS Vita (Vita3K), issue #198
+
+**Researched 2026-10-19; research only, no code; not decided.** The brief
+is MMagTech's comment on #198 of the same day: five tests, a failure on any
+of the first four a plain no, the fifth his call on the numbers; then which
+games are unique, whether touch was play or navigation (Sony's PS TV list as
+the pad rule), gyro, controls, start and stop, pin and licence, and the Game
+Boy motion games. Read: Vita3K's source at master `7428ca0` (2026-10-19,
+numbered build 4202), its compatibility tracker and Xenia Canary's, Sony's
+PS TV user's guide, Wikipedia's Vita lists (their PS TV column cites Sony),
+No-Intro's Vita DATs (libretro-database `12c21cf`), the pinned mGBA and
+Gambatte, SDL 3.4.16, and his RomM read-only with the Mac token. Nothing ran
+on the A9 or the VM. The sources, linked, are in the comment on #198.
+
+#### What his server holds
+
+- **26 games, not 27.** The 27th entry, `psvita`, is a folder of 26
+  `.psvita` text files (each holds a title ID, ES-DE's launch format) and
+  the `vita.py` that wrote them. Not a game.
+- **Each game is one zip** (`Dragon's Crown [PCSE00019] [USA] [NoNpDRM].zip`),
+  stored without compression, holding only `app/<title ID>/`: `eboot.bin`,
+  `sce_sys/param.sfo`, `sce_pfs/`, and the licence
+  `sce_sys/package/work.bin` (512 bytes). Read from all 26 central
+  directories. No patch or DLC folders; every `param.sfo` says `APP_VER
+  01.00`.
+- **Every licence is No-Intro's:** each `work.bin`'s SHA-1 matches No-Intro's
+  "Sony - PlayStation Vita (PSN)" DAT (2026-10-07) for that USA release.
+  There is no Redump Vita DAT: Vita games are cards and downloads, No-Intro's
+  domain ("Sony - PlayStation Vita", cards as `.vpk`; "(PSN)", one
+  `work.bin` per title).
+- **The game files are encrypted** (Sony's PFS layer): the manual pages in
+  `sce_sys/manual/` are not readable images in any of the 26. Only
+  `param.sfo` and the licence are plain.
+- **RomM 5.4.0 leaves `title_id` empty** for all 26; the zip's first 128
+  bytes name it (`app/PCSE00655/`).
+- **No Vita firmware** on the server (`/api/firmware?platform_id=29` is
+  empty).
+
+#### The five tests
+
+| Test | Answer | Why |
+|---|---|---|
+| 1. What it needs from RomM | **passes, once he uploads two firmware files** | A game is one zip with its licence inside. Firmware: Sony's system software and its font package, which Sony names `PSP2UPDAT.PUP` alike, so they need two names in RomM's Vita `bios/` folder. Vita3K installs each without a window (`--firmware`, one per run, `main.cpp:139-145`), as RPCS3's `--installfw` installs `PS3UPDAT*.PUP` (`standalone_rpcs3.cpp`). Vita3K's quickstart makes both step 3 of 5; it decrypts games without them, but system modules and fonts come from them |
+| 2. No user interaction | **passes on paper** | `--frontend sdl` (b852ad972, 2026-10-09): "a plain window that runs the app given by -r and quits with it". That frontend shows no dialog; the welcome, the update check and the compatibility download belong to the Qt window. User `00` is made by itself. To set: `discord-rich-presence: false` (on by default), `http-enable: false` (games may use HTTP by default), `show-compile-shaders: false`, a log level. Traps: `-F` does nothing there and the window opens at 960x544, so gamescope must fill the screen; `-r` checks the title against the default config's `pref-path` before `-c` is read, so the console writes Vita3K's own `config.yml` before each start, as it deletes Edge's |
+| 3. The cache model | **passes, the way PS3 packages do** | A Vita game is installed before it runs: Vita3K extracts the zip, then decrypts it with `work.bin`, deleting the copy if that fails (`interface.cpp:96-111, 190-252`). So the cached thing is the installed folder, made once on the download worker in the game's folder and removed with it, as PS3 packages are (`standalone_rpcs3.cpp:1-46`); the zip goes after. Costs: about twice the game's size on disk during the install (Killzone: Mercenary is 3.2 GB); install time unmeasured. Installing from a path reinstalls every time (`interface.cpp:196-204`), so starts use `-r`. Outside the folder: the shader and pipeline cache (`~/.cache/Vita3K/shaders/<ID>`), console-wide as Xenia's is |
+| 4. Saves | **passes** | One folder per game, `ux0/user/00/savedata/<dir>`, zipped and sent as PSP's and Xbox 360's are, kept in the person's folder as Xenia's content root is. Vita3K has no save states at all. A real Vita's saves are sealed to that Vita and will not load, as a real 360's do not |
+| 5. Playability | **his call; on the labels, not more experimental than Xbox 360** | below |
+
+**Playability, counted 2026-10-19** (open reports per label):
+
+| | Playable to the end | Reaches play | Reports |
+|---|---|---|---|
+| Vita3K (Vita3K/compatibility) | 1,900 (56.9%) | 2,834 (84.9%): Playable, "Ingame +" 532, "Ingame -" 402 | 3,340 |
+| Xenia Canary (xenia-canary/game-compatibility) | 289 (25.8%) | 1,056 (94.4%): playable, "gameplay" 767 | 1,119 |
+
+The scales differ: Xenia's "gameplay" is any working gameplay, Vita3K
+splits it in two. Both are players' reports on any hardware, some years
+old, and the console runs Edge, not Canary. **His 26:** 23 Playable;
+Killzone: Mercenary "Menu" (Vita3K/compatibility#278), MotorStorm RC
+"Intro" (#3112, Windows, build 3725), Skullgirls 2nd Encore "Intro" (#4039,
+Linux on a Radeon RX 6600, build 4058, 2026-06: a grey screen after the
+logo). His eight Xbox 360 games for comparison: five labelled playable (both
+Forzas, both Gears, Left 4 Dead 2), three unlisted, all eight played on the
+A9 (question 34).
+
+#### Touch: Sony's PS TV list is a pad rule with a pointer
+
+Sony's PS TV user's guide, "Using the touch pointer": in the games Sony
+allowed, a controller does touch through a pointer. L3 shows it for the
+screen, R3 for the rear touch pad, both together for both; the left stick
+(or a DUALSHOCK 4's touch pad) moves it and L2 taps; the right stick brings a
+second pointer, tapped with R2. So a game on Sony's list may still need a
+tap: Sony judged it playable with the pointer. Wikipedia's Vita lists carry
+Sony's list as a PS TV column, sourced to Sony Japan's software search and
+the US store's "PS Vita Games (for PS TV)": 1,075 Yes, 569 No, 16 Partial of
+1,664 rows. By name, not title ID: Sony's full list lived in a PS Store
+category (`STORE-MSF77008-PSTVCOMPATIBLE`), and no copy keyed by title ID
+was found.
+
+**What reaches Vita3K today: no touch at all.** Every emulator of its own
+gets the console's virtual pads, which carry neither a touch pad nor motion
+(`vpad.h`); SDL 3.4.16's Linux joystick code has no touch pad support for
+such a device (`SDL_sysjoystick.c`). Vita3K takes a real DUALSHOCK 4 or
+DualSense touch pad as the front screen (`touch.cpp:251-290`); only its Qt
+window switches it to the rear pad, and no frontend has a stick pointer. The PS TV pointer is an open request upstream,
+Vita3K/Vita3K#3707 ("PSTV 'touch pointer' function", 2025-12-22, no reply).
+**So Sony's list can be the one rule only once Vita3K has the pointer;**
+without it, a listed game that needs a tap stops at that tap.
+
+#### His 26 games
+
+"Elsewhere here" is a version on a system this console plays (PS4, Xbox
+One, PC, 3DS and phones are not). "Not found": no source read mentions it.
+Touch and motion are for the Vita version, from reviews, the PlayStation
+Blog and Wikipedia (the game's own manuals are encrypted, above).
+
+| Game (title ID) | Elsewhere here | Touch | PS TV list | Motion | Vita3K |
+|---|---|---|---|---|---|
+| Dragon's Crown (PCSE00019) | PS3 | optional (the right stick does it too) | yes | not found | Playable |
+| Geometry Wars 3: Dimensions (PCSE00655) | PS3, Xbox 360 | not found | yes | not found | Playable |
+| Gravity Rush (PCSA00011) | **unique** (PS4 remaster) | **required** (dodge by swipe; Gravity Slide) | **no** | **required** (Gravity Slide) | Playable |
+| Guacamelee! (PCSE00033) | PS3; Xbox 360, Wii U, Switch as Super Turbo Championship Edition | probably required (chicken form by swipe) | yes | not found | Playable |
+| Hotline Miami 2: Wrong Number (PCSE00402) | PS3, Switch | not found | yes | not found | Playable |
+| Killzone: Mercenary (PCSA00107) | **unique** | **required** at 1.00 (melee, hacking); update 1.11 reworked it for the PS TV | yes | optional | Menu |
+| MotorStorm RC (PCSA00027) | PS3 | menus only | yes | not found | Intro |
+| Muramasa Rebirth (PCSE00240) | Wii (The Demon Blade) | none | yes | none | Playable |
+| Ninja Gaiden Sigma Plus (PCSE00021) | PS3 (Sigma) | optional, can be turned off | yes | optional | Playable |
+| Odin Sphere Leifthrasir (PCSE00899) | PS3; PS2 original | not found | yes | not found | Playable |
+| Pumped BMX+ (PCSE00702) | PS3, Wii U | **required** (rear pad switches trick sets) | **no** | not found | Playable |
+| Riddled Corpses EX (PCSE01251) | Switch | not found | yes | not found | Playable |
+| Salt and Sanctuary (PCSE01023) | Switch | not found | yes | not found | Playable |
+| Severed (PCSE00589) | Wii U, Switch (touch there too) | **required** (every attack a swipe) | **no** | not found | Playable |
+| Shovel Knight (PCSE00640) | PS3, Wii U, Switch | menus only (rear-pad extras) | yes | not found | Playable |
+| Skullgirls 2nd Encore (PCSE00606) | Switch; PS3, Xbox 360 as Encore | optional (macro buttons) | yes (1 to 2 players) | not found | Intro |
+| Super Monkey Ball: Banana Splitz (PCSE00017) | **unique** | **required** (menus, two modes) | **no** | optional in the main game; camera modes | Playable |
+| Surge Deluxe (PCSE00370) | **unique** | **required** (touch only) | **no** | not found | Playable |
+| Table Top Racing (PCSE00323) | **unique** (PC, phones, PS4, Xbox One) | **main menu touch only**; rear touch in races | yes | not found | Playable (Europe's ID; none for the USA one) |
+| Tales from Space: Mutant Blobs Attack (PCSE00034) | PS3, Xbox 360, Switch | **required** (drag platforms) | **no** | **required** for one bonus level | Playable |
+| Thomas Was Alone (PCSE00258) | PS3, Wii U, Switch | optional | yes | not found | Playable |
+| TxK (PCSE00397) | **unique** | probably required (tap for the smart bomb) | yes | tilt in the warp tunnel, unclear | Playable |
+| Unit 13 (PCSA00014) | **unique** | **required** (objectives, mines) | **no** | none | Playable |
+| Velocity 2X (PCSE00374) | Switch | optional (teleport by cursor too) | yes | not found | Playable |
+| Windjammers (PCSE01032) | Switch | not found | yes | not found | Playable |
+| WipEout 2048 (PCSA00015) | **unique** (PS4 Omega Collection) | optional | **no** | optional | Playable |
+
+**What the table says.**
+
+- **8 of the 26 play nowhere else on this console:** Gravity Rush, Killzone:
+  Mercenary, Super Monkey Ball: Banana Splitz, Surge Deluxe, Table Top
+  Racing, TxK, Unit 13, WipEout 2048.
+- **18 are on Sony's list, 8 are not.** The 14 listed games with no touch
+  needed (or none found) all play here already, on PS3, Switch, Wii U, Wii or Xbox 360, most
+  as the same game. The four listed games that need a tap are Guacamelee!
+  (also here) and three unique ones: Killzone: Mercenary, Table Top Racing
+  and TxK. Killzone was made ready for the PS TV by update 1.11 ("reworked
+  all the touch mechanics", PlayStation Blog, 2014-10-13); his copy is 1.00,
+  and updates wait on #181 ("Updates and DLC as separate files in RomM
+  (Switch, PS3, Xbox 360)").
+- **So without a pointer, the Vita adds no game to his library that does
+  not already play here; with it, two (three once updates come).** The other
+  five unique games are off Sony's list: four need touch, and WipEout 2048
+  is off it although its touch and tilt are optional.
+
+#### Gyro
+
+- **His 26:** motion is required only in Gravity Rush (the Gravity Slide)
+  and Mutant Blobs Attack (one bonus level); both are off Sony's list and
+  need touch anyway. Optional in Killzone, Ninja Gaiden Sigma Plus, Banana
+  Splitz and WipEout 2048; unclear in TxK. **A gyro would unlock none of
+  his games.**
+- **Across the Vita:** no public list of games that need motion was found.
+  Vita3K's tracker has 4 open reports labelled "motion missing" and 2
+  "sensor missing".
+- **A Wii-style greying rule needs data,** as GameTDB is for Wii; nothing
+  says which Vita games need motion, so "needs motion" could not be told
+  from "needs touch". Sony's list leaves the motion games out already:
+  the PS TV had no gyroscope for Vita games at all (Wikipedia's PS TV
+  article, citing Sony's 2013 announcement), so every listed game plays
+  without motion.
+- **Could a DualSense unlock them?** Vita3K takes motion from any SDL pad
+  reporting both sensors (`ctrl.cpp:102-108`, Vita3K PR #2628, 2023-09-02),
+  and a DualSense does. But the virtual pads carry none, and SDL 3.4.16 pairs
+  a pad with its motion device by matching their UNIQ strings
+  (`SDL_sysjoystick.c:1530-1584`), which uinput cannot set (no such ioctl in
+  `uinput.h`): one player at best, unproven. The other way, handing Vita3K
+  the real pads, is open because Vita3K's SDL is 3.4.16 as the console's is,
+  so the numbering fault `vpad.h` guards against does not arise; it would
+  give up the console's player order and the pause menu's hold on the pads,
+  for one system.
+- **Recommended: no gyro for the Vita.** It unlocks nothing on his library,
+  there is no data to grey by, and it is a second input path.
+
+#### The Game Boy motion games
+
+- **mGBA at the pin** (`e31759b`) asks for libretro's sensor interface
+  (`RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE`, `libretro.c:1089-1114`) and
+  feeds the accelerometer's X and Y to tilt carts and the gyroscope's Z to
+  gyro carts (`:2552-2565`). Its own table marks them: WarioWare: Twisted!
+  (`RZWE`, gyro and rumble), Yoshi Topsy-Turvy (`KYGE`, tilt), and Japan's
+  Korokoro Puzzle (`KHPJ`, tilt) (`src/gba/overrides.c`). The console's core
+  host never answers that call (question 35: "the frontend does not offer it
+  yet"), and mGBA has no stick stand-in, so these games get no motion.
+- **Gambatte at the pin** (`d9d6cd0`) refuses MBC7 carts ("MBC7 ROM not
+  supported", `cartridge.cpp:905`). His Kirby Tilt 'n' Tumble is cart type
+  0x22, MBC7 (read from his file), so it does not start at all today. mGBA's
+  Game Boy core runs MBC7 from the same motion source (`src/gb/mbc.c`).
+- **His server has two:** WarioWare: Twisted! (its header says `RZWE`) and
+  Kirby Tilt 'n' Tumble.
+- **3DS:** there is no 3DS core on the console. Azahar's libretro core
+  (master `987f184`, 2026-10-17) takes gyro and accelerometer through the
+  same interface (`src/citra_libretro/input/input_factory.cpp:99-125`).
+- **So one piece serves the cores** (answer the sensor interface from the
+  player's own pad, in process, where the console already reads the real
+  pads), **but not Vita3K**, a separate program behind virtual pads: two
+  pieces, not one. A greying rule by cart hardware is possible from data
+  (mGBA's table for GBA; header byte 0x147 = 0x22 for Game Boy), and Kirby
+  would also need MBC7 carts sent to mGBA, a choice of core by cart type. If
+  any motion is built, this is the cheapest; whether it is wanted is his
+  call.
+
+#### Controls, start and stop, pin and licence (for when it is built)
+
+- **Controls:** the Vita has L and R only, no stick clicks. Vita3K gives L2,
+  R2, L3 and R3 only to games that ask for the PS TV's extended pad
+  (`ctrl.cpp:199-219`). With `pstv-mode` each pad is its own port and the
+  game sees a PS TV; without it every pad is merged into port 1 and ports
+  above answer "no device" (`ctrl.cpp:263-287`). So two players need
+  `pstv-mode`, which is also Sony's convention for the listed games.
+- **Start and stop:** silent start as in test 2. A failed load logs an error
+  and exits -1 (255 to the shell); an unknown `-r` exits 4. SIGTERM becomes
+  SDL's quit event, which the SDL frontend handles like a window close
+  (`session.cpp:295-296`), stopping the session and exiting; a game's own
+  exit ends Vita3K with the game's code (`:374-375`). Batocera's patch says
+  stopping "can hang" on guest threads, so a kill after a wait, as for the
+  others. The log is `~/.cache/Vita3K/vita3k.log`, emptied at each start,
+  TRACE by default. Whether a save written just before a close survives is
+  for the hand test.
+- **Pin and licence:** GPL-2.0. Upstream's own release is a moving
+  `continuous`, but every master build is also a numbered release in
+  Vita3K/Vita3K-builds (4202 is `7428ca0`, 2026-10-19) with an x86-64
+  AppImage: pinned by tag and checksum, built into the image as Xenia's
+  AppImage is, fetched from GitHub at build time only. 92 numbered builds in
+  the last 90 days. The SDL frontend is ten days old.
+
+#### The A9 hand test (step 3 of #198), when he names a time
+
+Needs: the A9 free and him at the TV; the two Sony firmware files on RomM
+(his upload, a write to his server); a numbered Vita3K build run by hand in
+a scratch folder, as `~/x360/t360.sh` was; his DualSense only if the touch
+pad is still wanted. To see: both firmware files install without a window;
+three installs, with time and peak disk (Killzone the largest); `--frontend
+sdl -r <ID>` starting with no dialog and the picture filling the TV; frames
+(frames.py) in one 2D and one 3D game (Shovel Knight; WipEout 2048 or Gravity
+Rush) at 1x and 2x resolution; Killzone and Skullgirls, to see whether their
+labels hold here; a close by SIGTERM (time, exit code) and a save made just
+before it; two pads with `pstv-mode` in Skullgirls; a game's own exit.
+
+#### Recommendation, 2026-10-19 (not decided)
+
+**No, for now.** None of the first four tests fails, and on the labels
+Vita3K is no further from finished than Xbox 360. But Sony's own pad rule
+assumes the PS TV's touch pointer, which Vita3K lacks; without it Sony's
+list over-promises on the games that need a tap, and the only honest rule
+left is a judgement per game, which the project does not make. On his
+library the Vita adds nothing that does not already play here unless the
+pointer comes, and then two games. **It becomes a go with conditions** when
+(1) Vita3K ships the pointer (upstream first, on his go: support for
+Vita3K/Vita3K#3707), (2) Sony's list is in hand by title ID to ship as data,
+and (3) the hand test passes. **No gyro for the Vita** in any case. Game Boy
+motion is a separate, smaller question for him.

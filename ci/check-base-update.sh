@@ -22,7 +22,9 @@
 #   4. Checks the new gamescope still takes every flag cabinetos-session
 #      and Steam's first download (cabinetos-steam-download) pass it
 #      (ci/check-gamescope-flags.sh, #227). One gone makes the update
-#      RELEVANT and says which, before it can reach a television.
+#      RELEVANT and says which, before it can reach a television; a check
+#      that could not tell says why (no --help, or the reading broke), in
+#      the pull request and in the run's summary.
 #   5. Checks the builders still start from the base's Fedora release: the
 #      frontend's and the PCSX2, Cemu and Sunshine builders' `FROM
 #      fedora:NN`, and Sunshine's fc44 package name. A base on a newer Fedora
@@ -34,7 +36,9 @@
 #   /tmp/base-notes.md  the update notes alone (the bump's commit message)
 #
 # Sets these outputs when running under GitHub Actions:
-#   changed, relevant, new_version, summary
+#   changed, relevant, new_version, summary, gamescope (ok, missing; or not
+#   checked: no-help, its --help did not run; too-few, the reading broke;
+#   failed, the check stopped)
 
 set -euo pipefail
 
@@ -135,19 +139,32 @@ say "new base has $(count /tmp/new-manifest.txt) packages"
 podman run --rm "${BASE_REPO}@${new_digest}" \
     sh -c 'cp "$(command -v gamescope)" /tmp/gamescope && /tmp/gamescope --help' \
     > /tmp/gamescope-help.txt 2>&1 || true
+# Its exit says which: 1 a flag gone, 2 no --help from the new base, 3 too
+# few flags read from a script (the reading broke). Kept apart, here and in
+# the run's summary, because the fix is in a different place.
 gamescope_check=ok
-if ci/check-gamescope-flags.sh /tmp/gamescope-help.txt > /tmp/gamescope-missing.txt; then
+if ci/check-gamescope-flags.sh /tmp/gamescope-help.txt \
+    > /tmp/gamescope-missing.txt 2> /tmp/gamescope-check.txt; then
     say "gamescope takes every flag the session and Steam's download pass"
 else
     rc=$?
-    if (( rc == 1 )); then
+    # A 1 with nothing named is the check stopping on an error, not a flag.
+    if (( rc == 1 )) && [[ -s /tmp/gamescope-missing.txt ]]; then
         gamescope_check=missing
         say "gamescope no longer takes: $(tr '\n' ' ' < /tmp/gamescope-missing.txt)"
+    elif (( rc == 2 )); then
+        gamescope_check=no-help
+        say "could not check gamescope's flags: the new base's gamescope --help did not run"
+    elif (( rc == 3 )); then
+        gamescope_check=too-few
+        say "could not check gamescope's flags: too few read from a script"
     else
-        gamescope_check=unknown
-        say "could not check gamescope's flags"
+        gamescope_check=failed
+        say "could not check gamescope's flags: ci/check-gamescope-flags.sh stopped (${rc})"
     fi
 fi
+cat /tmp/gamescope-check.txt >&2
+emit gamescope "${gamescope_check}"
 
 # The builders' Fedora (#487, SCRIPTS-20). They are pinned to a Fedora
 # release, not to the base, and a cache hit restores a build made against
@@ -306,14 +323,25 @@ emit summary "${summary}"
         echo
         echo '```'; cat /tmp/gamescope-missing.txt; echo '```'
         echo
-    elif [[ "${gamescope_check}" == unknown ]]; then
-        echo "### gamescope's flags could not be checked"
+    elif [[ "${gamescope_check}" == no-help ]]; then
+        echo "### gamescope's flags could not be checked: no \`--help\`"
         echo
-        echo "\`ci/check-gamescope-flags.sh\` could not tell: either"
-        echo "\`gamescope --help\` did not run in the new base, or it read too few"
-        echo "flags from \`cabinetos-session\` or \`cabinetos-steam-download\`"
-        echo "(the run's log says which). So nobody has confirmed gamescope still"
-        echo "takes what they pass. Check by hand before merging."
+        echo "\`gamescope --help\` did not run in the new base, or printed nothing"
+        echo "that names \`--backend\`, so nobody has confirmed gamescope still"
+        echo "takes what \`cabinetos-session\` and \`cabinetos-steam-download\`"
+        echo "pass it. Check by hand before merging. What it printed:"
+        echo
+        echo '```'; head -20 /tmp/gamescope-help.txt; echo '```'
+        echo
+    elif [[ "${gamescope_check}" == too-few || "${gamescope_check}" == failed ]]; then
+        echo "### gamescope's flags could not be checked: the reading broke"
+        echo
+        echo "\`ci/check-gamescope-flags.sh\` read fewer flags from a script than"
+        echo "it passes today (or stopped), so a flag passed in a way it cannot"
+        echo "follow went unchecked. Fix the reader, or its floor if a flag was"
+        echo "taken out on purpose, and check gamescope by hand before merging:"
+        echo
+        echo '```'; cat /tmp/gamescope-check.txt; echo '```'
         echo
     fi
 

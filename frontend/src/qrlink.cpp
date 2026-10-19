@@ -1,6 +1,6 @@
 // The link screen: a QR code and a code to approve on a phone. Adding an
-// account, the Tailscale sign-in and the diagnostic report each show one
-// (qrlink.h). Moved out of screens.cpp in the restructure (#398).
+// account, the Tailscale sign-in, the diagnostic report and What's new each
+// show one (qrlink.h). Moved out of screens.cpp in the restructure (#398).
 
 #include "qrlink.h"
 
@@ -17,6 +17,7 @@ void QrLinkScreen::open() {
     // THE LAST CODE'S PICTURE GOES TOO (#485, SETTINGS-06 and HOME-12): kept,
     // a new link whose code would not encode was drawn beside the old QR.
     qr_.set(qr::Code{});
+    baked_.reset();
     busy_ = true;
     appear_.retarget(0.0f, 0.0f);
     appear_.retarget(1.0f, 0.3f);
@@ -33,6 +34,17 @@ void QrLinkScreen::setPairing(const std::string& url, const std::string& code) {
     const qr::Code c = qr::encode(url, &err);
     qr_.set(c);   // an invalid code leaves no picture, never the last one
     if (!c.valid()) error_ = err;   // the address and the code below are still usable
+}
+
+void QrLinkScreen::setBaked(wikiqr::Which which) {
+    // The address without its scheme, as How to writes the Wiki's: it is
+    // read off the screen, and the code is the way in.
+    const std::string url = wikiqr::url(which);
+    url_ = url.substr(url.find("//") + 2);
+    code_ = url_;
+    busy_ = false;
+    baked_ = which;
+    qr_.set(wikiqr::qrCode(which));
 }
 
 void QrLinkScreen::setText(std::string title, std::vector<std::string> lines,
@@ -178,6 +190,8 @@ void QrLinkScreen::draw(Ctx& c) {
     const float qx = kPanelX + (kPanelW - side) * 0.5f;
     const float qy = kPanelY + (kPanelH - side) * 0.5f;
     if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
+    // At full strength, as the code under it is drawn.
+    if (baked_ && qr_.valid()) wikiqr::drawPatch(*baked_, c.r, qx, qy, side, 1.0f);
 
     // --- NOTHING ALONG THE BOTTOM, and both lines that were here are gone ---
     //

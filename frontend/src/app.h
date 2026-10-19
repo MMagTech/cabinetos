@@ -615,7 +615,7 @@ struct App {
     // is what makes quitting a game return to the launch screen and backing out
     // again return to the browsing.
     enum class Screen { Home, Library, Grid, Detail, Search, AddAccount, TailscaleSignIn, Report,
-                        HowTo, Settings };
+                        HowTo, Settings, WhatsNew };
     std::vector<Screen> stack{Screen::Home};
     // Which screen last set the room, so a change of screen can be told apart
     // from focus moving within one. See the backdrop block in the frame loop.
@@ -650,6 +650,9 @@ struct App {
     // THE DIAGNOSTIC REPORT (#195): the same screen again, the link this time
     // a download of the report. Its lines are set when it is made.
     screens::QrLinkScreen reportScreen;
+    // ABOUT, WHAT'S NEW (#329): the same screen once more, its code the What's
+    // new page's, made once by tools/make-wiki-qr.py like How to's Wiki.
+    screens::QrLinkScreen whatsNewScreen;
     // ABOUT, HOW TO (#314): the controls, in Settings' own shape (a section
     // per row on the left, its lines on the right), so it looks like the
     // console rather than a page of text (MMagTech on the TV, 2026-10-10).
@@ -1398,6 +1401,16 @@ struct App {
     std::map<int, size_t> ejectFormats;
     // Format, from a drive's row. Set once buildSettings exists.
     void askFormat(const drives::Drive& d);
+    // WHAT IS ON THE DRIVE, counted on a worker after the PIN (#481,
+    // FILES-21): a drive holding many files took the frame thread for up to
+    // half a second. followDrives opens the confirm when the count arrives
+    // (openFormatConfirm), for the drive it was counting.
+    cab::Job<drives::Contents> formatCount;
+    drives::Drive formatCounting;
+    std::string formatCountingWhat;   // the confirm's first line: kind, model, size
+    int formatCountFrame = 0;         // the frame the count began on, for the log
+    uint64_t formatCountAt = 0;       // and the clock then
+    void openFormatConfirm(const drives::Contents& c);
     std::map<std::string, std::string> locationNames(const std::vector<std::string>& locs,
                                                      const std::vector<drives::Unusable>& unusable);
     int screenOffIndex = 0;
@@ -2098,6 +2111,7 @@ struct App {
     // about.cpp
     void pressCredits();
     void pressHowTo();
+    void pressWhatsNew();
     // downloadsflow.cpp
     void pressDownloads();
     void pressRemoveDownload(const screens::Result& res);

@@ -60,7 +60,7 @@ is in the file named for its feature, and
 | Controllers | `players.cpp`, `controllers.cpp`, `bluetooth.cpp`, `btagent.h`, `battery.cpp`, `batteryrow.cpp`, `shortcuts.cpp`, `wiiremote.cpp` (starts the Wii bridge), `wiipair.cpp`, `wiipanel.cpp`, `wiimii.cpp`, `wii.cpp`, `wiiu.cpp` |
 | The machine | `net.cpp`, `wifi.cpp`, `power.cpp`, `power_menu.cpp`, `powerprofile.cpp`, `volume.cpp`, `sound.cpp`, `gpu.cpp`, `cpus.cpp`, `idle.cpp`, `proc.cpp` (running a program with no shell), `unit.cpp` (asking systemd for a root job), `update.cpp` (System update, the console's side), `files.cpp` (File access, the console's side), `server.cpp` and `serveraddress.cpp` (the RomM server this console belongs to) |
 | RetroAchievements | `achievements.cpp` (the sign-in and rcheevos' client; its console table names every system), `achievements_ui.cpp`, `ra_list.cpp`, `ra_net.cpp`, `ra_state.h` |
-| Settings features | `settingsflow.cpp` (the rows and their dispatch), `settingsids.h`, `about.cpp`, `credits.h`, `access.cpp` (File access and Developer access), `wikiqrview.cpp` and `wikiqr.h` (made by `tools/make-wiki-qr.py`), and one `*flow.cpp` per feature: `accountsflow.cpp`, `downloadsflow.cpp`, `drivesflow.cpp`, `pinflow.cpp`, `serveraddressflow.cpp`, `remoteplayflow.cpp`, `tailscaleflow.cpp`, `steamflow.cpp`, `updateflow.cpp`, `reportflow.cpp`; `choiceflow.cpp` asks a question over any screen |
+| Settings features | `settingsflow.cpp` (the rows and their dispatch), `settingsids.h`, `about.cpp`, `credits.h`, `access.cpp` (File access and Developer access), `wikiqrview.cpp` and `wikiqr.h` (the Wiki's and What's new's QR codes, made by `tools/make-wiki-qr.py`; How to and the link screen draw them), and one `*flow.cpp` per feature: `accountsflow.cpp`, `downloadsflow.cpp`, `drivesflow.cpp`, `pinflow.cpp`, `serveraddressflow.cpp`, `remoteplayflow.cpp`, `tailscaleflow.cpp`, `steamflow.cpp`, `updateflow.cpp`, `reportflow.cpp`; `choiceflow.cpp` asks a question over any screen |
 | Remote Play, Steam, the report | `remoteplay.cpp`, `sunshinelog.cpp`, `tailscale.cpp`, `steam.cpp`, `report.cpp`, `samenames.cpp` |
 | Test instruments | `probes.cpp` (runs the probes and calls most self-tests; `--same-names-test` and `--romm-race-test` run from `cli.cpp`), `selftests.cpp`, `coretests.cpp`, `testhooks.cpp`, `discrig.cpp`, `optcheck.cpp` (the option-table check CI runs). Most self-tests live in their feature's own file (`players::test` in `players.cpp`, and so on). They ship in the program and run only from a flag |
 
@@ -94,8 +94,10 @@ is in the file named for its feature, and
   NEVER BLOCK THE FRAME LOOP"). Downloads, uploads, cover loads and most RomM
   requests run on workers; the frame loop reads their state once a frame
   (`job.h`, `launch.h`). **Not yet true everywhere:** a launch loads the core
-  on the frame thread at the press, and later restores the game's saves from
-  RomM on the frame thread behind the curtain (section 6).
+  on the frame thread at the press (10 to 80 ms measured, #481, "The picture
+  freezes while the console waits on the network or a helper"); the game's
+  saves are fetched by the launch worker and only written behind the curtain
+  (section 6).
 - **The RomM client is the only code that talks to RomM.** It is synchronous
   and owns no thread; callers run it on workers. No password ever reaches it
   (RomM's device pairing gives it a token). Plain HTTP must work. It is
@@ -165,7 +167,11 @@ is in the file named for its feature, and
    `recoverDriveSaves`, which that game's launch also runs); then the rest
    of the start-up steps.
 9. `runFrameLoop` (`frame.cpp`) until the console exits or restarts; then the
-   game is left, the emulators closed, the core unloaded, and `shutDown`.
+   game is left, the emulators closed, the core unloaded, and `shutDown`
+   (`startup.cpp`): the uploads are sent and RetroAchievements' unlocks put
+   on disk first, then the workers are stopped. That rest is given two
+   seconds (#305), except for a restart in place; past them the process ends
+   and names what it was waiting on.
 
 ### Pressing Play on a game
 
@@ -180,6 +186,10 @@ is in the file named for its feature, and
    discs, a game installed before it runs (PS3), a folder of files, one file.
    The bytes go straight to disk: under `cache/` for a game pulled to play,
    under `roms/` for a game kept, on the console's own storage or a drive.
+   With the game on the disk it fetches the game's saves from RomM, the rows
+   and the bytes a restore may pick (`fetchLaunchSaves`; `saves.cpp`,
+   `fetchSaves`), and the Mii Channel's for a Wii game, then marks the job
+   Ready.
 3. Each frame, `pumpLaunch` (`launch.cpp`) reads the job. A failed job is
    undone (the keep record comes out; the bytes stay, to be evicted). A
    Download that was not a Play stops when the game is on disk. A game the
@@ -187,21 +197,24 @@ is in the file named for its feature, and
    that loads no game here (these three, a core that refuses the game, an
    emulator run as a program) forgets what its press asked for: a picked
    state, Home's Resume, a start disc (`forgetLaunchAsks`).
-4. The curtain comes down before the rest of the blocking work (restoring
-   the saves from RomM and loading the game, both on the frame thread), so
-   the person sees a curtain, not a frozen screen. A game for an emulator run as a program starts it here
+4. The curtain comes down before the rest of the work on the frame thread
+   (writing the fetched saves and loading the game), so the person sees a
+   curtain, not a frozen screen; nothing behind it asks the network. A game for an emulator run as a program starts it here
    (`standalone_play.cpp`) and ends this flow; an Xbox game whose last saves
    are still on its drive has them taken off first (`recoverDriveSaves`,
-   `startup.cpp`), or does not start.
+   `startup.cpp`): to this person's folder and the server, or to the folder
+   of the person they belong to, who sends them at their next start. Only a
+   drive that will not give them up stops the game.
 5. For a core: this person's save folder for this game and core is made, a
-   folder save is restored and the starting disc chosen
-   (`prepareSaveDirAndDiscs`); then the file saves (most saves) are restored
-   and Dolphin's settings and the Miis written, all before the load
+   folder save is written from the fetch and the starting disc chosen
+   (`prepareSaveDirAndDiscs`); then the file saves (most saves) are written
+   and Dolphin's settings and the Miis, all before the load
    (`restoreBeforeLoad`).
 6. The core loads the game (`loadLaunchedGame`); `setUpLoadedGame` sets up
-   the session; then the battery save is restored, the options the core was
-   given are logged, sound and pacing open, and play starts
-   (`startPlaying`).
+   the session; then the battery save is written into the core, the options
+   the core was given are logged, sound and pacing open, and play starts
+   (`startPlaying`). The restore order and its rules are one comment on
+   `pumpLaunch`.
 
 ### Leaving a game
 
@@ -228,7 +241,10 @@ power cut).
 3. Each core's saves, where it writes them and the tag they carry on RomM are
    one table, `savetable.cpp`. A launch restores the newest row under its
    tag, except that this console's own copy wins while it is still owed to
-   RomM, and is used when RomM has none (`saves.cpp`).
+   RomM, and is used when RomM has none (`saves.cpp`). The rows and bytes
+   are fetched on the launch worker (`fetchSaves`) and written on the frame
+   thread; a save of the game that lands on RomM between the two makes the
+   fetch stale, and the console's copy stands.
 4. Offline, the console uses its copy of RomM's rows as last seen
    (`savemirror.h`), so a launch decides as it would online. What offline
    will need is fetched while online, and the server is tried in the
@@ -299,10 +315,10 @@ Each with where it is recorded.
 
 ## 6. Known gaps
 
-- **The frame thread waits on the network during a launch:** `beginLaunch`
-  loads the core, and `pumpLaunch` restores the game's saves from RomM and
-  loads the game, all on the frame thread, behind the curtain
-  (`launch.cpp`, `saves.cpp`).
+- **The frame thread loads the core at the press** (`beginLaunch`, 10 to
+  80 ms measured) and loads the game behind the curtain (`pumpLaunch`). The
+  game's saves have come from the launch worker since #481; nothing behind
+  the curtain asks the network (`launch.cpp`, `saves.cpp`).
 - **RomM paths spelled outside the client:** the firmware and one-file game
   downloads (`launch_routes.cpp`), `probes.cpp`, the manual (`manual.cpp`),
   avatars (`startup.cpp`), small and big covers (`image.cpp`) and the cover

@@ -11,39 +11,54 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-19.** `latest` and `testing` are **2026.10.19.2** (revision
-a760620, digest sha256:b49fd4925ef5...), #517, "Overnight batch", merged on
-his go after his TV check and promoted. Built unattended overnight by nine
-sessions; it closed 22 issues. #473, #222 and #490 were reopened with what is
-left on each. Judged on the TV: Genesis 4:3, the grid's cover lift, the PS2
-"Disc can't be read" ending, the Restart fade, achievement progress after a
-state load, PS3 "VSync Mode: Full" (his call: stays on, revisit only on a
-report), N64 without the hitch. 37 issues are open. His server can move to
-RomM 5.4 (#516 is out; database backup first). The A9 is on the testing
-channel; its PIN is off. The machines' addresses are in his local notes,
-which CLAUDE.md loads; the tools read them from the environment
-(`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`).
+**2026-10-19, evening.** `latest` is **2026.10.19.2** (#517). `testing` is
+**2026.10.19.3** (revision 2b115cb), the day's batch: PR #519, "Batch 2026-10-19: Wii Remotes, Play on a slow server, archive folders, stranded Xbox saves, Steam's exit, What's new",
+waiting on his TV check and merge. Seven sessions built it on separate
+files while he was at work, one combined it, built it in the builder, ran
+every self-test and smoke-tested it headless on the A9 through the
+read-only relay. Nothing under `build_files/` or `system_files/` changed,
+so this image is #511's last proof: the 70 MB OS layer's digest must match
+2026.10.19.2's (the PR says whether it did). The morning's review of the 37
+open issues, one at a time with him: eight closed, every other decision
+written on its issue; 29 open now, 24 once the PR merges. His server has
+been on **RomM 5.4.0** since 2026-10-19; the batch's headless runs were the
+first proof of #516 on it. The A9 is on the testing channel; its PIN is
+off. The machines' addresses are in his local notes, which CLAUDE.md
+loads; the tools read them from the environment (`CABINETOS_A9`,
+`CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`; the Mac's shell
+profile does not set them, so export them per command).
 
-**His rules from 2026-10-18:** no issue is opened unless he asks for one
-(findings go in the pull request or PROJECT.md); FSR for Xbox 360 stays off
-(PROJECT.md, question 34). His decisions of that night are in #517's body.
+**His rules from 2026-10-19:** an unattended run never waits on a prompt
+(every session's brief says to skip what needs approval and carry on, and
+the parent sets a timed fallback to combine whatever landed); decisions
+are put to him one at a time, mechanics first, never with options he did
+not ask for; an opt-in, disclosed upload to a site under his control is
+his exception to "the console connects only to RomM and GitHub" (#215).
+No issue is opened unless he asks; findings go in the pull request or
+PROJECT.md.
 
 ## Next
 
-1. **The priority list of the 37 open**, as one short list for his yes or
-   no, grouped as in the 2026-10-19 morning message: ready for the next
-   overnight batch with no decision (#480, the rest of #481, #482, #487,
-   #488, #203, #305); needs the TV or a device; waiting on others; needs
-   his decision; suggested to close (#288, #339, #493, #398, and #490/#492's
-   build-script items). Then run the "no decision" group as the next
-   overnight batch, the same way as #517.
+1. **His TV check of 2026.10.19.3, then the merge on his go** (the list is in
+   PR #519, "For the TV"). After the merge: close nothing by hand (the
+   body closes #480, #481, #482, #488 and #329), delete the batch branches
+   (`claude/ovn4-*`, `claude/research-*`, `ovn4-2026-10-19`) and their
+   worktrees, and record #511's verdict on that issue's thread if the PR
+   had none.
 2. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: read their first week's reports and fix what they find
    (CONTRIBUTING.md, "What CI checks").
-3. **#511's last proof:** the next image built with no change under
-   build_files/ or system_files/ must keep the 70 MB OS layer's digest (the
-   254 MB splash layer already held between 19308fe and a760620; method in
-   #517).
+3. **The next batch, the one that may touch `system_files/`** (once #511
+   is proven): #305's 25 s stall, which is gamescope's own exit waiting on
+   logind (the Steam session's findings are in PR #519: in
+   `cabinetos-session`, give gamescope 2 s once its app is gone, then stop
+   it and carry on; try it with `ui-loop.sh --session-script` first);
+   #492's last item (STALE-187, the flatpak script's unset overrides);
+   #484's small leftovers (its first comment); #253's measurements and the
+   `--rt` trial; the Wii bridge's `make test` as a step in
+   `build-frontend.yml` (one line, and drop "CI does not run it yet" from
+   CONTRIBUTING.md). With the next real core change: #490's comments in
+   the core and PCSX2 build files.
 4. **Review the docs for Cabinet Go**: Cabinet is now the pocket version
    for handhelds, unfinished; the docs that call it "the Apple TV app"
    (CONTRIBUTING.md, docs/CABINET.md, PROJECT.md's banner, README.md, the
@@ -52,11 +67,20 @@ which CLAUDE.md loads; the tools read them from the environment
 
 ## Waiting, not for the next session unless MMagTech raises them
 
-- **His decisions:** #391 (headphones at full volume), #291 (the Rumble
-  row's place), #484's original-Xbox item (a second person blocked by
-  another's stranded save: he wants another way; the Xbox 360 way, saves
-  copied off to their owner at the next start, was offered), #288 and #339
-  (set aside; reasons in coreoptions.cpp and PROJECT.md question 34).
+- **His decisions:** #313 (Select on a stream; the Home-always fix is laid
+  out on the issue), #198 (the Vita research says no for now, and no gyro;
+  PROJECT.md question 49), #339 (the multi-disc audit: 15 of the 30 swap
+  discs mid-story; the table is on the issue and in question 34), #215,
+  #181 and #224 (each with its design on the issue), #487's
+  BASE_UPDATE_TOKEN secret and fork design.
+- **Needs the TV or a device:** #473 (a press while an emulator of its own
+  has the screen), #411 (Moonlight), #381 (the HDMI cable out), #290 (the
+  C1, before a release), #228 (the measurement in PROJECT.md section 46
+  when the sound dies again), #132 (the Bluetooth wake test).
+- **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
+  (RomM's save channels; revisit mid-January 2027), #222 (a Flycast
+  refusal seen in play), #203 (libretro/dolphin#508, no reply since
+  2026-10-01; the console's half waits for it).
 - **The game page's launch messages, later** (MMagTech, 2026-10-19, at the
   TV): "Disc can't be read" sits as a loose grey line under Download, as do
   all ten or so reasons Play or Download fails ("Couldn't start this game",
@@ -65,12 +89,6 @@ which CLAUDE.md loads; the tools read them from the environment
   offered; or the bottom pill) and their wording reviewed together, with a
   way to cycle through each on the TV first, like `--notice-gallery`: he
   has never seen half of them. Not an issue.
-- **Waiting on others:** #297 and #390 (Sunshine), #346 and #353 (RomM's
-  save channels; revisit around mid-January 2027), #487's
-  BASE_UPDATE_TOKEN secret (his), Xenia Edge taking Canary's Unreal tiling
-  fix (PROJECT.md, question 34).
-- **#228, sound dying:** investigated 2026-10-19 (PROJECT.md section 46, a
-  leading cause and the measurement that would confirm it, on the TV).
 
 **After a console is installed fresh** it has no key: About, press Version
 seven times, Developer access, PIN; then from the Mac, with the password on

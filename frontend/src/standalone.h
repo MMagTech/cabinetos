@@ -200,7 +200,10 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir);
 // the drive, written once they are on it; eviction leaves such a folder alone
 // (cache.cpp), and the next start of the console, or the next launch of that
 // game, finishes it after a crash, a power cut or a copy-off that failed
-// (App::recoverDriveSaves). Until it is finished that game does not start.
+// (App::recoverDriveSaves): this person's go up; another person's are copied
+// into that person's folder with the note moved there, so they go up as them
+// the way the next paragraph's do, and the game starts. Only saves the drive
+// will not give up keep the game from starting.
 //
 // Xenia, Cemu, Eden and RPCS3 (`notesPlaying`): the note goes in the PERSON's folder for
 // the game (`saveDir`), where the emulator writes the saves itself. A note
@@ -214,9 +217,13 @@ bool beforeStart(const Emulator& e, const std::string& entryPath, const std::str
 bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
               std::string* err);
 void finished(const Emulator& e, const std::string& saveDir);
-// The note in a folder (a game's for xemu, a person's for Xenia), or empty.
+// The note in a folder (a game's for xemu, a person's for the others and for
+// Xbox saves brought off the drive for them), or empty; one written there,
+// and one taken away.
 std::string playingNote(const std::string& folder);
 bool hasPlayingNote(const std::string& folder);
+bool writePlayingNote(const std::string& folder, const std::string& note);
+void removePlayingNote(const std::string& folder);
 
 // One running game.
 class Run {

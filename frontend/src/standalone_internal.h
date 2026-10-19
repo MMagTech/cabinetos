@@ -17,8 +17,10 @@ namespace cab::standalone::detail {
 // Where a game's folder records what was installed into it and deleted.
 constexpr const char* kInstalledNote = ".cabinetos-installed";
 // The note a folder holds from the start of a game until its saves are sent
-// (beforeStart): a game's folder for xemu, a person's for the others.
-// cache.cpp spells it out as well, to leave a game's folder holding one alone.
+// (beforeStart): a game's folder for xemu, a person's for the others, and a
+// person's for Xbox saves another person's start brought off the drive for
+// them (App::recoverDriveSaves). cache.cpp spells it out as well, to leave a
+// game's folder holding one alone.
 constexpr const char* kPlayingNote = ".cabinetos-playing";
 // RPCS3's one user, as it names the folder. The console's people are told
 // apart by whose save folder `hdd0` is, not by PS3 users.

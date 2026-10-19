@@ -152,6 +152,8 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          GAMESCOPE: ${{ steps.check.outputs.gamescope }}
         run: |
           {
             echo "## Base update check"
@@ -160,6 +162,16 @@ jobs:
               echo "Base moved to \`${{ steps.check.outputs.new_version }}\`."
               echo
               echo "**${{ steps.check.outputs.summary }}**"
+              echo
+              # The two ways the gamescope check can fail to tell (#487) need
+              # different fixes, so each says its own.
+              case "${GAMESCOPE}" in
+                ok) echo "gamescope takes every flag we pass it." ;;
+                missing) echo "gamescope no longer takes a flag we pass it (named in the pull request)." ;;
+                no-help) echo "gamescope's flags not checked: \`gamescope --help\` did not run in the new base." ;;
+                too-few) echo "gamescope's flags not checked: too few were read from a script (the reader broke; the step's log says which)." ;;
+                *) echo "gamescope's flags not checked: \`ci/check-gamescope-flags.sh\` stopped (the step's log says why)." ;;
+              esac
             else
               echo "No change — still on the pinned digest."
             fi

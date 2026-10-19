@@ -416,7 +416,7 @@ void SettingsScreen::drawGlass(Ctx& c) {
         if (qrFor_ != cat.qr) {
             std::string err;
             if (wiki) {
-                qr_.set(wikiqr::qrCode());
+                qr_.set(wikiqr::qrCode(wikiqr::Which::Wiki));
             } else {
                 qr_.set(qr::encode(cat.qr, &err));
             }
@@ -430,7 +430,8 @@ void SettingsScreen::drawGlass(Ctx& c) {
         const float side = std::clamp(itemBottom - qy, 360.0f, std::min(pw, 640.0f));
         const float qx = px + (pw - side) * 0.5f;
         if (qr_.valid()) qr_.draw(c.r, qx, qy, side);
-        if (wiki && qr_.valid()) wikiqr::drawPatch(c.r, qx, qy, side, alpha);
+        if (wiki && qr_.valid())
+            wikiqr::drawPatch(wikiqr::Which::Wiki, c.r, qx, qy, side, alpha);
     };
     auto drawPane = [&](int ci, float alpha, int focusRow, float scrollY) {
         drawRows(cats_[ci].rows, alpha, focusRow, scrollY);

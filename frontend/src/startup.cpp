@@ -13,12 +13,15 @@
 #include <dirent.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 #include "capture.h"
@@ -725,15 +728,18 @@ void App::settleScreensAtStart() {
     // Favorites when nothing has been played, as homeFromTheStart.
     focusRow = homeTopRow();
     // --focus N still means "start on card N of Recent", which is what every
-    // existing capture script passes it for.
+    // existing capture script passes it for. On an empty row the high bound
+    // is held at 0, not -1, which std::clamp leaves undefined (#488,
+    // HOME-21); slot 0 of an empty row is no card, as -1 was.
     if (initialFocus >= 0) {
         focusRow = RowRecent;
-        focusSlot = std::clamp(initialFocus, 0, static_cast<int>(shelfSlots()) - 1);
+        focusSlot = std::clamp(initialFocus, 0, std::max(0, static_cast<int>(shelfSlots()) - 1));
     }
     if (initialRow >= 0) {
         focusRow = std::clamp(initialRow, 0, static_cast<int>(RowFavorites));
         if (!rowExists(focusRow)) focusRow = homeTopRow();
-        focusSlot = std::clamp(focusSlot, 0, static_cast<int>(rowSlots(focusRow)) - 1);
+        focusSlot =
+            std::clamp(focusSlot, 0, std::max(0, static_cast<int>(rowSlots(focusRow)) - 1));
     }
     scrollY.from = scrollY.to = 0.0f;
     backdropMix.from = backdropMix.to = 1.0f;
@@ -793,43 +799,74 @@ void App::recoverPowerCutSaves() {
             }
         }
     }
-    // AND AN XBOX 360 OR WII U GAME'S (`notesPlaying`), whose note is in the
-    // person's own folder: `saves/<platform>/<rom id>/<core>/`. Only this
-    // person's, since the upload goes as them; anyone else's is finished when
-    // they next start a game of that kind here, or the console starts as them.
-    for (const cab::standalone::Emulator* emu : cab::standalone::all()) {
-        if (!emu->notesPlaying) continue;
-        const std::string saves = storage::userDir(storage::currentUser()) + "/saves";
-        for (const std::string& platform : listNames(saves))
-            for (const std::string& rom : listNames(saves + "/" + platform)) {
+    // AND THE NOTES IN THIS PERSON'S OWN FOLDERS, `saves/<platform>/<rom
+    // id>/<core>/`: an Xbox 360, Wii U, Switch or PS3 game's (`notesPlaying`,
+    // the emulator writes there), and an Xbox game's whose saves another
+    // person's start brought off the drive for them (recoverDriveSaves,
+    // below). Only this person's, since the upload goes as them; anyone
+    // else's is finished when they next start a game of that kind here, or
+    // the console starts as them.
+    const std::string saves = storage::userDir(storage::currentUser()) + "/saves";
+    for (const std::string& platform : listNames(saves))
+        for (const std::string& rom : listNames(saves + "/" + platform))
+            for (const cab::standalone::Emulator* emu : cab::standalone::all()) {
                 const std::string dir = saves + "/" + platform + "/" + rom + "/" + emu->core;
                 if (cab::standalone::hasPlayingNote(dir))
                     finishInterruptedSave(*emu, dir, uploader);
             }
-    }
 }
 
 // ONE XBOX GAME'S FOLDER, as above: true when it holds no note, or its
-// saves came off. False while they stay on the drive (somebody else's, or
-// the drive would not give them up): nothing may write that drive until
-// they are off. A launch of the game runs it too, before beforeStart would
-// put this person's older copy over them (#398, EMU-12).
+// saves came off. False only while they stay on the drive because it would
+// not give them up: nothing may write that drive until they are off. A
+// launch of the game runs it too, before beforeStart would put this
+// person's older copy over them (#398, EMU-12).
+//
+// WHOSE THEY ARE DECIDES WHERE THEY GO (#484, MMagTech, 2026-10-19). This
+// person's go up now, as if their game had just ended. Another person's are
+// copied into that person's folder, exactly as their own end would do, and
+// the note is left there rather than on the drive: the upload goes only as
+// them, through what Xbox 360 and Wii U use (finishInterruptedSave, at their
+// next launch of the game or the next start of the console as them,
+// recoverPowerCutSaves), and the game starts for whoever is here. Until then
+// another person's stayed on the drive and the game was refused to everyone
+// else until that person played it. Saves whose folder names nobody on this
+// console (the person was removed, and their folder with them) are treated
+// as removed with them: one line here, and the game starts.
 bool App::recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::string& path) {
     if (!cab::standalone::hasPlayingNote(path)) return true;
-    std::istringstream note(cab::standalone::playingNote(path));
+    const std::string text = cab::standalone::playingNote(path);
+    std::istringstream note(text);
     std::string id, dir, title, tag;
     std::getline(note, id);
     std::getline(note, dir);
     std::getline(note, title);
     std::getline(note, tag);
-    // ONLY THIS PERSON'S. The upload goes as whoever the console acts as,
-    // so somebody else's stays on the drive, still protected, until they
-    // are the one here.
     const std::string mine = storage::userDir(storage::currentUser()) + "/";
-    if (dir.compare(0, mine.size(), mine) != 0) {
-        std::fprintf(stderr, "[xbox] %s holds another person's saves; left for them\n",
-                     path.c_str());
-        return false;
+    const bool theirs = dir.compare(0, mine.size(), mine) != 0;
+    if (theirs) {
+        bool known = false;
+        for (const storage::User& u : storage::knownUsers()) {
+            const std::string own = storage::userDir(u) + "/";
+            if (dir.compare(0, own.size(), own) == 0) known = true;
+        }
+        if (!known) {
+            std::fprintf(stderr, "[xbox] %s holds saves of nobody on this console any more "
+                         "(%s); removed with them\n", path.c_str(), dir.c_str());
+            cab::standalone::removePlayingNote(path);
+            return true;
+        }
+        // THEIR NOTE FIRST, THEN THEIR SAVES. A stop between the two leaves
+        // both notes, and the next start does this again. The other order
+        // would leave their saves in their folder with nothing to say they
+        // are owed, and their next launch would unpack the server's older
+        // zip over them (restoreDirSave).
+        storage::makeDirs(dir);
+        if (!cab::standalone::writePlayingNote(dir, text)) {
+            std::fprintf(stderr, "[xbox] saves left on %s: could not mark %s\n", path.c_str(),
+                         dir.c_str());
+            return false;
+        }
     }
     GameSession owed;
     owed.romId = std::atoi(id.c_str());
@@ -839,9 +876,14 @@ bool App::recoverDriveSaves(const cab::standalone::Emulator& xemu, const std::st
     owed.dirSaveRoot = cab::standalone::saveRoot(xemu, dir);
     owed.dirAtLaunch = cab::listTree(owed.dirSaveRoot);
     std::string aerr;
-    if (dir.empty() || !cab::standalone::afterEnd(xemu, path, dir, &aerr)) {
+    if (!cab::standalone::afterEnd(xemu, path, dir, &aerr)) {
         std::fprintf(stderr, "[xbox] saves left on %s: %s\n", path.c_str(), aerr.c_str());
         return false;
+    }
+    if (theirs) {
+        std::fprintf(stderr, "[xbox] %s held another person's saves; copied into %s, to go "
+                     "up when the console next acts as them\n", path.c_str(), dir.c_str());
+        return true;
     }
     std::fprintf(stderr, "[xbox] finished what a stop left on %s\n", path.c_str());
     syncDirSave(owed, uploader);
@@ -896,6 +938,31 @@ void App::settleTabsAtStart() {
     tabDissolve.from = tabDissolve.to = 0.0f;
 }
 
+// THE REST OF AN EXIT IS GIVEN TWO SECONDS (#305), once the saves are sent
+// and the unlocks are on disk. Everything after that is a watcher's look, a
+// cache, or a request somebody can make again, and every one of them can
+// wait on something outside: a RomM call 30 s, a look at Sunshine 8 s, a
+// Steam slice job minutes. Nothing bounded them, and the session waits for
+// this process before Steam starts. Measured on the A9, 2026-10-19: the
+// rest takes 0.2 to 0.6 s; the journal's 21 hand-overs since 2026-10-04
+// had it gone in 0.06 to 0.28 s but once in 2.4 s, with no line to say
+// where. Past the two seconds the process ends here, the way Restart and
+// Power off end it every day (gamescope's reaper), and says what it was
+// waiting on. Not for a restart in place: that one must reach its exec.
+namespace {
+constexpr int kExitRestSeconds = 2;
+std::atomic<const char*> gExitStep{""};
+
+void boundTheRestOfTheExit() {
+    std::thread([] {
+        std::this_thread::sleep_for(std::chrono::seconds(kExitRestSeconds));
+        std::fprintf(stderr, "[shutdown] %d s after the saves, still waiting on %s; ending now\n",
+                     kExitRestSeconds, gExitStep.load());
+        ::_exit(0);
+    }).detach();
+}
+}  // namespace
+
 int App::shutDown(char** argv) {
     // Drained rather than abandoned: anything still queued is a save somebody
     // has already made, and quitting is not a reason to throw it away. This is
@@ -904,6 +971,9 @@ int App::shutDown(char** argv) {
     if (uploader.pending() > 0)
         std::fprintf(stderr, "[sync] finishing %d upload(s)\n", uploader.pending());
     uploader.shutdown();
+    // And an unlock still waiting to go out is written to its queue on disk.
+    ra::shutdown();
+    if (!restartSelf) boundTheRestOfTheExit();
     // A STEAM DOWNLOAD IS CANCELLED, not waited for (#485, SETTINGS-04):
     // SteamJobStop joins its thread as the App goes, and the download script
     // ends only on a cancel or its parent gone. Cancelled, proc::run stops it
@@ -911,18 +981,23 @@ int App::shutDown(char** argv) {
     if (steamInstall) steamInstall->cancel = true;
     // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
     // still running at exit ends the process with abort().
+    gExitStep = "Remote Play's watcher";
     remoteplay::watch(false);
     remoteplay::join();
+    gExitStep = "Tailscale's watcher";
     tailscale::watch(false);
     tailscale::cancelLogin();
     tailscale::join();
+    gExitStep = "Tailscale's sign-out";
     if (tsWorker.joinable()) tsWorker.join();
+    gExitStep = "the report";
     stopReport();
     // AND ADD AN ACCOUNT'S PAIRING (#398, SETTINGS-03; part of #406). It was
     // joined only before the next pairing, so after any visit to Add an
     // account the App was destroyed holding a joinable thread and Switch to
     // Steam ended in std::terminate. A poll still waiting stops at once; one
     // in flight is the server's answer away.
+    gExitStep = "an account's pairing";
     {
         std::lock_guard<std::mutex> lk(addJob->m);
         addJob->stop = true;
@@ -932,17 +1007,21 @@ int App::shutDown(char** argv) {
     // AND THE REST OF #406: a Remove or Sign-out send, stopped after the file
     // on the wire (what is left stays owed), the reconnect watcher and the
     // drive backfill, each at its next step.
+    gExitStep = "a Remove or Sign out";
     removeJob->stop = true;
     if (removeJob->th.joinable()) removeJob->th.join();
+    gExitStep = "offline sync";
     stopOfflineSync();
 
-    ra::shutdown();
+    gExitStep = "the covers";
     images.shutdown();
+    gExitStep = "the window";
     text.shutdown();
     renderer.shutdown();
     SDL_GL_DestroyContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    gExitStep = "the App's workers or the end of the process";
 
     // STARTING AGAIN IN PLACE, for Sign out and a new server address. Not by
     // exiting: gamescope ends with its child, and the session coming back up

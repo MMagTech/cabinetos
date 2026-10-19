@@ -208,15 +208,6 @@ public:
     void setSpeed(double s) { speed_ = s < 1.0 ? 1.0 : s; }
     double speed() const { return speed_; }
 
-    // How far the core's own audio output has run ahead of the clock runFor is
-    // driven by, in seconds. Positive means the emulated machine is going
-    // faster than realtime.
-    //
-    // This is the only direct read on emulated speed the frontend has, because
-    // audio is the one output whose rate the emulated machine decides rather
-    // than us. For one core it is also a brake — see runFor.
-    double audioAhead() const;
-
     // Whether the emulated machine is actually RUNNING, as opposed to still
     // being built. Audio is the signal because it is the one output that does
     // not appear until the machine runs — a picture arrives while a core is
@@ -248,8 +239,8 @@ public:
     // Dreamcast, Naomi, N64 and PSP — forty-three games in the reference
     // library today and every heavy system after it. They ask for a context
     // with RETRO_ENVIRONMENT_SET_HW_RENDER, and while this host refused that
-    // ask those cores could be built and could never be run. `catalog` had to
-    // grow a fourth answer, NeedsHardwareRender, to say so honestly.
+    // ask those cores could be built and could never be run (`catalog` had an
+    // answer of its own for them, removed with nothing left to give it, #492).
     //
     // WHAT IS ACTUALLY HANDED OVER, AND WHY IT IS NOT A CONTEXT. The frontend
     // already owns one GLES 3.0 context and draws the whole UI in it. So the
@@ -488,10 +479,6 @@ public:
     // whether emulated time is advancing at realtime.
     uint64_t framesRun() const;
     uint64_t audioFramesTotal() const;
-    // How many times the governor decided the core was not due. Zero for every
-    // core but one, and so far zero for that one too — which is a fact worth
-    // being able to read rather than a brake nobody can see.
-    uint64_t governorSkips() const { return governorSkips_; }
 
 private:
     Core() = default;
@@ -521,12 +508,6 @@ private:
     void (*afterFrame_)() = nullptr;
     double accumulator_ = 0.0;
     double speed_ = 1.0;
-    // The clock audioAhead measures against, and whether this core is braked
-    // by it. None is today (core.cpp, where governed_ is set); the switch
-    // stays. See runFor.
-    double paceClock_ = 0.0;
-    bool governed_ = false;
-    uint64_t governorSkips_ = 0;
     bool saveRunsFrame_ = false;   // see saveRunsFrame
 };
 

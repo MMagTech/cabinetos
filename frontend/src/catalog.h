@@ -70,27 +70,6 @@ enum class Support {
     // always a reason, and `reason()` gives it, because a decision nobody can
     // recover is indistinguishable from a bug.
     Excluded,
-    // The core is built and sitting on this disk, and the console still cannot
-    // run it, because it renders through a graphics context rather than
-    // handing back pixels and the host cannot serve the one it asks for.
-    //
-    // A FOURTH ANSWER RATHER THAN NotInstalled, because "we have not built it"
-    // and "we cannot drive it" lead to different work, and because the file
-    // being present would otherwise make the console offer a Dreamcast game it
-    // cannot start. That is the exact bug NotInstalled was added for, one layer
-    // further in.
-    //
-    // NOTHING ANSWERS THIS TODAY. It used to cover Flycast, Mupen64Plus and
-    // PPSSPP wholesale; the host now hands a hardware-rendered core a
-    // framebuffer in its own GLES context, and the first two are measured
-    // running real games from the library. What remains is the narrower case
-    // the value was always really about: a core that wants desktop GL or
-    // Direct3D, which this host does not serve and which `core_hwrender.cpp`
-    // turns down by name (Vulkan is served where the machine has it). PPSSPP has since been built and PSP plays through the same
-    // framebuffer path, so all three of the original cores are measured
-    // running real games and none of them answers this. Nothing is queued
-    // behind them — the next core that wants desktop GL will be the first.
-    NeedsHardwareRender,
     // The console runs this system, and THIS GAME was made for a controller
     // nobody has paired. Wii: a game that takes neither a Classic Controller
     // nor a GameCube pad needs a real Wii Remote (wii.h; docs/PROJECT.md open

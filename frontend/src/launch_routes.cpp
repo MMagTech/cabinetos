@@ -2,7 +2,8 @@
 // launch runs first, then one of four routes in a fixed order: a game on
 // several discs, a game installed before it runs (PS3), a folder of files,
 // one file. The disc route falls through to the others below two discs; the
-// other three always end the worker. beginLaunch (launch.cpp) starts it.
+// other three always end the worker, by fetching the game's saves from RomM
+// (finish) before the job is Ready. beginLaunch (launch.cpp) starts it.
 // Moved out of main.cpp in the restructure (#398).
 
 #include "launch.h"
@@ -25,8 +26,11 @@
 #include "fileio.h"
 #include "romfile.h"
 #include "romm.h"
+#include "saves.h"
 #include "standalone.h"
 #include "storage.h"
+#include "wii.h"
+#include "wiimii.h"
 
 // How many things are in a directory. Used once, to decide whether a download
 // left anything behind it when the core turned out to read its own archive.
@@ -55,8 +59,33 @@ static bool cancelled(LaunchJob& job) {
     return true;
 }
 
-// The end of every route: Ready, unless a cancel came during its last step.
-static void finish(LaunchJob& job) {
+// THE GAME'S SAVES COME DOWN HERE, ON THE WORKER (#481, LAUNCH-17), once the
+// game is on the disk: the rows RomM holds for it and the bytes of each row a
+// restore may pick (saves.h, fetchSaves), and for a Wii game the Mii
+// Channel's, found as its own launch would find it. The stages behind the
+// curtain (launch.cpp, pumpLaunch) restore from these and ask the server
+// nothing, so a slow or hanging server holds this job's busy clock, with the
+// screen alive, and never a black curtain. Each fetch asks only with a token
+// and a tag the core's saves travel under, as the restores did.
+static void fetchLaunchSaves(LaunchJob& job, romm::Client& client, const storage::User& user) {
+    const char* tag = catalog::saveTag(job.coreName.c_str());
+    fetchSaves(client, user, job.romId, tag, &job.cancel, &job.saves);
+    job.miiSaves = SaveFetch{};
+    if (job.cancel.load() || job.platformSlug != "wii" || job.coreName != "dolphin" ||
+        wii::isMiiChannel(job.titleId))
+        return;
+    int miiRom = 0;
+    std::string miiTitle;
+    if (!findMiiChannel(client, job.platformId, &miiRom, &miiTitle)) return;
+    fetchSaves(client, user, miiRom, tag, &job.cancel, &job.miiSaves);
+    job.miiSaves.title = miiTitle;
+}
+
+// The end of every route: the saves fetched, then Ready, unless a cancel
+// came during either.
+static void finish(LaunchJob& job, romm::Client& client, const storage::User& user) {
+    if (cancelled(job)) return;
+    fetchLaunchSaves(job, client, user);
     if (cancelled(job)) return;
     job.stage = LaunchJob::Stage::Ready;
 }
@@ -66,7 +95,8 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                   const std::string slug, const std::string fsSlug, const std::string fsName,
                   const cab::standalone::Emulator* const emu, const std::string entryPath,
                   const std::string location, const std::string validExts,
-                  const bool blockExtract, const int64_t expectedSize, const bool multiFile) {
+                  const bool blockExtract, const int64_t expectedSize, const bool multiFile,
+                  const storage::User user) {
     // FIRMWARE FIRST, and EVERY file the platform lists rather than
     // whichever one this game looks like it needs. A core looks BIOS up by
     // name in the system directory and ignores what it does not want, so
@@ -333,7 +363,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             job.romPath = list;
             job.got = 0;
             job.total = 0;
-            finish(job);
+            finish(job, client, user);
             return;
         }
     }
@@ -426,7 +456,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             return;
         }
         job.romPath = rom;
-        finish(job);
+        finish(job, client, user);
         return;
     }
 
@@ -466,7 +496,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 std::fprintf(stderr, "[launch] files of %d: %s; playing the one file "
                                      "here\n", id, lerr.c_str());
                 job.romPath = entry;
-                finish(job);
+                finish(job, client, user);
                 return;
             }
             const size_t slash = entry.find_last_of('/');
@@ -621,7 +651,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             return;
         }
         job.romPath = primary;
-        finish(job);
+        finish(job, client, user);
         return;
     }
 
@@ -757,7 +787,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // A file entry is one the console already collapsed, which only
         // happens for a payload no core wanted unpacked. Nothing to do.
         job.romPath = dest;
-        finish(job);
+        finish(job, client, user);
         return;
     }
 
@@ -833,5 +863,5 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     }
 
     job.romPath = primary;
-    finish(job);
+    finish(job, client, user);
 }
