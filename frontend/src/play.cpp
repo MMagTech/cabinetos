@@ -277,7 +277,7 @@ bool App::readGameInput(cab::Core& core) {
             if (down(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))  st.buttons |= bit(cab::L);
             if (down(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) st.buttons |= bit(cab::R);
             // L3/R3 also open the overlay as a pair. They still
-            // reach the core individually: Cabinet's rule is that
+            // reach the core individually: Cabinet's rule was that
             // the hotkey "applies regardless of what either button
             // is otherwise bound to", and the overlay pauses the
             // core the instant it opens anyway.
@@ -418,8 +418,8 @@ bool App::readGameInput(cab::Core& core) {
     // the thing that is wrong has cost this project a day already.
     // THE OVERLAY PAUSES THE EMULATOR. It did not until 2026-09-19,
     // so the game carried on being played behind the menu — in Crazy
-    // Taxi you would still be driving while reading it. Cabinet has
-    // always done this (`openMenu` sets `renderer.paused = true`);
+    // Taxi you would still be driving while reading it. Cabinet
+    // always did this (`openMenu` set `renderer.paused = true`);
     // this console simply never did, because nobody had opened the
     // overlay with a game they were actually playing.
     //
@@ -509,7 +509,7 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // The declared aspect is still what a picture with square
         // pixels needs and Saturn is unplayable without it, so it
         // keeps winning everywhere else. Nothing is lost by dropping
-        // it here, for the reason Cabinet gives: the platforms whose
+        // it here, for the reason Cabinet gave: the platforms whose
         // pixels are not square never rotate, and the boards that
         // rotate are square-pixel.
         const float declaredAspect = quarterTurn ? 0.0f : core.avInfo().aspectRatio;

@@ -180,7 +180,7 @@ struct RomFile {
 
 // A save or a save state held by RomM.
 //
-// They are separate endpoints and separate ideas, and Cabinet keeps them apart
+// They are separate endpoints and separate ideas, and Cabinet kept them apart
 // on purpose. A SAVE is the game's own — a cartridge battery, a memory card —
 // and it outlives everything; it is uploaded with overwrite so a PS1 game keeps
 // one memory card rather than one per session. A STATE is a snapshot of the
@@ -192,7 +192,7 @@ struct Asset {
     std::string fileName;
     int64_t sizeBytes = 0;
     // Which core wrote it. The reason states can be offered or greyed out
-    // rather than failing in front of someone — see docs/CABINET.md.
+    // rather than failing in front of someone (docs/history/CABINET.md).
     std::string emulator;
     std::string updatedAt;
     // A state's picture on RomM (its `screenshot.download_path`), for the

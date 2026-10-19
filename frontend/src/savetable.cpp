@@ -30,18 +30,18 @@ const char* emulatorTag(const char* core) {
         // save-state portability result was proved with this core.
         {"gambatte", "gambatte-native"},
         // Pinned at a7985a9c. CabinetOS builds HAVE_CDROM=0, which is what
-        // Cabinet's Apple builds get by default, and the object-file
+        // Cabinet's Apple builds got by default, and the object-file
         // comparison showed the flag changes nothing under core/.
         {"genesis_plus_gx", "gpgx-native"},
         // Pinned at ba61a4fd. CabinetOS builds DYNAREC=lightrec where Cabinet
-        // runs the interpreter on iOS/tvOS and ari64 on the Mac — and sharing
-        // the tag across that difference is what Cabinet ALREADY does between
+        // ran the interpreter on iOS/tvOS and ari64 on the Mac, and sharing
+        // the tag across that difference is what Cabinet ALREADY did between
         // its own two. Justified rather than assumed: the state format
         // tolerates either backend, and the dynarec section is block addresses
         // rather than machine state. docs/PROJECT.md, open question 13.
         {"pcsx_rearmed", "pcsx-rearmed-native"},
-        // Pinned at 66b5d263. CabinetOS builds JIT_ARCH=x64 where Cabinet runs
-        // the interpreter on iOS/tvOS and aarch64 on the Mac — and this one was
+        // Pinned at 66b5d263. CabinetOS builds JIT_ARCH=x64 where Cabinet ran
+        // the interpreter on iOS/tvOS and aarch64 on the Mac, and this one was
         // MEASURED, not argued: both builds run Tetris DS to an identical video
         // and audio digest over 600 frames, write states of identical size, and
         // every cross-load lands on the same digest as the matching control.
@@ -49,7 +49,7 @@ const char* emulatorTag(const char* core) {
         // DoSavestate are guarded `if (!file->Saving)`.
         {"melonds", "melonds-native"},
         // Pinned at 733c711a, and built with use_sh2drc=0, which is exactly
-        // what Cabinet's Apple builds get. Same commit, same argument, so the
+        // what Cabinet's Apple builds got. Same commit, same argument, so the
         // tag needs no argument at all. The states were checked anyway and came
         // out byte-identical to the recompiler build's.
         {"picodrive", "picodrive-native"},
@@ -59,15 +59,15 @@ const char* emulatorTag(const char* core) {
         //
         // One caveat, and it is Cabinet's rather than ours: libmgba_mac.a
         // reports its revision as `e31759b24-dirty`, so Cabinet's Mac build
-        // carries a modification no script applies — the same class of problem
-        // as Flycast's unscripted edits. The iOS and tvOS archives are clean at
-        // this commit, and tvOS is the platform states travel to and from most.
+        // carried a modification no script applies: the same class of problem
+        // as Flycast's unscripted edits. The iOS and tvOS archives were clean at
+        // this commit, and tvOS was the platform states travelled to and from most.
         {"mgba", "mgba-native"},
         // Pinned at c989c255, and the only core in the set where there is no
         // configuration difference left to justify. The commit is identical on
-        // every platform Cabinet ships it to (the manifest's own
+        // every platform Cabinet shipped it to (the manifest's own
         // diverges_across_platforms is false), both of the patches Cabinet's
-        // builder applies travel and are asserted, the two CMake levers that
+        // builder applied travel and are asserted, the two CMake levers that
         // the unix build would otherwise decide differently are matched
         // (USING_GLES2, MOBILE_DEVICE). The CPU engine is an OPTION in this
         // core rather than a build flag, and differs on purpose since #147:
@@ -97,12 +97,12 @@ const char* emulatorTag(const char* core) {
         {"stella2014", "stella2014-native"},  // 4a7da825
         {"vecx", "vecx-native"},            // 8f671cc9, HAS_GPU=0 both sides
         // N64, THE ONE WITH A DIFFERENCE, said plainly. Same commit, f275caf4,
-        // on every platform Cabinet ships. But Cabinet's build flags do not
+        // on every platform Cabinet shipped. But Cabinet's build flags do not
         // link on Linux (see docs/PROJECT.md, *mupen64plus: it builds*), so
         // this build is -O3 -ffast-math with the unix branch's RSP/RDP
-        // choices where Cabinet's is -Ofast with its own. A state holds the
+        // choices where Cabinet's was -Ofast with its own. A state holds the
         // machine's memory and registers, which neither changes; if a state
-        // from here ever refuses to load on an Apple TV, this line is why.
+        // from here refused to load on Cabinet's Apple TV, this line was why.
         //
         // Its SAVE is safer than its state: mupen64plus packs EEPROM, four
         // controller paks, SRAM and flash into one 296960-byte struct at this
@@ -119,7 +119,7 @@ const char* emulatorTag(const char* core) {
 
         // AND THE LAST THREE, BY DECISION, 2026-09-23. MMagTech: every core
         // that is supposed to have states uploads them under the tag Cabinet
-        // recognises, "regardless of if it will actually load". A state that
+        // recognised, "regardless of if it will actually load". A state that
         // does not load on the other device is refused there and costs
         // nothing else; a state that never leaves the console is lost with
         // it. So the tag says which emulator made it, and loading is the
@@ -127,14 +127,14 @@ const char* emulatorTag(const char* core) {
         //
         // What is known about each, so a refusal is not a surprise:
         //   beetle_saturn  An Apple TV state (Daytona USA, 2026-08-07) was
-        //                  REFUSED here. Cabinet's Apple TV Saturn build is not
+        //                  REFUSED here. Cabinet's Apple TV Saturn build was not
         //                  at the commit its manifest pins, and was replaced
         //                  on 2026-08-20, after that state was made. Which of
         //                  the two refused it is not known.
         //   mame2003_plus  Pinned at Cabinet's Mac commit, 21256d24; its Apple
-        //                  TV build is at 93159c0c. Never tested: there are no
+        //                  TV build was at 93159c0c. Never tested: there are no
         //                  MAME states on the reference server.
-        //   flycast        Cabinet's build carries unscripted working-tree
+        //   flycast        Cabinet's build carried unscripted working-tree
         //                  edits, so there is no revision to match. Never
         //                  tested either.
         {"beetle_saturn", "saturn-native"},        // ed549bda
@@ -179,19 +179,19 @@ const char* saveTag(const char* core) {
         // PlayStation 2's memory card and GameCube's, and these two tags were
         // READ OFF THE ROWS ALREADY ON THE SERVER rather than derived from the
         // pattern above — they are plainly `pcsx2` and `dolphin`, with no
-        // `-native` suffix, because Cabinet for Mac tags them that way and its
-        // comment says why: "PCSX2 rather than Cabinet, because the format is
+        // `-native` suffix, because Cabinet for Mac tagged them that way and its
+        // comment said why: "PCSX2 rather than Cabinet, because the format is
         // PCSX2's and another PCSX2 could read it."
         //
         // Matching them is the whole point. A card written here has to land in
-        // the row a Mac already reads, and RomM matches a row by filename with
+        // the row Cabinet's Mac app wrote, and RomM matches a row by filename with
         // the tag NOT included — so the tag is what stops two emulators'
         // uploads being confused for one another, and the name is what decides
         // which row is overwritten.
         //
         // NOTE these are not state tags and must never become them. Neither
         // system has states on this console (open question 25), and a state
-        // from either would not load in the Mac's build anyway.
+        // from either would not have loaded in the Mac's build anyway.
         {"pcsx2", "pcsx2"},
         {"dolphin", "dolphin"},
         // Switch, in Eden. No Cabinet app plays Switch, so there is no row to
@@ -421,7 +421,7 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
         if (core == "mame2003_plus") {
             f.coreRowName = "mame2003Plus";
             // ONE DIRECTORY DEEPER THAN THE REFERENCE IMPLEMENTATION SAYS, and
-            // this was measured rather than carried across. Cabinet writes
+            // this was measured rather than carried across. Cabinet wrote
             // `nvram/<stem>.nv` straight under the save directory; MAME
             // 2003-Plus as this console builds and drives it puts its whole
             // working tree under a `mame2003-plus/` folder first, so the file
@@ -449,7 +449,7 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
     // PlayStation 2. The console's PCSX2 host is handed one card, `<stem>.ps2`
     // in the save directory (core_ps2.cpp, startPs2Game), which is already
     // per game. Never a shared `Mcd001.ps2`, the arrangement Cabinet for Mac
-    // rejects in as many words ("a shared card belongs to no rom in
+    // rejected in as many words ("a shared card belongs to no rom in
     // particular").
     //
     // NAMED THE MAC'S WAY on the server, because the whole point is that the

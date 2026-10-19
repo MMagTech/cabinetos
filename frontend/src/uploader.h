@@ -114,7 +114,7 @@ public:
     // what happened rather than what was attempted. 0 nothing new, 1 it reached
     // the server, 2 it did not and is still on the disk.
     //
-    // Cabinet awaits its upload and reports "Saved to RomM." or "Waiting for
+    // Cabinet awaited its upload and reported "Saved to RomM." or "Waiting for
     // signal to upload." This console queues on a worker instead, which is the
     // right shape for a machine that must not stall its frame loop — but it
     // meant Save said nothing at all, and then "load latest" went looking on a
@@ -128,7 +128,7 @@ private:
     // shortcuts, and three states per game"). Once a state has reached RomM,
     // this person's states for the game UNDER THE SAME EMULATOR TAG are cut to
     // the newest three, on RomM and on this console. Other tags, which is
-    // every other app's states, are never looked at. A state saved by Cabinet
+    // every other app's states, are never looked at. A state Cabinet saved
     // on the Apple TV under the same tag counts, and can be the one that goes:
     // decided, and the price of three being true everywhere.
     //

@@ -14,8 +14,8 @@
 //     dropped straight into a memory stick;
 //   * the frontend already links libarchive for ROMs, so it costs nothing here;
 //   * the alternative was Apple's `rtfd`, which the reference implementation
-//     used and which is readable nowhere without Foundation. That is being
-//     changed on the Apple side too.
+//     used and which is readable nowhere without Foundation. That was to
+//     change on the Apple side too.
 //
 // THE CORE NEVER SEES THE ARCHIVE. It reads loose files out of the save
 // directory exactly as it always has; the zip exists only between this console

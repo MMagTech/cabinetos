@@ -175,8 +175,8 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
         //
         // The memory card is NOT named here. Core::loadGame names it from the rom
         // by the same rule catalog::saveFiles uses, so the existing save machinery
-        // — restore before launch, capture after, refuse an unformatted card, file
-        // it on the server under the name Cabinet's Mac uses — works on it
+        // (restore before launch, capture after, refuse an unformatted card, file
+        // it on the server under the name Cabinet's Mac used) works on it
         // unchanged.
         if (cov.core && std::string(cov.core) == "pcsx2") {
             // The level's values, unless a --ps2-upscale or --ps2-anisotropy

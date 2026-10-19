@@ -203,8 +203,8 @@ std::optional<int> App::startDisplay() {
 
     // GLES 3.0, which is what the libretro hardware-rendered cores ask for via
     // RETRO_ENVIRONMENT_SET_HW_RENDER. The UI and the cores share one context
-    // on purpose: that is what removes the readback the Apple build cannot
-    // avoid. See docs/PROJECT.md, "Video: two paths".
+    // on purpose: that is what removes the readback Cabinet's Apple build could
+    // not avoid. See docs/PROJECT.md, "Video: two paths".
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);

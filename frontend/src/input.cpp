@@ -385,14 +385,14 @@ void App::handleEvent(const SDL_Event& e) {
             // it meant a game could never be paused — MMagTech, on the
             // A9, 2026-09-19, before playing the first real game on it.
             //
-            // L3+R3 is Cabinet's default and its reasoning carries:
+            // L3+R3 was Cabinet's default and its reasoning carries:
             // RetroArch's alternative to Select+Start, chosen because
             // analog trigger pairs collide with real gameplay —
             // braking and accelerating together in a racing game is
             // the obvious case — "while clicking both sticks at once
             // has no gameplay meaning in anything this app runs".
             //
-            // Still hardcoded here. Cabinet makes it remappable and
+            // Still hardcoded here. Cabinet made it remappable and
             // GLOBAL rather than per-controller, on the grounds that
             // the risk comes from the game and not the pad model, and
             // lets the second button be cleared for single-button

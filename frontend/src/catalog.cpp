@@ -96,9 +96,9 @@ const Entry kTable[] = {
     // below (wiiu.h), as for Wii.
     {"wiiu",                 nullptr,     Support::Playable, "cemu",            nullptr},
 
-    // A core exists and Cabinet does not ship it. The manifest says so in as
-    // many words — "iOS-only by decision" — and there is no tvOS build, which
-    // is the platform CabinetOS most resembles. Not carried over without a
+    // A core exists and Cabinet did not ship it. The manifest says so in as
+    // many words, "iOS-only by decision", and there was no tvOS build, which
+    // was the platform CabinetOS most resembles. Not carried over without a
     // deliberate decision, because whatever made it wrong for a television
     // has not changed.
     // NOT A GAP, A DECISION — MMagTech, 2026-09-20: this console will not build
@@ -257,7 +257,7 @@ std::map<std::string, std::vector<std::string>> libretroCores() {
 namespace {
 
 // Turns a table row into the answer for THIS console. The table is a fact about
-// Cabinet's manifest; everything here is a fact about the machine it is running
+// the emulators; everything here is a fact about the machine it is running
 // on, which is why the two are kept apart.
 //
 // Two ways a Playable row stops being playable, and they are different work:

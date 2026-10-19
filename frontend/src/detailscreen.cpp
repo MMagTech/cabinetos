@@ -588,7 +588,7 @@ void DetailScreen::drawGlass(Ctx& c) {
         c.r.draw(cup);
     }
 
-    // CONTINUE FROM, as Cabinet's tvOS launch screen calls it: the game's
+    // CONTINUE FROM, as Cabinet's tvOS launch screen called it: the game's
     // states, newest first, each with the picture it was saved with and when.
     // Picking one plays from there; Play itself still starts the game from
     // its own save. Cards rather than rows because the picture is how a

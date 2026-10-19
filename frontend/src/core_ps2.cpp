@@ -26,7 +26,7 @@ bool Core::startPs2Game(const std::string& romPath, const std::string& systemDir
     // filename without its extension — and `filesave.cpp` already restores
     // that file before launch, captures it after, refuses to upload an
     // unformatted one, and files it on the server under the name Cabinet's
-    // Mac uses.
+    // Mac used.
     //
     // Deriving it here rather than being told means the two cannot drift.
     // A card PCSX2 wrote under a name the save layer does not look for is

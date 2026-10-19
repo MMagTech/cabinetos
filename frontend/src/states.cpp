@@ -126,7 +126,7 @@ void saveStateNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
     std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
 
     // THE PICTURE (#99): the game's own frame, the menu not in it, upright,
-    // at the core's resolution, as Cabinet sends. Kept beside the state, so a
+    // at the core's resolution, as Cabinet sent. Kept beside the state, so a
     // state that has to wait for the server still has it when it goes. A
     // state without one is still a state: nothing here stops the save.
     std::vector<uint8_t> png;
@@ -315,8 +315,8 @@ void beginLoadLatestState(StateLoad& load, GameSession& sess,
 // that "latest" can mean latest across every device a person owns. A console
 // that preferred its own copy would quietly stop being one of those devices.
 //
-// Cabinet gets away with it because its Save AWAITS the upload and only then
-// says "Saved to RomM.", so by the time you could press Load the server has it.
+// Cabinet got away with it because its Save AWAITED the upload and only then
+// said "Saved to RomM.", so by the time you could press Load the server had it.
 // This console queues on a worker instead — right for a machine that must not
 // stall its frame loop — so the race was real here and not there. It is closed
 // where it belongs, in Save's own reporting, rather than by changing what

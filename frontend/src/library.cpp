@@ -265,7 +265,7 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
     int skippedGames = 0;
     // A tile per platform, built whether or not this console can play it. The
     // unplayable ones are why `coverageFor` gives four different answers rather
-    // than one boolean: "no core exists", "Cabinet does not ship it", "this
+    // than one boolean: "no core exists", "Cabinet did not ship it", "this
     // console has not built it yet" and "it is built and cannot be driven" lead
     // to different work and to different words on the screen.
     for (const auto& p : platforms) {
@@ -292,7 +292,7 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
             std::fprintf(stderr, "[library] %s (%d games) — %s\n", tile.title.c_str(),
                          p.romCount, cov.reason ? cov.reason : tile.detail.c_str());
             // ONLY WHAT THIS CONSOLE CAN PLAY (#117, MMagTech 2026-10-04), as
-            // Cabinet's tvOS Library does: a system with no emulator here
+            // Cabinet's tvOS Library did: a system with no emulator here
             // (Jaguar, ColecoVision, Vita) or left out by decision (Game &
             // Watch) gets no tile. Search and collections still find its
             // games, whose page says why. A core that SHOULD be here and is
@@ -422,7 +422,7 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
     }
 
     // The hero, from the server's play history rather than from anything this
-    // console remembers. A game played on an Apple TV is recent here the moment
+    // console remembers. A game played on another device is recent here the moment
     // this console is paired, which is what lets a machine that has never
     // launched anything still open on the right game.
     //
@@ -444,7 +444,7 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
             // A recent game on a platform this console cannot play is skipped,
             // not shown greyed: Home must not offer a Resume that cannot run.
             // The reference library exercises this — the most recent "Altered
-            // Beast" is the Game & Watch one, which Cabinet does not ship.
+            // Beast" is the Game & Watch one, which this console leaves out.
             if (!catalog::playable(g)) continue;
             const int idx = appendGame(lib, g);
             // THE MOST RECENT ONE STAYS ON THE SHELF — changed 2026-09-21.
@@ -614,7 +614,7 @@ Library offlineLibrary() {
 
 // A kept game's record: the whole library entry, not a subset.
 //
-// Cabinet's KeptGame embeds the entire Rom captured at keep time so that a kept
+// Cabinet's KeptGame embedded the entire Rom captured at keep time so that a kept
 // game can be browsed and launched with NO NETWORK AT ALL — cover path and
 // platform identifiers included. A subset is how that promise gets broken later
 // by a field nobody thought of, so this writes every field this client knows a

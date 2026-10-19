@@ -202,7 +202,7 @@ void App::drawBar(bool gameUp, float sc, float dt) {
         // corner". Name and avatar, as MMagTech asked for.
         //
         // A lettered disc stands in until the real avatar is fetched, which
-        // is Cabinet's fallback too — it uses a person glyph. Account
+        // was Cabinet's fallback too; it used a person glyph. Account
         // switching is its own topic and nothing here is focusable yet.
         const storage::User me = storage::currentUser();
         const std::string who = me.valid() ? me.name : std::string("Not signed in");
