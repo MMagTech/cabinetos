@@ -24,5 +24,6 @@ the Mii answers still go out in order and as far apart as before.
 
 The image carries it as `/usr/libexec/cabinetos-wii-bridge`, which is where the
 console app looks (frontend/src/wiiremote.cpp). CI builds it beside the frontend
-(.github/workflows/build-frontend.yml), ci/stage-image-payload.sh collects it,
-and build_files/install-frontend.sh installs it in the frontend layer.
+and runs `make test` (.github/workflows/build-frontend.yml),
+ci/stage-image-payload.sh collects it, and build_files/install-frontend.sh
+installs it in the frontend layer.

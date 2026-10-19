@@ -88,8 +88,7 @@ podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make
 Unlike the frontend's, its Makefile lists its source files by hand: a new
 file there must be added to `wiibridge/Makefile`. `make test` there builds
 and runs its one test, `wiibridge/pacing-test.cpp` (#480): two Remotes on
-socket pairs through the bridge's own loop, no hardware. CI does not run
-it yet.
+socket pairs through the bridge's own loop, no hardware.
 
 **A libretro core:** `cores/build-core.sh <core>` from the repository root,
 where `<core>` is the name of one of its `case` arms (the same 22 names as
@@ -267,7 +266,8 @@ something besides `.md` files and `docs/`):
   `disk_config/iso.toml`; and every Python file, the ones that ship
   included, is parsed. `just lint` runs the first two commands.
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
-  Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
+  Wii bridge in the builder, runs the bridge's `make test` (report only
+  until the date below), `--check-option-tables` and the self-tests,
   summarises the compiler's warnings, fails a new one, and lists the code
   nothing calls (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
