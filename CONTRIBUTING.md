@@ -150,7 +150,11 @@ test that waits for a game to print something needs 20,000 or more.
 `--nav <presses>` walks the screens after start-up through the same door a
 pad uses; it skips the start-up screen's lift as a capture does, or its
 presses would land on a Home nobody can see yet and be dropped. It does not
-reach first run's screens, which run before it.
+reach first run's screens, which run before it. Its words are `up`, `down`,
+`left`, `right`, `a`, `b`, `l1`, `r1` and a PIN digit; `key:<name>` (a key
+by SDL's name, `key:]`, `key:F5`), `held:<name>` (the system's repeat of a
+key already down) and `start` (the pad's Start) go through the event
+handler, `input.cpp`, as SDL's own events do.
 
 `--no-setup` skips first run; on a machine with no server address it shows
 a stand-in library of six made-up games. The server is the first of

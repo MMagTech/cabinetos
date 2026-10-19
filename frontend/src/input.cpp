@@ -503,10 +503,17 @@ void App::handleEvent(const SDL_Event& e) {
                     // is: Start opens the menu except while typing.
                     // On Search with the keyboard put away (the results
                     // focused), nobody is typing, so it is the menu too
-                    // (#484).
-                    if (!(here() == Screen::Search && keyboard.isOpen()) &&
-                        !pinScreen.isOpen() && !choiceScreen.isOpen() &&
-                        !downloadsPanel.isOpen())
+                    // (#484). With the results or the bar focused and the
+                    // keyboard still showing (it takes the keys only while
+                    // focus is in it, inputOwner), Start is the keyboard's
+                    // "done", as its legend still says: it goes, and the
+                    // next Start is the menu. It did nothing (#484).
+                    if (pinScreen.isOpen() || choiceScreen.isOpen() ||
+                        downloadsPanel.isOpen())
+                        break;
+                    if (here() == Screen::Search && keyboard.isOpen())
+                        keyboardResult(keyboard.commit());
+                    else
                         openPowerMenu();
                     break;
                 default: break;
