@@ -186,8 +186,10 @@ public:
     // makes a hero possible on a machine that has never launched anything.
     bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
-    // The games marked favourite, newest first. Home's second shelf, and only
-    // drawn when there are any — an empty Favorites row is worse than none.
+    // The games marked favourite, in RomM's title order: RomM keeps no date
+    // for a favourite. Home's second shelf, in the console's own order
+    // (favorites.cpp, keepFavorites), and only drawn when there are any — an
+    // empty Favorites row is worse than none.
     bool fetchFavorites(int limit, std::vector<Game>* out, std::string* err);
 
     // Every firmware file a platform carries. Empty is a normal answer: most
@@ -231,8 +233,12 @@ public:
     // this adds the game to it or takes it out (`POST`/`DELETE
     // /api/collections/<id>/roms`), making the collection first if they have
     // none. Needs the `collections.write` scope; `*forbidden` says the
-    // pairing lacks it, which only pairing again can mend.
-    bool setFavorite(int romId, bool on, bool* forbidden, std::string* err);
+    // pairing lacks it, which only pairing again can mend. `*cannotMake`
+    // says RomM refused to make that collection (#474): it answers 500 on
+    // 5.3.1 and 409 on 5.4.0 when the person already owns an ordinary
+    // collection named Favorites, which asking again does not mend.
+    bool setFavorite(int romId, bool on, bool* forbidden, std::string* err,
+                     bool* cannotMake = nullptr);
 
     // A screenshot into this person's gallery on RomM 5.1 (`POST
     // /api/screenshots?rom_id=`: stored under the user, private until shared),
@@ -288,7 +294,9 @@ private:
     // collection calls.
     bool sendJson(const char* method, const std::string& path, const std::string& json,
                   std::string* body, long* status, std::string* err) const;
-    bool probe(const std::string& candidate);
+    // `report` false: a failure to connect is not told to serverAway, for
+    // the first of setAddress's two schemes (#479); an answer still is.
+    bool probe(const std::string& candidate, bool report = true);
 
     // What a request is sent with, the address and the token, copied
     // together under the lock (romm_http.cpp).
@@ -298,9 +306,12 @@ private:
     };
     Where where() const;
     // get, sent to whatever `at` names. probe asks a candidate this way
-    // without making it the address until it has answered.
+    // without making it the address until it has answered, and says whether
+    // what it met is reported (`report`, as probe's). A redirect off the
+    // server is not followed (#380); with `movedTo` its address is put there
+    // instead of logged.
     bool getAt(const Where& at, const std::string& path, std::string* body,
-               std::string* err) const;
+               std::string* err, bool report = true, std::string* movedTo = nullptr) const;
 
     // GUARDS THE THREE BELOW. Nothing is done while holding it but a copy or
     // an assignment, never a request (see the head of this file).
@@ -324,7 +335,8 @@ void noteTransport(void* curlHandle, int curlCode);
 
 // True for addresses that are obviously on a local network, which decides
 // whether http or https is tried first. A hostname with no dots is local by
-// construction, and so is anything in the private ranges or .local/.lan.
+// construction, and so is anything in the private ranges, Tailscale's
+// 100.64.0.0/10, or .local/.lan.
 bool looksLocal(const std::string& host);
 
 // One path SEGMENT, a file name RomM gave us, escaped whole: everything but

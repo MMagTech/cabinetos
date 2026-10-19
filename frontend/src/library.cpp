@@ -460,40 +460,41 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
         std::fprintf(stderr, "[library] no play history: %s\n", err.c_str());
     }
 
+    // ALL OF THEM ARE ASKED FOR, up to 200, not the shelf's 40 (#476):
+    // RomM lists favourites by title, so asking for 40 left a person with
+    // more never seeing the rest, and a new one past the fortieth title never
+    // reached Home. About 23 KB each on RomM 5.3.1.
     const Uint64 tFavs = SDL_GetTicks();
     std::vector<romm::Game> favs;
-    const bool gotFavs = client.fetchFavorites(40, &favs, &err);
+    const bool gotFavs = client.fetchFavorites(200, &favs, &err);
     std::fprintf(stderr, "[library] favourites in %llu ms\n",
                  static_cast<unsigned long long>(SDL_GetTicks() - tFavs));
     if (gotFavs) {
-        // WHAT THE SERVER HAS NOT HEARD YET WINS (#267): a favourite taken
-        // off while it was away stays off, one added stays on, until sent.
-        const std::map<int, bool> owedFav = favOwed(storage::currentUser());
-        favs.erase(std::remove_if(favs.begin(), favs.end(), [&](const romm::Game& g) {
-                       auto it = owedFav.find(g.id);
-                       return it != owedFav.end() && !it->second;
-                   }), favs.end());
-        for (const auto& [id, on] : owedFav) {
-            if (!on || std::any_of(favs.begin(), favs.end(),
-                                   [&](const romm::Game& g) { return g.id == id; }))
-                continue;
-            for (const auto& g : lib.games)
-                if (g.id == id) { favs.insert(favs.begin(), g); break; }
-        }
-        for (const auto& g : favs) {
-            if (!catalog::playable(g)) continue;
-            lib.favorites.push_back(appendGame(lib, g));
-        }
-        // KEPT FOR OFFLINE (#88): this person's favourites, in order, so the
-        // offline Home shows the ones on the drive. `favorites.json` in their
-        // folder.
-        if (const storage::User& who = storage::currentUser(); who.valid()) {
-            json_object* arr = json_object_new_array();
-            for (const auto& g : favs) json_object_array_add(arr, json_object_new_int(g.id));
-            const std::string path = storage::userDir(who) + "/favorites.json";
-            const std::string tmp = path + ".part";
-            if (json_object_to_file(tmp.c_str(), arr) == 0) ::rename(tmp.c_str(), path.c_str());
-            json_object_put(arr);
+        // THE ORDER IS THE CONSOLE'S (favorites.cpp, keepFavorites): newest
+        // first as far as it knows, with what the server has not heard yet
+        // winning (#267): a favourite taken off while it was away stays off,
+        // one added stays on, until sent. Kept for the offline Home (#88).
+        std::vector<int> order;
+        for (const auto& g : favs) order.push_back(g.id);
+        if (const storage::User& who = storage::currentUser(); who.valid())
+            order = keepFavorites(who, order);
+        // Home's shelf holds the first 40 this console can play. A game
+        // hearted here and not yet on RomM is not in RomM's answer; its
+        // record is the Recent shelf's, the one kept on the drive, or asked
+        // for (#476).
+        for (const int id : order) {
+            if (lib.favorites.size() >= 40) break;
+            romm::Game asked;
+            const romm::Game* g = nullptr;
+            for (const auto& f : favs) if (f.id == id) { g = &f; break; }
+            if (!g)
+                for (const auto& r : lib.games) if (r.id == id) { g = &r; break; }
+            if (!g && (romm::gameFromJson(cache::gameRecord(id), &asked) ||
+                       client.fetchGame(id, &asked, nullptr)))
+                g = &asked;
+            if (!g || !catalog::playable(*g)) continue;
+            const romm::Game game = *g;   // appendGame grows lib.games
+            lib.favorites.push_back(appendGame(lib, game));
         }
         std::fprintf(stderr, "[library] %zu favourites\n", lib.favorites.size());
     }
@@ -550,18 +551,10 @@ Library offlineLibrary() {
     // FAVORITES: this person's, as last seen online, that are on the drive,
     // in their order (MMagTech, 2026-10-05). None on the drive: no shelf, as
     // online with none.
-    if (const storage::User& who = storage::currentUser(); who.valid()) {
-        if (json_object* arr = json_object_from_file(
-                (storage::userDir(who) + "/favorites.json").c_str())) {
-            if (json_object_is_type(arr, json_type_array))
-                for (size_t i = 0; i < json_object_array_length(arr); ++i) {
-                    const int id = json_object_get_int(json_object_array_get_idx(arr, i));
-                    if (auto it = lib.byRomId.find(id); it != lib.byRomId.end())
-                        lib.favorites.push_back(it->second);
-                }
-            json_object_put(arr);
-        }
-    }
+    if (const storage::User& who = storage::currentUser(); who.valid())
+        for (const int id : favoriteList(who))
+            if (auto it = lib.byRomId.find(id); it != lib.byRomId.end())
+                lib.favorites.push_back(it->second);
     for (auto& [pid, idxs] : byPlatform) {
         screens::Tile tile;
         tile.id = pid;

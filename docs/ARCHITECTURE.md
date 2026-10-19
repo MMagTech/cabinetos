@@ -49,7 +49,7 @@ is in the file named for its feature, and
 | Screens | `screens.h` (what they share), `libraryscreen.cpp`, `grid.cpp`, `searchscreen.cpp`, `detailscreen.cpp` (a game's page), `settings.cpp`, `accountpanel.cpp`, `qrlink.cpp`, `choice.cpp`, `pin.cpp`, `keyboard.cpp`, `downloads.cpp`, `manualview.cpp`, `achlist.cpp`, `startscreen.cpp` |
 | App code that draws its own screen | `home.cpp` (Home), `setup.cpp` (first run; its rules are `firstrun.cpp`, with `firstrun_internal.h`), `serverwait.cpp` (the wait for the server at start). These act as well as draw: first run pairs and joins networks, the wait talks to the server |
 | Drawing | `ui.h`/`ui.cpp` (the primitives), `design.h` (the design system's numbers), `motion.h`, `text.cpp`, `image.cpp` (covers), `imagecodec.cpp`, `card.h`, `panels.h`, `screenparts.cpp`, `look.cpp` (the menus' colour), `looks.cpp` (a system's screen looks), `backdrop.cpp`, `notice.cpp` and `noticegallery.h` (the short messages), `qr.cpp` and `qrtexture.h`, `timewords.cpp`, `capture.h` (the SIGUSR1 picture), `shaders.inc` |
-| The RomM client | `romm.h` (its face and its rules), `romm_types.h` (what it hands back), `romm_internal.h`, `romm_http.cpp` (every request goes out here), `romm_pairing.cpp`, `romm_library.cpp`, `romm_playdata.cpp`, `romm_codes.cpp`, `romm_racetest.cpp` |
+| The RomM client | `romm.h` (its face and its rules), `romm_types.h` (what it hands back), `romm_internal.h`, `romm_http.cpp` (every request goes out here, and only to the RomM server, #380), `romm_pairing.cpp`, `romm_library.cpp`, `romm_playdata.cpp`, `romm_codes.cpp`, `romm_racetest.cpp` |
 | Library data | `library.cpp` (the store of cards, the shelves), `catalog.cpp` and `catalog_internal.h` (which platforms play, on which core), `covercache.cpp`, `coverfill.cpp`, `gridfill.cpp`, `search.cpp`, `codecache.cpp` and `gametdb.cpp` (game codes and controller lists read off files), `samplelibrary.h` (the stand-in library) |
 | A launch and a game in play | `launch.cpp` (the frame thread's half), `launch_routes.cpp` (the worker), `play.cpp` (in play, and leaving), `pace.cpp` (the game frame), `pausemenu.cpp`, `gamesession.h`, `romfile.cpp` (what to hand a core), `disc.cpp`, `discs.cpp`, `rewind.cpp`, `states.cpp`, `rumble.cpp` |
 | The libretro host | `core.h`, `core.cpp`, `core_state.h`, `core_*.cpp` (discs, hardware rendering, input, memory, options, picture, PS2), `vkhost.cpp`, `vkhost_state.h`, `vkbridge.cpp`, `libretro.h` and `libretro_vulkan.h` (the libretro API, the RetroArch team's), and the console's three option tables: `coreoptions.cpp` (set on purpose for every game), `quality.cpp` (Picture quality) and `sysopts.cpp` (a system's pause-menu options); `screenfx.cpp` (screen looks) |
@@ -299,12 +299,6 @@ Each with where it is recorded.
 
 ## 6. Known gaps
 
-- **The console follows any web address RomM's data hands it, with the
-  sign-in attached:** `Client::fetchBytes` (`romm_http.cpp`) takes a path
-  that starts with `http` as the whole address, sends the token and follows
-  redirects. This breaks the rule that the console connects only to fixed
-  places (CONTRIBUTING.md, "The rules"); it is #380 ("The console follows any
-  web address in RomM's data, with the RomM sign-in attached").
 - **The frame thread waits on the network during a launch:** `beginLaunch`
   loads the core, and `pumpLaunch` restores the game's saves from RomM and
   loads the game, all on the frame thread, behind the curtain
@@ -316,8 +310,7 @@ Each with where it is recorded.
   `ci/check-romm-paths.sh` lists them and fails a pull request that adds
   another.
 - **Threads not yet put right:** #404 ("The launch worker writes the job's
-  entry path while the frame thread reads it"), #405 ("favorites.json is
-  written from two threads through the same temporary file with no lock"),
+  entry path while the frame thread reads it"),
   #406 ("Four background threads are never stopped at exit (pairing, remove
   and sign out, reconnect, drive backfill)").
 - **CI runs one self-test** (`--check-option-tables`); the others are run by

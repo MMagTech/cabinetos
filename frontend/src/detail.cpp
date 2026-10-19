@@ -4,7 +4,6 @@
 #include "app.h"
 
 #include <dirent.h>
-#include <json-c/json.h>
 #include <sys/stat.h>
 
 #include <algorithm>
@@ -357,14 +356,8 @@ void App::openDetail(int cardIndex) {
     // yet sent says so.
     d.favorite = std::find(favorites.begin(), favorites.end(), cardIndex) != favorites.end();
     if (const storage::User& who = storage::currentUser(); who.valid()) {
-        if (json_object* arr = json_object_from_file(
-                (storage::userDir(who) + "/favorites.json").c_str())) {
-            if (json_object_is_type(arr, json_type_array))
-                for (size_t i = 0; i < json_object_array_length(arr); ++i)
-                    if (json_object_get_int(json_object_array_get_idx(arr, i)) == d.romId)
-                        d.favorite = true;
-            json_object_put(arr);
-        }
+        const std::vector<int> list = favoriteList(who);
+        if (std::find(list.begin(), list.end(), d.romId) != list.end()) d.favorite = true;
         const std::map<int, bool> owedFav = favOwed(who);
         if (auto it = owedFav.find(d.romId); it != owedFav.end()) d.favorite = it->second;
     }

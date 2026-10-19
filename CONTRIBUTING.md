@@ -518,9 +518,6 @@ here, not reworded; follow the link for the full text.
   upstream defaults to OpenGL. OpenGL only where there is no Vulkan renderer,
   or where a measurement on real hardware shows it is better.
 
-The code breaks the first of these in one place today: #380 ("The console
-follows any web address in RomM's data, with the RomM sign-in attached").
-
 ### Duties that come with some changes
 
 - **Moving a core's pin:** in the same commit, refresh

@@ -10,6 +10,7 @@
 
 #include "accounts.h"
 #include "firstrun.h"
+#include "romm.h"
 #include "server.h"
 #include "storage.h"
 
@@ -386,6 +387,23 @@ int firstRunRules() {
         // flow exists to make.
         if (f.online && f.serverAnswered && f.havePairedToken && !m.finished())
             fail("a fully configured machine could not finish setup", f);
+    }
+
+    // WHICH SCHEME THE SERVER STEP TRIES FIRST (#479): http for an address
+    // that is the person's own, Tailscale's 100.64.0.0/10 included, and https
+    // for the rest. The wrong one first cost a try at every heartbeat.
+    const struct { const char* host; bool local; } schemes[] = {
+        {"100.101.1.2", true},   {"100.101.1.2:8080", true}, {"100.64.0.1", true},
+        {"100.127.255.254", true}, {"100.128.0.1", false},   {"100.63.0.1", false},
+        {"192.168.1.10:6005", true}, {"romm", true},         {"romm.example.com", false},
+    };
+    for (const auto& c : schemes) {
+        ++cases;
+        if (romm::looksLocal(c.host) != c.local) {
+            ++failures;
+            std::printf("  FAIL  looksLocal(\"%s\") is not %s\n", c.host,
+                        c.local ? "true" : "false");
+        }
     }
 
     std::printf("first-run rules: %d fact combinations, %d failure%s\n", cases,
