@@ -393,20 +393,22 @@ void App::playFromState(const screens::Result& res) {
     sound::play(sound::Cue::Activate);
     std::fprintf(stderr, "[detail] play from state %d\n", res.value);
     // Negative: one of this console's own states, by its file.
-    if (res.value < 0 &&
-        static_cast<size_t>(-res.value) <= detailLocalStates.size()) {
+    const bool local = res.value < 0 &&
+                       static_cast<size_t>(-res.value) <= detailLocalStates.size();
+    // SET ONLY WHEN THE PRESS COUNTS, and then in place of what an earlier
+    // press of the same launch asked for (#484). A press refused because
+    // another game is downloading cleared that game's picked state, and two
+    // picks on a joined download loaded both, one over the other.
+    if (!launchById(detailScreen.game().romId)) return;
+    forgetLaunchAsks();
+    if (local) {
         pendingStatePath = detailLocalStates[static_cast<size_t>(-res.value) - 1];
         // ON THE STATE'S OWN DISC (#162): no swap to wait on,
         // and the only way in for a core with no drive (3DO).
         gNextStartDisc = disc::discInStateName(pendingStatePath);
-        if (!launchById(detailScreen.game().romId)) {
-            pendingStatePath.clear();
-            gNextStartDisc = 0;
-        }
-        return;
+    } else {
+        pendingStateId = res.value;
     }
-    pendingStateId = res.value;
-    if (!launchById(detailScreen.game().romId)) pendingStateId = 0;
 }
 
 // ---- The states in play (#398) --------------------------------------------
