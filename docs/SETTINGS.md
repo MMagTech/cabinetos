@@ -108,6 +108,14 @@ status here to Built.
   request #92 ("Settings: owner and PIN, remove an account; account
   switching fixed"); the sending is #194 ("Removing a person deletes their
   folder, after sending what is owed").**
+  - **Their token on RomM is revoked** once they are removed (#484, ROMM-10),
+    and so is every account's on Sign out, and the old one when somebody is
+    paired again: before, every token the console was ever given stayed live
+    on RomM. It needs the me.write scope, which pairing asks for since
+    (`romm_pairing.cpp`, kScopes, says what else it allows); a token paired
+    before, or approved without it, is not revoked and stays on RomM's own
+    token list until removed there. A server that does not answer revokes
+    nothing and stops nothing. Proven on the write-test RomM, 2026-10-19.
 - **RetroAchievements**, a sign-in per account, **opt-in** (#74, decided with
   MMagTech 2026-10-06). One row, "RetroAchievements", its value "Sign in" or
   the username. Pressing it asks for the username, then the password, on the
@@ -308,7 +316,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   most. Then everything tied to that server is
   cleared: kept and cached games on every drive plugged in, every account's
   saves, states and keeps on this console, its covers, the accounts, their
-  tokens, the PIN and the address. Wi-Fi, controllers, BIOS and the console's
+  tokens (revoked on RomM first, #484), the PIN and the address. Wi-Fi, controllers, BIOS and the console's
   own settings stay. Then first run, at the server step, then pairing, then
   straight into the console: the network and the controllers stayed, so
   their steps and the Ready screen are skipped (MMagTech, 2026-09-25: "we
