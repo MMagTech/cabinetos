@@ -19,6 +19,24 @@ log "CabinetOS build starting"
 log "base: $(grep '^PRETTY_NAME=' /usr/lib/os-release | cut -d= -f2-)"
 
 # ---------------------------------------------------------------------------
+# Every package this build installs is stamped with the base's own time.
+# ---------------------------------------------------------------------------
+#
+# MEASURED 2026-10-18 (#511): 2026.10.18.6 and .7, built from the same
+# build_files/ and system_files/, had OS layers that differed in only the
+# rpm database, in the four packages this build installs (Steam's session
+# from terra, Sunshine and miniupnpc), because rpm records the time it
+# installed each one; and in dnf's countme files (removed at the end). That
+# gave the 70 MB layer a new digest in every image, so every update
+# downloaded it. rpm takes that time from SOURCE_DATE_EPOCH when it is set
+# (tried on the A9: INSTALLTIME and INSTALLTID both follow it), so this
+# build gives it the newest install time already in the base: the same for
+# every build on one base, and still a real date.
+SOURCE_DATE_EPOCH="$(rpm -qa --qf '%{INSTALLTIME}\n' | sort -n | tail -1)"
+export SOURCE_DATE_EPOCH
+log "packages installed here are stamped ${SOURCE_DATE_EPOCH}, the base's newest install time"
+
+# ---------------------------------------------------------------------------
 # Overlay any files from system_files/ onto the image.
 # ---------------------------------------------------------------------------
 #
@@ -361,6 +379,12 @@ done
 # itself is what the rpm database and packages-after-strip.txt record.
 rm -f /usr/lib/sysimage/libdnf5/transaction_history.sqlite*
 log "removed dnf's transaction history, which is dated and would change this layer every build"
+
+# And dnf's state in /var/lib/dnf, which the base does not have: a countme
+# file per repository this build fetched from, holding the week it ran
+# (#511), and a lock. /var in an image reaches only a console installed from
+# it, and nothing on a console runs dnf.
+rm -rf /var/lib/dnf
 
 # And what dnf and the SELinux tools leave in /run. `bootc container lint`
 # warns about it (nonempty-run-tmp), and it was always there; the rechunk used

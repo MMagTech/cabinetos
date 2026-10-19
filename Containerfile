@@ -25,10 +25,12 @@ COPY docs/LICENCES.md /licences/LICENCES.md
 # docs/ does not start a build.
 COPY licences /licences/texts
 # The controller list (SDL_GameControllerDB). Installed with the frontend, in
-# the small last layer, NOT from system_files/: there it rode in the OS layer,
+# the small frontend layer, NOT from system_files/: there it rode in the OS layer,
 # and its first update shipped 60 MB to the console instead of one file.
 COPY frontend/data /frontend-data
-# The frontend binary, the twenty-one cores and PPSSPP's system files.
+# Everything the image carries that is built elsewhere: the frontend, the
+# cores, PCSX2, Cemu, Sunshine and their files (ci/stage-image-payload.sh
+# lists it).
 #
 # None of them is in this repository and none of them is built here — they are
 # far too slow, and .github/workflows/build-frontend.yml and build-core.yml
@@ -61,27 +63,37 @@ FROM ghcr.io/ublue-os/bazzite:44.20261012.1@sha256:5d49529cf809ff5b9e1ba52fd4833
 # Build
 # ---------------------------------------------------------------------------
 #
-# All customisation happens in build_files/build.sh, which calls the strip
-# scripts in order. Keeping it in scripts rather than in RUN layers means the
-# reasoning for each removal lives next to the removal.
+# The OS layer's customisation is build_files/build.sh, which calls the strip
+# scripts in order; each later layer runs one script (below). Keeping it in
+# scripts rather than in RUN lines means the reasoning for each removal lives
+# next to the removal.
 #
-# FIVE LAYERS, ORDERED BY HOW OFTEN EACH CHANGES, 2026-09-23 (RPCS3 added
-# 2026-09-28). This was one RUN, so a 1.4 MB frontend change rebuilt and
-# re-shipped everything CabinetOS adds: 546 MB to the console. See
-# docs/PROJECT.md open question 27.
+# LAYERS ORDERED BY HOW OFTEN EACH CHANGES, 2026-09-23. This was one RUN, so
+# a 1.4 MB frontend change rebuilt and re-shipped everything CabinetOS adds:
+# 546 MB to the console. See docs/PROJECT.md open question 27. Sizes as
+# compressed in 2026.10.18.7:
 #
-#   1. the OS        Bazzite stripped and configured. Moves on a base bump or a
-#                    change to build_files/ or system_files/.
-#   2. the cores     314 MB, pinned. Moves when a core is bumped.
-#   3. RPCS3         338 MB, pinned. Moves when RPCS3 is bumped.
-#      Xenia Edge     53 MB, pinned. Moves when Edge is bumped (2026-09-29).
-#   4. core files    23 MB of PPSSPP's and PCSX2's resources. Same.
-#   5. the frontend  1.4 MB. Moves with nearly every change.
+#    1. the OS            70 MB  build.sh: Bazzite stripped and configured.
+#                                Moves on a base bump or a change to
+#                                build_files/ or system_files/.
+#    2. the cores         95 MB  pinned, and PCSX2. Moves when one moves.
+#    3. RPCS3            131 MB  pinned. Moves when RPCS3 is bumped.
+#    4. Xenia Edge        21 MB  pinned. Moves when Edge is bumped.
+#    5. Cemu              35 MB  built at a pin by build-cemu.yml.
+#    6. xemu's drive       1 MB  pinned.
+#    7. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#    8. the frontend       4 MB  the frontend, the Wii bridge, the
+#                                controller lists and the shaders. Moves
+#                                with nearly every change.
+#    9. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   10. the version       1 kB  every image.
+#   11. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
-# ships layer 4 — PROVIDED the layers before it rebuild to identical bytes. CI
+# ships layer 8, PROVIDED the other layers rebuild to identical bytes. CI
 # builds from nothing every time, so that rests on `podman build --timestamp`
-# in the Justfile, and on there being NO RECHUNK, which throws this order away
+# in the Justfile, on build.sh stamping the packages it installs with a fixed
+# time (#511), and on there being NO RECHUNK, which throws this order away
 # and regroups the image by RPM package.
 #
 # One image, one digest, one update. Splitting layers changes how the image is
@@ -131,23 +143,25 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-frontend.sh frontend
 
-# THE VERSION, IN A LAYER OF ITS OWN, LAST. It changes with every image, so
-# anywhere earlier it would drag a layer that did not change into every
-# update. Here it is one small file. The console reads it after booting to
-# tell whether an update applied; docs/SETTINGS.md, System. The number comes
-# from ci/next-version.sh through the Justfile. os-release is named here for
-# the same reason (#137): its PRETTY_NAME carries the version.
+# THE BOOT SPLASH (#108): the initramfs rebuilt with the CabinetOS watermark
+# build.sh put in place, 250 MB. os-release is branded first, WITHOUT the
+# version, so the initramfs's copy names CabinetOS and is the same in every
+# image (#511: with the version in it, every update downloaded this layer).
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/brand-os-release.sh && \
+    /ctx/boot-splash.sh
+
+# THE VERSION, IN A LAYER OF ITS OWN, LAST but for the lint. It changes with
+# every image, so anywhere earlier it would drag a layer that did not change
+# into every update. Here it is two small files. The console reads it after
+# booting to tell whether an update applied; docs/SETTINGS.md, System. The
+# number comes from ci/next-version.sh through the Justfile. os-release takes
+# the version here for the same reason (#137): its PRETTY_NAME carries it.
 ARG CABINETOS_VERSION=dev
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     printf '%s\n' "${CABINETOS_VERSION}" > /usr/share/cabinetos/version && \
     /ctx/brand-os-release.sh "${CABINETOS_VERSION}"
-
-# THE BOOT SPLASH (#108): the initramfs rebuilt with the CabinetOS watermark
-# build.sh put in place. After the branding on purpose, so the initramfs's
-# copy of os-release names CabinetOS too.
-RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
-    --mount=type=tmpfs,dst=/tmp \
-    /ctx/boot-splash.sh
 
 # ---------------------------------------------------------------------------
 # Lint
