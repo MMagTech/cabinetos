@@ -141,7 +141,10 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // default, Mouse, reads only a mouse, which this console never answers,
     // so the touch screen did nothing in any DS game. The DS has no sticks,
     // so nothing else wants the right one. A PlayStation pad's touchpad as
-    // the touch screen is #288.
+    // the touch screen was set aside, MMagTech 2026-10-18 (#288): melonDS
+    // takes one touch mode at a time (src/libretro/input.cpp at our pin), so
+    // those pads would lose the stick, and its Touch mode draws no cursor.
+    // The stick is the one rule for every pad.
     if (coreName == "melonds") {
         return {
             {"melonds_threaded_renderer", "enabled"},
