@@ -65,6 +65,7 @@
 #include "panels.h"
 #include "pin.h"
 #include "players.h"
+#include "power.h"
 #include "playtime.h"
 #include "qrlink.h"
 #include "remoteplay.h"
@@ -1016,6 +1017,13 @@ struct App {
     // mid-upload has sent nothing, and the save would sit owed until morning.
     bool restPending = false;
     uint64_t restWaitStart = 0;
+    // SLEEP, RESTART OR POWER OFF CHOSEN WHILE THE GAME CANNOT BE LEFT YET
+    // (#473): a core still building its machine, or an emulator of its own
+    // that was asked to close. Done once the game is left (pumpExit,
+    // finishStandalone); finishExit forgets it, so any other way out of the
+    // game takes it with it.
+    std::optional<power::Action> powerAfterExit;
+    void powerAct(power::Action act);
     int ovCount();
     void ovStep(int delta);
     const char* ovLabel(int i);
@@ -1888,6 +1896,7 @@ struct App {
     void powerCue(sound::Cue c);
     void closeOverlay(bool cue = true);
     void powerActivate(PowerItem item);
+    void backToPauseMenu();
     void standaloneScreenshot();
     void pumpStandaloneShot();
     void stepChoice(int slot, int delta, bool wrap);

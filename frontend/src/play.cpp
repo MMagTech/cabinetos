@@ -122,8 +122,10 @@ void App::finishExit() {
     pendingStatePath.clear();
     pendingResume = false;
     // A quit that was waiting on the core is answered by any exit, or the
-    // next game's pumpExit would quit it the moment it is up (#398).
+    // next game's pumpExit would quit it the moment it is up (#398). So is
+    // a Power menu choice waiting with it (#473): pumpExit has kept its own.
     exitPending = false;
+    powerAfterExit.reset();
     stateHold = stateHoldWaiting = false;
     rewindKeep.reset();
     rewindAvailable = -1;
@@ -166,7 +168,11 @@ void App::pumpExit() {
         std::fprintf(stderr, "[overlay] quitting after %.1fs%s\n", waited,
                      up ? "" : " — the core never booted, unloading anyway");
         exitPending = false;
+        // A Power menu choice that waited for the core (#473) is made now,
+        // once the game is left.
+        const std::optional<power::Action> then = powerAfterExit;
         finishExit();
+        if (then) powerAct(*then);
     }
 }
 
@@ -715,6 +721,19 @@ void App::reportAndUnloadCore() {
         if (core.governorSkips() > 0)
             std::fprintf(stderr, "[core] the audio governor held it back %llu times\n",
                          static_cast<unsigned long long>(core.governorSkips()));
+        // NOT UNLOADED WHILE THE MACHINE IS STILL BEING BUILT (#473), the
+        // rule exitToHome keeps (core.h, running): asked to stop in the
+        // first seconds of a PSP game, the unload killed PPSSPP's boot
+        // thread. The core is stepped until it runs, at most five seconds,
+        // and unloaded then whatever it says.
+        if (!core.running()) {
+            const Uint64 since = SDL_GetTicksNS();
+            while (!core.running() && (SDL_GetTicksNS() - since) / 1e9 < 5.0)
+                core.runFor(1.0 / std::max(core.avInfo().fps, 1.0));
+            std::fprintf(stderr, "[shutdown] the core was still starting; %s after %.1fs\n",
+                         core.running() ? "running" : "unloading anyway",
+                         (SDL_GetTicksNS() - since) / 1e9);
+        }
         core.unload();
     }
 }
