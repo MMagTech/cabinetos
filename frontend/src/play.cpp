@@ -11,6 +11,7 @@
 
 #include "core.h"
 #include "discs.h"
+#include "ps2.h"
 #include "saves.h"
 #include "screenfx.h"
 #include "shortcuts.h"
@@ -174,6 +175,28 @@ void App::pumpExit() {
         finishExit();
         if (then) powerAct(*then);
     }
+}
+
+// A PS2 DISC PCSX2 CANNOT OPEN ENDS THE GAME AND SAYS SO (#506), as a
+// game whose core will not load it does (loadLaunchedGame). It started as
+// if it were playing, with nothing on the screen: PCSX2's start returns
+// before the machine is built, and the machine that then failed was never
+// asked about again (Destroy All Humans! 2, a CHD made with createcd from
+// a DVD). Asked every frame until the machine runs. A game that never ran
+// is not time played and does not move up Recent. The words are
+// MMagTech's; a BIOS missing on the server keeps its own.
+void App::watchPs2Start() {
+    if (!playing) return;
+    cab::Core& core = cab::Core::shared();
+    if (!core.isPs2() || core.running()) return;
+    const std::string why = ps2::stoppedWhy();
+    if (why.empty()) return;
+    std::fprintf(stderr, "[ps2] the machine stopped before it ran: %s\n", why.c_str());
+    if (playClock.active()) playClock.finish(playtime::wallMs());
+    finishExit();
+    refuseLaunch(launchJob.biosMissing.load()
+                     ? "No " + launchJob.systemName + " BIOS on your server"
+                     : std::string("Disc can't be read"));
 }
 
 // REAL WII REMOTES (#200): while a Wii game runs Dolphin drives them,

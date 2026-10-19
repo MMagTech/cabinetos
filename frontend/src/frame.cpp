@@ -85,6 +85,7 @@ void App::runFrameLoop() {
         pollSteamJob();
         pumpArrive();
         pumpExit();
+        watchPs2Start();
         pumpStateLoad(stateLoad, session, menuNotice);
         pumpDetailStates();
         loadPendingStates();

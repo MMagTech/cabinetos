@@ -161,6 +161,15 @@ bool ps2::startGame(const std::string& discPath, const std::string& biosDir,
     return true;
 }
 
+// cps2_error is written once, by PCSX2's thread as it ends, before the
+// machine counts as stopped, and cleared only by the next cps2_start; it is
+// read here only while cps2_running says no.
+std::string ps2::stoppedWhy() {
+    if (!gHandle || gApi.running()) return {};
+    const char* why = gApi.error();
+    return why ? why : "";
+}
+
 bool ps2::hasWidescreenPatch() {
     return gHandle && gApi.hasWidescreenPatch && gApi.hasWidescreenPatch() != 0;
 }

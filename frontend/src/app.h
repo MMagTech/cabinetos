@@ -1885,6 +1885,7 @@ struct App {
     void finishExit();
     void exitToHome();
     void pumpExit();
+    void watchPs2Start();
 
     // A STREAM STARTING OR ENDING HANDS THE PLAYERS OVER (players.h) AND
     // PAUSES A RUNNING GAME, so nobody's car crashes in the second it takes to
