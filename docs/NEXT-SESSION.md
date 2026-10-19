@@ -11,22 +11,20 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-19, evening.** `latest` is **2026.10.19.2** (#517). `testing` is
-**2026.10.19.3** (revision 2b115cb), the day's batch: PR #519, "Batch 2026-10-19: Wii Remotes, Play on a slow server, archive folders, stranded Xbox saves, Steam's exit, What's new",
-waiting on his TV check and merge. Seven sessions built it on separate
-files while he was at work, one combined it, built it in the builder, ran
-every self-test and smoke-tested it headless on the A9 through the
-read-only relay. Nothing under `build_files/` or `system_files/` changed,
-so this image is #511's last proof: the 70 MB OS layer's digest must match
-2026.10.19.2's (the PR says whether it did). The morning's review of the 37
-open issues, one at a time with him: eight closed, every other decision
-written on its issue; 29 open now, 24 once the PR merges. His server has
-been on **RomM 5.4.0** since 2026-10-19; the batch's headless runs were the
-first proof of #516 on it. The A9 is on the testing channel; its PIN is
-off. The machines' addresses are in his local notes, which CLAUDE.md
-loads; the tools read them from the environment (`CABINETOS_A9`,
-`CABINETOS_KEY`, `CABINETOS_VM`, `CABINETOS_RELAY_UP`; the Mac's shell
-profile does not set them, so export them per command).
+**2026-10-19, night.** `latest` and `testing` are **2026.10.19.3** (revision
+2b115cb, digest sha256:ccc09686df0f...), PR #519, "Batch 2026-10-19: Wii
+Remotes, Play on a slow server, archive folders, stranded Xbox saves,
+Steam's exit, What's new", merged on his go after his TV check and
+promoted. Seven sessions built it on separate files while he was at work;
+it closed #480, #481, #482, #488 and #329, and #511 is proven (the OS
+layer's digest held). The morning's review of the 37 open issues, one at
+a time with him: eight closed, every other decision written on its issue;
+**24 open**. His server has been on **RomM 5.4.0** since 2026-10-19. The A9
+is on the testing channel; its PIN is off. The machines' addresses are in
+his local notes, which CLAUDE.md loads; the tools read them from the
+environment (`CABINETOS_A9`, `CABINETOS_KEY`, `CABINETOS_VM`,
+`CABINETOS_RELAY_UP`; the Mac's shell profile does not set them, so export
+them per command).
 
 **His rules from 2026-10-19:** an unattended run never waits on a prompt
 (every session's brief says to skip what needs approval and carry on, and
@@ -39,26 +37,34 @@ PROJECT.md.
 
 ## Next
 
-1. **His TV check of 2026.10.19.3, then the merge on his go** (the list is in
-   PR #519, "For the TV"). After the merge: close nothing by hand (the
-   body closes #480, #481, #482, #488 and #329), delete the batch branches
-   (`claude/ovn4-*`, `claude/research-*`, `ovn4-2026-10-19`) and their
-   worktrees, and record #511's verdict on that issue's thread if the PR
-   had none.
+1. **The next unattended batch, the one that may touch `system_files/`**
+   (#511 is proven, so the OS layer may change again): #305's 25 s stall,
+   which is gamescope's own exit waiting on logind (the findings and the
+   fix are on the issue: in `cabinetos-session`, give gamescope 2 s once
+   its app is gone, then stop it and carry on; try it with
+   `ui-loop.sh --session-script` first); #492's last item (STALE-187, the
+   flatpak script's unset overrides); #484's small leftovers (its first
+   comment; ROMM-10 needs writes to RomM, so it waits for his call);
+   #253's measurements and the `--rt` trial; the pause menu lingering
+   over Home after Exit to Home from a built-in core (play.cpp,
+   finishExit: snap the overlay fade as finishStandalone does; three
+   lines; MMagTech noticed it 2026-10-19); the Wii bridge's `make test` as
+   a step in `build-frontend.yml` (one line, and drop "CI does not run it
+   yet" from CONTRIBUTING.md); the three things the Steam session found
+   in passing (on #305's PR #519). Run it like #519: separate sessions,
+   every brief skipping anything that needs approval, a timed fallback so
+   the combining step runs regardless, one checklist for him. With the
+   next real core change: #490's comments in the core and PCSX2 build
+   files.
 2. **The automatic checks report only until 2026-10-25**, then fail a pull
    request: read their first week's reports and fix what they find
    (CONTRIBUTING.md, "What CI checks").
-3. **The next batch, the one that may touch `system_files/`** (once #511
-   is proven): #305's 25 s stall, which is gamescope's own exit waiting on
-   logind (the Steam session's findings are in PR #519: in
-   `cabinetos-session`, give gamescope 2 s once its app is gone, then stop
-   it and carry on; try it with `ui-loop.sh --session-script` first);
-   #492's last item (STALE-187, the flatpak script's unset overrides);
-   #484's small leftovers (its first comment); #253's measurements and the
-   `--rt` trial; the Wii bridge's `make test` as a step in
-   `build-frontend.yml` (one line, and drop "CI does not run it yet" from
-   CONTRIBUTING.md). With the next real core change: #490's comments in
-   the core and PCSX2 build files.
+3. **Words from him that close issues with no work:** #198 (the research
+   says no for now), #339 (the audit is done), #222 and #203 (close as
+   "reopen when it happens"), #487 (the BASE_UPDATE_TOKEN secret, and
+   whether the fork design stays as documented). **Fifteen minutes at the
+   TV, at a time he names:** #473 (one press of the power button during a
+   PS3 or Switch game), #132 (the Bluetooth wake test from Sleep).
 4. **Review the docs for Cabinet Go**: Cabinet is now the pocket version
    for handhelds, unfinished; the docs that call it "the Apple TV app"
    (CONTRIBUTING.md, docs/CABINET.md, PROJECT.md's banner, README.md, the
@@ -81,6 +87,11 @@ PROJECT.md.
   (RomM's save channels; revisit mid-January 2027), #222 (a Flycast
   refusal seen in play), #203 (libretro/dolphin#508, no reply since
   2026-10-01; the console's half waits for it).
+- **An idea of his, 2026-10-19, not scheduled:** a channel-change animation
+  when a game starts and when it exits, on the console's own layers only
+  (the console does not own PS2's or the standalone emulators' picture, so
+  a collapse of the game's picture would not be the same for every game),
+  silent, no setting; pause stays instant.
 - **The game page's launch messages, later** (MMagTech, 2026-10-19, at the
   TV): "Disc can't be read" sits as a loose grey line under Download, as do
   all ten or so reasons Play or Download fails ("Couldn't start this game",
