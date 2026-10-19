@@ -35,6 +35,9 @@
 #     tags:<romId>=<regions>;<languages>;<revision>;<tags> (each a comma list,
 #     any part empty) gives it RomM's four fields, for the same-name heading
 #     (#383): twins on a Home shelf and long labels, without renaming files.
+#   * nosize:<romId> gives a game no size (fs_size_bytes 0), as a server
+#     that has none for it would (#484, LAUNCH-11: the room check before a
+#     one-file download then waits for the download's own length).
 #   * hold:<what>=<seconds> answers every /api/<what> request that late
 #     (hold:saves=20 holds a game's save rows and bytes), as a slow or hung
 #     server would, for what the console does meanwhile (#481, LAUNCH-17: a
@@ -62,6 +65,7 @@ MEDIA = set()     # media:<romId>, also in NESTED
 NAMES = {}        # name:<romId>=<name>
 TAGS = {}         # tags:<romId>=<regions>;<languages>;<revision>;<tags>
 HOLD = {}         # hold:<what>=<seconds>: "/api/<what>" -> seconds
+NOSIZE = set()    # nosize:<romId>
 # (owner id, owner name, collection id, name, smart, favourite, platform id)
 MOCK = [
     (9101, "Alex", 9001, "Saturday co-op", False, False, 8),
@@ -105,6 +109,9 @@ for a in sys.argv[2:]:
         TAGS[int(rid)] = {"regions": lst(parts[0]), "languages": lst(parts[1]),
                           "revision": parts[2].strip(), "tags": lst(parts[3])}
         continue
+    if a.startswith("nosize:"):
+        NOSIZE.add(int(a[7:]))
+        continue
     if a.startswith("hold:"):
         what, secs = a[5:].split("=", 1)
         HOLD["/api/" + what] = float(secs)
@@ -132,6 +139,8 @@ def rewrite(obj):
                 obj["name"] = NAMES[obj["id"]]
             if obj.get("id") in TAGS:
                 obj.update(TAGS[obj["id"]])
+            if obj.get("id") in NOSIZE:
+                obj["fs_size_bytes"] = 0
         if obj.get("id") in FOLDERS and "fs_name" in obj and "platform_id" in obj:
             obj["has_multiple_files"] = True
             obj["has_nested_single_file"] = False
@@ -306,7 +315,7 @@ class H(BaseHTTPRequestHandler):
             r = e
         body = r.read() if not head else b""
         ctype = r.headers.get("Content-Type", "")
-        if (MAP or FILES or FOLDERS or NESTED or NAMES or TAGS) and "json" in ctype and body:
+        if (MAP or FILES or FOLDERS or NESTED or NAMES or TAGS or NOSIZE) and "json" in ctype and body:
             try: body = json.dumps(rewrite(json.loads(body))).encode()
             except Exception: pass
         listing = urllib.parse.urlsplit(self.path).path
