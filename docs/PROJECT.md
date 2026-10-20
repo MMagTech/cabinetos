@@ -18202,7 +18202,7 @@ stand in for it.
   `citra_libretro`.
 - **Built and released by:** Azahar itself, whose every release since
   2125.0-alpha5 (2026-03-08) carries `azahar-libretro-linux-x86_64-*.zip`
-  (its `.github/workflows/libretro.yml`: Ubuntu 22.04, gcc 12); and
+  (its a workflow for it under .github/workflows: Ubuntu 22.04, gcc 12); and
   libretro's buildbot, nightly (`azahar_libretro.so.zip`, 2026-10-19), whose
   core info names it "Nintendo - 3DS (Azahar)".
 - **How often it moves:** 34 commits touch the core's folder in eight
@@ -18603,7 +18603,7 @@ and Japan's Monster Hunter 4, not listed.
 #### For when it is built
 
 A case arm (above), with the keys off and the network answer in place;
-`cores/options/azahar.txt` from `tools/core-options.c`;
+an option table for it under cores/options from `tools/core-options.c`;
 a catalog row, `3ds` to `azahar`; the levels in `quality.cpp`; the layout,
 if not the core's default, in `coreoptions.cpp`; `azahar` in
 `kNoSnapshots`, a save tag and its directory save root in `savetable.cpp`;
