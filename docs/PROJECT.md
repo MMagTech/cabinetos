@@ -2308,6 +2308,82 @@ left is MMagTech's, as it needs sudo: Home with the GPU clocks locked
 high against as shipped, 10 minutes each, counting held pictures from the
 visible frame time.
 
+**2026-10-19, the Vectrex (MMagTech: "it's not running smoothly").** His
+two games that night, from the journal, on 2026.10.20 at the LG C1,
+3840x2160, 60 Hz: Blitz (RomM 2948) and Pole Position (2962), both through
+vecx 1.2 (8f671cc), which reports 50.0000 fps, so the console paces it by
+the clock. Two things, separate:
+
+- **Every window shows 100 repeated frames per 600** (one in six): a 50 Hz
+  game on a 60 Hz screen, which no pacing can hide. RetroArch on a 60 Hz
+  screen has the same; Batocera offers a 50 Hz screen mode. The C1 does 4K
+  at 50 Hz, and VRR (the #256 and #290 checks) would show 50 fps as 50 Hz.
+  This console's gamescope already runs with `--adaptive-sync` (its
+  command line, 2026-10-19), so if the console presented only new game
+  frames for a clock-paced core, the C1 in VRR would show them at 50 Hz;
+  today it presents every refresh. Not tried. It is every 50 Hz game, PAL
+  ones included. Not decided.
+- **Stalls to about 30 Hz for 20 s at a time:** Blitz's first two windows
+  (232 and 288 frames shown, 214 and 291 refreshes missed), Pole Position's
+  fourth and fifth (326 and 300 frames, 243 and 279 missed), the rest at
+  60 Hz with 0 missed. Not the core's cost: headless on the A9 (no screen,
+  the clock's 50 fps, 50 s each, through the read-only relay) both games
+  ran 0 game frames skipped at the image's `vecx_res_multi` 4 (1320x1640)
+  and at 1, with the unpaced loop at 8,500 and 15,700 frames a second. The
+  cause is in the display path and needs the TV.
+- **On the TV, the same night (22:31 to 22:39), at 1x: no stall.** A
+  scratch build with `vecx_res_multi` 1 (sha 9ce296ae8947, through
+  `tools/ui-loop.sh`), Pole Position from attract mode into a race, 7 minutes
+  in all: 47 `[pace]` windows, every one 600 or 601 frames shown with 0
+  refreshes missed (5 windows had 1 game frame skipped). gamescope's frame
+  times over 60 s of the race (the mangoapp queue, per 10 s): about 600 app
+  and 600 visible frames a window, 1 app frame over 25 ms (34.4 ms) and 1
+  visible over 25 ms (33.3 ms) in the whole minute. The race was a light
+  one: the keyboard reaches only Vectrex buttons 1 and 2 (X and Z; the game
+  maps A=1, B=2, X=3, Y=4) and the throttle is a pad's, so the clock ran with
+  the car on the grid.
+- **Then five more on the TV (22:42 to 22:50), with a pad: no stall in
+  any.** A virtual Xbox 360 pad through uinput (`~/fb/vx/fake-hold` on the
+  A9, a copy of `~/fb/fake-pad` that can hold a button) pressed Vectrex
+  button 1 three times and held button 4, the throttle, for 64 s; Pole
+  Position then raced at speed (135 on its gauge, the road curving). Each
+  run its own loop deploy, the frame times sampled for 60 s from 12 s after
+  `[launch] running VecX`, 8 `[pace]` windows each:
+
+  | Run | Build | Game | `[pace]` windows, refreshes missed | Frame times over 25 ms in 60 s (app / visible) |
+  |---|---|---|---|---|
+  | 1 | image, 4x | Pole Position, racing | 1, 0, 0, 0, 0, 0, 0, 0 | 1 / 1 |
+  | 2 | image, 4x | Blitz | 2, 0, 0, 0, 0, 0, 0, 0 | 1 / 2 |
+  | 3 | scratch, 1x | Blitz | 2, 0, 0, 0, 0, 1, 0, 0 | 1 / 0 |
+  | 4 | image, 4x | Pole Position, racing | 0, 0, 0, 0, 0, 0, 0, 0 | 1 / 7 |
+  | 5 | image, 4x | Pole Position, racing | 1, 0, 0, 0, 0, 1, 0, 0 | 1 / 1 |
+
+  Every window 599 to 601 frames shown (the stalls read 232 to 326). The
+  few missed refreshes are at the launch (the first window) or single; no
+  window came near a stall. Blitz never left its PLAYER and GAME select
+  screen (buttons 1 and 4 pressed, 4 held), but his stall began in Blitz's
+  first two windows from launch, which both runs covered. One app frame of
+  34 to 41 ms fell in the same place in every run, 52 to 62 s after launch,
+  where the frontend writes its play-time checkpoint each minute
+  (`frame.cpp`); it coincides, not checked further. Run 4's 7 visible
+  frames over 25 ms were all 33.3 ms, one picture held for two refreshes
+  each, the kind #253 counts at Home.
+- **What that rules out and leaves.** Ruled out, as far as six runs and 14
+  minutes go: the stall is not the resolution (none at 1x or 4x), not the
+  race or the car moving, not the first 20 s of either game, and not
+  something every launch does. Left: what was different during his play.
+  His own pad over Bluetooth (pad 2, the Xbox Series X; the runs used a
+  wired virtual one), a longer session (his Blitz stall was in the first
+  20 s, so length is unlikely for that one), the menus and screens he went
+  through before each game, and the screen's state (dimmed or not, other
+  apps, the TV's own mode). Not measured: the next step is the journal of
+  his evening read for what ran just before each stall.
+- **The runs wrote to his RomM, on his go** ("You can run it as many times
+  as you want to figure out the issue"): every loop deploy ends the running
+  game by restarting the session, which leaves its play session open, and
+  the next start sends it. Pole Position gained 420 s (the first 1x run)
+  and 60 s three times, Blitz 60 s twice, of time played nobody played.
+
 ### The emulator settings audit (#89) — 2026-09-27
 
 **The rule, MMagTech's:** most settings do not decide whether a save or
