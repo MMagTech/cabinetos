@@ -320,8 +320,17 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   - **Crash-left Dreamcast cards** (`saves/unattributed/`) go with it and
     were never uploaded. MMagTech: fine to lose.
   - **A games drive that is not plugged in keeps its games.** They are that
-    server's and nothing will use them; a wrong one is never launched,
-    because a file is only reused at its game's number, name and size.
+    server's, and nothing on the drive says so: RomM gives no server an
+    identity (PROJECT.md, open question 14), so plugged in under the next
+    server they are taken for its games with the same numbers (#484). A
+    wrong one is never launched, because a file is only reused at its
+    game's number, name and size; but online the new server's record is
+    written for each (offline Home shows them under its names), and
+    playing the new server's game of that number downloads it into the old
+    one's entry, over the old file when the entry is one file. Settings'
+    Downloads lists the ones that were downloads (kept by nobody now) and
+    removes them; the cached ones are cleared as room is needed. What
+    should become of them is MMagTech's to decide.
   - **Dropped: keeping games through Sign out** until the next pairing shows
     whether it is the same server. It would protect a kept library from an
     accidental sign out, but the one deliberate same-server case (a dead

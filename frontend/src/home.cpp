@@ -125,7 +125,12 @@ void App::activateHome() {
     // Home promises one action from cold to playing, and this is it.
     if (haveResume() && focusRow == RowRecent && focusSlot == 0) {
         sound::play(sound::Cue::Activate);   // #389
-        pendingResume = launchById(cards[heroIndex].id);
+        // Set only when the press counts (#484): refused because another
+        // game is downloading, it cleared that game's Resume.
+        if (launchById(cards[heroIndex].id)) {
+            forgetLaunchAsks();
+            pendingResume = true;
+        }
         return;
     }
     // Every other cover on Home opens the launch screen, the same as a

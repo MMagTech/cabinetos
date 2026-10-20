@@ -93,7 +93,10 @@ bool shownGreyed(Support s);
 struct Coverage {
     Support support = Support::NoCore;
     const char* core = nullptr;     // manifest core name, when there is one
-    const char* reason = nullptr;   // why, when it is not simply playable
+    // Why, when it is not simply playable: the line a game's page shows in
+    // place of Play, so it is worded for the screen, capital first (#484).
+    // Home's Resume on such a game opens that page (App::showWhyUnplayable).
+    const char* reason = nullptr;
 };
 
 // The file a core was built into, given the manifest's name for it.

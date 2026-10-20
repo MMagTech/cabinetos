@@ -361,7 +361,9 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 - **ydotool's virtual keyboard has no key repeat**, so a held key sends one
   press. A held volume key cannot be tested with it. A held arrow can: the
   console runs its own hold from the press to the release, on every screen
-  since #398 (PLAY-03).
+  since #398 (PLAY-03). Headless, `--nav held:<key>` hands the event handler
+  the system's repeat itself (#484): `--nav "key:],held:],held:]"` ends on
+  the Library, where a repeat that acted would end on Search.
 
 - **A SHORT YDOTOOL TAP CAN BE DROPPED.** 2026-10-19 (#253): with key-down
   and key-up 0.15 s apart, the Return after `ydotool type` into Search was
