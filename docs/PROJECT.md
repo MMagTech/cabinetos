@@ -340,8 +340,10 @@ down. "Look now at" is where the code or a later decision moved on.
   with the conditions; built (the core's arm, the catalog row, the levels,
   saves the PSP way, the encrypted-dump and CIA refusal, games given no
   network by a patch), #524 ("Nintendo 3DS through Azahar's own libretro
-  core (decrypted dumps)"), a draft. The A9 hand test waits for a time he
-  names and a game of his.**
+  core (decrypted dumps)"). On 2026-10-20: states yes, by his decision (the
+  exception to question 25), side by side, levels 1x, 3x and 6x; tested on
+  the TV with three of his games on Vulkan; CIAs hidden; conditions 4 and 5
+  met by his go for the testing image ("Build the damn thing already").**
 - **51. Vectrex screen overlays, issue #224** ("Vectrex: the cartridges'
   screen overlays"). Researched 2026-10-19, not decided: Cabinet's 38 sheets
   are libretro/overlay-borders' `Game Overlay` folder, byte for byte (MIT,
@@ -18582,8 +18584,9 @@ go with conditions once the hand test passes.
 ### 50. Nintendo 3DS (Azahar's libretro core)
 
 **Researched 2026-10-19; go given the same night, with the conditions
-below; built, the hand test still to come** (see "The go, and the build" at
-the end). Asked by
+below; built, tested on the TV, and every condition met on 2026-10-20**
+(see "The go, and the build", "The TV run" and "Conditions 4 and 5" at the
+end). Asked by
 MMagTech on the night of 2026-10-19, with no issue: should the console play
 the 3DS, and how. His four questions (a stable core, Vulkan, upscaling for
 the picture quality levels, the pointer), then the tests the Vita had
@@ -19655,6 +19658,21 @@ person's do (`tools/fake-pad.c`'s `down:` and `up:`):
   ahead and both in one frame opened it with no swap. No game on the
   write-test RomM uses L3 outside the 3DS, so a lone click reaching another
   system was not shown there; it is the same code for every core.
+
+#### Conditions 4 and 5: his go for the testing image (2026-10-20)
+
+MMagTech, 2026-10-20, asked about the last two conditions: "Yes, I'm fine
+with those. Build the damn thing already." So every condition is met:
+
+- **(4) Accepted:** only decrypted cartridge dumps play. Encrypted dumps
+  are refused after their download ("Encrypted 3DS games can't be
+  played"), CIAs are hidden (above), and updates and DLC do not play yet
+  (#181, "Updates and DLC as separate files in RomM (Switch, PS3, Xbox
+  360)", or Azahar's bundles in a stable release).
+- **(5) His call:** the 3DS emulator is built into the image, Azahar's own
+  libretro core at 2126.2, with the no-network patch.
+
+Next: the testing image, judged on the TV, then the merge on his go.
 
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 
