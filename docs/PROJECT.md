@@ -2295,9 +2295,24 @@ the clock. Two things, separate:
   the clock's 50 fps, 50 s each, through the read-only relay) both games
   ran 0 game frames skipped at the image's `vecx_res_multi` 4 (1320x1640)
   and at 1, with the unpaced loop at 8,500 and 15,700 frames a second. The
-  cause is in the display path and needs the TV: Pole Position in a race,
-  frames.py and the plane sampler, 4 against 1, with the pause menu, the
-  manual's fetch and the game's own phases ruled in or out. Not measured.
+  cause is in the display path and needs the TV.
+- **On the TV, the same night (22:31 to 22:39), at 1x: no stall.** A
+  scratch build with `vecx_res_multi` 1 (sha 9ce296ae8947, through
+  `tools/ui-loop.sh`), Pole Position from attract mode into a race, 7 minutes
+  in all: 47 `[pace]` windows, every one 600 or 601 frames shown with 0
+  refreshes missed (5 windows had 1 game frame skipped). gamescope's frame
+  times over 60 s of the race (the mangoapp queue, per 10 s): about 600 app
+  and 600 visible frames a window, 1 app frame over 25 ms (34.4 ms) and 1
+  visible over 25 ms (33.3 ms) in the whole minute. The race was a light
+  one: the keyboard reaches only Vectrex buttons 1 and 2 (X and Z; the game
+  maps A=1, B=2, X=3, Y=4) and the throttle is a pad's, so the clock ran with
+  the car on the grid. **4x on the TV was not measured:** the shipped
+  frontend's run was refused by the session's permission check (a loop game
+  sends its play time to RomM), so nothing is ruled out between 1x and 4x.
+  Still open: 4x in a real race with a pad, and whether the stall needs the
+  car moving. That 1x run ended with a restore, which left its play session
+  open; the next start sent it, so Pole Position on his server gained 7
+  minutes (420 s) of time played it was never played for.
 
 ### The emulator settings audit (#89) — 2026-09-27
 
