@@ -2306,13 +2306,48 @@ the clock. Two things, separate:
   visible over 25 ms (33.3 ms) in the whole minute. The race was a light
   one: the keyboard reaches only Vectrex buttons 1 and 2 (X and Z; the game
   maps A=1, B=2, X=3, Y=4) and the throttle is a pad's, so the clock ran with
-  the car on the grid. **4x on the TV was not measured:** the shipped
-  frontend's run was refused by the session's permission check (a loop game
-  sends its play time to RomM), so nothing is ruled out between 1x and 4x.
-  Still open: 4x in a real race with a pad, and whether the stall needs the
-  car moving. That 1x run ended with a restore, which left its play session
-  open; the next start sent it, so Pole Position on his server gained 7
-  minutes (420 s) of time played it was never played for.
+  the car on the grid.
+- **Then five more on the TV (22:42 to 22:50), with a pad: no stall in
+  any.** A virtual Xbox 360 pad through uinput (`~/fb/vx/fake-hold` on the
+  A9, a copy of `~/fb/fake-pad` that can hold a button) pressed Vectrex
+  button 1 three times and held button 4, the throttle, for 64 s; Pole
+  Position then raced at speed (135 on its gauge, the road curving). Each
+  run its own loop deploy, the frame times sampled for 60 s from 12 s after
+  `[launch] running VecX`, 8 `[pace]` windows each:
+
+  | Run | Build | Game | `[pace]` windows, refreshes missed | Frame times over 25 ms in 60 s (app / visible) |
+  |---|---|---|---|---|
+  | 1 | image, 4x | Pole Position, racing | 1, 0, 0, 0, 0, 0, 0, 0 | 1 / 1 |
+  | 2 | image, 4x | Blitz | 2, 0, 0, 0, 0, 0, 0, 0 | 1 / 2 |
+  | 3 | scratch, 1x | Blitz | 2, 0, 0, 0, 0, 1, 0, 0 | 1 / 0 |
+  | 4 | image, 4x | Pole Position, racing | 0, 0, 0, 0, 0, 0, 0, 0 | 1 / 7 |
+  | 5 | image, 4x | Pole Position, racing | 1, 0, 0, 0, 0, 1, 0, 0 | 1 / 1 |
+
+  Every window 599 to 601 frames shown (the stalls read 232 to 326). The
+  few missed refreshes are at the launch (the first window) or single; no
+  window came near a stall. Blitz never left its PLAYER and GAME select
+  screen (buttons 1 and 4 pressed, 4 held), but his stall began in Blitz's
+  first two windows from launch, which both runs covered. One app frame of
+  34 to 41 ms fell in the same place in every run, 52 to 62 s after launch,
+  where the frontend writes its play-time checkpoint each minute
+  (`frame.cpp`); it coincides, not checked further. Run 4's 7 visible
+  frames over 25 ms were all 33.3 ms, one picture held for two refreshes
+  each, the kind #253 counts at Home.
+- **What that rules out and leaves.** Ruled out, as far as six runs and 14
+  minutes go: the stall is not the resolution (none at 1x or 4x), not the
+  race or the car moving, not the first 20 s of either game, and not
+  something every launch does. Left: what was different during his play.
+  His own pad over Bluetooth (pad 2, the Xbox Series X; the runs used a
+  wired virtual one), a longer session (his Blitz stall was in the first
+  20 s, so length is unlikely for that one), the menus and screens he went
+  through before each game, and the screen's state (dimmed or not, other
+  apps, the TV's own mode). Not measured: the next step is the journal of
+  his evening read for what ran just before each stall.
+- **The runs wrote to his RomM, on his go** ("You can run it as many times
+  as you want to figure out the issue"): every loop deploy ends the running
+  game by restarting the session, which leaves its play session open, and
+  the next start sends it. Pole Position gained 420 s (the first 1x run)
+  and 60 s three times, Blitz 60 s twice, of time played nobody played.
 
 ### The emulator settings audit (#89) — 2026-09-27
 
