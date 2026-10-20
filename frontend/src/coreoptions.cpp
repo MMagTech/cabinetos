@@ -166,16 +166,15 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // C-stick at once, R3 touches, L3 swaps the screens (#374's rule, as on
     // the DS). quality.cpp's levels are sized for this layout.
     //
-    // L3 SWAPS THE SCREENS ONLY WHILE IT IS HELD ("Hold", not the core's
-    // "Toggle"). A stick click reaches the core on its own before L3 + R3 is
-    // caught as the pause menu (play.cpp), so with Toggle the L3 that lands a
-    // frame before R3 left the screens swapped behind the menu. Side by side,
-    // a swap only trades the screens' sides, so holding it costs nothing.
+    // L3 SWAPS THE SCREENS AND THEY STAY SWAPPED: the core's own "Toggle",
+    // so no override (MMagTech 2026-10-20, replacing "Hold"). One press
+    // swaps, the next swaps back, and every start begins unswapped. The L3
+    // that used to land a frame before R3 as a player opened the pause menu,
+    // and left the screens swapped behind it, no longer reaches the core: a
+    // lone stick click waits App::kStickPairMs for the other (play.cpp), and
+    // the pair reaches only the menu.
     if (coreName == "azahar")
-        return {
-            {"citra_layout_option", "side_by_side"},
-            {"citra_swap_screen_mode", "Hold"},
-        };
+        return {{"citra_layout_option", "side_by_side"}};
 
     // Beetle Saturn, and this one also decides where the save is. "libretro"
     // hands the Saturn's backup RAM to the frontend through SAVE_RAM, which

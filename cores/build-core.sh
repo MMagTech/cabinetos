@@ -844,6 +844,20 @@ if [ "$CORE" = ppsspp ]; then
 fi
 
 if [ "$CORE" = azahar ]; then
+    # Each replacement in these patches is literal and must match exactly
+    # once, or the build stops: a patch that matches nothing is a green build
+    # without it, with games online or every game in the first game's folders.
+    patch_once() {
+        FROM="$2" TO="$3" perl -0pi -e '
+            my $n = () = /\Q$ENV{FROM}\E/g;
+            die "matched $n times\n" unless $n == 1;
+            s/\Q$ENV{FROM}\E/$ENV{TO}/;
+        ' "$SRC/$1" || {
+            echo "azahar patch did not apply to $1; upstream shape changed" >&2
+            exit 1
+        }
+    }
+
     # GAMES GET NO NETWORK. The emulated 3DS reaches the real network for a
     # game: its sockets are the host's, its HTTP service makes real requests,
     # and its Wi-Fi says connected the moment a game asks. A game's servers
@@ -857,19 +871,6 @@ if [ "$CORE" = azahar ]; then
     # and the lookup SOC makes of the console's own address, which opens a
     # connection to 8.8.8.8 to find it. Local play between 3DSes goes through
     # the multiplayer rooms, which ENABLE_LIBRETRO leaves out.
-    #
-    # Each replacement is literal and must match exactly once, or the build
-    # stops: a patch that matches nothing is a green build with games online.
-    patch_once() {
-        FROM="$2" TO="$3" perl -0pi -e '
-            my $n = () = /\Q$ENV{FROM}\E/g;
-            die "matched $n times\n" unless $n == 1;
-            s/\Q$ENV{FROM}\E/$ENV{TO}/;
-        ' "$SRC/$1" || {
-            echo "azahar no-network patch did not apply to $1; upstream shape changed" >&2
-            exit 1
-        }
-    }
     AC=src/core/hle/service/ac/ac.cpp
     patch_once "$AC" 'rb.Push<u32>(static_cast<u32>(Status::STATUS_INTERNET));' \
         'rb.Push<u32>(static_cast<u32>(Status::STATUS_DISCONNECTED)); // cabinetos: no network'
@@ -915,6 +916,31 @@ if [ "$CORE" = azahar ]; then
     state = RequestState::Completed;
     FinishTransfer();'
     echo "patched: games get no network (Wi-Fi off, sockets, lookups and HTTP refused)"
+
+    # EACH GAME SETS ITS OWN FOLDERS. Azahar's bug, not ours, tracked on
+    # #534 (reported as azahar-emu/azahar#2694); drop this patch when
+    # an Azahar release fixes SetUserPath. Every start hands the core that
+    # game's and that person's save folder, and SetUserPath
+    # (src/common/file_util.cpp) fills its table of folders with emplace,
+    # which never replaces an entry already there. The core is never really
+    # unloaded (glibc keeps a library with GNU unique symbols loaded, and
+    # Azahar has thousands), so the table outlives the game: every 3DS game
+    # after the first since the frontend started, and every person after the
+    # first, read and wrote the first game's sdmc, nand, sysdata and shader
+    # folders, and their saves went up to RomM under the first game. The
+    # table is emptied only when the folder changes: the core calls
+    # SetUserPath again, with the same folder, whenever an option changes
+    # while a game runs (the pause menu's rows), and emptying it then would
+    # free paths the running game may be reading. Nothing fills the table
+    # before it in this build (UpdateUserPath is the Qt window's alone), so
+    # nothing is lost.
+    patch_once src/common/file_util.cpp 'void SetUserPath(const std::string& path) {
+    std::string& user_path = g_paths[UserPath::UserDir];' \
+        'void SetUserPath(const std::string& path) {
+    if (path != g_paths[UserPath::UserDir])
+        g_paths.clear(); // cabinetos: each game sets its own folders
+    std::string& user_path = g_paths[UserPath::UserDir];'
+    echo "patched: each game sets its own folders (SetUserPath drops the last game's)"
 fi
 
 # platform=unix is the core's own Linux case, and on every Makefile-based core
