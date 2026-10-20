@@ -19591,7 +19591,9 @@ after (`--restore`).
   is known: it held for the whole run, both loads and across Exit to Home
   and a new start. Azahar's own lines below warnings are not kept
   (`core.cpp` keeps warnings and errors), so its renderer's rebuild is not
-  in the log. Not fixed; watch for it.
+  in the log. Not fixed; watch for it. The notes are kept in #531 ("3DS: a
+  black picture after loading a save state (seen twice, not reproduced)"),
+  opened and closed at once on MMagTech's ask.
 - **For the test, not the console:** a `ui-loop.sh` redeploy stops the
   session, whose reaper kills the frontend at once, so a game left that way
   sends no save; it waits on the console and goes at that game's next exit.
