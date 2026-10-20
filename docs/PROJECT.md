@@ -19516,6 +19516,74 @@ HOME and storage root with no input devices. Nothing ran on the TV.
   And `--core-option` reached only `--core`; it now reaches a library
   launch too, which is how the TV switches API and layout without a build.
 
+#### The TV run (2026-10-20, unattended)
+
+On the A9's own session, through `tools/ui-loop.sh`, this branch with side
+by side and the levels 1x, 3x, 6x, against the write-test RomM in a scratch
+HOME and storage root; presses by ydotool's keyboard (the frontend's player
+one) and, for the stick clicks, `tools/fake-pad.c`. MMagTech was at work;
+his Xbox pad was connected for part of it. Frame times from gamescope
+(`frames.py`, 15 to 25 s windows), repeated and skipped game frames from
+the console's own `[pace]` lines. The console was put back on its image
+after (`--restore`).
+
+| Game, scene | Level | Vulkan, first play | Vulkan, second play | OpenGL, second play |
+|---|---|---|---|---|
+| Mario Kart 7, Toad Circuit race | 6x | 59.7/s, 99th 17.75 ms, worst 112 ms, 5 over 34 ms | 60.0/s, worst 18.3 ms, none over 20 ms | 60.0/s, worst 17.8 ms, none over 20 ms |
+| | 3x | | 60.0/s, worst 18.5 ms, none over 20 ms | |
+| | 1x | | 60.0/s, worst 17.8 ms, none over 20 ms | |
+| Kirby: Planet Robobot, stage 1-1 | 6x | 58.4/s, 99th 24.3 ms, worst 118 ms, 8 over 34 ms | 60.0/s, worst 17.6 ms, none over 20 ms | |
+| | 3x | | 60.0/s, worst 18.4 ms | |
+| | 1x | | 60.0/s, worst 17.9 ms | |
+| Smash Bros., a fight | 6x | 59.7/s, 99th 24.2 ms, worst 57.8 ms, 3 over 34 ms | 59.7/s, 99th 18.9 to 20.8 ms, worst 42 to 63 ms, 3 over 34 ms | 59.6/s, 99th 19.5 ms, worst 60 ms, 4 over 34 ms (first GL fight 59.4/s, 7 over 34 ms) |
+| | 5x | | 59.8/s, 99th 19.3 ms, worst 43 ms, 3 over 34 ms | |
+| | 3x | | 59.9/s, 99th 18.5 ms, worst 40.5 ms, 2 over 34 ms | |
+| | 1x | | 59.9/s, 99th 17.7 ms, worst 38.5 ms, 2 over 34 ms | |
+
+- **6x holds full speed** in all three; Quality stays 6x. Smash's few
+  hitches are there at 1x too and the same at 5x, so they are the game's,
+  not the resolution's.
+- **Vulkan stays:** OpenGL tied it in Mario Kart 7 and was a little worse
+  in Smash (3 to 6 refreshes missed in 10 s against Vulkan's 1).
+- **azahar-emu/azahar#2093 not seen:** in play, Vulkan's 10-second windows
+  show 0 to 5 repeated or skipped game frames out of 600 and 0 to 2 missed
+  refreshes, OpenGL's the same or more.
+- **The first play's shader stutter** is real and short: 3 to 8 frames over
+  34 ms in the first 20 s of a new track, stage or fight; none on the
+  second play of the same scene (the disk shader cache, per person per
+  game).
+- **Side by side** filled the TV's width, the top screen on the left
+  (stills in the session's notes folder). **L3** swapped the screens and
+  swapped them back. **L3 + R3** pressed in the same frame opened the pause
+  menu with no swap and no tap (the fake pad presses both at once; a
+  person's two presses a frame apart are "Full features", fault 4, from the
+  code).
+- **Saves:** each game's save zip reached the write-test RomM at Exit to
+  Home (Mario Kart 7 1,585 bytes, Kirby 6,537, Smash 16,459), and Mario
+  Kart 7's came back at its next start. Every game left by the pause menu
+  without a crash (#2572).
+- **States:** made and uploaded under the tag `azahar`: 18.4 MB (a demo),
+  22.4 MB (a race), 20.6 MB (Kirby), 30.4 MB (Smash), each about 0.5 s to
+  make and about a second's hold with its 4320x1440 picture; a load 0.8 s
+  from the press, then "Press (A) to continue". Loaded by Load latest state
+  and by Home's Resume, on Vulkan and OpenGL, at every level.
+- **No connection** from the frontend in 30 one-second `ss` samples while a
+  game played.
+- **Found and fixed:** the first state load crashed the console 2 ms later
+  (radv, in `vk::present()`'s blit): Azahar rebuilds its system to load a
+  state, renderer included, and the host blitted from the image the old one
+  had handed over, while the game waited on "Press (A) to continue".
+  `Core::loadState` now has the host forget that image
+  (`vk::forgetCoreImage`).
+- **Seen, not explained:** two of sixteen loads on Vulkan at 6x showed a
+  black picture after continuing while the game ran on (the same states
+  loaded with their pictures fourteen times after, at every level and on
+  OpenGL). Both were in one run, the one where his Xbox pad connected seven
+  seconds before the first. Watch for it; not reproduced.
+- **For the test, not the console:** a `ui-loop.sh` redeploy stops the
+  session, whose reaper kills the frontend at once, so a game left that way
+  sends no save; it waits on the console and goes at that game's next exit.
+
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 
 **Researched 2026-10-19, the night; research only, no code; DECIDED 2026-10-19, late.**
