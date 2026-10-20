@@ -10,6 +10,9 @@ one you install, so you only ever install the newest.
   the pause menu instead of putting a coin in. Select and Start can no
   longer be chosen as the shortcut button, and Home opens the pause menu
   even when another button was chosen for that kind of controller (#313).
+- **Fixed:** on Search, the covers grow and shrink with the keyboard as it
+  slides in and out, instead of jumping to their new size at once. Done
+  slides the keyboard away rather than dropping it.
 
 ## 2026.10.20 {#v2026-10-20}
 
