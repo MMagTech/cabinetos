@@ -1840,8 +1840,8 @@ and Home is the button the list most often gets wrong.
   during controller testing, so Moonlight's on-screen controls (which
   Sunshine presents as that kind of pad) opened the menu on a tap of Select
   and an arcade game never got its coin. Now a chosen button is added beside
-  Home, the row refuses the four and says why ("Games use Select…", "L3 and
-  R3 open the menu…"), and a choice saved before the rule reads as none. A phone's
+  Home, the row refuses the four and says why ("Games use Select…", "L3
+  opens the menu with R3…"), and a choice saved before the rule reads as none. A phone's
   long press of Select, which Sunshine sends as Home, therefore always opens
   the menu, whatever was chosen for that kind of pad at the TV. Two builds
   that gave a stream its own rule (Home always; the saved button except
