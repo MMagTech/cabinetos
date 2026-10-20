@@ -327,7 +327,9 @@ down. "Look now at" is where the code or a later decision moved on.
   only decrypted cartridge dumps play. Recommended go with conditions: the
   build with its key blob off, no network for games (Azahar has no switch),
   an A9 test of Vulkan's frame pacing (azahar-emu/azahar#2093), and his
-  legal call. His server has no 3DS games.
+  legal call. With it, a touchpad as a second way to touch (the core takes
+  it beside the stick, unlike melonDS, #288); gyro as a later piece of its
+  own. His server has no 3DS games.
 
 ---
 
@@ -18197,7 +18199,95 @@ same scene. Switching is one option, `citra_graphics_api` (`Vulkan`,
 - **Does one rule hold with no exception per game?** As for the DS (#248,
   "one rule for every game"): the games built around the stylus suffer, the
   rest play on buttons with the odd tap. Nothing here needs a per-game
-  choice.
+  choice. How many suffer is counted below.
+- **Touch for play, or for menus and maps only** (MMagTech's addition,
+  2026-10-19). A research pass over 50 games, the 25 best-sellers and 25
+  chosen for their touch use (Kid Icarus: Uprising, the Layton games,
+  rhythm, drawing and puzzle games), from Nintendo's and Capcom's
+  electronic manuals, Wikipedia and reviews; Theatrhythm counted twice
+  because Curtain Call changed its controls, so 51 rows. The sample leans
+  towards touch games on purpose.
+  - **Menus and maps only (30):** Mario Kart 7, Pokémon X and Y, Sun and
+    Moon, Omega Ruby and Alpha Sapphire, Ultra Sun and Ultra Moon, New Super
+    Mario Bros. 2, Animal Crossing: New Leaf, Super Mario 3D Land, Super
+    Smash Bros., Luigi's Mansion: Dark Moon, Ocarina of Time 3D, Majora's
+    Mask 3D, A Link Between Worlds, Monster Hunter Generations and 4
+    Ultimate, Fire Emblem Awakening and Fates, Donkey Kong Country Returns
+    3D, Bravely Default, Kirby: Planet Robobot and Triple Deluxe, Xenoblade
+    Chronicles 3D, Star Fox 64 3D, Paper Mario: Sticker Star, Pilotwings
+    Resort, Pokémon Mystery Dungeon: Gates to Infinity, Fantasy Life,
+    Rhythm Heaven Megamix (touch optional), Theatrhythm: Curtain Call
+    (buttons added), Phoenix Wright: Dual Destinies (the weakest call:
+    StrategyWiki calls it touch-led, a review found the buttons easier).
+    Two have menus that only touch reaches, which the pointer reaches:
+    Ocarina of Time 3D assigns items by touch (its manual), Bravely Default's
+    Norende Village and SP Drink menus.
+  - **Touch for play, throughout (15):** Kid Icarus: Uprising (aiming; but
+    Wikipedia says face buttons aim too), Professor Layton and the Miracle
+    Mask and the Azran Legacy, Tomodachi Life, Nintendogs + Cats, Style
+    Savvy: Trendsetters, Picross 3D: Round 2, Happy Home Designer, Super
+    Mario Maker for Nintendo 3DS (its editor), Yo-kai Watch and Yo-kai Watch
+    2 (the battle wheel), Theatrhythm Final Fantasy ("controlled solely with
+    the stylus", Nintendo World Report), Brain Age: Concentration Training,
+    Steel Diver, Dillon's Rolling Western.
+  - **Touch for play, in parts (6):** Professor Layton vs. Phoenix Wright
+    (story puzzles), Metroid: Samus Returns (switching beams, the Grapple
+    Beam among them), Mario & Luigi: Dream Team (Luiginary Works), Kingdom
+    Hearts 3D (Reality Shifts, needed in some boss fights), WarioWare Gold
+    (Touch League), Mario Party: Island Tour (some minigames).
+  - **What the stick pointer covers, with no rule per game:** it reaches
+    every tap and drag (R3 held while the stick moves), at stick speed. So
+    it carries the 30 menu games and the 10 whose touch play waits for the
+    player (the Layton three, Tomodachi Life, Nintendogs + Cats, Style
+    Savvy, Picross 3D, Happy Home Designer, Super Mario Maker's editor,
+    Dream Team): **40 of 51, 78%, of a sample that leans to touch.** The 11
+    whose touch play is against the clock (Kid Icarus, Theatrhythm Final
+    Fantasy, Brain Age, Dillon, the two Yo-kai Watch games, WarioWare Gold,
+    Mario Party: Island Tour, Kingdom Hearts 3D, Steel Diver, Metroid's beam
+    switching in a fight) are where a stick likely cannot keep up; that
+    split is a reading of the sources' descriptions, for the TV to confirm.
+    **Of the best-sellers alone** (24 classified; Japan's Monster Hunter 4
+    was not), 17 use touch for menus only and 4 more wait for the player:
+    **21 of 24**. The other three are the Yo-kai Watch games and Island
+    Tour's minigames.
+  - **His own 3DS games:** none on his server to sort.
+  - **The timed 11 are where a touchpad helps** (below): direct touch, as a
+    stylus, for the players whose pad has one.
+- **A touchpad as the bottom screen, beside the stick (#288's question,
+  asked again for the 3DS, MMagTech 2026-10-19).** melonDS takes one touch
+  mode at a time, so the DS's touchpad would have cost the stick (#288, set
+  aside). **This core takes both at once.** One pass of its pointer code
+  reads the mouse button and libretro's absolute pointer
+  (`RETRO_DEVICE_POINTER`, pressed, X and Y), then the right stick and R3,
+  and ORs the presses: the pointer sets the position, the stick moves it
+  from there, either one touches (`input/mouse_tracker.cpp:100-188` at
+  master; the same order at 2126.2, `:132-240`). Both inputs are on by
+  default ("Mouse Touchscreen Support", "Touch Device Support"). So the
+  console could answer `RETRO_DEVICE_POINTER` from player 1's touchpad when
+  that pad has one, and every pad keeps the stick: one rule, no setting.
+  What it would take, and what to know:
+  - **SDL brings touchpad events into the host already,** in process: the
+    console's event filter names `SDL_EVENT_GAMEPAD_TOUCHPAD_*`, to drop a
+    set-aside pad's (`startup.cpp`); SDL reports a DualShock 4's or a
+    DualSense's touchpad.
+    Whether those events arrive under CabinetOS is still #288's open check,
+    on the A9. `core_input.cpp` answers only the pad and its sticks today;
+    the pointer is new code there.
+  - **Map the touchpad onto the bottom screen's rectangle,** not the whole
+    picture: the core counts a touch only where it starts on the bottom
+    screen (`mouse_tracker.cpp:120`), and the pointer's range is the whole
+    frame (`:114-117`). The console sets the layout, so it knows where the
+    bottom screen is. (At 2126.2 a touch off the bottom screen still taps at
+    the last position, which master fixed in #2563; a mapping that never
+    leaves the rectangle never meets it.)
+  - **No cursor for a touch:** the cursor wakes only when the stick moves
+    (`:167-185`) and hides after 4 still seconds, so touches aim by feel.
+    "Touch Pointer Timeout" off would keep it on screen in every game.
+  - **A brushing thumb taps.** The touchpad touches on contact; #509
+    already met thumbs brushing a DualSense's pad. Touch on contact or only
+    while the pad is clicked is a choice for the TV.
+  - **Port 0 only**, as everything in this core: player 1's pad, which is
+    the 3DS's one player.
 - **L3** is the core's screen swap ("Toggle", `citra_libretro.cpp:239-270`) and the
   3DS HOME button (`:191-193`); HOME does nothing unless a HOME menu was booted
   (`core/hle/service/apt/applet_manager.cpp:1743-1753`), so for a game L3
@@ -18302,20 +18392,71 @@ and Japan's Monster Hunter 4, not listed.
   Pocket (Great). ZL and ZR are L2 and R2, the C-stick the right stick
   (`citra_libretro.cpp:185-202`). One pad: every binding is port 0, as on
   the machine.
-- **Gyro:** the core reads gyroscope and accelerometer through libretro's
-  sensor interface (`input/input_factory.cpp:99-170`), which the host does
-  not answer, so a game sees a 3DS lying still. No public list of 3DS games
-  that need motion was found. Examples from public sources: Super Monkey
-  Ball 3D is built around tilting the console (V&A collection); Ocarina of
-  Time 3D aims by gyro (Galaxus); Cubic Ninja's levels are made for gyro,
-  with a Circle Pad fallback a review calls awkward (Nintendo World Report).
-  As for the Vita: no gyro for the 3DS now; with nothing to grey by, a game
-  that needs it stops where it does. The one piece that would serve it, the
-  sensor interface answered from the player's own pad, also serves the Game
-  Boy Advance motion carts (question 49) and is his separate question.
-- **Microphone:** asked through libretro's microphone interface
-  (`environment.cpp:61-63`), not answered here, so games hear silence.
-  "Static Noise" is the core's other value. Not counted.
+- **Gyro: the core takes motion through libretro's sensor interface**
+  (MMagTech's addition, 2026-10-19). Every 3DS has a gyroscope and an
+  accelerometer. With "Gyroscope/Accelerometer Support" on, its default
+  (`core_settings.cpp:699`), the core asks `GET_SENSOR_INTERFACE`, turns both
+  sensors on at 60 Hz with `set_sensor_state`, and reads accelerometer X, Y,
+  Z in g and gyroscope X, Y, Z in radians a second, times "Motion
+  Sensitivity", from port 0 (`input/input_factory.cpp:99-170`,
+  `environment.cpp:57-59`). The host does not answer it today, so a game
+  sees a 3DS lying still: gravity straight down, no turn.
+- **So a DualSense's gyro could serve it** if the host answered that
+  interface. The host reads the real pads in process through SDL, which
+  reports a DualSense's and a DualShock 4's gyroscope and accelerometer (its
+  event filter already handles `SDL_EVENT_GAMEPAD_SENSOR_UPDATE`,
+  `startup.cpp`). What it would take: SDL's accelerometer is in m/s², so it
+  is divided by standard gravity; the axes are turned from a pad held flat to
+  a 3DS held up, and checked by hand; and `set_sensor_state` is refused for
+  a pad with no sensors, so the core keeps its lying-still values instead of
+  reading no gravity at all (`:113-140` reads a sensor only once
+  `set_sensor_state` turned it on, `:162-170`). One
+  rule by pad, not by game: a pad with a gyro moves the 3DS, any other pad
+  holds it still. The same piece serves mGBA's motion carts (question 49).
+- **Which games need motion to play**, not as an option: a research pass
+  over public sources, 2026-10-19. No list exists to read it from: Wikipedia's
+  3DS lists record no controls, and the two community lists found would not
+  open (a GameFAQs thread, the Emulation General wiki's page, which is up for
+  deletion). Found:
+  - **Needed to play at all (3):** Face Raiders (built in), Spirit Camera:
+    The Cursed Memoir, Pokémon Dream Radar. All three need the camera too.
+  - **Needed in a part, a mode or a minigame (13):** Luigi's Mansion: Dark
+    Moon (balance beams); Kirby: Triple Deluxe ("you have to use the 3DS'
+    gyroscope features in order to progress", Nintendo World Report);
+    Yoshi's New Island (every transformation, Wikipedia); Metal Gear Solid:
+    Snake Eater 3D (balancing on walkways); Mario & Luigi: Dream Team (some
+    Giant battles); Sonic Lost World (Special Stages); LEGO City Undercover:
+    The Chase Begins (the scanner, needed in mission 2,
+    azahar-emu/azahar#1309); WarioWare Gold (Twist League); Rhythm Thief &
+    the Emperor's Treasure (gyro stages); Mario Party: Island Tour and Mario
+    Party: The Top 100 (some minigames); Mario & Sonic at the London 2012
+    Olympic Games (Long Jump); Pac-Man & Galaga Dimensions (Pac-Man Tilt).
+  - **Optional, a button or stick does it too (13):** Super Monkey Ball 3D,
+    Cubic Ninja, Ocarina of Time 3D and Majora's Mask 3D (aiming), Star Fox
+    64 3D, Steel Diver, Super Mario 3D Land, Mario Kart 7, Pokémon Sun and
+    Moon (Poké Finder) and Ultra Sun and Ultra Moon, Resident Evil
+    Revelations, Mario Tennis Open, Luigi's Mansion (2018).
+  - **None found (24 checked),** among them Kid Icarus: Uprising,
+    Nintendogs + Cats, Rhythm Heaven Megamix, Kirby: Planet Robobot, New
+    Super Mario Bros. 2, Pokémon X and Y, Animal Crossing: New Leaf.
+  - **Not settled:** whether Ultra Sun and Ultra Moon's first Ultra Warp Ride
+    forces the gyro, and whether Yoshi's and Snake Eater's sections can be
+    skipped.
+  - **Of the 25 best-sellers, two have a required motion part:** Luigi's
+    Mansion: Dark Moon and Mario Party: Island Tour.
+- **Without a gyro**, a game stops at its motion part, and nothing says
+  which game will before it does (Azahar's list does not mark them). **My
+  view: worth building, as its own small piece after the 3DS.** It is one
+  answer in the core host for two systems, the motion parts are in
+  mainstream games (Kirby, Yoshi, Luigi's Mansion), and the rule is the pad,
+  not the game. The downside: a player with an Xbox or 8BitDo pad still
+  stops there, and there is no stick stand-in in the core.
+- **Camera, AR cards and the microphone** (the same pass): the three games
+  above need the camera; Mario Party: Island Tour has an AR-card minigame;
+  WarioWare Gold's Ultra League adds microphone microgames; in Nintendogs +
+  Cats a pet learns its name by voice. The core asks for libretro's
+  microphone interface (`environment.cpp:61-63`), not answered here, so
+  games hear silence; "Static Noise" is the core's other value. No camera.
 
 #### For when it is built
 
@@ -18342,7 +18483,9 @@ a touch menu, and the cursor in a game that turns its camera with the
 C-stick; a save made, the game quit and reopened, the save's zip on the
 write-test server; leaving by the pause menu (the unload crash #2572 fixed);
 with the keys off, that the games still start and that no game opens a
-connection (the log, and `ss` on the A9 while one plays).
+connection (the log, and `ss` on the A9 while one plays); with his
+DualSense, whether SDL reports its touchpad and its gyro on the A9 (#288's
+open check), before either piece is built.
 
 #### Recommendation, 2026-10-19 (not decided)
 
@@ -18359,5 +18502,23 @@ network, by an upstream option (asked on his go) or the recorded patch;
 that only decrypted cartridge dumps play, `.cia` files and encrypted dumps
 greyed with the reason, and updates wait for bundles in a stable release or
 #181; (5) his legal call on building a 3DS emulator into the image.
-**No gyro** for now. His server has no 3DS games today, so this is for the
-players who have them.
+His server has no 3DS games today, so this is for the players who have
+them.
+
+**Touch:** the stick pointer, the core's default, carries 21 of the 24
+best-sellers sorted and 40 of a 51-game sample leaning to touch; the rest
+are timed touch games where a stick likely falls behind. **Recommended
+with it: the touchpad as a second way to touch**, for the pads that have
+one (a DualSense, a DualShock 4), because this core, unlike melonDS, takes
+the touchpad and the stick at once: every pad keeps the stick, a pad with a
+touchpad also touches directly, one rule with no setting. It is #288's
+idea, set aside for the DS only because melonDS could not take both. Its
+open check is SDL reporting the touchpad on the A9.
+
+**Gyro:** the core takes motion through libretro's sensor interface, so a
+DualSense's gyro could serve it once the host answers that interface. 16
+games were found that need motion somewhere, two of them best-sellers.
+**My view: worth building as a small piece of its own after the 3DS**, one
+answer in the core host for the 3DS and the Game Boy Advance motion carts;
+a pad without a gyro still stops at those parts. His call, separate from
+the go.
