@@ -18726,6 +18726,25 @@ measured on 2026-10-20; nothing built. Read: this repository at #524's head
 (`9de47ca`, 2026-10-18); RomM 5.4.0 (`68f7125`); libretro's core info and
 RetroArch's `core_info.h` (master, 2026-10-20); his live RomM, read-only.
 
+**Decided, 2026-10-20** (MMagTech on states and RetroAchievements; the rest
+by the 3DS work's lead session, which he left the 3DS details to, his bar
+"fits the console and is fun"):
+
+- **Save states: yes**, as on every other handheld here, on the
+  understanding that backwards compatibility is not promised: an Azahar
+  update can make older 3DS states stop loading (option (a) below). A build
+  item, planned at the end of this section.
+- **RetroAchievements: built if RetroAchievements supports the 3DS**,
+  whether or not his three games are recognised or their hashes match; his
+  own games are not a gate. Today it does not (below), so nothing is built.
+- **Controls stay as Azahar ships them:** the right stick is both the touch
+  pointer and the C-stick, R3 touches, L3 swaps the screens. No DualSense
+  touchpad piece: the stick is the one rule, as on the DS.
+- **Layout "Side by Side"** for every game.
+- **Levels `citra_resolution_factor` 1, 3, 6** (6x is the 4K step side by
+  side), stepped down only if the A9 cannot hold full speed. The layout and
+  the levels are built by the hand test's session.
+
 **What a libretro core gets on this console, and the 3DS in #524:**
 
 | Feature | Where | Who lacks it, and the code's reason | #524's 3DS |
@@ -18742,6 +18761,22 @@ RetroArch's `core_info.h` (master, 2026-10-20); his live RomM, read-only.
 | Look and the system's own rows | `looks.cpp`, `sysopts.cpp` | every system without a look, DS and PSP among them | none, as DS and PSP |
 
 The touchpad and the gyro are not on this list: no other core has them.
+
+**The levels, read against 1, 3, 6.** `quality.cpp` builds each core's
+levels as the system's own resolution at Performance, then the first step
+at or above a 1080p TV and a 4K TV. Side by side the picture is 720x240 a
+factor; a 3840x2160 TV draws it at 5.33x, a 1920x1080 one at 2.67x, so the
+first steps at or above are 6 and 3, and 1 is the 3DS's own, as PSP, N64
+and DS are at Performance. (1, 3, 5 was the same reading for the stacked
+layout, 4.5x on a 4K TV.) Nothing else Azahar offers belongs in the levels:
+it has no anisotropic filtering (none of the 32 options in
+`cores/options/azahar.txt`; Dolphin, PPSSPP and Flycast set 16x because
+they have one), building shaders in the background is not a libretro
+option here (Dolphin's and Eden's levels use theirs), accurate shader
+multiplication is accuracy and stays at the core's value unless the A9
+shows it costs a level, and the texture filter and sampling are looks, kept
+out as Genesis's NTSC filter is (question 23). The level does not change a
+state's cost: factor 5 made and loaded one as fast as factor 1.
 
 **RetroAchievements for the 3DS: no, for three reasons, any one enough.**
 
@@ -18860,7 +18895,8 @@ that state" (`states.cpp:61-64`), the words a damaged state gets. The state
 stays on RomM and on the game's page; Home's Resume tries the newest, is
 refused, says the same, and the game starts from the beginning, until three
 new states rotate the old ones out. It says what happened, not why, and the
-player cannot tell a stranded state from a broken one. The options:
+player cannot tell a stranded state from a broken one. **Decided: (a)**,
+backwards compatibility not promised. The options as they were put:
 
 - (a) Leave it: every pin move loses every 3DS state on every console with
   those words, the data loss question 25 warned of, which the ruling accepts.
@@ -18869,7 +18905,7 @@ player cannot tell a stranded state from a broken one. The options:
   core's (its version, "219d743", is the commit's first seven characters,
   so no state has to be made to know it); grey those on the game's page
   with a short reason, and Resume passes over them. About 60 to 100 lines
-  in `states.cpp` and `detail.cpp`. The words on screen are his.
+  in `states.cpp` and `detail.cpp`. Not in the plan; there if he asks.
 - (c) Never move the pin while states exist: not workable, the pin has to
   move one day.
 
@@ -18890,25 +18926,81 @@ player cannot tell a stranded state from a broken one. The options:
 3. **A failed save asks `stateSize()` again for its words**
    (`states.cpp:79`): for Azahar a second whole state, and 0 when the core
    gave up waiting (its 5 s limit), so the console would say "No save states
-   for this system". Choosing the words by `snapshotsAllowed` instead: two
-   lines.
+   for this system". Not `snapshotsAllowed` instead (that would break #222's
+   words for a core with no states at all); a flag in `Core` keeping the
+   size the failed save got would spare the second state (about 6 lines),
+   and the words for a timed-out drain would still be wrong, since the core
+   answers 0 either way. Rare (a save that failed); left out of the plan.
+4. **L3 + R3 for the pause menu reaches the core first.** Each stick click
+   goes to the core on its own (`play.cpp:285-291`, by Cabinet's rule that
+   the menu pair "applies regardless of what either button is otherwise
+   bound to"); the pair is caught on the button-down events
+   (`input.cpp:388-407`, `toggleOverlay` once both are down), and the core
+   is not stepped once the menu is open. So whichever click lands a frame
+   before the other reaches Azahar: L3 first swaps the screens, on its press
+   edge, and they stay swapped (Toggle, `citra_libretro.cpp:239-270`); R3
+   first is a touch at the pointer for as long as it is held
+   (`input/mouse_tracker.cpp:193`). Only two clicks in the same frame's
+   events reach neither. The DS already has the R3 half (#374's tap); the
+   3DS adds the swap, undone by L3 once more. From the code, not tried on
+   the TV. A fix for every core would hold a lone stick click back for a
+   frame or two before the core gets it (about 20 lines in `play.cpp`, and
+   that delay on every stick click in every game); not in the plan, his
+   call.
 
-**What to build, and the cost:**
+**The build: save states for the 3DS** (decided; the faults above that it
+carries are 1 and 2). All in #524's branch, about 30 lines of code:
 
-| Piece | Where | Lines | Risk |
-|---|---|---|---|
-| States on: `azahar` out of `kNoSnapshots`; its row moved from `saveTag`'s table to `emulatorTag`'s, the tag still `azahar`, so saves keep theirs | `savetable.cpp` | about 10 with comments | every pin move strands every 3DS state (above) |
-| Rewind refused for Azahar, and its probe not run: a `rewindAllowed(core)` beside `snapshotsAllowed`, the rule stated generally (no rewind where a state takes longer than a frame; Azahar's takes 16 to 51), a list because there is no cheap way to ask | `savetable.cpp/.h`, `play.cpp:452-454` | about 15 | none; "No rewind for this system" exists |
-| Fault 1 | `play.cpp:453` | 1 to 3 | none; worth shipping with #524 whatever is decided |
-| Fault 2 | `core_memory.cpp` | about 4 | none on Vulkan |
-| Fault 3 | `states.cpp:79` | about 2 | none |
-| Option (b), if he picks it | `states.cpp`, `detail.cpp` | 60 to 100 | the words are his |
-| RetroAchievements | nothing now; about 5 lines on the day RetroAchievements and RomM both have the 3DS | | |
-| Docs | this question's "States" row; docs/ARCHITECTURE.md for a new function; a changelog line | | |
+1. **States on** (`savetable.cpp`): take `"azahar"` out of `kNoSnapshots`
+   (`:158`) and rewrite the comment above it (`:154-157`, which gives the
+   old reason). Move its row from `saveTag`'s table (`:221-225`) to
+   `emulatorTag`'s (`kTags`), keeping the tag `azahar`, with the comment it
+   needs: no Cabinet app plays the 3DS, so the name is the emulator's; a
+   state loads only in the same Azahar commit (`core/savestate.cpp:300-306`),
+   so an Azahar update can strand them, accepted (this question). `saveTag`
+   answers from `emulatorTag` first, so saves keep the same tag and rows.
+   Update the doc comment of `snapshotsAllowed` in `savetable.h:350-360` if
+   it names the list. Fast forward, the pause menu's two rows, the shortcut
+   button with R or L, F5 and F8, the game page's states and Home's Resume
+   all follow `snapshotsAllowed` and `emulatorTag`; nothing else changes.
+2. **Rewind refused, its probe not run:** a `bool rewindAllowed(const char*
+   manifestCoreName)` in `savetable.h/.cpp` beside `snapshotsAllowed`: false
+   where states are not allowed, and for a short list, `{"azahar"}`, under a
+   rule stated for every core: no rewind where a state takes longer than a
+   frame, since rewind takes one every half second on the frame thread
+   (`pace.cpp:127`); Azahar's takes 270 to 850 ms on the A9 (measured
+   2026-10-20, 16 to 51 frames), and RetroArch offers none for it either
+   ("basic"). A list, because the only way to ask the core is to make a
+   state. Then `play.cpp:452-454`: decide `allowed = session.snapshots &&
+   catalog::rewindAllowed(session.core.c_str())` first and call
+   `core.stateSize()` only when it is true; `rewindAvailable` from both.
+   That is fault 1's fix as well, and the player hears the words that exist,
+   "No rewind for this system" (`play.cpp:472-475`).
+3. **The context** (fault 2, `core_memory.cpp:71-85`): `serialize_size`
+   inside `CoreContext` in `saveState` (move the call into the scope at
+   `:82-85`) and a `CoreContext` in `stateSize`. A no-op on Vulkan.
+4. **Docs:** this question's tests row "States" (superseded by this
+   section); `docs/wiki/changelog.md`'s entry under "Next", which says
+   "there are no save states" (states now, no rewind, an update can stop
+   older 3DS states loading); #524's body ("there are no save states",
+   `kNoSnapshots`); docs/ARCHITECTURE.md needs nothing new (`savetable.cpp`
+   is already named for both tags).
+5. **Checks:** the build with no new warnings in the touched files; the
+   self-tests. On the A9 with the TV, in play: a state saved (the log's
+   "[state] N bytes saved locally", then "Saved to RomM" on the write-test
+   server), Load latest state, one picked on the game's page, Home's Resume,
+   fast forward in a race, and rewind saying "No rewind for this system"
+   with no pause at the game's start.
 
-About 35 lines of code without option (b), about 100 to 130 with it. Then
-on the TV: a state saved and loaded in play, its size and its pause read
-from the log; Resume from Home; fast forward in a race.
+**RetroAchievements:** nothing to build until RetroAchievements supports
+the 3DS. On that day, by the decision above and whatever his games' hashes
+say: a `{"3ds", RC_CONSOLE_NINTENDO_3DS}` row in `consoleFor`
+(`achievements.cpp:741-776`); `frontend/third_party/rcheevos` updated to
+the release that carries the 3DS memory map (the same files, and its
+`VERSION` note); RomM giving 3DS games an `ra_hash` (5.4.0's
+`rahasher.py:92-156` has no 3DS; asked of RomM then, by the small-gaps
+rule); and a check on a running game that Azahar's map, sent once at load,
+covers what the set reads.
 
 #### Before the hand test: headless on the A9 (2026-10-20)
 
