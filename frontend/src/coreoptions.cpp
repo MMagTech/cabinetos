@@ -156,6 +156,17 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
         };
     }
 
+    // Nintendo 3DS, in Azahar (docs/PROJECT.md question 50): the two screens
+    // SIDE BY SIDE for every game, not the core's stacked default. On a 16:9
+    // TV both screens draw about 19% larger that way (a 4K TV: the top screen
+    // 2133x1280 against 1800x1080 stacked), and the touch screen stays large
+    // enough to aim the pointer at; Large Screen draws it at a quarter of the
+    // top screen's scale. Decided 2026-10-20. The controls are the core's own,
+    // with no override: the right stick is the touch pointer and the New 3DS
+    // C-stick at once, R3 touches, L3 swaps the screens (#374's rule, as on
+    // the DS). quality.cpp's levels are sized for this layout.
+    if (coreName == "azahar") return {{"citra_layout_option", "side_by_side"}};
+
     // Beetle Saturn, and this one also decides where the save is. "libretro"
     // hands the Saturn's backup RAM to the frontend through SAVE_RAM, which
     // is what saveTag's `saturn-native` rides; "mednafen" makes the core keep

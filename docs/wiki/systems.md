@@ -125,8 +125,13 @@ downloads anything new into the console's shared BIOS folder.
   installer, and the emulator installs nothing): *3DS CIA files can't be
   played*.
 - **Updates and DLC do not play yet**: they come as `.cia` files.
-- **Touch screen:** the right stick moves a pointer on the bottom screen and
-  pressing it (R3) touches. L3 swaps the two screens.
+- **The two screens side by side**, the top screen on the left.
+- **Touch screen:** the right stick moves a pointer on the touch screen and
+  pressing it (R3) touches. The right stick is the New 3DS's C-stick too. L3
+  swaps the two screens.
+- **Save states and fast forward, no rewind.** A 3DS state may not load
+  after an update changes the emulator: *Couldn't load that state*. Saves
+  are not affected.
 - **Games get no internet.** The emulated 3DS has no connection, so online
   features and downloads inside games do not work.
 
@@ -144,6 +149,7 @@ downloads anything new into the console's shared BIOS folder.
 | 2600 to Saturn, N64, Dreamcast, PS1, PSP, DS (built-in emulators) | Yes | Most | Yes |
 | PS2 | No | No | Yes |
 | GameCube, Wii | No | No | Yes |
-| 3DS, Switch, PS3, Xbox, Xbox 360, Wii U | No | No | No |
+| 3DS | States and fast forward; no rewind | No | No |
+| Switch, PS3, Xbox, Xbox 360, Wii U | No | No | No |
 
 Saves sync for every system. See [Saves, states and sync](saves.md).

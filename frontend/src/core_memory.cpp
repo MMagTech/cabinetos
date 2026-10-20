@@ -68,19 +68,24 @@ std::optional<bool> environmentMemory(unsigned cmd, void* data) {
 
 using namespace corestate;
 
+// IN THE CORE'S OWN CONTEXT, the size as well as the state: Azahar makes the
+// whole state inside retro_serialize_size, its emulation loop and all, so on
+// OpenGL that call needs the core's context current as retro_serialize does.
 size_t Core::stateSize() const {
-    return (gameLoaded_ && g.serialize_size) ? g.serialize_size() : 0;
+    if (!gameLoaded_ || !g.serialize_size) return 0;
+    CoreContext in;
+    return g.serialize_size();
 }
 
 bool Core::saveState(std::vector<uint8_t>& out) {
     if (!gameLoaded_ || !g.serialize_size || !g.serialize) return false;
-    const size_t n = g.serialize_size();
-    if (n == 0) return false;  // some cores genuinely cannot; that is not an error
-    out.resize(n);
     const uint64_t soundBefore = gAudioFrames;
     bool saved;
     {
         CoreContext in;
+        const size_t n = g.serialize_size();
+        if (n == 0) return false;  // some cores genuinely cannot; that is not an error
+        out.resize(n);
         saved = g.serialize(out.data(), n);
     }
     // A SAVE THAT MADE SOUND RAN THE GAME (#254). Mupen64Plus-Next runs the

@@ -13,6 +13,7 @@
 #include "discs.h"
 #include "ps2.h"
 #include "saves.h"
+#include "savetable.h"
 #include "screenfx.h"
 #include "shortcuts.h"
 #include "storage.h"
@@ -449,9 +450,12 @@ bool App::readGameInput(cab::Core& core) {
         std::fprintf(stderr, "[shortcuts] fast forward %s\n", fastForward ? "on" : "off");
     core.setSpeed(fastForward && !rewinding ? kFastForward : 1.0);
     // Whether this game can rewind, decided once it is running.
+    // A core with no rewind is not asked its state's size: for Azahar that
+    // question makes a whole state, up to 0.9 s, in the game's first frames.
     if (rewindAvailable < 0 && core.running() && core.framesRun() > 0) {
-        const size_t sz = core.stateSize();
-        rewindAvailable = session.snapshots && sz > 0 ? 1 : 0;
+        const bool allowed = session.snapshots && catalog::rewindAllowed(session.core.c_str());
+        const size_t sz = allowed ? core.stateSize() : 0;
+        rewindAvailable = allowed && sz > 0 ? 1 : 0;
         rewindLastFrame = core.framesRun();
         std::fprintf(stderr, "[rewind] %s (state %zu KB)\n",
                      rewindAvailable ? "available" : "not offered", sz / 1024);

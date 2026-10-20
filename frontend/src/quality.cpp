@@ -261,13 +261,14 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
             {"reicast_anisotropic_filtering", "16"},
         };
     }
-    // Nintendo 3DS (docs/PROJECT.md question 50): 1x, the 3DS's own 400x240
-    // top screen, as PSP, N64 and DS are at Performance; 3x (1200x720), at or
-    // just above a 1080p TV's size in any layout; 5x (2000x1200), about a 4K
-    // TV's. Everything else at the core's own value, accurate shader
-    // multiplication included. Not yet measured on the A9.
+    // Nintendo 3DS (docs/PROJECT.md question 50), sized for the side by side
+    // layout coreoptions.cpp sets, which draws the top screen at 1067x640 on
+    // a 1080p TV and 2133x1280 on a 4K one: 1x, the 3DS's own 400x240, as
+    // PSP, N64 and DS are at Performance; 3x (1200x720), just above a 1080p
+    // TV's; 6x (2400x1440), just above a 4K TV's. Everything else at the
+    // core's own value, accurate shader multiplication included.
     if (core == "azahar") {
-        static const char* const kFactor[] = {"1", "3", "5"};
+        static const char* const kFactor[] = {"1", "3", "6"};
         return {{"citra_resolution_factor", pick(l, kFactor)}};
     }
     // FIXED AT EVERY LEVEL (MMagTech, 2026-10-02): the processor-side

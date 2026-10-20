@@ -40,6 +40,8 @@ from RomM. When you leave the game, it sends the save back if it changed.
 - The console keeps **three states per game per person**. Saving a fourth
   deletes the oldest, on the console and on RomM.
 - There is no autosave: leaving a game keeps its save, not a state.
+- A 3DS state may not load after an update changes the emulator; the console
+  says *Couldn't load that state*.
 
 With [In-game shortcuts](navigation.md#in-game-shortcuts) on, the shortcut
 button with **R1** saves a state and with **L1** loads the newest.
@@ -48,7 +50,8 @@ button with **R1** saves a state and with **L1** loads the newest.
 
 On systems with save states, with In-game shortcuts on: hold the shortcut
 button and **L2** to rewind up to about 15 seconds, or **R2** to play at about
-four times speed. Rewind is kept in memory only.
+four times speed. Rewind is kept in memory only. The 3DS has fast forward but
+no rewind.
 
 ## Offline
 

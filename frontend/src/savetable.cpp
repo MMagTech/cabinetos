@@ -140,6 +140,17 @@ const char* emulatorTag(const char* core) {
         {"beetle_saturn", "saturn-native"},        // ed549bda
         {"mame2003_plus", "mame2003plus-native"},  // 21256d24
         {"flycast", "flycast-native"},             // a172e000
+
+        // NINTENDO 3DS, IN AZAHAR, BY DECISION, 2026-10-20 (MMagTech: the 3DS
+        // gets states like every other handheld). No Cabinet app plays 3DS,
+        // so the tag is the emulator's own name, as the separate emulators'
+        // save tags are; its saves keep the same tag through saveTag. A state
+        // loads only in the Azahar commit that made it (its core/savestate.cpp
+        // refuses any other revision), so an emulator update can strand older
+        // 3DS states: accepted, docs/PROJECT.md question 50. A refused one is
+        // the console's plain "Couldn't load that state". No rewind
+        // (rewindAllowed).
+        {"azahar", "azahar"},                      // 219d743a, 2126.2
         //
         // PS2 and GameCube have no states at all (snapshotsAllowed), by open
         // question 25, so they need no tag here.
@@ -152,12 +163,26 @@ const char* emulatorTag(const char* core) {
 bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
-    // Azahar too (docs/PROJECT.md question 50): it refuses a state made by
-    // any other revision of itself, so every pin move would strand them all,
-    // and the 3DS has real saves.
+    // Not the 3DS, a handheld, by MMagTech's decision of 2026-10-20, though
+    // its states may not survive an emulator update (emulatorTag).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
-                                               "xenia", "cemu", "azahar"};
+                                               "xenia", "cemu"};
     for (const char* c : kNoSnapshots)
+        if (std::strcmp(c, core) == 0) return false;
+    return true;
+}
+
+bool rewindAllowed(const char* core) {
+    if (!snapshotsAllowed(core)) return false;
+    if (!core) return true;
+    // NO REWIND WHERE A STATE TAKES LONGER THAN A FRAME: rewind takes one
+    // every half second of play (pace.cpp), and each one holds the frame
+    // thread. Azahar's takes 270 to 850 ms on the A9 (measured 2026-10-20,
+    // docs/PROJECT.md question 50), which would play a 3DS game at 37% to 65%
+    // of its speed; RetroArch's core info marks it "basic", with no rewind
+    // either. A list, because asking a core its cost means making a state.
+    static const char* const kNoRewind[] = {"azahar"};
+    for (const char* c : kNoRewind)
         if (std::strcmp(c, core) == 0) return false;
     return true;
 }
@@ -218,11 +243,10 @@ const char* saveTag(const char* core) {
         // game, `<title>/user/` and `<title>/meta/` in Cemu's own layout, which
         // drops into any Cemu's mlc01. No Cabinet app plays Wii U either.
         {"cemu", "cemu"},
-        // Nintendo 3DS, in Azahar: a zip of the emulated SD card's
-        // `Nintendo 3DS` folder, which holds this game's save and extra data
-        // in Azahar's own layout and drops into any Azahar's sdmc. No Cabinet
-        // app plays 3DS either. docs/PROJECT.md question 50.
-        {"azahar", "azahar"},
+        //
+        // Nintendo 3DS has states, so its save tag comes from emulatorTag
+        // above: a zip of the emulated SD card's `Nintendo 3DS` folder
+        // (directorySaveRoot), in Azahar's own layout.
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)

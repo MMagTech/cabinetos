@@ -59,11 +59,12 @@ and **A** steps through it.
 
 The Home (Guide) button is never passed to a game.
 
-## On two systems
+## On three systems
 
 | System | Button | Does |
 |---|---|---|
 | Nintendo DS | Right stick, **R3** | The right stick moves a pointer on the touch screen; **R3** (press the stick) touches |
+| Nintendo 3DS | Right stick, **R3**, **L3** | The right stick moves a pointer on the touch screen, and is the C-stick too; **R3** touches; **L3** swaps the two screens |
 | PlayStation (PS1) | **L1 + R1 + Select** | The DualShock's ANALOG button, for the few games that need it pressed |
 
 PS1 games get a DualShock: sticks and rumble work in the games made
@@ -85,7 +86,7 @@ list and then the button you want; it is remembered for that kind of pad.
 | Hold it + **X** (left face button) | Screenshot, also with the pause menu open |
 
 State, rewind, fast forward and screenshot shortcuts work in the built-in
-emulators. In Switch, PS3, Xbox, Xbox 360 and Wii U games only the tap works;
+emulators (3DS: no rewind). In Switch, PS3, Xbox, Xbox 360 and Wii U games only the tap works;
 use the pause menu for the rest.
 
 ## The on-screen keyboard
