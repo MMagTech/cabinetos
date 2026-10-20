@@ -321,7 +321,12 @@ down. "Look now at" is where the code or a later decision moved on.
   and whether touch rules it out"). Researched 2026-10-19, not decided: the
   first four tests pass on paper; recommended no for now, because Sony's
   PS TV list assumes a touch pointer Vita3K lacks (Vita3K/Vita3K#3707), and
-  no gyro. The A9 hand test waits for a time he names.
+  no gyro. The A9 hand test waits for a time he names. Addendum the same
+  night, his "how vital is that pointer?": a pointer is needed in play for
+  at least one in ten of Sony's passed games; no frontend gives Vita3K a stick
+  pointer (everyone has a touch surface); downloads are mostly Android; the
+  console could build one as a virtual touch screen (medium). Still no for
+  now, upstream first; his call: ask Vita3K or build it here.
 - **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
   Researched the same night, not decided: Azahar's own core, pinnable at its
   2126.2 tag, fits the core host on Vulkan as it is; the touch screen is the
@@ -1846,6 +1851,21 @@ and Home is the button the list most often gets wrong.
   Lite 2 on the console uses it.
 - **Home by default** where the pad has a working one. A pad with none has no
   shortcut button until one is set.
+- **Home always works, and Select, Start, L3 and R3 are never the button**
+  (#313, MMagTech, 2026-10-20; the sticks the same morning, when L3 chosen
+  on the TV made the L3+R3 chord open the menu and close it again). The row
+  is "Shortcuts use: Home", read with the switch above it as one sentence,
+  and asks for "a spare button". Until then a chosen button replaced Home,
+  and the row took Select: on the A9 Select had been chosen for Xbox Series pads
+  during controller testing, so Moonlight's on-screen controls (which
+  Sunshine presents as that kind of pad) opened the menu on a tap of Select
+  and an arcade game never got its coin. Now a chosen button is added beside
+  Home, the row refuses the four and says why ("Games use Select…", "L3
+  opens the menu with R3…"), and a choice saved before the rule reads as none. A phone's
+  long press of Select, which Sunshine sends as Home, therefore always opens
+  the menu, whatever was chosen for that kind of pad at the TV. Two builds
+  that gave a stream its own rule (Home always; the saved button except
+  Select) were set aside unjudged.
 - **A tap of it opens the pause menu; held with a second button it is a
   shortcut**, exactly as Home was. Governed by the same switch.
 - **Single button only**, not a pair: it is held while a second is pressed,
@@ -2287,6 +2307,82 @@ at Home, about 0.4 a minute (8 in 20.5 minutes across all the steps).
 left is MMagTech's, as it needs sudo: Home with the GPU clocks locked
 high against as shipped, 10 minutes each, counting held pictures from the
 visible frame time.
+
+**2026-10-19, the Vectrex (MMagTech: "it's not running smoothly").** His
+two games that night, from the journal, on 2026.10.20 at the LG C1,
+3840x2160, 60 Hz: Blitz (RomM 2948) and Pole Position (2962), both through
+vecx 1.2 (8f671cc), which reports 50.0000 fps, so the console paces it by
+the clock. Two things, separate:
+
+- **Every window shows 100 repeated frames per 600** (one in six): a 50 Hz
+  game on a 60 Hz screen, which no pacing can hide. RetroArch on a 60 Hz
+  screen has the same; Batocera offers a 50 Hz screen mode. The C1 does 4K
+  at 50 Hz, and VRR (the #256 and #290 checks) would show 50 fps as 50 Hz.
+  This console's gamescope already runs with `--adaptive-sync` (its
+  command line, 2026-10-19), so if the console presented only new game
+  frames for a clock-paced core, the C1 in VRR would show them at 50 Hz;
+  today it presents every refresh. Not tried. It is every 50 Hz game, PAL
+  ones included. Not decided.
+- **Stalls to about 30 Hz for 20 s at a time:** Blitz's first two windows
+  (232 and 288 frames shown, 214 and 291 refreshes missed), Pole Position's
+  fourth and fifth (326 and 300 frames, 243 and 279 missed), the rest at
+  60 Hz with 0 missed. Not the core's cost: headless on the A9 (no screen,
+  the clock's 50 fps, 50 s each, through the read-only relay) both games
+  ran 0 game frames skipped at the image's `vecx_res_multi` 4 (1320x1640)
+  and at 1, with the unpaced loop at 8,500 and 15,700 frames a second. The
+  cause is in the display path and needs the TV.
+- **On the TV, the same night (22:31 to 22:39), at 1x: no stall.** A
+  scratch build with `vecx_res_multi` 1 (sha 9ce296ae8947, through
+  `tools/ui-loop.sh`), Pole Position from attract mode into a race, 7 minutes
+  in all: 47 `[pace]` windows, every one 600 or 601 frames shown with 0
+  refreshes missed (5 windows had 1 game frame skipped). gamescope's frame
+  times over 60 s of the race (the mangoapp queue, per 10 s): about 600 app
+  and 600 visible frames a window, 1 app frame over 25 ms (34.4 ms) and 1
+  visible over 25 ms (33.3 ms) in the whole minute. The race was a light
+  one: the keyboard reaches only Vectrex buttons 1 and 2 (X and Z; the game
+  maps A=1, B=2, X=3, Y=4) and the throttle is a pad's, so the clock ran with
+  the car on the grid.
+- **Then five more on the TV (22:42 to 22:50), with a pad: no stall in
+  any.** A virtual Xbox 360 pad through uinput (`~/fb/vx/fake-hold` on the
+  A9, a copy of `~/fb/fake-pad` that can hold a button) pressed Vectrex
+  button 1 three times and held button 4, the throttle, for 64 s; Pole
+  Position then raced at speed (135 on its gauge, the road curving). Each
+  run its own loop deploy, the frame times sampled for 60 s from 12 s after
+  `[launch] running VecX`, 8 `[pace]` windows each:
+
+  | Run | Build | Game | `[pace]` windows, refreshes missed | Frame times over 25 ms in 60 s (app / visible) |
+  |---|---|---|---|---|
+  | 1 | image, 4x | Pole Position, racing | 1, 0, 0, 0, 0, 0, 0, 0 | 1 / 1 |
+  | 2 | image, 4x | Blitz | 2, 0, 0, 0, 0, 0, 0, 0 | 1 / 2 |
+  | 3 | scratch, 1x | Blitz | 2, 0, 0, 0, 0, 1, 0, 0 | 1 / 0 |
+  | 4 | image, 4x | Pole Position, racing | 0, 0, 0, 0, 0, 0, 0, 0 | 1 / 7 |
+  | 5 | image, 4x | Pole Position, racing | 1, 0, 0, 0, 0, 1, 0, 0 | 1 / 1 |
+
+  Every window 599 to 601 frames shown (the stalls read 232 to 326). The
+  few missed refreshes are at the launch (the first window) or single; no
+  window came near a stall. Blitz never left its PLAYER and GAME select
+  screen (buttons 1 and 4 pressed, 4 held), but his stall began in Blitz's
+  first two windows from launch, which both runs covered. One app frame of
+  34 to 41 ms fell in the same place in every run, 52 to 62 s after launch,
+  where the frontend writes its play-time checkpoint each minute
+  (`frame.cpp`); it coincides, not checked further. Run 4's 7 visible
+  frames over 25 ms were all 33.3 ms, one picture held for two refreshes
+  each, the kind #253 counts at Home.
+- **What that rules out and leaves.** Ruled out, as far as six runs and 14
+  minutes go: the stall is not the resolution (none at 1x or 4x), not the
+  race or the car moving, not the first 20 s of either game, and not
+  something every launch does. Left: what was different during his play.
+  His own pad over Bluetooth (pad 2, the Xbox Series X; the runs used a
+  wired virtual one), a longer session (his Blitz stall was in the first
+  20 s, so length is unlikely for that one), the menus and screens he went
+  through before each game, and the screen's state (dimmed or not, other
+  apps, the TV's own mode). Not measured: the next step is the journal of
+  his evening read for what ran just before each stall.
+- **The runs wrote to his RomM, on his go** ("You can run it as many times
+  as you want to figure out the issue"): every loop deploy ends the running
+  game by restarting the session, which leaves its play session open, and
+  the next start sends it. Pole Position gained 420 s (the first 1x run)
+  and 60 s three times, Blitz 60 s twice, of time played nobody played.
 
 ### The emulator settings audit (#89) — 2026-09-27
 
@@ -18180,6 +18276,295 @@ pointer comes, and then two games. **It becomes a go with conditions** when
 Vita3K/Vita3K#3707), (2) Sony's list is in hand by title ID to ship as data,
 and (3) the hand test passes. **No gyro for the Vita** in any case. Game Boy
 motion is a separate, smaller question for him.
+
+#### Addendum, 2026-10-19 night: how vital is the pointer?
+
+**His question:** "how vital is that pointer to playing games? On DS we use
+the right thumbstick for the pointer. I also discussed the PS5 touchpad. Can
+you research if anybody else does this type of implementation? Or is this
+emulator pretty much only used on phones and devices that already have touch
+support?" Research only, nothing ran on the A9. Read: Vita3K master
+`287accf` (2026-10-19, numbered build 4206) and its issues, releases and
+site; Vita3K/Vita3K-builds and Vita3K/Vita3K-Android releases (GitHub API,
+2026-10-19); Batocera `7fa4f7c` (2026-10-20), EmuDeck `dddb302`
+(2026-10-05), RetroDECK `7786a84` (2026-10-03); gamescope master `4d5b7f3`
+(2026-10-19); SDL 3.4.16 (`fa2c02b`, Vita3K's own submodule); Wikipedia's
+Vita lists; this repository at `38cd735`.
+
+##### 1. How vital touch is
+
+**Across the library, with Sony's PS TV list as the proxy:**
+
+- **Recounted 2026-10-19:** Wikipedia's eight Vita lists (A–D revid
+  1375396377, E–H 1362222427, I–L 1375960768, M–O 1375530409, P–R
+  1348458334, S 1374284241, T–V 1376152920, W–Z 1365315994) now hold 1,732
+  rows: **1,125 Yes (65%), 585 No (34%), 21 Partial** (regions only), 1
+  blank. The pages have grown since the count above (1,664 rows).
+- **No source gives a reason per game, so the touch share of the 585
+  cannot be counted.** Sony's reason was general: the Vita has "touch
+  screen, rear touch pad, motion sensors, camera, electronic compass and
+  microphones" that a DUALSHOCK 3 cannot stand in for (Sony's PS Vita TV
+  announcement, 2013-09-09, sonyinteractive.com release 130909c). And a No
+  is not always a feature: each game's `param.sfo` carries a "bootable on
+  Vita TV" flag its publisher sets (psdevwiki, "Param.sfo"), the block was
+  a blacklist ("its a blacklist. not a whitelist", LiEnby/DolcePolce
+  README), and updates moved games onto it (Killzone: Mercenary 1.11, Ys:
+  Memories of Celceta). A seeded sample of ten No titles found none that
+  needs touch and six with no source on their controls, mostly late indies
+  and visual novels: too few for a share. **So 34% is the ceiling on games
+  Sony judged unplayable without a touch screen, and touch is some unknown
+  part of it.**
+- **Among the Yes games, touch is mostly absent, and the pointer is needed
+  in play for at least one in ten.** The one list that notes touch per game
+  is VitaPlayer's (Europe, tested by them, updated 2018-03-16,
+  vitaplayer.co.uk "List of PlayStation TV compatible games"): 232 Yes, of
+  which 32 carry a touch note: 7 for menus only (Jetpack Joyride and its
+  Deluxe, Sparkle, Table Top Racing, The LEGO Movie Videogame, The Walking
+  Dead twice), 1 optional (Ultimate Marvel vs Capcom 3), and **24 that need
+  the pointer in play** ("needs emulated touch controls", Broken Sword 5,
+  Madden NFL 13, OlliOlli, Virtue's Last Reward, the mahjong games, and
+  others). The other 200 carry no note, which is not proof of no touch: his
+  Guacamelee!, Killzone: Mercenary and TxK are Yes and need a tap. Sony's
+  pointer is how all of these play on a PS TV: L3 shows it, the left stick
+  or a DUALSHOCK 4's touch pad moves it, L2 selects ("Using the touch
+  pointer", manuals.playstation.net PS TV guide, read 2026-10-19).
+- **Samples cannot fill the gap.** Seeded samples of 20 Yes and 10 No
+  titles found a source on controls for only 12 of the 30, one of them
+  only from a later port (Jet Set Radio's
+  touch graffiti and Baseball Riot's touch aiming optional, PlayStation Blog
+  2012-09-12 and PS3Blog 2016-02-11; LEGO Marvel's Avengers' free-roam exit
+  needing it); Japanese visual novels and late indies are rarely described.
+
+**His 26** (touch as in the table above):
+
+| Touch | Games | On Sony's list |
+|---|---|---|
+| none, or none found | 7: Geometry Wars 3, Hotline Miami 2, Muramasa Rebirth, Odin Sphere, Riddled Corpses EX, Salt and Sanctuary, Windjammers | all 7 |
+| optional | 6: Dragon's Crown, Ninja Gaiden Sigma Plus, Skullgirls, Thomas Was Alone, Velocity 2X, WipEout 2048 | 5 (not WipEout) |
+| menus only | 3: MotorStorm RC, Shovel Knight, Table Top Racing | all 3 |
+| in play (2 "probably") | 10: Guacamelee!, Killzone: Mercenary, TxK; Gravity Rush, Pumped BMX+ (rear pad), Severed, Banana Splitz, Surge Deluxe, Mutant Blobs Attack, Unit 13 | first 3 only |
+
+- **With no touch at all, 13 of 26 play,** and only one of them is unique
+  here: WipEout 2048, whose touch and tilt are optional but which Sony left
+  off its list.
+- **A pointer adds 6** (3 menus only, 3 in play that Sony passed); the
+  unique ones among them are Table Top Racing, TxK, and Killzone: Mercenary
+  once updates come (#181).
+- **The other 7 need touch in play and are off Sony's list:** swipes (Severed, Surge Deluxe, Gravity Rush), the rear pad
+  (Pumped BMX+), drags and motion (Mutant Blobs Attack). Four are unique
+  (Gravity Rush, Banana Splitz, Surge Deluxe, Unit 13). A real touchpad
+  could do some of what a pointer cannot; that is beyond Sony's rule.
+- **So for him the pointer is the difference between one unique game and
+  three (four with updates);** for the library it matters to a tenth or
+  more of what Sony passed, and to some unknown part of the third it did
+  not.
+
+##### 2. How Vita3K is played without a touch screen
+
+**In Vita3K itself** (master `287accf`):
+
+- **The mouse is touch, in the Qt window only.** The left button is the
+  front screen and the right button the rear pad, both at once if both are
+  held (`vita3k/gui-qt/src/game_window.cpp:489-522` sets the buttons;
+  `vita3k/touch/src/touch.cpp:131` picks the port). Vita3K's site says the
+  same ("rear touchpad is the right mouse button", vita3k.org/quickstart,
+  read 2026-10-19). Turned off on Android, where a touch screen arrives as a
+  mouse too (`touch.cpp:97-103`).
+- **A DUALSHOCK 4's or DualSense's touchpad is touch**, through SDL's
+  gamepad touchpad events, mapped absolutely onto the whole screen
+  (`touch.cpp:70-90, 251-288`; Vita3K PR 2904 "touch: Add touchpad
+  support", 2023-09). It goes to one panel at a time, front by default; in
+  the Qt window a click of the touchpad (or the T key) flips it to the rear
+  (`gui-qt/src/main_window.cpp:1349-1357`; `ctrl_keyboard_filter.cpp:79-80`).
+- **A touch screen is touch** (SDL finger events, `touch.cpp:205-249`): the
+  phone and the Steam Deck's screen arrive this way.
+- **The SDL frontend, the one test 2 above chose (`--frontend sdl`, no
+  dialogs), reads the touchpad and finger events but no mouse at all, and
+  has no front/rear switch** (`vita3k/sdl-frontend/src/session.cpp:291-349`).
+  So under it: the touchpad and a touch screen touch the front, nothing
+  touches the rear, and a mouse does nothing.
+- **No stick pointer of any kind.** `pstv-mode` changes only the pad type
+  (`modules/SceCtrl/SceCtrl.cpp:73`). Asked for and not built: Vita3K/Vita3K#3707
+  ("PSTV 'touch pointer' function", 2025-12-22, open, no reply), Vita3K#3825
+  ("Add rear panel touch gamepad button activation support", 2026-02-13,
+  open, no reply), Vita3K#3261 ("Allow mapping of Steam Deck trackpads akin to the
+  touchpads on the DS4 and DualSense", 2024-03-23, open). The Qt window's
+  on-screen touch cursor was dropped with the old interface (Vita3K#3964,
+  2026-05-24, open).
+
+**In the frontends people use:**
+
+- **Batocera** (`7fa4f7c`): no touch, touchpad or pointer setting. Its one
+  touch item is "SHOW POINTER" ("You can hide the pointer on touchscreen
+  devices", `package/batocera/emulators/vita3k/vita3k.emulator.yml:129-131`),
+  which keeps the mouse cursor for touch
+  (`python-src/batocera-launch/batocera_launch/emulators/vita3k.py:86-88`,
+  "for touchscreen actions"). No pad-to-mouse map for the Vita. Its seven
+  patches to Vita3K are paths, exit, the PS button and the window; none is
+  touch. Batocera's DS stick pointer is melonDS's own option, as ours is.
+- **EmuDeck** (`dddb302`): nothing for Vita3K's touch in its Vita3K config
+  or launcher. Its Steam Deck Steam Input template, shared by every
+  emulator, makes both trackpads an absolute mouse (`configs/steam-input/
+  emudeck_controller_steamdeck.vdf`, groups 95 and 96 bound to
+  `left_trackpad` and `right_trackpad`); the sticks stay sticks. On the Deck
+  that reaches only the Qt window (mouse), and the Deck's screen touches
+  directly. Its radial-menu template has a "Vita3K" preset
+  (`emudeck_controller_steamdeck_radial_menus.vdf`, preset title at line
+  140): the right trackpad an absolute mouse, its click the left button;
+  the right stick stays a stick.
+- **RetroDECK** (`7786a84`): only generic Steam Input templates per pad
+  (the Deck's right trackpad an absolute mouse), nothing for Vita3K; its
+  Vita3K helper file points to its wiki.
+- **RetroBat** (Windows, emulatorlauncher `7f8dc28`): `pstv-mode` as an
+  option (`emulatorLauncher/Generators/vita3k.Generator.cs:190`), nothing
+  for touch.
+- **A Vita3K libretro core exists, unofficial and new:**
+  WizzardSK/vita3k-libretro (`48b9307`, 2026-10-17; a fork, made
+  2026-10-05, of danprice142/Vita3K-libretro, itself a fork of Vita3K;
+  GPL-2.0), given a page in libretro's docs on 2026-10-13 (libretro/docs
+  `15883c8`, `docs/library/vita3k.md`). Touch follows the frontend's
+  libretro pointer (`RETRO_DEVICE_POINTER`), front, or the rear pad while L2
+  is held; and Cross with no touch held also taps the middle of the screen
+  (`vita3k/libretro/libretro_input.cpp:164-200`). It has no stick pointer
+  either: the pointer is the frontend's mouse or touch screen, and its
+  docs name no other.
+- **Steam Deck in general** (SteamOS, Bazzite, ChimeraOS): the Deck's own
+  touch screen, or a trackpad as a mouse through Steam Input. Vita3K's FAQ
+  sends Deck users to the AppImage in Desktop Mode (vita3k.org/faq, read
+  2026-10-19). Vita3K#2711 ("Steam Deck Multi-touch not working", open since
+  2023-07-04) is still being commented on.
+- **No frontend or setup found gives Vita3K a stick-driven pointer.** Every
+  one relies on a real touch surface: a touch screen, a mouse, a Deck
+  trackpad as a mouse, or a PlayStation pad's touchpad read by Vita3K
+  itself. Searches for a stick or analog touch pointer for Vita3K found
+  only Vita3K#3707.
+
+##### 3. Is it mostly a phone emulator?
+
+- **Downloads say Android, by far.** The last 100 numbered builds
+  (Vita3K/Vita3K-builds 4056 to 4206, 2026-06-13 to 2026-10-19): Android APK
+  667,141 downloads; Linux AppImage 57,313 (zsync update checks included);
+  Windows 21,503; Linux 7z 15,028; macOS 8,522. The old Android repository
+  (Vita3K/Vita3K-Android, 12 releases, 2023-02 to 2024-06) adds 4,332,272.
+  Android is in the main repository now (`android/`), not on Google Play.
+- **The trackers say desktop**, but by design: the compatibility template
+  asks for "Windows/macOS/Linux" and says "Please do not submit test results
+  on Android" (Vita3K/compatibility `.github/ISSUE_TEMPLATE/
+  2-compatibility_report.yml:36-39`). The main tracker's issues mention
+  Android in 192 and Windows in 220 (search API, title or body).
+- **What cannot be known:** Vita3K has no telemetry. The desktop and Android
+  updaters fetch the moving `continuous` release, whose counts reset each
+  build, so the numbered counts miss most updates on every platform, and
+  mirrors and update checkers inflate others. Nobody records how players
+  touch or how many play on a TV. **So: most downloads are Android, a touch
+  device; the desktop players it does have touch with a mouse, a touchpad or
+  a Deck's screen; no setup was found that plays it from a couch with
+  sticks only.**
+
+##### 4. What the DS rule would cost here
+
+- **The DS rule is not console code.** It is one option in melonDS
+  (`melonds_touch_mode` = `Joystick`, `frontend/src/coreoptions.cpp:143-158`,
+  commit `8d59623`): the core moves its own pointer and draws it. Azahar
+  does the same by default (question 50). Vita3K has no such thing to switch
+  on, so here the console would build the pointer itself.
+- **The right stick is not free.** The DS and 3DS have no right stick in
+  play (the 3DS's C-stick shares it); the Vita has two sticks and games use
+  both. Sony's pointer is a mode: L3 shows it, the stick that moves it stops
+  moving the game, L2 taps (PS TV guide, above). Any pointer here needs the
+  same mode, so the stick is withheld from the game while the pointer shows.
+- **What reaches Vita3K under the SDL frontend: only finger events and a
+  pad's touchpad.** Not a mouse (above), so a virtual mouse moved by the
+  stick (uinput `REL_X`/`REL_Y`, or SDL's relative mouse) does nothing there.
+  A pad's touchpad does not pass through either: Vita3K is given the
+  console's virtual pads (`vpad.h`), which have no touchpad, and SDL
+  3.4.16's Linux joystick driver reads none from an evdev device
+  (`src/joystick/linux/SDL_sysjoystick.c`, no touchpad code).
+- **The mechanism that would work, unmeasured: a virtual touch screen.** The
+  console makes one more uinput device, a direct touch screen
+  (`INPUT_PROP_DIRECT`, `ABS_MT_*`), and writes one touch to it. gamescope
+  by default turns any touch into a mouse click
+  (`touch_click_mode`, default `Left`, `src/backend.cpp:173-185`;
+  `src/wlserver.cpp:3375-3410`), which the SDL frontend ignores; set to
+  `Passthrough` (`gamescopectl touch_click_mode 4`, the way `idle.cpp:98`
+  already sets a convar) it passes touch to the window, Xwayland makes it an
+  XInput2 touch, and SDL 3.4.16 reports it as finger events
+  (`src/video/x11/SDL_x11xinput2.c:705, 811, 908`), which Vita3K takes as
+  the front screen. Into that one device go both inputs:
+  - **the stick pointer**: while the pointer shows, the stick moves a
+    position the console keeps and L2 (or R3) puts a finger down there;
+  - **the DualSense or DualShock 4 touchpad**: the console already receives
+    its events in process (`startup.cpp:150-152` filters them by pad; HIDAPI
+    is on for the console's own SDL), and maps the pad's 0 to 1 square onto
+    the screen as a direct touch, beside the stick, one rule with no
+    setting, as question 50 recommends for the 3DS.
+  - **The cursor** would be the console's to draw: Vita3K's SDL frontend
+    draws none. The console's window already composites over a standalone
+    emulator in gamescope's overlay slot (`overlaywin.h`), and can hand
+    input back while staying up; drawing a dot there while the game keeps
+    the pad is new.
+  - **Rear touch stays out of reach** under the SDL frontend (no switch).
+    Of his games, Pumped BMX+ needs it; Sony's list leaves rear-pad games
+    out too.
+- **Files it would touch, if built:** a new `frontend/src/vtouch.cpp` and
+  `vtouch.h` (the virtual touch screen, its own job beside `vpad.cpp`);
+  `standalone_play.cpp` (the pointer mode, withholding the stick, passing
+  touchpad events); the overlay's drawing for the cursor; the Vita launcher
+  itself (`standalone_vita3k.cpp`, needed for any Vita support); the
+  gamescope convar set and restored around a Vita game;
+  `docs/ARCHITECTURE.md`. **Size:** a few hundred lines and an A9 session,
+  medium, with three unknowns only the A9 answers: that Bazzite's gamescope
+  passes uinput touch through as above, that Xwayland and SDL turn it into
+  finger events Vita3K accepts, and that the DualSense's touchpad events
+  reach the console (#288's open check).
+- **The other ways, and why not:** the Qt window instead of the SDL frontend
+  reads a mouse and switches to the rear pad, but brings back the dialogs
+  test 2 removed. Handing Vita3K the real pads gives it their touchpads and
+  gyros, but undoes `vpad.h` (player order, the pause menu's hold) for one
+  system (question 49's gyro section). **The libretro core** would move
+  the Vita into the core host, where the pointer is the console's own
+  answer to `RETRO_DEVICE_POINTER`: the same piece question 50 recommends
+  for the 3DS touchpad, plus a stick-moved position and a cursor drawn on
+  the console's own picture, with rear touch on L2 and gyro through the
+  sensor interface. Technically the closest fit, but it is one person's
+  fork two weeks old, not upstream's, and its Cross rule taps the middle
+  of the screen on every Cross press while nothing else touches, in every
+  game: not one to adopt today. A virtual DualSense through `/dev/uhid` is
+  larger still and unproven. **Upstream first** is the cleaner route: the
+  pointer inside Vita3K (Vita3K#3707), where the emulator knows the screen
+  and draws the cursor, as melonDS and Azahar do, turned on by
+  an option the console sets; the console's virtual touch screen is the
+  fallback, written in full here.
+
+##### Recommendation and his one decision
+
+- **How vital:** for a Vita on a television it is Sony's own answer, and
+  on Sony's list it is needed in play for at least one game in ten and in
+  menus for more. On his library it turns one unique game into three.
+- **Who else does it: nobody.** No frontend, setup or fork gives Vita3K a
+  stick pointer; everyone else has a touch surface (phones, the Deck, a
+  mouse, a PlayStation touchpad). The console would be first, with Sony's
+  PS TV pointer as the model.
+- **Where it is played:** mostly Android by downloads, desktop by reports;
+  no telemetry, so not knowable beyond that.
+- **What it costs here:** not the DS's one option. Under the SDL frontend
+  the only door is touch, so the console would build a virtual touch screen
+  fed by a stick pointer in a mode (the Vita uses both sticks) and by the
+  touchpad, set gamescope to pass touch through, and draw the cursor
+  itself: medium work and three A9 unknowns, front screen only.
+
+**My view: keep "no, for now", and go upstream first.** For his library
+the pointer buys two unique games (three with updates), the work is
+medium with unknowns only the A9 can answer, and the right home for it is
+inside Vita3K, as melonDS and Azahar carry theirs, behind an option the
+console sets. The console's virtual touch screen above is the recorded
+fallback, and the libretro core is one to watch, not adopt. One step is
+worth taking whatever he decides, because it serves the 3DS too: #288's
+open check on the A9, whether his DualSense's touchpad events reach the
+console. **His one decision:** ask Vita3K for the pointer (a comment of
+support on Vita3K/Vita3K#3707 in his voice, on his go) and wait, or have
+the console build its own pointer now, which would turn question 49 into a
+go with conditions once the hand test passes.
 
 ### 50. Nintendo 3DS (Azahar's libretro core)
 

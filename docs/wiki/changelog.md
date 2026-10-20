@@ -13,6 +13,20 @@ one you install, so you only ever install the newest.
   for every Vectrex game. See [Picture and colours](picture.md).
   ([#224](https://github.com/MMagTech/cabinetos/issues/224))
 
+## 2026.10.20.3 {#v2026-10-20-3}
+
+*20 October 2026*
+
+- **Fixed:** streaming an arcade game to a phone, a tap of Select could open
+  the pause menu instead of putting a coin in. Select, Start and the stick
+  buttons can no longer be chosen for shortcuts (games use them, and L3+R3
+  is the pause menu), and Home opens the pause menu even when a spare
+  button was chosen for that kind of controller. The row now reads
+  "Shortcuts use: Home" (#313).
+- **Fixed:** on Search, the covers grow and shrink with the keyboard as it
+  slides in and out, instead of jumping to their new size at once. Done
+  slides the keyboard away rather than dropping it.
+
 ## 2026.10.20 {#v2026-10-20}
 
 *20 October 2026*
