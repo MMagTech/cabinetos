@@ -290,6 +290,15 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   running gamescope; stale sockets from earlier instances sit there looking
   identical.
 
+- **`gamescopectl <convar>` WITH NO VALUE DOES NOT READ IT: IT SETS IT TO
+  0.** gamescopectl sends the name and an empty value, and gamescope
+  parses the empty value as false or 0 (gamescope 3.16.31,
+  `gamescopectl.cpp` and `convar.h`). 2026-10-19 (#253, "4K: the console
+  misses a screen refresh 1 to 5 times every 10 s (gamescope)"): a "read
+  back" after `vblank_debug 1` switched it off again, and its log stayed
+  empty. Check a switch by what it does (vblank_debug's lines in the
+  journal), never by asking for it.
+
 - **`Environment=` IN A SYSTEMD DROP-IN SPLITS ON WHITESPACE.** An unquoted
   `CABINETOS_APP=/path --core-dir x` sets the path and silently discards every
   argument, and the console comes up looking correct on the default core
@@ -354,6 +363,11 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   console runs its own hold from the press to the release, on every screen
   since #398 (PLAY-03).
 
+- **A SHORT YDOTOOL TAP CAN BE DROPPED.** 2026-10-19 (#253): with key-down
+  and key-up 0.15 s apart, the Return after `ydotool type` into Search was
+  dropped about half the time. Hold 0.25 s, and read the journal for the
+  result (`[keyboard] committed: ...`) before the next press.
+
 - **frames.py CANNOT SEE A REPEATED GAME FRAME.** (frames.py is a frame-time
   script kept on the reference console, not in this repository; it reads
   gamescope's frame times.) The console presents at
@@ -361,6 +375,16 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   frame times read a clean 16.67 ms over a game that repeats and skips
   frames every second. Read the console's own `[pace]` line (#221, "Built-in
   cores: no audio rate control, a frame repeats or drops every 10 to 17 s").
+
+- **AND `[pace]` CANNOT SEE A PICTURE GAMESCOPE HOLDS.** `[pace]` counts
+  only the console's own lateness. The message `frames.py` skips (app
+  frame time all ones) carries the visible frame time: the time between
+  the kernel's flips that put a new console frame on screen. 33.3 ms there
+  is a picture shown for two refreshes. 2026-10-19 (#253): with
+  `GAMESCOPE_DISABLE_TIMERFD=1`, Axelay showed 4 such pictures in 38 s
+  while every `[pace]` window read 0 refreshes missed. Read both. The
+  layout after mtype is version u32, pid u32, app frame time u64, two u8,
+  visible frame time u64.
 
 - **`--env` REACHES THE FRONTEND, NOT THE SESSION SCRIPT.** It goes on the
   frontend's command line, so `CABINETOS_OUTPUT` given that way changes
