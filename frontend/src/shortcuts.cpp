@@ -116,6 +116,11 @@ std::string label(SDL_Gamepad* gp) {
     if (!gp) return "";
     const int raw = chosen(gp);
     if (raw < 0) return SDL_GamepadHasButton(gp, SDL_GAMEPAD_BUTTON_GUIDE) ? "Home" : "Not set";
+    return label(gp, raw);
+}
+
+std::string label(SDL_Gamepad* gp, int raw) {
+    if (!gp || raw < 0) return "";
     const SDL_GamepadButton b = mappedTo(gp, raw);
     if (b != SDL_GAMEPAD_BUTTON_INVALID) {
         const std::string n = nameOf(gp, b);

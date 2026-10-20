@@ -37,8 +37,10 @@ bool held(SDL_Gamepad* gp);
 bool isShortcut(SDL_Gamepad* gp, SDL_GamepadButton b);
 
 // What the button is called, for the Settings row: "Home", "Select",
-// "L3", or "Button 3" for one the mapping does not name.
+// "L3", or "Button 3" for one the mapping does not name. The second form
+// names a raw button that was pressed, saved or not.
 std::string label(SDL_Gamepad* gp);
+std::string label(SDL_Gamepad* gp, int raw);
 
 // Setting it. `raw` is the joystick button number from a
 // SDL_EVENT_JOYSTICK_BUTTON_DOWN on this pad.
