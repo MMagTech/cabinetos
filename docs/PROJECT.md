@@ -341,7 +341,9 @@ down. "Look now at" is where the code or a later decision moved on.
   already uses for the system ROM; ten sheets carry other companies' marks.
   Recommended: ship that set at `385490fa8`, fetched at build time, 25 retail
   sheets and 3 variants drawn, the invented ones off, alpha-composited at
-  opacity 1 over the core's picture. His decision: the legal footing.
+  opacity 1 over the core's picture. RetroArch and Bazzite ship none;
+  Batocera ships the same sheet art inside Duimon's CC BY-NC-ND console
+  bezels, in four optional sets. His decision: the legal footing.
 
 ---
 
@@ -18717,6 +18719,10 @@ or commit was read, 2026-10-19, unless it says otherwise.
   carry: ten sheets reproduce third parties' titles and logos (Star Trek,
   Pole Position, Berzerk, Scramble and the Cinematronics games), which
   Smith Engineering's permission cannot cover.
+- **Nobody ships them as part of RetroArch or Bazzite.** Batocera does, in
+  four of its decoration sets (Duimon's console drawings with the same
+  sheet art inside, CC BY-NC-ND 4.0), applied by ROM name once a player
+  picks one of those sets; its out-of-the-box set has none. Below.
 - **Recommendation:** ship libretro's `Game Overlay` set at commit
   `385490fa8`, fetched at build time the way the shaders are; draw the 25
   sheets that shipped with retail cartridges and the three regional
@@ -19123,6 +19129,101 @@ the top:
   what is there.
 - The smoothness he saw on 2026-10-19 is a separate matter, in hand in the
   session that asked this question; nothing here touches the core's pacing.
+
+#### Do RetroArch, Batocera or Bazzite already ship the sheets?
+
+Asked by MMagTech the same night, through the parent session: he was fairly
+sure one of them includes them. Checked concretely on 2026-10-19:
+
+- **RetroArch: no.** A stock RetroArch carries libretro/common-overlays
+  (CC BY 4.0): touch gamepads, a few console borders (Game Boy, NES, SNES)
+  and no Vectrex sheet. Its one Vectrex file is a touch-screen gamepad
+  layout, `gamepads/Named_Overlays/GCE - Vectrex.cfg`. That is true of the
+  Online Updater's "Update Overlays" (the buildbot's
+  `assets/frontend/overlays.zip` of 2026-10-20, 27.6 MB, downloaded and
+  listed: one Vectrex match, that gamepad) and of the Flathub build
+  (flathub/org.libretro.RetroArch's manifest bundles common-overlays,
+  retroarch-assets, the shaders, the database and the core info with
+  `HAVE_UPDATE_ASSETS=0`; overlay-borders is not among its modules). The
+  vecx core draws none. A RetroArch player gets a sheet only by fetching
+  overlay-borders from GitHub by hand and writing a per-game config; nothing
+  applies one by itself.
+- **Batocera: yes, in its decoration sets, drawn by Duimon under
+  CC BY-NC-ND 4.0, and not on out of the box.** The image ships
+  batocera-linux/batocera-bezel (pinned in
+  `package/batocera/emulators/retroarch/batocera-bezel/batocera-bezel.mk` at
+  `96c8f8650ff8`, 2026-09-25) into `/usr/share/batocera/datainit/decorations/`.
+  Four of its sets (`default_curve`, `default_curve_night`,
+  `default_nocurve`, `default_nocurve_night`) carry a `games/vectrex/`
+  folder: 37 PNG files at 1920x1080 with an `.info` each, the console drawn
+  around the screen and the game's sheet in the window (centre alpha 51 of
+  255, the same 20% as libretro's; the Mine Storm sheet is the same drawing
+  line for line, so it is the HyperSpin recreation inside Duimon's console),
+  named by the No-Intro ROM name (`Armor..Attack (World).png`,
+  `Mine Storm (World).png`), the picture placed by the `.info` (top 117,
+  left 669, bottom 244, right 669 of 1920x1080; opacity 1.0). Covered: 22
+  of the 25 retail sheets (not the three light-pen games AnimAction, Art
+  Master and Melody Master), Flipper Pinball, Star Ship, Mine Storm II, the
+  Dark Tower, Pitcher's Duel and Tour de France prototypes, 2D Narrow
+  Escape, seven homebrew titles and a generic `Mega.png`; not the 3D games
+  and not Mr. Boston. Added by Duimon on 2022-01-22 (commit `85b29ca49`,
+  "added/updated, optimized decorations"); each file carries
+  "CC BY-NC-ND - https://github.com/Duimon" in its corner, and Duimon's own
+  repository (Duimon/Duimon-Mega-Bezel) is under CC BY-NC-ND 4.0; the
+  batocera-bezel repository has no licence file of its own. **Automatic
+  only after a choice:** the launcher's default decoration is `consoles`
+  (`python-src/batocera-launch/resources/defaults/config.yml`,
+  `bezel: consoles`), a folder the build assembles from `default_unglazed`
+  and the night sets' `systems` folders (the `.mk` above) with no `games/`
+  folder at all, and its `systems/vectrex.png` is a bare console with a
+  transparent window (centre alpha 0). A player who picks DECORATION SET
+  `default_curve` or `default_nocurve` (or their night versions) in GAME
+  SETTINGS then gets the sheet per game by the ROM's file name, with no
+  further setting (`batocera_launch/emulator.py`, the bezel lookup: the
+  game's name under `games/<system>/` first, then the system's bezel, then
+  the set's default). Batocera draws a bezel through RetroArch's overlay
+  for libretro cores (its wiki, "decoration": most RetroArch cores support
+  bezels out of the box; the `.info` gives the opacity) and through its own
+  `batocera-bezel-overlay` window for standalone emulators
+  (`batocera_launch/draw/bezel.py`). On request it also downloads The Bezel
+  Project's Vectrex pack (UPDATES & DOWNLOADS, from updates.batocera.org's
+  mirror of thebezelproject/bezelproject-GCEVectrex, listed in
+  `scripts/linux/thebezelproject/tbp_systems.txt`): 131 PNG at 1920x1080,
+  console bezel with the sheet in the window (Armor Attack: centre alpha
+  51), RetroPie-style per-game configs, `overlay0_full_screen = true`, no
+  licence file. For its MAME alternative the image ships only MAME's own
+  `artwork` folder (`package/batocera/emulators/mame/mame.mk:207`) and a
+  table mapping No-Intro names to MAME's software names
+  (`batocera-launch/resources/data/special/vectrex.toml`), so Mr. Do's
+  `vectrex.zip` would be found if a player added it; none ships.
+- **Bazzite: no.** Nothing of RetroArch is in the image. In ublue-os/bazzite
+  (cloned 2026-10-19) RetroArch appears once, in the Bazaar store's content
+  list (`system_files/desktop/shared/usr/share/ublue-os/bazaar/content.yaml`:
+  `org.libretro.RetroArch` and `net.retrodeck.retrodeck` as Flathub
+  suggestions), and EmuDeck is a `ujust get-emudeck` recipe
+  (`82-bazzite-apps.just:660`) that downloads its AppImage. So a Vectrex
+  sheet on Bazzite would come from Flathub's RetroArch (none, above),
+  RetroDECK (nothing Vectrex in RetroDECK/RetroDECK but a folder icon; its
+  "borders" feature is RetroArch's own) or EmuDeck (dragoonDorise/EmuDeck,
+  cloned the same day: its bezel switch covers 27 systems and vectrex is
+  not among them; its bezel pack URL answers 94 bytes). This console's
+  image strips none of that because none of it is there.
+
+**Who applies a sheet by itself, for the record:** Batocera once a player
+chooses one of its four sets that carry `games/vectrex` (by ROM name); The
+Bezel Project's pack once installed on Batocera or RetroPie (by ROM name,
+through RetroArch's per-game config); VectrexWii and Vectrexy (by name);
+ParaJVE for its bundled games; Cabinet (by md5, then name). RetroArch as
+shipped, Bazzite, RetroDECK and EmuDeck: nothing.
+
+**What it changes here:** nothing in the recommendation. Batocera's files are
+the same sheet drawing inside Duimon's console under CC BY-NC-ND, whose
+NoDerivatives term forbids cutting the sheet back out and whose
+NonCommercial term is the ROM's constraint again; libretro's `Game Overlay`
+folder is the sheet alone under MIT. What Batocera adds is a precedent: a
+free Linux distribution has shipped per-game Vectrex sheets inside its image
+since January 2022, under a non-commercial licence, with no claim reported
+that I could find.
 
 #### Recommendation, 2026-10-19 (not decided)
 
