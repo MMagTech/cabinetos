@@ -334,8 +334,9 @@ down. "Look now at" is where the code or a later decision moved on.
   own. His server has no 3DS games. **Go given the night of 2026-10-19,
   with the conditions; built (the core's arm, the catalog row, the levels,
   saves the PSP way, the encrypted-dump and CIA refusal, games given no
-  network by a patch). The A9 hand test waits for a time he names and a
-  game of his.**
+  network by a patch), #524 ("Nintendo 3DS through Azahar's own libretro
+  core (decrypted dumps)"), a draft. The A9 hand test waits for a time he
+  names and a game of his.**
 
 ---
 
@@ -18679,9 +18680,11 @@ it out, with nothing redecided:
 - **The core:** `cores/build-core.sh`'s `azahar` arm at 2126.2
   (`219d743a1e69`), CMake, `-DENABLE_LIBRETRO=ON -DENABLE_TESTS=OFF
   -DENABLE_BUILTIN_KEYBLOB=OFF`, Release, and `-DENABLE_LTO=OFF` as Azahar's
-  own Linux libretro release builds it. Condition (1), that it builds in
-  `cabinetos-builder`, is proved or not by the core workflow's run on the
-  pull request's branch, said there.
+  own Linux libretro release builds it. **Condition (1) is met:** it built
+  in `cabinetos-builder` on CI on 2026-10-20 (the core workflow run by hand
+  on #524's branch, about 15 minutes), with the patch applied, the revision
+  read back as `219d743`, its 32 options as listed, and a 62 MB core that
+  needs only glibc and the C++ runtime.
 - **Games get no network, condition (2), by the recorded fallback**, a
   patch in the arm, with no upstream option asked for yet (that waits on
   his go). Reading the source for it found more doors than the Wi-Fi: the
