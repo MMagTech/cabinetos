@@ -57,7 +57,14 @@ RomM and GitHub" (#215). No issue is opened unless he asks.
    Xbox-type controller on the client from Moonlight's on-screen buttons,
    so Select must stay with the game). He decides at the TV. Six written
    explanations failed on 2026-10-19; do not write a seventh.
-3. **Words from him that close or settle issues, no work:** #253 (the
+3. **Search's keyboard, in the loop beside #313** (MMagTech at the TV,
+   2026-10-19): when the keyboard is put away (Start, or its Done key) the
+   covers jump to their larger size at once while the panel slides out,
+   because the results area follows where the panel rests
+   (search.cpp, setResultsBottom; keyboard.cpp, panelTop). Make the covers
+   grow and shrink with the slide; judged on the TV. Down from the results
+   brings the keyboard back with the text kept, which stays as it is.
+4. **Words from him that close or settle issues, no work:** #253 (the
    night's hour of measurements found nothing to change: the misses the
    issue was filed for are gone on gamescope 3.16.31, what is left is one
    held picture at Home about 0.4 a minute; close with "reopen on a
@@ -66,9 +73,9 @@ RomM and GitHub" (#215). No issue is opened unless he asks.
    he says whether there is an issue); #484's "a drive unplugged during
    Sign out" (the docs now say what happens; what to do is his call);
    #224, #181, #215 (designs on their issues).
-4. **The automatic checks turn strict on 2026-10-26** and `main` passes
+5. **The automatic checks turn strict on 2026-10-26** and `main` passes
    all four; nothing to do but watch the first pull request after.
-5. **The monthly health check.** With the next real core change: #490's
+6. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
 
 ## Waiting, not for the next session unless MMagTech raises them
