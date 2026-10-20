@@ -645,6 +645,11 @@ void destroyContext() {
     gInterface = {};
 }
 
+void forgetCoreImage() {
+    std::lock_guard<std::mutex> lock(gImageLock);
+    gHaveCoreImage = false;
+}
+
 const retro_hw_render_interface_vulkan* renderInterface() {
     return gDevice == VK_NULL_HANDLE ? nullptr : &gInterface;
 }

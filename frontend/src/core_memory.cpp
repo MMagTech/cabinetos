@@ -6,6 +6,7 @@
 
 #include "core.h"
 #include "core_state.h"
+#include "vkhost.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -140,8 +141,20 @@ bool Core::writeSaveRam(const std::vector<uint8_t>& data) {
 
 bool Core::loadState(const std::vector<uint8_t>& data) {
     if (!gameLoaded_ || !g.unserialize || data.empty()) return false;
-    CoreContext in;
-    return g.unserialize(data.data(), data.size());
+    bool loaded;
+    {
+        CoreContext in;
+        loaded = g.unserialize(data.data(), data.size());
+    }
+    // A VULKAN CORE MAY REBUILD ITS RENDERER TO LOAD A STATE, and Azahar does:
+    // the image it last handed over is destroyed, and the next present()
+    // blitted from it and crashed the console 2 ms after the load (A9,
+    // 2026-10-20, radv in vkCmdBlitImage). The frame loop presents while the
+    // game is held on "Press (A) to continue", before the core runs again. So
+    // the image is forgotten here: the picture on screen stays until the core
+    // hands over its next one, which every Vulkan core here does each frame.
+    if (gHWVulkan) vk::forgetCoreImage();
+    return loaded;
 }
 
 bool Core::saveRAM(std::vector<uint8_t>& out) const {
