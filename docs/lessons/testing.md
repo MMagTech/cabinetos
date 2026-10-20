@@ -547,15 +547,29 @@ minute and guessing at it for twenty.
   default D-Bus timeout on logind's ReleaseDevice. The same stall shows on
   gamescope exits that are not handovers. The brief's lead, the
   frontend's D-Bus calls on exit, was wrong: those run only inside a
-  pairing. **To open Steam and come back in a test:** on Home, Escape
-  (the Power menu, Cancel focused), Down (Switch to Steam), Return,
-  Return (Start); come back with `steam -shutdown` as `cabinet` with
-  `XDG_RUNTIME_DIR=/run/user/1000`, which ends Steam's session the way
-  its own menu does, so the session's whole return path runs. Escape on
-  Settings goes Back to Home rather than opening the menu. Capture with
+  pairing. **The session now cuts it** (#305; cabinetos-session,
+  `wait_for_compositor`): two seconds after the reaper has gone it logs
+  `has not ended 2 s after its app; stopping it (TERM)`, then `(KILL)` a
+  second later, and the handover takes about 3.2 s; one of four handovers
+  on the A9 stalled by itself on 2026-10-19 and read exactly so. **To
+  stall one on purpose**, as `cabinet`: `waitpid` on the
+  `gamescopereaper`, then `kill -STOP` its parent gamescope (the STOP
+  lands within 2 ms of `Primary child shut down!`), and `kill -CONT` it
+  later if it is still there. **To open Steam and come back in a test:**
+  on Home, Escape (the Power menu, Cancel focused), Down (Switch to
+  Steam), Return, Return (Start); come back with `steam -shutdown` as
+  `cabinet` with `XDG_RUNTIME_DIR=/run/user/1000`, which ends Steam's
+  session the way its own menu does, so the session's whole return path
+  runs. Escape on Settings goes Back to Home rather than opening the
+  menu. Capture with
   `gamescopectl screenshot` into a file of your own while other sessions
   run headless frontends: they write and remove the same
-  `/tmp/cabinetos-frame.bmp` the SIGUSR1 capture uses.
+  `/tmp/cabinetos-frame.bmp` the SIGUSR1 capture uses. Under
+  `ui-loop.sh --session-script` the session's lines carry the identifier
+  `bash`, not `cabinetos-session`, so `journalctl -t cabinetos-session`
+  shows none of them; and pick gamescopectl's socket by the exact name
+  `gamescope-<n>`, since `gamescope-<n>-ei` beside it has the same time
+  and gamescopectl hangs on it.
 
 - **A TEST GAME ON THE CONSOLE ENDS INSIDE A MINUTE, BY `--restore`, NEVER
   BY A KILL.** 2026-10-15, move 4 of #398: a loop launch (`tools/ui-loop.sh
