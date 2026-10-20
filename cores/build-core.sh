@@ -84,6 +84,7 @@ gambatte)
     # nothing here to keep in step with Cabinet. That is exactly why it is the
     # first core: it proves the pipeline without also testing the parity
     # question.
+    # A harmless comment, to prove the per-core cache key; reverted next.
     MAKEARGS=()
     ;;
 genesis_plus_gx)
