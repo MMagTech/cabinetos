@@ -133,9 +133,14 @@ void App::buildSettings() {
             for (const players::Pad& p : pads)
                 if (p.id == settingsLastPad) inHand = &p;
             SDL_Gamepad* gp = SDL_GetGamepadFromID(inHand->id);
-            rows.push_back({K::Action, SetShortcutButton, "Shortcut button", inHand->name,
-                            shortcutListen ? "Press a button\xE2\x80\xA6"
-                                           : shortcuts::label(gp)});
+            // "Shortcuts use: Home", read with the switch above it as one
+            // sentence (MMagTech, 2026-10-20): a fact for the player with a
+            // working Home, and the place to press a spare button for one
+            // whose Home the console cannot see.
+            rows.push_back({K::Action, SetShortcutButton, "Shortcuts use", inHand->name,
+                            !shortcutListen           ? shortcuts::label(gp)
+                            : !shortcutRefused.empty() ? shortcutRefused + "\xE2\x80\xA6"
+                                                       : "Press a spare button\xE2\x80\xA6"});
         }
         cats.push_back({"Controllers", std::move(rows)});
     }
@@ -526,6 +531,7 @@ void App::applySetting(const screens::Result& res) {
     } else if (res.value == SetShortcutButton) {
         // The pad that pressed A, which the row already names.
         const std::vector<players::Pad> pads = players::connected();
+        shortcutRefused.clear();
         shortcutListen = pads.empty() ? 0 : pads.front().id;
         for (const players::Pad& p : pads)
             if (p.id == settingsLastPad) shortcutListen = p.id;

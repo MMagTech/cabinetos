@@ -1831,6 +1831,21 @@ and Home is the button the list most often gets wrong.
   Lite 2 on the console uses it.
 - **Home by default** where the pad has a working one. A pad with none has no
   shortcut button until one is set.
+- **Home always works, and Select, Start, L3 and R3 are never the button**
+  (#313, MMagTech, 2026-10-20; the sticks the same morning, when L3 chosen
+  on the TV made the L3+R3 chord open the menu and close it again). The row
+  is "Shortcuts use: Home", read with the switch above it as one sentence,
+  and asks for "a spare button". Until then a chosen button replaced Home,
+  and the row took Select: on the A9 Select had been chosen for Xbox Series pads
+  during controller testing, so Moonlight's on-screen controls (which
+  Sunshine presents as that kind of pad) opened the menu on a tap of Select
+  and an arcade game never got its coin. Now a chosen button is added beside
+  Home, the row refuses the four and says why ("Games use Select…", "L3
+  opens the menu with R3…"), and a choice saved before the rule reads as none. A phone's
+  long press of Select, which Sunshine sends as Home, therefore always opens
+  the menu, whatever was chosen for that kind of pad at the TV. Two builds
+  that gave a stream its own rule (Home always; the saved button except
+  Select) were set aside unjudged.
 - **A tap of it opens the pause menu; held with a second button it is a
   shortcut**, exactly as Home was. Governed by the same switch.
 - **Single button only**, not a pair: it is held while a second is pressed,
