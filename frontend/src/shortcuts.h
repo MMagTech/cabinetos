@@ -16,8 +16,9 @@
 // once for a Lite 2, every Lite 2 uses it.
 //
 // Unset, a pad uses its mapped Home, which is right for most pads. A chosen
-// button is ADDED to Home, never put in its place, and Select and Start can
-// never be chosen: they are the coin and the pause inside games (#313).
+// button is ADDED to Home, never put in its place, and Select, Start, L3 and
+// R3 can never be chosen: the coin and the pause inside games, and the menu
+// chord (#313). The row reads "Shortcuts use: Home" (MMagTech, 2026-10-20).
 
 #pragma once
 
@@ -47,8 +48,8 @@ std::string label(SDL_Gamepad* gp, int raw);
 enum class Pick { Taken, Cancel, Ignore, Refused };
 // What a press means while the row is listening: B cancels, and a button the
 // game or the shortcuts need (the face buttons, the shoulders, the d-pad) is
-// ignored so listening goes on; Select and Start are refused, which the row
-// says, and listening goes on. Anything else is taken and saved.
+// ignored so listening goes on; Select, Start, L3 and R3 are refused, which
+// the row says, and listening goes on. Anything else is taken and saved.
 Pick pick(SDL_Gamepad* gp, int raw);
 
 }  // namespace shortcuts
