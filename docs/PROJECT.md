@@ -2080,6 +2080,10 @@ refresh to compose, and its estimate of that time only grows after a
 frame has already missed. Locking the GPU's clocks high did not help
 (Home, a minute each: 11, 12, 6 late as shipped; 3, 2, 46 locked), so the
 cause is open. #253. High-refresh monitors (144 Hz, VRR) are #255.
+**2026-10-19 (#253): on 2026.10.19.3 and gamescope 3.16.31 the `[pace]`
+line shows no missed refreshes in SNES; what is left, and the five
+switches tried, are in "The 4K misses measured again" at the end of this
+section.**
 
 **N64 and Dreamcast still hold a frame about twice a second, locked or
 not** (measured both ways: Hydro Thunder 17 to 21 holds per 10 s on the
@@ -2125,6 +2129,117 @@ because nothing there waits for a refresh.
 50 and 120 Hz untested, no such screen here). A machine that cannot keep
 up misses refreshes, and those are caught up exactly as the clock did.
 No screen rate known means the clock, as before.
+
+#### The 4K misses measured again (#253), 2026-10-19
+
+#253 is "4K: the console misses a screen refresh 1 to 5 times every 10 s
+(gamescope)". Measured on the A9 at the LG C1, 3840x2160 at 60 Hz, on
+2026.10.19.3 with gamescope 3.16.31-ogc2, 7:46 to 8:29 PM, with the TV
+freed by MMagTech. Nothing was changed: no switch removed anything
+measurable, and one made it worse.
+
+**How it was measured, the same way for every step.**
+- **Home:** two readings of 60 s on the Home tab.
+- **A game:** Axelay (SNES, RomM id 232; no battery save, so leaving it
+  uploads nothing), started from Home through Search with ydotool key
+  presses. It was played for 38 s, giving four `[pace]` windows, and left
+  through the pause menu inside a minute, so no play was recorded.
+- **Frame times** came from gamescope's mangoapp queue, as `frames.py`
+  reads it, in two kinds:
+  - *app*: the time between the console's frames, which is what
+    `frames.py` counts;
+  - *visible*: the second message, which `frames.py` skips. It is the
+    time between the flips that put a new console frame on screen, from
+    the kernel's flip times. A visible time of 33.3 ms is a picture shown
+    for two refreshes.
+- **A plane sampler** (libdrm, as `cabinet`, every 2 to 3 ms) recorded
+  which buffer each display plane showed.
+
+**What changed since 2026-10-05.** gamescope moved from 3.16.28-ogc3 to
+3.16.31-ogc2 on 2026-10-09 (the journal's version lines), and the
+frontend changed too; which of the two ended the misses was not tested.
+
+The journal's `[pace]` lines since 2026-10-08, light cores only:
+
+| Core | 10 s windows | Windows with any miss |
+|---|---|---|
+| snes9x | 158 | 2 (Axelay 25 windows, all 0) |
+| genesis_plus_gx | 37 | 2 |
+| gambatte | 24 | 2 |
+| fbneo | 94 | 18 |
+
+The 2026-10-05 figure was 1 to 5 in every 10 s window at 4K.
+
+**The steps.** Steps 4 and 5 ran the step's session script copy through
+`tools/ui-loop.sh --no-build --session-script --session-env
+CABINETOS_APP=/usr/bin/cabinetos-frontend`, so the frontend was the
+image's own. "Held" is a visible frame time over 25 ms; "late" is an app
+frame time over 25 ms.
+
+| Step | Home, 2 x 60 s: late app / held | Axelay, 38 s: `[pace]` refreshes missed per window | Axelay: held |
+|---|---|---|---|
+| 1. As shipped | 0 / 3 (2 + 1) | 0 0 0 0 | 0 |
+| 2. `vblank_debug 1`, `composite_debug 1`, plane sampler on | 0 / 0 (on the game page), 0 / 0 (Home) | 0 0 0 0 | 0 |
+| 2b. The same, sampler off | 0 / 1 | not run | not run |
+| 3. `composite_force 1`, sampler on | 0 / 1 | 0 0 0 0 | 0 |
+| 4a. Loop control: drop-in, unchanged script | 0 / 0 | 0 0 0 0 | 0 |
+| 4b. `GAMESCOPE_DISABLE_TIMERFD=1` in `GS_ENV` | 0 / 0, besides the TV's HDMI drop below | 0 0 0 0 | **4** (1, 0, 3 per 10 s) |
+| 5. `--rt` on the drm line | 0 / 0 | 0 0 0 0 | 0 |
+| Restored image, 270 s, GPU clock sampled | 0 / 3 | not run | not run |
+
+The other figures, the same in every step:
+- The worst app frame at Home was 16.8 to 18.5 ms, and in Axelay 17.4 to
+  17.8 ms.
+- `[pace]`'s sound control read +0.01 to -0.29% per window, and `[audio]`
+  32 to 57 ms waiting.
+- pw-top's ERR for the frontend stayed at 0 after every deploy.
+- The first window always skipped 1 or 2 game frames, which is the load's
+  catch-up.
+
+**What each switch showed.**
+- **`vblank_debug`:** gamescope's draw time was 0.07 to 1.41 ms against
+  a wake-up 1.72 to 3.06 ms before vblank (83 lines, one every 5 s). It
+  logged no "missed vblank" in
+  6 minutes 38 s with the switch on, including the moment of step 2b's
+  held picture. Gamescope believed every flip was on time.
+- **The planes:** at Home and in Axelay, gamescope never composed in
+  4 minutes 48 s of sampling. The primary plane showed the frontend's own
+  three 4K buffers in turn, a new one every refresh. One fixed 1920x1080
+  buffer sat on an overlay plane.
+- **`composite_force`:** the primary plane showed gamescope's own 10-bit
+  (XR30) buffers instead, and the overlay plane was empty. At its one held
+  picture, the plane changed buffer at every refresh around it (54, 37,
+  19 and 2 ms before). So gamescope composed and flipped on time, but with
+  the same console frame twice.
+- **When the console's frames arrive:** they reach gamescope within 1 ms
+  after each flip, about 14 ms before its next latch. A held picture is
+  therefore a console frame not ready at the latch, not gamescope waking
+  late. The likely reason is that its GPU work was not finished: the GPU
+  is 28 to 36% busy at Home at 4K. That was not measured. The averaged
+  clock reading (hwmon `freq1_input`, 1,360 to 1,433 MHz) and
+  `gpu_busy_percent` (28 to 29%) showed nothing at the three held
+  pictures of the last run, but both are too coarse for one frame.
+- **`GAMESCOPE_DISABLE_TIMERFD=1`:** gamescope logged "Using nudge
+  thread." and held 4 pictures in Axelay while `[pace]` read 0, against
+  0 in every other game run. It made things worse.
+- **`--rt`:** gamescope's main, kms, pw, xwm, wait and vrmon threads ran
+  SCHED_RR at priority 1. **So did Xwayland**, which inherits it; the
+  frontend stayed on the normal scheduler. Gamescope used 4.3 to 4.8% of
+  a core and the frontend 6.6 to 7.8% (`top`, 30 s samples). Nothing was
+  starved, and nothing changed that the control did not also show.
+- **The TV dropped HDMI by itself** for 1.2 s at 8:17 PM (the kernel
+  reported HDMI-A-1 disconnected at 20:17:00.99 and back at 20:17:02.23):
+  one 1,283 ms gap in step 4b. The same 1.1 s drop is in the journal at
+  5:52 PM that day, before any of this.
+
+**Where #253 stands.** The `[pace]` misses the issue was filed for are
+gone in SNES, Genesis and Game Boy. FBNeo still misses in 18 of 94
+windows; that was not looked into. What is left is a picture held for one extra refresh
+at Home, about 0.4 a minute (8 in 20.5 minutes across all the steps).
+`[pace]` cannot see it; only the visible frame time does. The one test
+left is MMagTech's, as it needs sudo: Home with the GPU clocks locked
+high against as shipped, 10 minutes each, counting held pictures from the
+visible frame time.
 
 ### The emulator settings audit (#89) — 2026-09-27
 
