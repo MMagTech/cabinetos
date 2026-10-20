@@ -17,6 +17,13 @@ use in 1992; the same non-commercial constraint as the six cores below covers
 it. Everything else comes from the person's own RomM server at runtime and is
 not redistributed here.
 
+**The Vectrex sheets are GCE's too.** Every retail cartridge shipped with
+a translucent printed sheet that sat in front of the screen; the console
+draws each game's sheet over its picture (#224) from community-drawn
+copies of them. The drawings are MIT; the designs are Smith Engineering's,
+allowed for non-commercial use with the games, as above. They are not
+public domain, and the permission is Jay Smith's to withdraw.
+
 ---
 
 ## The constraint this project is under, said plainly
@@ -130,6 +137,7 @@ here. See `frontend/src/catalog.cpp`.
 | What | Where it comes from | Licence |
 |---|---|---|
 | **The screen looks** (#122), `/usr/share/cabinetos/shaders/` | RetroArch's GLSL shaders from [libretro/glsl-shaders](https://github.com/libretro/glsl-shaders) at `435612fe4f10`, unmodified, read at run time and never compiled into the frontend; `frontend/data/shaders/`, fetched by `tools/fetch-shaders.py` | Each file's own: **public domain** for crt-lottes (Timothy Lottes), lcd3x (Gigaherz) and sharp-bilinear-simple; **GPL** for crt-easymode and its halation version (EasyMode), crt-geom (cgwg, Themaister, DOLLS), zfast-crt and zfast-lcd (Greg Hogan), crt-aperture (EasyMode), crt-guest-dr-venom (guest.r), the Game Boy dot-matrix (Harlequin) and its colour version (LuigiRa, GPL v3 or later); crt-guest-dr-venom's colour tables (LUTs) are torridgristle's, with no licence stated. lcd-grid-v2 (cgwg) and some helper passes of halation and guest carry no header; cgwg distributes his shaders under the GPL (his note in crt-geom), and the helpers are parts of GPL works, so they are treated as GPL |
+| **The Vectrex screen sheets** (#224), `/usr/share/cabinetos/vectrex/` | the `Game Overlay` folder of [libretro/overlay-borders](https://github.com/libretro/overlay-borders) (`1080 GCE Vectrex`) at `385490fa8`, 38 PNG files, unmodified, fetched at build time by `tools/fetch-vectrex-overlays.py` (as the shaders are); which sheet belongs to which game is this project's own table, `frontend/data/vectrex-overlays.json`, after Cabinet's | **MIT** for the drawings, which are vector recreations by THK and Gigapig of the HyperSpin community, cut for RetroArch by thatman84 (credited in each file's `.cfg`, and the attribution libretro asked for in its issue #6). **The designs underneath are GCE's, 1982 to 1984, and belong to Smith Engineering**, under the same non-commercial permission as the system ROM (above); ten sheets carry the titles and marks of the games' licensors (Paramount, Namco, Atari, Konami, Cinematronics) as the printed sheets did |
 | **PPSSPP system files** — fonts, VFPU tables, `compat.ini`, the atlases | PPSSPP's own `assets/`, installed by `cores/build-core.sh` | GPL v2 or later, as PPSSPP (the PSP fonts carry no licence of their own; the Japanese and Latin ones were replaced in 2020 by a PPSSPP contributor's) |
 | **FFmpeg**, statically linked inside PPSSPP | the prebuilt `ffmpeg/linux/x86_64` in PPSSPP's own tree | LGPL v2.1 or later |
 | **Noto Sans** and Noto Sans CJK, the interface type | already in the Bazzite base; nothing is bundled | SIL Open Font License 1.1 |

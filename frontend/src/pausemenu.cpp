@@ -11,6 +11,7 @@
 #include "quality.h"
 #include "screenfx.h"
 #include "sysopts.h"
+#include "vectrexsheets.h"
 
 using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
@@ -233,6 +234,18 @@ void App::toggleOverlay() {
             c.current = screenfx::chosen(session.platformSlug);
             const std::string slug = session.platformSlug;
             c.apply = [slug](int i) { screenfx::choose(slug, i); };
+            pauseChoices.push_back(std::move(c));
+        }
+        // THE SCREEN SHEET (#224), where the Look row sits for the other
+        // systems (the Vectrex has no look), only for a game that has a
+        // sheet: a row that does nothing is worse than none. One choice for
+        // the system, kept as a look is. Changes at once, behind the menu.
+        if (session.standaloneCore.empty() && vectrexsheets::ready()) {
+            PauseChoice c;
+            c.label = "Overlays";
+            c.values = {"On", "Off"};
+            c.current = vectrexsheets::on() ? 0 : 1;
+            c.apply = [](int i) { vectrexsheets::setOn(i == 0); };
             pauseChoices.push_back(std::move(c));
         }
         // THE SYSTEM'S OWN ROWS (#73), for everyone: they are looks.

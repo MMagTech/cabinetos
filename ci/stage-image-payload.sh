@@ -46,6 +46,11 @@
 #   cemu/{bin,share/Cemu}/...     Wii U's emulator, its game profiles and resources
 #   sunshine/Sunshine-*.rpm       Remote Play's streaming host, with our patch (#304)
 #
+# This starts image_payload/ afresh. Two more folders go in after it, from
+# build.yml's later steps (by hand, run them after this): downloads/, the
+# pinned outside files (ci/fetch-pinned.sh), and vectrex/, the Vectrex
+# screen sheets (tools/fetch-vectrex-overlays.py image_payload/vectrex).
+#
 # image_payload/ is gitignored, which also keeps `git status -s` clean — the
 # Justfile reads that to decide whether to stamp the image with a revision, so
 # an untracked staging directory would silently cost the build its labels and

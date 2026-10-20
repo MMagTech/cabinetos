@@ -16,6 +16,7 @@
 #include "screenfx.h"
 #include "shortcuts.h"
 #include "storage.h"
+#include "vectrexsheets.h"
 #include "vkhost.h"
 #include "wii.h"
 
@@ -95,6 +96,7 @@ void App::finishExit() {
     curtain.elapsed = curtain.duration;
     curtain.retarget(0.0f, kCurtainUp);
     cab::Core::shared().unloadGame();
+    vectrexsheets::release();
     closePs2Window();
     // AFTER the unload, for the one platform whose save is a tree. The
     // battery above is read out of the core's own memory and is finished
@@ -671,6 +673,10 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         else
             ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
                                  v1, true, static_cast<int>(core.rotation()));
+        // A VECTREX GAME'S SCREEN SHEET (#224), over exactly the picture, as
+        // the printed sheet sat over the tube: stretched with it, and drawn
+        // only for a Vectrex game with a sheet and Overlays on.
+        vectrexsheets::draw(renderer, px, py, dw, dh);
 
         // The glow goes over the bars, not under the picture: it is
         // drawn after, and its shader discards inside the picture rect,

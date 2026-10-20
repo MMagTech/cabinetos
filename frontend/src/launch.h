@@ -105,6 +105,8 @@ struct LaunchJob {
     int platformId = 0;
     // RomM's `ra_hash`, for RetroAchievements (achievements.h).
     std::string raHash;
+    // RomM's `md5_hash`, for the Vectrex sheets (vectrexsheets.h).
+    std::string md5;
     // The server's own file name for this game, with its extension removed —
     // `Ikaruga (Japan)`, `lethalen`. It is what a save's row on RomM is named
     // after; see saveRowName.

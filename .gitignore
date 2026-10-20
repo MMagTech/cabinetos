@@ -48,6 +48,9 @@ image_payload/
 # cache. Ignored for the same reason as .artifacts/: an untracked directory
 # costs the image its labels.
 .downloads/
+# The Vectrex screen sheets (tools/fetch-vectrex-overlays.py), kept by the
+# Actions cache the same way, and ignored for the same reason.
+.vectrex-sheets/
 
 # macOS
 .DS_Store

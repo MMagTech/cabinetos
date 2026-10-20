@@ -77,7 +77,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 53 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 54 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -18702,8 +18702,8 @@ Read: Cabinet's retired source on GitHub (MMagTech/cabinet, commit
 libretro repository the images came from (libretro/overlay-borders at
 `385490fa8`, 2017-03-07) and its issue #6; libretro-vecx at the console's pin
 `8f671cc9d737` and at master `dccff5402` (2026-10-16); MAME at master
-(`src/emu/rendlay.cpp`, `docs/source/techspecs/layout_files.rst`,
-`hash/vectrex.xml`); RetroArch at master (`config.def.h`,
+(`src/emu/rendlay.cpp`, `layout_files.rst` in its documentation's
+`techspecs`, `hash/vectrex.xml`); RetroArch at master (`config.def.h`,
 `gfx/drivers/gl2.c`); the rec.games.video.classic Vectrex FAQ (version 2.0,
 1994-03-01, and version 4.0 as reposted 2020-09-28); Wikipedia's Vectrex
 articles (list of games last edited 2026-10-15); the Vectrex Museum's home
@@ -19212,7 +19212,7 @@ sure one of them includes them. Checked concretely on 2026-10-19:
   `vectrex.zip` would be found if a player added it; none ships.
 - **Bazzite: no.** Nothing of RetroArch is in the image. In ublue-os/bazzite
   (cloned 2026-10-19) RetroArch appears once, in the Bazaar store's content
-  list (`system_files/desktop/shared/usr/share/ublue-os/bazaar/content.yaml`:
+  list (Bazzite's `desktop/shared/usr/share/ublue-os/bazaar/content.yaml`:
   `org.libretro.RetroArch` and `net.retrodeck.retrodeck` as Flathub
   suggestions), and EmuDeck is a `ujust get-emudeck` recipe
   (`82-bazzite-apps.just:660`) that downloads its AppImage. So a Vectrex
