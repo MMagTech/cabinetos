@@ -19596,6 +19596,33 @@ after (`--restore`).
   session, whose reaper kills the frontend at once, so a game left that way
   sends no save; it waits on the console and goes at that game's next exit.
 
+**3DS CIAs are hidden, not greyed (MMagTech, 2026-10-20, from his
+Discord testers):** a 3DS game that is a CIA by its name in RomM (`.cia`,
+`.zcia`, or an archive named `.cia.7z`, `.cia.zip` and the like) shows
+nowhere: not on the shelf, in Search, Recent, Continue, collections or
+favourites. Built as one answer, `catalog::Support::Hidden` from
+`catalog::coverageFor` (`ncch::namesCia`), which every list already asks
+after counting the game, so the grids' paging (#471) still counts it; the
+3DS tile is counted from its list (`catalog::hidesSomeGames`), so a server
+whose 3DS games are all CIAs gets "0 games", as a platform with none does.
+By the name, because a list carries no file's bytes. A folder game's files
+are not in RomM's lists (`files` is empty there), so a folder shows, and
+Play starts its playable file: Azahar lists no `cia` among its extensions
+at 2126.2, so a folder's CIA never outranks a `.3ds`. A folder of only CIAs,
+or an archive whose name hides one, is still refused after its download
+(`ncch.cpp`), as are encrypted dumps. Not built, measured: RomM 5.4.0's list
+takes `with_files=true`, which would let a folder of only CIAs hide too; on
+his library it adds 12% to every list (31.52 to 35.31 MB, 3.0 to 4.2 s for
+all 1,709 games), a cost on every system, so it waits on his call. **A fact
+for later, not built:** RomM 5.4.0 can serve a CIA converted to `.cci` when
+the server owner turns its converter on (`ROM_CONVERTO_ENABLED` and
+`download_conversion_enabled`, shown in a game's `download_formats`), which
+would make such a game playable; until the console asks for that, those
+games stay hidden too. Tested headless on the A9 against the write-test
+RomM with a made-up `.cia`: the 3DS shelf showed 4 of the server's 5, the
+Library tile "4 games", Search for its name left it out; his three games
+showed. The test file was deleted after.
+
 **L3 is held to swap, decided 2026-10-20 by the lead session**
 (`citra_swap_screen_mode` "Hold", `coreoptions.cpp`): with the core's
 "Toggle", the L3 that lands a frame before R3 when a player opens the pause

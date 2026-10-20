@@ -26,4 +26,11 @@ namespace ncch {
 // screen shows.
 std::string refusal(const std::string& path);
 
+// Whether a file's NAME says it is a CIA: `.cia`, Azahar's compressed
+// `.zcia`, or an archive named for one (`.cia.7z`, `.cia.zip`). For what the
+// console LISTS, which has only RomM's names to go on (MMagTech, 2026-10-20:
+// a 3DS game that is a CIA shows nowhere, catalog::coverageFor); what it plays is
+// still judged by the bytes, above.
+bool namesCia(const std::string& fileName);
+
 }  // namespace ncch

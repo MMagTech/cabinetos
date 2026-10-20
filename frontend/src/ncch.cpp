@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -62,6 +63,17 @@ Kind classify(const Reader& read) {
 }
 
 }  // namespace
+
+bool namesCia(const std::string& fileName) {
+    std::string n = fileName;
+    std::transform(n.begin(), n.end(), n.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    for (const char* end : {".cia", ".zcia", ".cia.7z", ".cia.zip", ".cia.rar", ".cia.zst"}) {
+        const size_t k = std::strlen(end);
+        if (n.size() >= k && n.compare(n.size() - k, k, end) == 0) return true;
+    }
+    return false;
+}
 
 std::string refusal(const std::string& path) {
     const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);

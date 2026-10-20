@@ -121,9 +121,9 @@ downloads anything new into the console's shared BIOS folder.
 ## Nintendo 3DS
 
 - **Decrypted cartridge dumps play.** An encrypted dump does not, and says
-  *Encrypted 3DS games can't be played*. A `.cia` does not either (it is an
-  installer, and the emulator installs nothing): *3DS CIA files can't be
-  played*.
+  *Encrypted 3DS games can't be played*.
+- **`.cia` files do not show on the console.** One inside an archive says
+  *3DS CIA files can't be played*.
 - **Updates and DLC do not play yet**: they come as `.cia` files.
 - **The two screens side by side**, the top screen on the left.
 - **Touch screen:** the right stick moves a pointer on the touch screen and

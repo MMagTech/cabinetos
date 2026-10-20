@@ -9,10 +9,10 @@ one you install, so you only ever install the newest.
 - **New:** the Nintendo 3DS. Decrypted cartridge dumps play, the two
   screens side by side on the TV; the right stick moves a pointer on the
   touch screen, R3 taps, and holding L3 swaps the screens. Encrypted dumps
-  and `.cia` files do not play, and say so on the game's page; updates and
-  DLC do not play yet. Games get no internet. Saves sync with your server; save states
-  and fast forward work, rewind does not, and a 3DS state may not load after
-  an update changes the emulator.
+  do not play, and say so on the game's page; `.cia` files do not show on
+  the console. Updates and DLC do not play yet. Games get no internet. Saves
+  sync with your server; save states and fast forward work, rewind does not,
+  and a 3DS state may not load after an update changes the emulator.
 - **Fixed:** pressing both sticks for the pause menu no longer sends a stray
   stick click to the game.
 
