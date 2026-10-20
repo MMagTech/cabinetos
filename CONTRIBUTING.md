@@ -577,6 +577,9 @@ here, not reworded; follow the link for the full text.
 - **Every emulator uses Vulkan when it has a Vulkan renderer**, even where
   upstream defaults to OpenGL. OpenGL only where there is no Vulkan renderer,
   or where a measurement on real hardware shows it is better.
+- **A patch to an emulator's source is proposed and agreed first (MMagTech,
+  2026-10-20),** and tracked on an issue linked to its upstream report until
+  upstream fixes it (docs/WORKING.md, "Patches to an emulator's code").
 
 ### Duties that come with some changes
 
