@@ -11,8 +11,9 @@
 # they always match the pinned core, never typed in.
 #
 # THE PIN IS READ FROM cores/build-core.sh, the one place it is written. Not
-# a mode of that script on purpose: build-core.sh keys every core's CI cache,
-# so editing it rebuilds all twenty-two cores.
+# a mode of that script on purpose: every core's CI cache key covers
+# build-core.sh's shared lines (ci/core-cache-key.sh), so editing a mode
+# there would rebuild every core.
 #
 # A core with no set list (every core but the two arcade ones) writes nothing
 # and exits 0, so CI can run this for every core.

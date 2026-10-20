@@ -37,19 +37,17 @@ CORE="${1:-}"
 # what is lost is only the ability to read it back out.
 VERIFY_REVISION=1
 
-# make is how eighteen of the twenty-two cores build. Four have no
-# Makefile.libretro at all — mGBA's upstream dropped it, Flycast and PPSSPP
-# never had one — and set BUILDSYS=cmake with CMAKEARGS and CMAKE_TARGET
-# instead.
+# make is how most cores build. A core with no Makefile.libretro (mGBA's
+# upstream dropped it; others never had one) sets BUILDSYS=cmake with
+# CMAKEARGS and CMAKE_TARGET in its case arm instead.
 BUILDSYS="make"
 
 # Files from the core's own source tree that have to be installed under the
 # frontend's system directory, in ASSET_DIR — the folder name the core itself
 # looks for, which is not necessarily the manifest's name for it.
 #
-# Empty for twenty of the twenty-two: their firmware is a console's, and it
-# comes from RomM with the game. PPSSPP and Dolphin are the exceptions and
-# their case arms say why.
+# Empty for most cores: their firmware is a console's, and it comes from
+# RomM with the game. A core that sets it says why in its case arm.
 ASSETS=()
 ASSET_DIR=""
 ASSET_SRC=""
@@ -57,7 +55,7 @@ ASSET_SRC=""
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_ROOT="${CABINETOS_CORE_SRC:-$ROOT/.core-src}"
 OUT="${CABINETOS_CORE_OUT:-$ROOT/cores/build}"
-# Where a core's own system files go, for the one core that has any. This is
+# Where a core's own system files go, for the cores that have any. This is
 # not the frontend's system directory — that is a working directory holding
 # BIOS files RomM served and files the cores themselves write. This is the
 # staging area the deploy copies FROM, and in the image it becomes a path in
@@ -69,6 +67,13 @@ SYSTEM_OUT="${CABINETOS_SYSTEM_OUT:-$ROOT/cores/system}"
 # COMMIT values come from Cabinet's core-manifest.json `pinned_commit`, which is
 # the revision every platform must build from going forward. They are not to be
 # "updated" here; they move in Cabinet, and this follows.
+#
+# EVERYTHING ABOUT ONE CORE GOES IN ITS ARM, or in a patch block of its own
+# below. CI caches each core under a hash of its own arm and blocks and of
+# every line outside all of them (ci/core-cache-key.sh), so a change inside
+# one arm rebuilds that core alone and a change to any other line, comments
+# included, rebuilds every core. That is why the lines outside the arms
+# carry no count or list of cores: adding a core must touch only its own.
 case "$CORE" in
 gambatte)
     REPO=https://github.com/libretro/gambatte-libretro.git
@@ -637,8 +642,8 @@ verify_core() {
                   else exec /tmp/core-info "/out/$1"; fi' _ "$SO" "$expect"
     echo "sha256      $(sha256sum "$OUT/$SO" | cut -d' ' -f1)"
     # Its options against cores/options/<core>.txt. A separate script so that
-    # editing the check does not change this file, which keys every core's
-    # cache in CI; read its header.
+    # editing the check does not change this function, which is in every
+    # core's cache key in CI; read its header.
     CABINETOS_CORE_OUT="$OUT" CABINETOS_BUILDER="$BUILDER" \
         "$ROOT/cores/check-options.sh" "$CORE"
 }
@@ -647,9 +652,10 @@ verify_core() {
 #
 # This is for the CI cache and nothing else. A core is determined entirely by
 # this script — the pinned commit, the patches and the build arguments are all
-# here — and by the toolchain in frontend/Containerfile, so CI keys a cache on
-# the hash of those two files and restores the .so instead of spending eight
-# minutes rebuilding something that cannot have changed.
+# here — and by the toolchain in frontend/Containerfile, so CI keys each core's
+# cache on the parts of this script that run for that core and on the
+# Containerfile (ci/core-cache-key.sh), and restores the .so instead of
+# spending eight minutes rebuilding something that cannot have changed.
 #
 # THE ASSERTION STILL RUNS ON A CACHE HIT, and that is the point of having this
 # mode rather than just skipping the job. What makes the whole workflow worth
@@ -721,6 +727,11 @@ echo "$CORE @ $COMMIT"
 # Every one of them asserts its own anchor. A patch that silently matches
 # nothing leaves a green build with the fix absent, which has happened twice on
 # this project and is the reason the assertion is not optional.
+#
+# Each core's patches are one block of this exact shape, so that
+# ci/core-cache-key.sh counts the block as that core's alone:
+# `if [ "$CORE" = <core> ]; then` and `fi`, both in the first column, with
+# everything between them indented, its comments too.
 if [ "$CORE" = melonds ]; then
     # melonDS's libretro build has no background flush thread — __LIBRETRO__
     # compiles it out — and instead debounce-flushes the .sav two seconds after
@@ -842,7 +853,7 @@ mkdir -p "$OUT"
 #
 # Upstream output names do not match manifest names and there is no rule to it:
 # beetle_ngp builds mednafen_ngp_libretro.so, beetle_pce_fast builds
-# mednafen_pce_fast_libretro.so. Hand-maintaining that list for twenty-two cores
+# mednafen_pce_fast_libretro.so. Hand-maintaining that list for every core
 # is a table that goes stale, and the frontend would need a second copy of it to
 # find anything.
 #
@@ -869,7 +880,7 @@ UPSTREAM=$(basename "${BUILT[0]}")
 cp "${BUILT[0]}" "$OUT/$SO"
 echo "wrote $OUT/$SO ($(du -h "$OUT/$SO" | cut -f1))"
 
-# The core's own system files, for the one core that has any.
+# The core's own system files, for the cores that have any.
 #
 # Every entry is asserted to exist before anything is copied. A missing one
 # means upstream moved it, and the failure that would otherwise follow is the
