@@ -29,8 +29,10 @@ first three.
 - Headless runs and the self-tests: CONTRIBUTING.md, "Running and testing".
 - Never write to a RomM server you do not own. Test through
   `tools/romm-readonly-relay.py` (its server comes from
-  `CABINETOS_RELAY_UP`). The tools take every machine from the environment
-  (CONTRIBUTING.md, "Running and testing").
+  `CABINETOS_RELAY_UP`). A test that has to write goes to the project's
+  write-test server in `CABINETOS_TEST_ROMM`, and only there. The tools
+  take every machine from the environment (CONTRIBUTING.md, "Running and
+  testing").
 
 ## Rules for every change
 

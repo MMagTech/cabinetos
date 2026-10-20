@@ -233,12 +233,36 @@ drive (docs/lessons/testing.md, the bullet on the read-only relay). **Its upstre
 `CABINETOS_RELAY_UP`** (`http://<your server>:<port>`), and so does
 `tools/offline-relay.py`'s.
 
+**A RomM server for write tests.** The project has a RomM server of its
+own, on the RomM version the maintainer's server runs, holding only free
+homebrew from GitHub releases and test accounts. **Writes are allowed
+there, and only there:** pairing, saves, states, time played, favourites
+and the test flags that write. Its address comes from
+`CABINETOS_TEST_ROMM` (`http://<server>:<port>`); its login is in the
+maintainer's local notes, never here. Point a run at it with
+`CABINETOS_ROMM=<server>:<port>` and the scratch `HOME`, `CABINETOS_DRIVES`
+and `--storage-root` above, with nothing copied from a real console. Pair
+as a console does: `--romm-probe --romm-pair` prints a code, and a user of
+that server approves it, on its pairing page or with `POST
+/api/auth/device/approve`; the token lands where the console keeps it. Then
+`--no-setup --launch <id>` plays one of its games, and SIGTERM leaves the
+game the way Exit to Home does, so its saves and time played are sent (time
+under a minute is not, and neither is time held on "Press A to continue",
+where `--sync-test` leaves a game after it loads the state back). A run
+that signs out restarts itself with the same flags; under `--no-setup` that
+signs out again and again, because first run is what finishes a sign-out,
+so stop it and start it once without `--no-setup`. Without access to that
+server, run a RomM of your own the same way (RomM's documentation, "Quick
+Start").
+
 **The tools in `tools/` take their machines from the environment;** none
 has an address written in. `CABINETOS_A9` is the test console, as
 `cabinet@<address>` (`ui-loop.sh`, `base-checks.sh`, `check-applied.sh`,
 `installer-vm.sh`); `CABINETOS_KEY` is the SSH key (`~/.ssh/cabinetos`
 when unset); `CABINETOS_VM` is the build machine for
-`ui-loop.sh --via-vm`; `CABINETOS_RELAY_UP` is the relays' server. A tool
+`ui-loop.sh --via-vm`; `CABINETOS_RELAY_UP` is the relays' server;
+`CABINETOS_TEST_ROMM` is the server for write tests (above), which no tool
+reads yet. A tool
 stops at once, naming the variable, when one it needs is unset.
 CLAUDE.local.example.md has the lines to fill in.
 
