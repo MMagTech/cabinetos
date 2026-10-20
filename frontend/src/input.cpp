@@ -385,14 +385,14 @@ void App::handleEvent(const SDL_Event& e) {
             // it meant a game could never be paused — MMagTech, on the
             // A9, 2026-09-19, before playing the first real game on it.
             //
-            // L3+R3 is Cabinet's default and its reasoning carries:
+            // L3+R3 was Cabinet's default and its reasoning carries:
             // RetroArch's alternative to Select+Start, chosen because
             // analog trigger pairs collide with real gameplay —
             // braking and accelerating together in a racing game is
             // the obvious case — "while clicking both sticks at once
             // has no gameplay meaning in anything this app runs".
             //
-            // Still hardcoded here. Cabinet makes it remappable and
+            // Still hardcoded here. Cabinet made it remappable and
             // GLOBAL rather than per-controller, on the grounds that
             // the risk comes from the game and not the pad model, and
             // lets the second button be cleared for single-button
@@ -503,10 +503,17 @@ void App::handleEvent(const SDL_Event& e) {
                     // is: Start opens the menu except while typing.
                     // On Search with the keyboard put away (the results
                     // focused), nobody is typing, so it is the menu too
-                    // (#484).
-                    if (!(here() == Screen::Search && keyboard.isOpen()) &&
-                        !pinScreen.isOpen() && !choiceScreen.isOpen() &&
-                        !downloadsPanel.isOpen())
+                    // (#484). With the results or the bar focused and the
+                    // keyboard still showing (it takes the keys only while
+                    // focus is in it, inputOwner), Start is the keyboard's
+                    // "done", as its legend still says: it goes, and the
+                    // next Start is the menu. It did nothing (#484).
+                    if (pinScreen.isOpen() || choiceScreen.isOpen() ||
+                        downloadsPanel.isOpen())
+                        break;
+                    if (here() == Screen::Search && keyboard.isOpen())
+                        keyboardResult(keyboard.commit());
+                    else
                         openPowerMenu();
                     break;
                 default: break;

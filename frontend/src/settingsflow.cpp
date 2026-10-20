@@ -109,7 +109,7 @@ void App::buildSettings() {
                             n == 0 ? "None" : std::to_string(n) + " paired"});
         }
         // RUMBLE, on by default, for every pad and every system with
-        // motors: one switch, as Cabinet has it (rumble.h, #149). Above
+        // motors: one switch, as Cabinet had it (rumble.h, #149). Above
         // the shortcuts so their button row stays under its own switch.
         {
             Row r{K::Choice, SetRumble, "Rumble", "", ""};

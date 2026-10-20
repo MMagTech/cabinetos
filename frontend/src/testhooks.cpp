@@ -164,6 +164,33 @@ void App::walkNavScript() {
                 if (!*p) break;
                 continue;
             }
+            // A KEY OR THE PAD'S START, handed to handleEvent as SDL hands
+            // them over, so what input.cpp does with them is walked too
+            // (#484): "key:]" a press, "held:]" the system's repeat of a key
+            // already down, "start" the pad's Start. A key by SDL's name for
+            // it ("F5", "Return"); a comma cannot be one.
+            if (!ok && (word.rfind("key:", 0) == 0 || word.rfind("held:", 0) == 0 ||
+                        word == "start")) {
+                SDL_Event e{};
+                if (word == "start") {
+                    e.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+                    e.gbutton.button = SDL_GAMEPAD_BUTTON_START;
+                    e.gbutton.down = true;
+                } else {
+                    const bool held = word[0] == 'h';
+                    e.type = SDL_EVENT_KEY_DOWN;
+                    e.key.key = SDL_GetKeyFromName(word.c_str() + (held ? 5 : 4));
+                    e.key.down = true;
+                    e.key.repeat = held;
+                }
+                if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_UNKNOWN)
+                    std::fprintf(stderr, "[nav] unknown key '%s'\n", word.c_str());
+                else
+                    handleEvent(e);
+                word.clear();
+                if (!*p) break;
+                continue;
+            }
             // A digit is a PIN pad key typed on a keyboard, so a whole PIN
             // can be walked headless: "down,a,4,8,2,1,4,8,2,1".
             if (!ok && word.size() == 1 && word[0] >= '0' && word[0] <= '9') {
@@ -177,9 +204,10 @@ void App::walkNavScript() {
             word.clear();
             if (!*p) break;
         }
-        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d%s\n", navScript,
+        std::fprintf(stderr, "[nav] after '%s': screen %d, bar %s slot %d%s%s\n", navScript,
                      static_cast<int>(here()), barFocused ? "focused" : "not focused",
-                     barSlot, pinScreen.isOpen() ? ", PIN pad open" : "");
+                     barSlot, pinScreen.isOpen() ? ", PIN pad open" : "",
+                     overlayOpen && powerMenu ? ", Power menu open" : "");
         // A capture shows the pad at rest, not part-way through its fade.
         if (pinScreen.isOpen()) pinScreen.settle();
         if (choiceScreen.isOpen()) choiceScreen.settle();

@@ -335,7 +335,7 @@ std::string saveRowName(const std::string& fsStem, const std::string& coreRowNam
     return base + ")." + region;
 }
 
-// The same thing, spelled the way Cabinet for Mac spells it.
+// The same thing, spelled the way Cabinet for Mac spelled it.
 //
 // `cabinet-604.ps2`. Only PlayStation 2 uses this, and only because its saves
 // ALREADY EXISTED on the server written by the Mac: RomM matches a row for
@@ -643,7 +643,7 @@ void restoreBatterySave(cab::Core& core, GameSession& session, const std::string
                 const romm::Asset* newest = nullptr;
                 for (const auto& a : fetched.rows) {
                     if (a.emulator != session.saveTag) continue;
-                    // THE BATTERY ROW ONLY. Cabinet files a Game Boy
+                    // THE BATTERY ROW ONLY. Cabinet filed a Game Boy
                     // clock as its own 8-byte `.rtc` row under the same
                     // tag; taken as the newest, its bytes went over the
                     // start of the save (#346, found in the audit).

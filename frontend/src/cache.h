@@ -313,7 +313,7 @@ bool almostFull();
 // Marks a game kept BY THIS PERSON, and promotes it out of the cache.
 //
 // `record` is the game's whole library entry as JSON, not a subset: Cabinet's
-// KeptGame embeds the entire Rom captured at keep time so a kept game can be
+// KeptGame embedded the entire Rom captured at keep time so a kept game can be
 // browsed and launched with no network at all, and a subset is how that promise
 // gets broken later by a field nobody thought of.
 bool keep(const storage::User& u, int romId, const std::string& record,

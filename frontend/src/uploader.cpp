@@ -9,6 +9,16 @@
 #include "playtime.h"
 #include "savemirror.h"
 
+// RomM ANSWERED AND REFUSED IT FOR GOOD: an HTTP 4xx (a permission unticked
+// at pairing, a role without write access, a file it will not take), read
+// off the client's error, "HTTP <status>: ..." (Client::postMultipart). Not
+// 408 or 429, which ask to be asked again. A server away or a 5xx is not a
+// refusal and is tried again as before.
+static bool refusedForGood(const std::string& err) {
+    if (err.size() < 8 || err.compare(0, 6, "HTTP 4") != 0) return false;
+    return err.compare(5, 3, "408") != 0 && err.compare(5, 3, "429") != 0;
+}
+
 // ONE FILE TO RomM, as whoever `c` is signed in as: a save, a state (with its
 // picture) or a screenshot. The uploader sends the signed-in person's this way,
 // and removing a person (#194) sends theirs with their own login.
@@ -78,6 +88,11 @@ void Uploader::push(Job job) {
     o.shotPath = job.shotPath;
     if (!job.who.valid()) job.who = storage::currentUser();
     cache::markPending(job.who, o, static_cast<int64_t>(job.data.size()));
+    {
+        // A new save of a file RomM refused is asked about once more.
+        std::lock_guard<std::mutex> lock(mutex_);
+        refused_.erase(whoKey(job));
+    }
     enqueue(std::move(job));
 }
 
@@ -99,6 +114,10 @@ void Uploader::resendOwedFor(const storage::User& who) {
         j.shotPath = o.shotPath;
         j.resend = true;
         j.who = who;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (refused_.count(whoKey(j))) continue;
+        }
         enqueue(std::move(j));
     }
     if (!playtime::owed(who).empty()) sendPlayFor(who);
@@ -235,6 +254,11 @@ void Uploader::run() {
             // not reached RomM, and the console still owes it.
             if (ok) cache::clearPending(job.who, job.romId, job.fileName);
         }
+        const bool refused = !ok && !job.data.empty() && refusedForGood(err);
+        if (refused) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            refused_.insert(whoKey(job));
+        }
         if (ok && job.isState) rotate(job);
         if (ok && !job.isState && !job.isScreenshot) refreshSaveCopy(job);
         // 1 reached RomM; 2 RomM could not be reached, so it will be retried;
@@ -243,13 +267,18 @@ void Uploader::run() {
         // is back" (#477). The file stays owed either way.
         if (job.isState && !job.resend)
             stateOutcome.store(ok ? 1 : romm::serverAway() ? 2 : 3);
-        std::fprintf(stderr, "[%s] %s%s %s%s\n",
-                     job.isScreenshot ? "screenshot" : job.isState ? "state" : "save",
-                     job.resend ? "resent, " : "",
-                     ok ? "uploaded" : "upload failed, kept locally:",
-                     ok ? job.emulator.c_str() : err.c_str(),
-                     ok && !job.shot.empty() ? " with its picture" : "");
-        finished(job, ok, /*leftSomething=*/!ok && !job.data.empty());
+        const char* kind = job.isScreenshot ? "screenshot" : job.isState ? "state" : "save";
+        if (refused)
+            std::fprintf(stderr, "[%s] %s%s refused by RomM, kept locally; not sent "
+                                 "again until the next start or a new save of it: %s\n",
+                         kind, job.resend ? "resent, " : "", job.fileName.c_str(),
+                         err.c_str());
+        else
+            std::fprintf(stderr, "[%s] %s%s %s%s\n", kind, job.resend ? "resent, " : "",
+                         ok ? "uploaded" : "upload failed, kept locally:",
+                         ok ? job.emulator.c_str() : err.c_str(),
+                         ok && !job.shot.empty() ? " with its picture" : "");
+        finished(job, ok, /*leftSomething=*/!ok && !job.data.empty() && !refused);
     }
 }
 
@@ -270,11 +299,17 @@ void Uploader::finished(const Job& job, bool ok, bool leftSomething) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         queued_.erase(key(job));
-        // THE SERVER ANSWERED, so anything a failure left behind can
-        // go now rather than at the next timer.
-        if (ok && owing_.load()) resendNow = true;
-        if (leftSomething) owing_ = true;
-        if (ok && queue_.empty()) owing_ = false;
+        if (leftSomething) failed_.insert(whoKey(job));
+        else failed_.erase(whoKey(job));
+        // THE SERVER ANSWERED AN UPLOAD A PERSON MADE, so anything a
+        // failure left behind can go now rather than at the next timer.
+        // Not after a resend (favourites and time played go as resends
+        // too): one that always works (favourites RomM will not make a
+        // collection for, which favorites.cpp counts as done) beside one
+        // that always fails queued both again, for ever. The timer and the
+        // server coming back still send the rest.
+        if (ok && !job.resend && !failed_.empty()) resendNow = true;
+        owing_ = !failed_.empty();
     }
     // THE RESEND IS QUEUED BEFORE THIS ONE IS COUNTED OFF (#483, FILES-09):
     // in between, pending() read 0, and a switch of person could start while

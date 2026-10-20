@@ -290,6 +290,15 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   running gamescope; stale sockets from earlier instances sit there looking
   identical.
 
+- **`gamescopectl <convar>` WITH NO VALUE DOES NOT READ IT: IT SETS IT TO
+  0.** gamescopectl sends the name and an empty value, and gamescope
+  parses the empty value as false or 0 (gamescope 3.16.31,
+  `gamescopectl.cpp` and `convar.h`). 2026-10-19 (#253, "4K: the console
+  misses a screen refresh 1 to 5 times every 10 s (gamescope)"): a "read
+  back" after `vblank_debug 1` switched it off again, and its log stayed
+  empty. Check a switch by what it does (vblank_debug's lines in the
+  journal), never by asking for it.
+
 - **`Environment=` IN A SYSTEMD DROP-IN SPLITS ON WHITESPACE.** An unquoted
   `CABINETOS_APP=/path --core-dir x` sets the path and silently discards every
   argument, and the console comes up looking correct on the default core
@@ -352,7 +361,14 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
 - **ydotool's virtual keyboard has no key repeat**, so a held key sends one
   press. A held volume key cannot be tested with it. A held arrow can: the
   console runs its own hold from the press to the release, on every screen
-  since #398 (PLAY-03).
+  since #398 (PLAY-03). Headless, `--nav held:<key>` hands the event handler
+  the system's repeat itself (#484): `--nav "key:],held:],held:]"` ends on
+  the Library, where a repeat that acted would end on Search.
+
+- **A SHORT YDOTOOL TAP CAN BE DROPPED.** 2026-10-19 (#253): with key-down
+  and key-up 0.15 s apart, the Return after `ydotool type` into Search was
+  dropped about half the time. Hold 0.25 s, and read the journal for the
+  result (`[keyboard] committed: ...`) before the next press.
 
 - **frames.py CANNOT SEE A REPEATED GAME FRAME.** (frames.py is a frame-time
   script kept on the reference console, not in this repository; it reads
@@ -361,6 +377,16 @@ then `YDOTOOL_SOCKET=/tmp/ydotool.sock ydotool key 108:1 108:0` (Down; Up
   frame times read a clean 16.67 ms over a game that repeats and skips
   frames every second. Read the console's own `[pace]` line (#221, "Built-in
   cores: no audio rate control, a frame repeats or drops every 10 to 17 s").
+
+- **AND `[pace]` CANNOT SEE A PICTURE GAMESCOPE HOLDS.** `[pace]` counts
+  only the console's own lateness. The message `frames.py` skips (app
+  frame time all ones) carries the visible frame time: the time between
+  the kernel's flips that put a new console frame on screen. 33.3 ms there
+  is a picture shown for two refreshes. 2026-10-19 (#253): with
+  `GAMESCOPE_DISABLE_TIMERFD=1`, Axelay showed 4 such pictures in 38 s
+  while every `[pace]` window read 0 refreshes missed. Read both. The
+  layout after mtype is version u32, pid u32, app frame time u64, two u8,
+  visible frame time u64.
 
 - **`--env` REACHES THE FRONTEND, NOT THE SESSION SCRIPT.** It goes on the
   frontend's command line, so `CABINETOS_OUTPUT` given that way changes
@@ -547,15 +573,29 @@ minute and guessing at it for twenty.
   default D-Bus timeout on logind's ReleaseDevice. The same stall shows on
   gamescope exits that are not handovers. The brief's lead, the
   frontend's D-Bus calls on exit, was wrong: those run only inside a
-  pairing. **To open Steam and come back in a test:** on Home, Escape
-  (the Power menu, Cancel focused), Down (Switch to Steam), Return,
-  Return (Start); come back with `steam -shutdown` as `cabinet` with
-  `XDG_RUNTIME_DIR=/run/user/1000`, which ends Steam's session the way
-  its own menu does, so the session's whole return path runs. Escape on
-  Settings goes Back to Home rather than opening the menu. Capture with
+  pairing. **The session now cuts it** (#305; cabinetos-session,
+  `wait_for_compositor`): two seconds after the reaper has gone it logs
+  `has not ended 2 s after its app; stopping it (TERM)`, then `(KILL)` a
+  second later, and the handover takes about 3.2 s; one of four handovers
+  on the A9 stalled by itself on 2026-10-19 and read exactly so. **To
+  stall one on purpose**, as `cabinet`: `waitpid` on the
+  `gamescopereaper`, then `kill -STOP` its parent gamescope (the STOP
+  lands within 2 ms of `Primary child shut down!`), and `kill -CONT` it
+  later if it is still there. **To open Steam and come back in a test:**
+  on Home, Escape (the Power menu, Cancel focused), Down (Switch to
+  Steam), Return, Return (Start); come back with `steam -shutdown` as
+  `cabinet` with `XDG_RUNTIME_DIR=/run/user/1000`, which ends Steam's
+  session the way its own menu does, so the session's whole return path
+  runs. Escape on Settings goes Back to Home rather than opening the
+  menu. Capture with
   `gamescopectl screenshot` into a file of your own while other sessions
   run headless frontends: they write and remove the same
-  `/tmp/cabinetos-frame.bmp` the SIGUSR1 capture uses.
+  `/tmp/cabinetos-frame.bmp` the SIGUSR1 capture uses. Under
+  `ui-loop.sh --session-script` the session's lines carry the identifier
+  `bash`, not `cabinetos-session`, so `journalctl -t cabinetos-session`
+  shows none of them; and pick gamescopectl's socket by the exact name
+  `gamescope-<n>`, since `gamescope-<n>-ei` beside it has the same time
+  and gamescopectl hangs on it.
 
 - **A TEST GAME ON THE CONSOLE ENDS INSIDE A MINUTE, BY `--restore`, NEVER
   BY A KILL.** 2026-10-15, move 4 of #398: a loop launch (`tools/ui-loop.sh

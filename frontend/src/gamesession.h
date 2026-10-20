@@ -14,7 +14,7 @@
 // Saves and states, and which way they travel.
 //
 // THE DISK COPY IS WRITTEN FIRST, ALWAYS, before any upload is attempted. That
-// is Cabinet's guarantee and the reason is plain: losing signal must never mean
+// was Cabinet's guarantee and the reason is plain: losing signal must never mean
 // losing a save. The upload is a second step that is allowed to fail, and a
 // file that failed to upload is still sitting on disk to try again.
 //

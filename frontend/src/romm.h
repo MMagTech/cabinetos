@@ -6,7 +6,7 @@
 // we ask the server to start a pairing, it returns a short code, and the person
 // approves it in a browser they are already signed in to. We poll until it is
 // approved and receive a scoped token we can be given and can have revoked.
-// Cabinet solves first-run this way on tvOS for the same reason a console has:
+// Cabinet solved first-run this way on tvOS for the same reason a console has:
 // typing a password with a controller is miserable. So the whole typing burden
 // on a television is ONE HOSTNAME.
 //
@@ -179,11 +179,11 @@ public:
     static std::string encodeQueryValue(const std::string& in);
 
     // The games with play history, most recent first — the same query RomM's
-    // own web home screen makes, so CabinetOS agrees with the web UI and with
-    // Cabinet about what you were last playing.
+    // own web home screen makes, so CabinetOS agrees with the web UI (as it did
+    // with Cabinet) about what you were last playing.
     //
-    // PLAY HISTORY LIVES ON THE SERVER, not on the console. A game played on an
-    // Apple TV is recent here the moment this console is paired, which is what
+    // PLAY HISTORY LIVES ON THE SERVER, not on the console. A game played on
+    // another device is recent here the moment this console is paired, which is what
     // fills Recent on a machine that has never launched anything.
     bool fetchRecent(int limit, std::vector<Game>* out, std::string* err);
 
@@ -221,7 +221,7 @@ public:
     // is offered later, so it must identify the BUILD and not just the core.
     bool uploadSave(int romId, const std::string& emulator, const std::string& fileName,
                     const std::vector<uint8_t>& data, std::string* err) const;
-    // A state may carry its picture, as Cabinet's do (#99): a second part,
+    // A state may carry its picture, as Cabinet's did (#99): a second part,
     // `screenshotFile`, image/png, named like the state. Empty for none.
     bool uploadState(int romId, const std::string& emulator, const std::string& fileName,
                      const std::vector<uint8_t>& data, std::string* err,

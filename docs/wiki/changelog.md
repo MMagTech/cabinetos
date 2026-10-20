@@ -4,6 +4,33 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.20 {#v2026-10-20}
+
+*20 October 2026*
+
+- **Fixed:** opening Steam, and some restarts, could sit on a blank screen
+  for about 25 seconds while the picture changed over. The change-over
+  now takes a few seconds at most, even when the compositor stalls.
+  ([#305](https://github.com/MMagTech/cabinetos/issues/305))
+- **Fixed:** after leaving a game through the pause menu, the menu and its
+  dimming lingered over Home for a moment. They go with the game now.
+- **Fixed:** a game this console cannot play, opened from Home's Resume,
+  now says why on its page in plain words, such as "No core for this
+  system". ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** pressing Play from a save state on a second game while
+  another was still downloading lost the first game's pick. Each press now
+  keeps its own. ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** on a keyboard, a held [ or ] kept walking along the top bar,
+  and a held F5 wrote a save state at every repeat. Keys now act once per
+  press. On Search, Start puts the keyboard away; the next Start opens the
+  Power menu. ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** a game your server gives no size for could fail to download
+  onto a nearly full drive. Room is now made as the download reports its
+  length. ([#484](https://github.com/MMagTech/cabinetos/issues/484))
+- **Fixed:** a save or screenshot upload the server kept refusing could be
+  sent again without end and hold up the console on its way out. It is now
+  tried once, noted, and tried again at the next start.
+
 ## 2026.10.19.3 {#v2026-10-19-3}
 
 *19 October 2026*

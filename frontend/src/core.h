@@ -14,8 +14,8 @@
 //
 // ONE .so PER CORE, dlopen'd with RTLD_LOCAL. On Apple, where everything is
 // statically linked into one binary, only one core can carry the standard
-// retro_* names, so Cabinet renames every other core's symbols with a prefix
-// and merges each into a single relocatable object. On Linux that entire
+// retro_* names, so Cabinet renamed every other core's symbols with a prefix
+// and merged each into a single relocatable object. On Linux that entire
 // apparatus is unnecessary: RTLD_LOCAL gives each core its own namespace for
 // free. See docs/PROJECT.md, open question 13.
 //
@@ -365,9 +365,9 @@ public:
 
     // --- Save states ---------------------------------------------------------
     //
-    // The whole product rests on these. A state written on an Apple TV has to
-    // load on this machine, which is what core parity is for (docs/PROJECT.md,
-    // "Core parity is a hard constraint").
+    // The whole product rests on these. A state written on another console has
+    // to load on this one; core parity once meant Cabinet's Apple TV app too
+    // (docs/PROJECT.md, "Core parity is a hard constraint", since overtaken).
     //
     // THREADING: both must run on the thread that drives runFor. A snapshot
     // taken part-way through a retro_run is corrupt by definition.
@@ -469,7 +469,7 @@ public:
     // picture a save state carries (#99). Read from the game's frame, never
     // from the screen, so the pause menu drawn over it is not in it. Rows top
     // first, flipped and quarter-turned exactly as the player draws it, at the
-    // core's own resolution (Cabinet sends the same). False with nothing to
+    // core's own resolution (as Cabinet sent). False with nothing to
     // read: no frame yet, or the PS2 path, which has no states. Call on the
     // GL thread.
     bool snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height) const;

@@ -101,7 +101,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     // whichever one this game looks like it needs. A core looks BIOS up by
     // name in the system directory and ignores what it does not want, so
     // extra files cost a little disk and a missing one costs the launch.
-    // Cabinet's rule — see docs/CABINET.md.
+    // Cabinet's rule (docs/history/CABINET.md).
     //
     // Shared by every game on the platform and by every person on the
     // console, so it lives at the root in `bios/` rather than inside one

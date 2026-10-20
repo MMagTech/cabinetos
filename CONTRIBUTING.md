@@ -88,8 +88,7 @@ podman run --rm -v "$PWD":/src:Z -w /src cabinetos-builder make
 Unlike the frontend's, its Makefile lists its source files by hand: a new
 file there must be added to `wiibridge/Makefile`. `make test` there builds
 and runs its one test, `wiibridge/pacing-test.cpp` (#480): two Remotes on
-socket pairs through the bridge's own loop, no hardware. CI does not run
-it yet.
+socket pairs through the bridge's own loop, no hardware.
 
 **A libretro core:** `cores/build-core.sh <core>` from the repository root,
 where `<core>` is the name of one of its `case` arms (the same 22 names as
@@ -150,7 +149,11 @@ test that waits for a game to print something needs 20,000 or more.
 `--nav <presses>` walks the screens after start-up through the same door a
 pad uses; it skips the start-up screen's lift as a capture does, or its
 presses would land on a Home nobody can see yet and be dropped. It does not
-reach first run's screens, which run before it.
+reach first run's screens, which run before it. Its words are `up`, `down`,
+`left`, `right`, `a`, `b`, `l1`, `r1` and a PIN digit; `key:<name>` (a key
+by SDL's name, `key:]`, `key:F5`), `held:<name>` (the system's repeat of a
+key already down) and `start` (the pad's Start) go through the event
+handler, `input.cpp`, as SDL's own events do.
 
 `--no-setup` skips first run; on a machine with no server address it shows
 a stand-in library of six made-up games. The server is the first of
@@ -230,12 +233,36 @@ drive (docs/lessons/testing.md, the bullet on the read-only relay). **Its upstre
 `CABINETOS_RELAY_UP`** (`http://<your server>:<port>`), and so does
 `tools/offline-relay.py`'s.
 
+**A RomM server for write tests.** The project has a RomM server of its
+own, on the RomM version the maintainer's server runs, holding only free
+homebrew from GitHub releases and test accounts. **Writes are allowed
+there, and only there:** pairing, saves, states, time played, favourites
+and the test flags that write. Its address comes from
+`CABINETOS_TEST_ROMM` (`http://<server>:<port>`); its login is in the
+maintainer's local notes, never here. Point a run at it with
+`CABINETOS_ROMM=<server>:<port>` and the scratch `HOME`, `CABINETOS_DRIVES`
+and `--storage-root` above, with nothing copied from a real console. Pair
+as a console does: `--romm-probe --romm-pair` prints a code, and a user of
+that server approves it, on its pairing page or with `POST
+/api/auth/device/approve`; the token lands where the console keeps it. Then
+`--no-setup --launch <id>` plays one of its games, and SIGTERM leaves the
+game the way Exit to Home does, so its saves and time played are sent (time
+under a minute is not, and neither is time held on "Press A to continue",
+where `--sync-test` leaves a game after it loads the state back). A run
+that signs out restarts itself with the same flags; under `--no-setup` that
+signs out again and again, because first run is what finishes a sign-out,
+so stop it and start it once without `--no-setup`. Without access to that
+server, run a RomM of your own the same way (RomM's documentation, "Quick
+Start").
+
 **The tools in `tools/` take their machines from the environment;** none
 has an address written in. `CABINETOS_A9` is the test console, as
 `cabinet@<address>` (`ui-loop.sh`, `base-checks.sh`, `check-applied.sh`,
 `installer-vm.sh`); `CABINETOS_KEY` is the SSH key (`~/.ssh/cabinetos`
 when unset); `CABINETOS_VM` is the build machine for
-`ui-loop.sh --via-vm`; `CABINETOS_RELAY_UP` is the relays' server. A tool
+`ui-loop.sh --via-vm`; `CABINETOS_RELAY_UP` is the relays' server;
+`CABINETOS_TEST_ROMM` is the server for write tests (above), which no tool
+reads yet. A tool
 stops at once, naming the variable, when one it needs is unset.
 CLAUDE.local.example.md has the lines to fill in.
 
@@ -267,18 +294,21 @@ something besides `.md` files and `docs/`):
   `disk_config/iso.toml`; and every Python file, the ones that ship
   included, is parsed. `just lint` runs the first two commands.
 - **The frontend** (`build-frontend.yml`): it compiles the frontend and the
-  Wii bridge in the builder, runs `--check-option-tables` and the self-tests,
+  Wii bridge in the builder, runs the bridge's `make test` (report only
+  until the date below), `--check-option-tables` and the self-tests,
   summarises the compiler's warnings, fails a new one, and lists the code
   nothing calls (below).
 - **The changelog check** (`changelog.yml`): see "Pull requests and issues".
 
 **No new warnings in the files you touch** (`ci/check-new-warnings.sh`,
 after the Warnings step of `build-frontend.yml`, on every pull request it
-runs on): each warning in a file the pull request changes is compared with
-the same file compiled at the base, by file and text, so moved code is not
-new. Only what can put a warning in a touched file is compiled again at the
-base: one touched `.cpp` took 6 seconds, and `app.h`, which 53 files
-include, 38 seconds against 80 for the whole compile in the same run
+runs on): the warnings in the files the pull request changes are compared
+with the same files compiled at the base, by their text across all those
+files, so code moved within a file or from one changed file to another is
+not new. Vendored files (`frontend/third_party/`, `frontend/src/libretro.h`)
+are not checked. Only what can put a warning in a touched file is compiled
+again at the base: one touched `.cpp` took 6 seconds, and `app.h`, which 53
+files include, 38 seconds against 80 for the whole compile in the same run
 (2026-10-18). The run's summary lists each touched file's count at the base
 and now, and every new warning. Report only for its first week, like the
 checks below.
@@ -495,16 +525,16 @@ here, not reworded; follow the link for the full text.
   (docs/PROJECT.md, "Dreamcast, PSP and N64 draw right", 2026-09-27). The A9
   is the reference console. The same rule opens with a Cabinet clause that
   the next point overtakes.
-- **Cabinet, the Apple TV app CabinetOS came from, is a reference, not a
-  constraint.** PROJECT.md's banner says to read docs/CABINET.md before
-  designing anything. Since 2026-10-11 "Cabinet on Apple platforms is no
+- **Cabinet, the retired Apple TV app CabinetOS came from, is a reference,
+  not a constraint.** Since 2026-10-11 "Cabinet on Apple platforms is no
   longer a constraint" (docs/PROJECT.md, open question 12b, the GameCube save
   decision, #344, "GameCube: a save restored from RomM never reaches Dolphin
   (card.raw vs card.USA.raw)"); it is newer than the rule above. One thing
   stays: the save tags already on RomM (`savetable.cpp`, many in Cabinet's
-  spelling) are what existing saves are filed under, so changing one hides
-  those saves from the console. docs/CABINET.md is worth reading for how a problem was solved
-  before; Cabinet's own source is not required reading.
+  spelling) are what existing saves are filed under, and Cabinet Go, its
+  unfinished pocket version, will read them, so changing one hides those
+  saves. docs/CABINET.md says what Cabinet is now; docs/history/CABINET.md
+  is worth reading for how a problem was solved before.
 - **Emulators favour stability over the newest version**: a pin moves only
   for something a player gets, and the question is asked out loud on the
   issue or pull request (docs/PROJECT.md, "Constraints and principles", 8).

@@ -90,7 +90,7 @@ status here to Built.
   to press. MMagTech, 2026-09-24. **Built.**
 - **One PIN, not one per person**, kept after comparing consoles on
   2026-09-24: PlayStation and Xbox let each person lock their own account;
-  Nintendo and Apple TV (and so Cabinet) have only the one console PIN.
+  Nintendo and Apple TV have only the one console PIN, as Cabinet had.
   **Later, if wanted:** an optional lock per account that guards switching
   into it, added beside the owner PIN without changing it.
 - **Dropped: offering a PIN when the second account is added.** Built and
@@ -320,8 +320,17 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   - **Crash-left Dreamcast cards** (`saves/unattributed/`) go with it and
     were never uploaded. MMagTech: fine to lose.
   - **A games drive that is not plugged in keeps its games.** They are that
-    server's and nothing will use them; a wrong one is never launched,
-    because a file is only reused at its game's number, name and size.
+    server's, and nothing on the drive says so: RomM gives no server an
+    identity (PROJECT.md, open question 14), so plugged in under the next
+    server they are taken for its games with the same numbers (#484). A
+    wrong one is never launched, because a file is only reused at its
+    game's number, name and size; but online the new server's record is
+    written for each (offline Home shows them under its names), and
+    playing the new server's game of that number downloads it into the old
+    one's entry, over the old file when the entry is one file. Settings'
+    Downloads lists the ones that were downloads (kept by nobody now) and
+    removes them; the cached ones are cleared as room is needed. What
+    should become of them is MMagTech's to decide.
   - **Dropped: keeping games through Sign out** until the next pairing shows
     whether it is the same server. It would protect a kept library from an
     accidental sign out, but the one deliberate same-server case (a dead
@@ -969,7 +978,7 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
 
 ## In the pause menu, per system (not Settings)
 
-Every option Cabinet offers is kept, only moved here, because the picture is
+Every option Cabinet offered is kept, only moved here, because the picture is
 right there and the choice is about a system:
 
 - **Virtual Boy:** 3D glasses (Off, red and blue, red and cyan, red and
@@ -989,7 +998,7 @@ right there and the choice is about a system:
     that flicker), and **Atari 2600 flicker blending: no row, fixed on
     Medium ghosting** (`ghost_75`; Average still strobed Ms. Pac-Man's
     ghosts and Heavy trailed, judged on the TV 2026-10-02). Each checked on a game known to flicker before it ships.
-  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet draws
+  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet drew
     each cartridge's sheet from its own images, none of which is built here.
     Its own issue, after the first release.
 - **How the rows behave:** centred like every other button, "Screen: Red",

@@ -57,8 +57,8 @@ Read before working on a core, an emulator, input, saves or states.
 
 - **AND ANSWERING IT WRONGLY IS WORSE THAN NOT ANSWERING IT.** Flycast reads
   the analogue trigger first and falls back to the digital L2/R2 bit **only
-  when that value is exactly zero**. Cabinet returns a plain 0 here and
-  therefore works by taking the fallback; a real pad's right stick rests a few
+  when that value is exactly zero**. Cabinet returned a plain 0 here and
+  therefore worked by taking the fallback; a real pad's right stick rests a few
   hundred counts off centre, which is not zero, so the fallback never ran. On
   Dreamcast those triggers are the accelerator and the brake.
 
@@ -138,7 +138,7 @@ Read before working on a core, an emulator, input, saves or states.
 
 - **Rotation does not come from a MAME DAT and never did.** Checked in
   Cabinet's own tree because it was raised as a likely memory: the three
-  MAME-derived JSON files it ships hold `rotary`, `dial`, `trackball`,
+  MAME-derived JSON files it shipped hold `rotary`, `dial`, `trackball`,
   `pedals`, `lightgun` and `paddle` — control panels, not screens.
 
 - **MEASURE THE GLITCH BEFORE BELIEVING THE ARITHMETIC.** #221 ("Built-in
@@ -182,7 +182,7 @@ Read before working on a core, an emulator, input, saves or states.
 ## Cores, naming and coverage
 
 - **`catalog::coverageFor` answers FOUR different questions.** No core exists, a
-  core exists and Cabinet does not ship it, this console has not built it, and
+  core exists and Cabinet did not ship it, this console has not built it, and
   it is built and cannot be driven. Collapsing any two hides work.
 
 - **The core-file naming rule now lives in THREE places** —

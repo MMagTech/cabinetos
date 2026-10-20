@@ -175,8 +175,8 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
         //
         // The memory card is NOT named here. Core::loadGame names it from the rom
         // by the same rule catalog::saveFiles uses, so the existing save machinery
-        // — restore before launch, capture after, refuse an unformatted card, file
-        // it on the server under the name Cabinet's Mac uses — works on it
+        // (restore before launch, capture after, refuse an unformatted card, file
+        // it on the server under the name Cabinet's Mac used) works on it
         // unchanged.
         if (cov.core && std::string(cov.core) == "pcsx2") {
             // The level's values, unless a --ps2-upscale or --ps2-anisotropy
@@ -297,9 +297,8 @@ auto App::launchById(int romId) -> bool {
         // SAID, NOT SILENT (#184): a press that did nothing looked like a
         // broken button. One download at a time until there is a queue.
         menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
-        // THE SAME GAME, ALREADY JOINED, is a press that counts (#484): false
-        // made the caller drop the state it had just picked, so a second
-        // Play from a state lost both presses' states.
+        // THE SAME GAME, ALREADY JOINED, is a press that counts (#484), so
+        // the state a second Play from a state picked goes with the launch.
         return launchJob.romId == romId;
     }
     // A JOB THE FRAME LOOP HAS NOT TAKEN YET is not replaced (#472): a
@@ -376,7 +375,9 @@ void App::showWhyUnplayable(int romId) {
 // IT: the state picked on the game's page, Home's Resume and the disc Start
 // over asked for belong to this launch, and left set they were loaded into
 // the next game of any title on its first frame (#398). Called on every
-// way out of takeFinishedJob and loadLaunchedGame that loads no game here.
+// way out of takeFinishedJob and loadLaunchedGame that loads no game here,
+// and by a press that counts before it sets its own (playFromState,
+// activateHome; #484).
 // NOT IN finishExit, which keeps its own three lines: Start over sets the
 // disc just before it leaves the game (startOverOnDisc).
 void App::forgetLaunchAsks() {

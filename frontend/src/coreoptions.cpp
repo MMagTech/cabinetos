@@ -61,7 +61,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
         //
         // ppsspp_internal_resolution deliberately does NOT appear here. Its
         // declared default is "480x272", the PSP's own screen, which is what
-        // RetroArch would answer and what Cabinet ships on a television. It is
+        // RetroArch would answer and what Cabinet shipped on a television. It is
         // also the option that used to be this core's defaults trap: the
         // internal default is 0, "Auto (native)", which sizes the render to a
         // display a libretro frontend never reports, so every frame comes out
@@ -119,7 +119,7 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // (#89 audit). The declared default "shared" puts one card in slot 2 for
     // every game, in the system directory, which the save sync never reads:
     // a game that saved there would keep that save on this console and never
-    // reach RomM or an Apple TV. Card 1 is already "libretro", per game,
+    // reach RomM or another device. Card 1 is already "libretro", per game,
     // which is the one that syncs. No card 2 had ever been written on the
     // A9 when this changed.
     if (coreName == "pcsx_rearmed") {
@@ -129,13 +129,13 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // Virtual Boy: THE RIGHT STICK IS THE SECOND D-PAD (#89 audit). The
     // console has two d-pads and games use both (Red Alarm, Teleroboxer); a
     // modern pad has one, so without this half the controls are nowhere.
-    // Cabinet forces it for the same reason. Input only.
+    // Cabinet forced it for the same reason. Input only.
     if (coreName == "beetle_vb") {
         return {{"vb_right_analog_to_digital", "enabled"}};
     }
 
     // DS: THE SOFTWARE RENDERER ON ITS OWN THREAD (#89 audit), as Cabinet
-    // has it. It changes how the drawing work is split, not what a save or
+    // had it. It changes how the drawing work is split, not what a save or
     // state holds, and it is the headroom a weaker machine needs. melonDS
     // turns it off by itself under its OpenGL renderer (picture quality's,
     // #219).

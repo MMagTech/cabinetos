@@ -315,8 +315,12 @@ void App::startSignOut() {
     if (removeJob->th.joinable()) removeJob->th.join();
     removeJob->th = std::thread([job = removeJob.get(), addr]() {
         int left = 0;
-        for (const accounts::Account& a : accounts::all())
+        // STOPPED BETWEEN PEOPLE TOO (#484): told to stop at exit, it went
+        // on to ask the server for each person left, a heartbeat each.
+        for (const accounts::Account& a : accounts::all()) {
+            if (job->stop.load()) break;
             left += sendOwedBeforeRemoving(a, addr, &job->stop);
+        }
         std::lock_guard<std::mutex> lk(job->m);
         job->left = left;
         job->finished = true;

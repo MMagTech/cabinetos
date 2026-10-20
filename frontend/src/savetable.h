@@ -203,7 +203,7 @@ struct SaveFile {
     // PlayStation 2 is the platform where a save already existed on the
     // server written by a DIFFERENT implementation of this same product, and
     // RomM matches a row for overwrite by filename alone. Cabinet
-    // for Mac calls a PS2 card `cabinet-604.ps2`; this console would call it
+    // for Mac called a PS2 card `cabinet-604.ps2`; this console would call it
     // `Burnout 3 Takedown (Cabinet).srm`. Same bytes, same emulator tag, two
     // rows — and a restore that never finds the card the person actually made.
     //
@@ -284,7 +284,7 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
                                 const std::string& stem);
 
 // The tag a save or state is filed under on RomM, for a given manifest core
-// name. This is the compatibility marker: Cabinet greys out a state whose tag
+// name. This is the compatibility marker: Cabinet greyed out a state whose tag
 // does not match the core about to run, which is what stops someone being
 // offered a save that cannot load.
 //
@@ -293,11 +293,11 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
 // Linux x86-64 build AT THE SAME COMMIT; core-manifest.json pins that commit,
 // build-core.sh asserts it, and CI proved the artifact reproducible across two
 // machines. Those three together make a shared tag a fact rather than a hope,
-// and they are why a state written on an Apple TV loads on this console.
+// and they are why a state from Cabinet's Apple TV app loaded on this console.
 //
 // THE RULE, AS DECIDED 2026-09-23: every core that has states uses Cabinet's
-// tag for that emulator, so its states upload and Cabinet recognises them,
-// whether or not the other device can load a particular one. MMagTech:
+// tag for that emulator, so its states upload and Cabinet recognised them (as
+// Cabinet Go will), whether or not the other device can load one. MMagTech:
 // "regardless of if it will actually load". A state that will not load is
 // refused on the other side and costs nothing else; one that never leaves the
 // console is lost with it. Where a build is known to differ from Cabinet's,
@@ -347,7 +347,7 @@ const char* saveTag(const char* manifestCoreName);
 // question: a PCSX2 state breaks when the image updates the emulator, these
 // consoles have memory cards every game uses, and their states open nowhere
 // else. PRECISELY: no states where they cannot be trusted to load, because
-// they cannot travel to Cabinet (GameCube: a different Dolphin on the Mac) or
+// they could not travel to Cabinet (GameCube: a different Dolphin on the Mac) or
 // break when the emulator updates (PS2: embedded PCSX2, not libretro). PSP and
 // DS are later consoles and keep theirs, because theirs are proven portable. A
 // new emulator is checked against that rule the day it lands.

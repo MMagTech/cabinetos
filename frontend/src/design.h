@@ -387,9 +387,9 @@ constexpr float kCoverRadius = 10.0f;
 
 // --- Library ----------------------------------------------------------------
 //
-// A TILE GRID, NOT A LIST, and the reason is in docs/CABINET.md: a full-width
-// row on a 1920pt canvas leaves a name at the far left and a count at the far
-// right with a third of the screen empty between them. A grid also gives the
+// A TILE GRID, NOT A LIST, and the reason is in docs/history/CABINET.md: a
+// full-width row on a 1920pt canvas leaves a name at the far left and a count
+// at the far right with a third of the screen empty between them. A grid also gives the
 // focus engine a real two-dimensional field to move in.
 constexpr float kTileMinWidth = 380.0f;   // adaptive: as many columns as fit
 constexpr float kTileHeight = 200.0f;

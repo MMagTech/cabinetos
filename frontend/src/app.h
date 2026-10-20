@@ -350,7 +350,7 @@ struct App {
     // --load-state N: after N frames of play, what the pause menu's "Load
     // latest state" does. The other half of --sync-test, which loads back the
     // state it has just made; this loads whatever is newest on the server, so
-    // a state from an Apple TV can be tried here without a controller.
+    // a state made on another device can be tried here without a controller.
     int loadStateAfter = 0;
     // --state-check N: after N frames, save a state IN MEMORY, play on, load
     // it, and save again at once. Equal bytes mean the load put the machine
@@ -586,7 +586,7 @@ struct App {
     int focusRow = RowRecent;
     int focusSlot = 0;
     // Home is taller than the screen once there are two shelves, so it scrolls
-    // to follow focus — the same as tvOS, which puts Home in a ScrollView.
+    // to follow focus, as Cabinet did on tvOS, where Home was a ScrollView.
     design::Animated scrollY;
     int homeTopRow();
     void homeFromTheStart();

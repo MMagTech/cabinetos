@@ -93,10 +93,11 @@ public:
     // SEND AGAIN EVERYTHING STILL OWED (2026-09-26). Until this, an upload
     // that failed was never tried again: a state saved while the server was
     // away stayed on this console for good, and never reached the Apple TV.
-    // Called at start, after an upload that worked, and every few minutes
-    // while something is owed (the frame loop's `owing()`). The bytes are read
-    // off the disk on the worker; anything already queued is not queued twice.
-    // On the frame thread, for the person signed in.
+    // Called at start, after an upload a person made that worked, and every
+    // few minutes while something is owed (the frame loop's `owing()`). The
+    // bytes are read off the disk on the worker; anything already queued is
+    // not queued twice, and nothing RomM refused this run (refused_). On the
+    // frame thread, for the person signed in.
     void resendOwed();
 
     // Everything owed in favorites-owed.json, in one job, as sendPlay.
@@ -114,7 +115,7 @@ public:
     // what happened rather than what was attempted. 0 nothing new, 1 it reached
     // the server, 2 it did not and is still on the disk.
     //
-    // Cabinet awaits its upload and reports "Saved to RomM." or "Waiting for
+    // Cabinet awaited its upload and reported "Saved to RomM." or "Waiting for
     // signal to upload." This console queues on a worker instead, which is the
     // right shape for a machine that must not stall its frame loop — but it
     // meant Save said nothing at all, and then "load latest" went looking on a
@@ -128,7 +129,7 @@ private:
     // shortcuts, and three states per game"). Once a state has reached RomM,
     // this person's states for the game UNDER THE SAME EMULATOR TAG are cut to
     // the newest three, on RomM and on this console. Other tags, which is
-    // every other app's states, are never looked at. A state saved by Cabinet
+    // every other app's states, are never looked at. A state Cabinet saved
     // on the Apple TV under the same tag counts, and can be the one that goes:
     // decided, and the price of three being true everywhere.
     //
@@ -170,6 +171,19 @@ private:
     std::condition_variable wake_;
     std::deque<Job> queue_;
     std::set<std::string> queued_;
+    // WHAT RomM REFUSED FOR GOOD THIS RUN (an HTTP 4xx), by person and key:
+    // sending it again cannot help until something changes, so no resend
+    // queues it. Its marker stays, so the next start tries it once more,
+    // and so does the person's own next save of that file (push), as
+    // favourites RomM will not make a collection for wait for the next
+    // heart or start (favorites.cpp). Under mutex_.
+    std::set<std::string> refused_;
+    // WHAT FAILED AND IS STILL OWED, by person and key: `owing_` is true
+    // while any of it is, so a resend that works (parked favourites, time
+    // played) takes only itself off and the five-minute retry goes on for
+    // the rest. Under mutex_.
+    std::set<std::string> failed_;
+    static std::string whoKey(const Job& j) { return storage::userDir(j.who) + "|" + key(j); }
     std::atomic<int> pending_{0};
     std::atomic<bool> owing_{false};
     bool stopping_ = false;

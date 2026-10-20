@@ -236,8 +236,11 @@ power cut).
 2. The upload queue (`uploader.h`) sends it on its own thread as the person
    who made it (`romm_playdata.cpp` makes the request), and removes the
    marker when RomM has it. A marker left by a crash is sent again at the
-   next start (`startSync`). States: the newest three per game and emulator
-   tag are kept on RomM.
+   next start (`startSync`). One that failed is sent again every five
+   minutes, when the server comes back and after a person's next upload
+   works; one RomM refused (an HTTP 4xx) keeps its marker and waits for the
+   next start or a new save of it. States: the newest three per game and
+   emulator tag are kept on RomM.
 3. Each core's saves, where it writes them and the tag they carry on RomM are
    one table, `savetable.cpp`. A launch restores the newest row under its
    tag, except that this console's own copy wins while it is still owed to
@@ -396,8 +399,7 @@ comments, which the faults step fixes. Until then, trust the code:
   does not have; `selftests.cpp` says `--first-run-rules` runs in CI (it does
   not); `samplelibrary.h` says main.cpp is its only user (startup.cpp is);
   `cores/check-options.sh` names catalog.cpp for what is now
-  `coreoptions.cpp`; `catalog.cpp` says Cabinet's manifest is the source of
-  truth for its table; `cores/build-core.sh` says core pins follow Cabinet's
+  `coreoptions.cpp`; `cores/build-core.sh` says core pins follow Cabinet's
   manifest and "are not to be updated here", which predates both Cabinet
   ceasing to be a constraint (2026-10-11) and the stability rule for moving
   pins (docs/PROJECT.md, "Constraints and principles", 8, 2026-10-14), which

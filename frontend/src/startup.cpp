@@ -203,8 +203,8 @@ std::optional<int> App::startDisplay() {
 
     // GLES 3.0, which is what the libretro hardware-rendered cores ask for via
     // RETRO_ENVIRONMENT_SET_HW_RENDER. The UI and the cores share one context
-    // on purpose: that is what removes the readback the Apple build cannot
-    // avoid. See docs/PROJECT.md, "Video: two paths".
+    // on purpose: that is what removes the readback Cabinet's Apple build could
+    // not avoid. See docs/PROJECT.md, "Video: two paths".
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -975,9 +975,14 @@ int App::shutDown(char** argv) {
     ra::shutdown();
     if (!restartSelf) boundTheRestOfTheExit();
     // A STEAM DOWNLOAD IS CANCELLED, not waited for (#485, SETTINGS-04):
-    // SteamJobStop joins its thread as the App goes, and the download script
-    // ends only on a cancel or its parent gone. Cancelled, proc::run stops it
-    // and the join returns within about two seconds.
+    // SteamJobStop joins the Steam job's thread as the App goes, and the
+    // download script ends only on a cancel or its parent gone. Cancelled,
+    // proc::run stops it within about two seconds. Only the download has a
+    // cancel: making, growing or removing Steam's space (steam.cpp) clears
+    // cached games and then waits on the root helper, up to 15 minutes, and
+    // an install cancelled meanwhile stops once its space is made. A quit
+    // ends two seconds after the saves anyway (the bound above); a restart
+    // in place execs before the App goes, so it joins nothing.
     if (steamInstall) steamInstall->cancel = true;
     // THE WATCHING THREADS JOINED BEFORE THEY ARE DESTROYED: a std::thread
     // still running at exit ends the process with abort().

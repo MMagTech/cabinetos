@@ -56,13 +56,12 @@ Offline, the console uses the saves it last saw on the server, so a game
 starts from the same save it would online. New saves wait on the console and go
 up when the server is back.
 
-## Cabinet on Apple TV
+## Saves from Cabinet
 
-Saves use the same names and formats as
-[Cabinet](https://github.com/MMagTech/cabinet), so a save made in one carries on
-in the other, except GameCube: Cabinet for Mac keeps a whole memory card, and
-the console keeps Dolphin's single `.gci` files. Saves made in RomM's web player
-or other apps are not read.
+Saves use the same names and formats as Cabinet, the retired Apple TV app, so
+a save it left on your server carries on here, except GameCube: Cabinet for Mac
+kept a whole memory card, and the console keeps Dolphin's single `.gci` files.
+Saves made in RomM's web player or other apps are not read.
 
 ## Each person's own
 

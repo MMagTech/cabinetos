@@ -3,7 +3,7 @@
 //
 // THE SHAPE IS NOT CABINET'S, ON PURPOSE. MMagTech, 2026-09-24: Settings is
 // *"the one screen where we can diverge a bit from the others"*. Cabinet's tvOS
-// app opens each category as its own page, which costs an open and a back for
+// app opened each category as its own page, which costs an open and a back for
 // every look. Here walking down the list changes the right side at once, and a
 // television is wide enough to show both. docs/PROJECT.md, open question 31.
 //
