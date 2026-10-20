@@ -2273,6 +2273,32 @@ left is MMagTech's, as it needs sudo: Home with the GPU clocks locked
 high against as shipped, 10 minutes each, counting held pictures from the
 visible frame time.
 
+**2026-10-19, the Vectrex (MMagTech: "it's not running smoothly").** His
+two games that night, from the journal, on 2026.10.20 at the LG C1,
+3840x2160, 60 Hz: Blitz (RomM 2948) and Pole Position (2962), both through
+vecx 1.2 (8f671cc), which reports 50.0000 fps, so the console paces it by
+the clock. Two things, separate:
+
+- **Every window shows 100 repeated frames per 600** (one in six): a 50 Hz
+  game on a 60 Hz screen, which no pacing can hide. RetroArch on a 60 Hz
+  screen has the same; Batocera offers a 50 Hz screen mode. The C1 does 4K
+  at 50 Hz, and VRR (the #256 and #290 checks) would show 50 fps as 50 Hz.
+  This console's gamescope already runs with `--adaptive-sync` (its
+  command line, 2026-10-19), so if the console presented only new game
+  frames for a clock-paced core, the C1 in VRR would show them at 50 Hz;
+  today it presents every refresh. Not tried. It is every 50 Hz game, PAL
+  ones included. Not decided.
+- **Stalls to about 30 Hz for 20 s at a time:** Blitz's first two windows
+  (232 and 288 frames shown, 214 and 291 refreshes missed), Pole Position's
+  fourth and fifth (326 and 300 frames, 243 and 279 missed), the rest at
+  60 Hz with 0 missed. Not the core's cost: headless on the A9 (no screen,
+  the clock's 50 fps, 50 s each, through the read-only relay) both games
+  ran 0 game frames skipped at the image's `vecx_res_multi` 4 (1320x1640)
+  and at 1, with the unpaced loop at 8,500 and 15,700 frames a second. The
+  cause is in the display path and needs the TV: Pole Position in a race,
+  frames.py and the plane sampler, 4 against 1, with the pause menu, the
+  manual's fetch and the game's own phases ruled in or out. Not measured.
+
 ### The emulator settings audit (#89) — 2026-09-27
 
 **The rule, MMagTech's:** most settings do not decide whether a save or
