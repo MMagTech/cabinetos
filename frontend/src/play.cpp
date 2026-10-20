@@ -285,13 +285,35 @@ bool App::readGameInput(cab::Core& core) {
             // from code or watched an attract demo.
             if (down(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))  st.buttons |= bit(cab::L);
             if (down(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) st.buttons |= bit(cab::R);
-            // L3/R3 also open the overlay as a pair. They still
-            // reach the core individually: Cabinet's rule was that
-            // the hotkey "applies regardless of what either button
-            // is otherwise bound to", and the overlay pauses the
-            // core the instant it opens anyway.
-            if (down(SDL_GAMEPAD_BUTTON_LEFT_STICK))  st.buttons |= bit(cab::L3);
-            if (down(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) st.buttons |= bit(cab::R3);
+            // L3/R3 also open the overlay as a pair (input.cpp), and
+            // a lone click reaches the core only once kStickPairMs
+            // has passed without the other (stickPair, app.h), so
+            // the pair itself reaches nobody: on the DS and 3DS the
+            // click a frame ahead tapped the touch screen as the
+            // menu opened.
+            {
+                StickPair& sp = stickPair[p];
+                if (sp.pad != SDL_GetGamepadID(gp)) sp = {{}, {}, SDL_GetGamepadID(gp)};
+                const Uint64 now = SDL_GetTicks();
+                const bool l3 = down(SDL_GAMEPAD_BUTTON_LEFT_STICK);
+                const bool r3 = down(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+                auto heard = [now](StickClick& c, bool raw, bool other) {
+                    if (c.tapped) c.tapped = false;   // last frame's tap, let go
+                    if (raw && !c.raw) c = {true, false, false, false, now};
+                    if (raw) {
+                        if (other && !c.heard) c.paired = true;
+                        if (!c.paired && !c.heard && now - c.downAt >= kStickPairMs)
+                            c.heard = true;
+                        return c.heard;
+                    }
+                    const bool tap = c.raw && !c.heard && !c.paired;
+                    c = {};
+                    c.tapped = tap;
+                    return tap;
+                };
+                if (heard(sp.l3, l3, r3)) st.buttons |= bit(cab::L3);
+                if (heard(sp.r3, r3, l3)) st.buttons |= bit(cab::R3);
+            }
 
             // Analog triggers as digital L2/R2, which is what a
             // RetroPad's L2/R2 are for every core in this set.

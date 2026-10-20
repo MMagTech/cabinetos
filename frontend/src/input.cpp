@@ -397,6 +397,10 @@ void App::handleEvent(const SDL_Event& e) {
             // the risk comes from the game and not the pad model, and
             // lets the second button be cleared for single-button
             // mode. That belongs with the remapping screen.
+            //
+            // The clicks themselves wait a moment before a game hears
+            // one alone (play.cpp, App::kStickPairMs), so the pair
+            // reaches only the menu.
             if (e.gbutton.button == SDL_GAMEPAD_BUTTON_LEFT_STICK)
                 l3Down = true;
             if (e.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)

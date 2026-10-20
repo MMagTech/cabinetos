@@ -13,6 +13,8 @@ one you install, so you only ever install the newest.
   DLC do not play yet. Games get no internet. Saves sync with your server; save states
   and fast forward work, rewind does not, and a 3DS state may not load after
   an update changes the emulator.
+- **Fixed:** pressing both sticks for the pause menu no longer sends a stray
+  stick click to the game.
 
 ## 2026.10.20.4 {#v2026-10-20-4}
 

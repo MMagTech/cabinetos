@@ -19579,7 +19579,19 @@ after (`--restore`).
   black picture after continuing while the game ran on (the same states
   loaded with their pictures fourteen times after, at every level and on
   OpenGL). Both were in one run, the one where his Xbox pad connected seven
-  seconds before the first. Watch for it; not reproduced.
+  seconds before the first. **Looked for again the same day, not
+  reproduced in 24 more loads:** 6x and 1x; after the frontend was killed
+  in a load's "Press (A) to continue" (the run with the blacks was the
+  first after the load crash); two right after a pad connected; holds of
+  70 and 100 s (the two blacks were held 63 and 98 s, every good load 5 s
+  or less); a still taken during the hold; both together. The host's log
+  of that run matches a good run's line for line; no GPU fault in the
+  kernel's log; no Remote Play stream; Azahar's one warning after a load
+  ("Depth scale unsupported by hardware") comes in good loads too. What
+  is known: it held for the whole run, both loads and across Exit to Home
+  and a new start. Azahar's own lines below warnings are not kept
+  (`core.cpp` keeps warnings and errors), so its renderer's rebuild is not
+  in the log. Not fixed; watch for it.
 - **For the test, not the console:** a `ui-loop.sh` redeploy stops the
   session, whose reaper kills the frontend at once, so a game left that way
   sends no save; it waits on the console and goes at that game's next exit.
@@ -19602,8 +19614,18 @@ person's do (`tools/fake-pad.c`'s `down:` and `up:`):
   game's own hand cursor (the C-stick) and no touch cursor showed, so the
   pointer could not be put on a target. Whether a stray R3 taps was not
   shown on the TV; by the code it does (fault 4 above).
-- **Not built, his call:** holding a lone stick click back a frame or two
-  so L3 + R3 never reaches the core (fault 4).
+- **Built, his call (2026-10-20, "Yeah, I think I agree with that"):** a
+  lone stick click is held back from the core for `App::kStickPairMs`, 33
+  ms, two frames (`play.cpp`); if the other click joins it inside that, the
+  pair reaches only the pause menu, and otherwise the click is delivered, a
+  quick one for a frame, so none is lost. Every libretro core. Fault 4 is
+  fixed by it. **Checked on the TV the same day** (Mario Kart 7's results
+  screen, the same overlapping presses): L3 held still swapped the screens
+  while held; L3 33 ms ahead of R3 now opened the pause menu with no swap
+  behind it, twice (before the change it swapped every time); R3 33 ms
+  ahead and both in one frame opened it with no swap. No game on the
+  write-test RomM uses L3 outside the 3DS, so a lone click reaching another
+  system was not shown there; it is the same code for every core.
 
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 
