@@ -636,6 +636,7 @@ std::string gameRecordJson(const romm::Game& g) {
     // tell which controllers it takes (romm::gameFromJson).
     json_object_object_add(o, "product_code", json_object_new_string(g.productCode.c_str()));
     json_object_object_add(o, "ra_hash", json_object_new_string(g.raHash.c_str()));
+    json_object_object_add(o, "md5_hash", json_object_new_string(g.md5.c_str()));
     json_object_object_add(o, "path_manual", json_object_new_string(g.manualPath.c_str()));
     json_object_object_add(o, "fs_size_bytes", json_object_new_int64(g.sizeBytes));
     json_object_object_add(o, "has_multiple_files", json_object_new_boolean(g.multiFile));

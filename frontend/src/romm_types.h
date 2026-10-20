@@ -121,6 +121,9 @@ struct Game {
     // it is instead of reading the file itself, so a .chd disc needs no disc
     // reader here. Empty where RomM could not work one out.
     std::string raHash;
+    // RomM's `md5_hash` of the game's file (inside its archive when it is
+    // one): the Vectrex sheets' first key (vectrexsheets.h). Empty for none.
+    std::string md5;
     // THE GAME'S MANUAL (#364): RomM's `path_manual`, a PDF in its resources,
     // `roms/1/2/manual/2.pdf`, served under /assets/romm/resources/. Filled
     // by the scraper or uploaded on the game's page; empty for none. The

@@ -11,6 +11,7 @@
 #include "quality.h"
 #include "storage.h"
 #include "sysopts.h"
+#include "vectrexsheets.h"
 #include "wii.h"
 
 namespace optcheck {
@@ -85,6 +86,10 @@ int run(const std::string& dir) {
             for (bool on : {true, false})
                 for (const auto& kv : wii::coreOptions(core, slug, on))
                     sets.push_back({kv, "wii rumble"});
+            // And the Vectrex sheets' fit, both ways (#224).
+            for (bool fitted : {true, false})
+                for (const auto& kv : vectrexsheets::coreOptions(core, slug, fitted))
+                    sets.push_back({kv, "vectrex sheet fit"});
         }
         for (const auto& [kv, from] : sets) {
             ++checked;

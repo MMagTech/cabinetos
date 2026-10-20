@@ -225,6 +225,39 @@ for preset in crt/crt-easymode.glslp handheld/lcd3x.glslp; do
     fi
 done
 log "installed the screen looks ($(find /usr/share/cabinetos/shaders -name '*.glslp' | wc -l) presets, $(du -sh /usr/share/cabinetos/shaders | cut -f1))"
+# The Vectrex games' screen sheets (#224), where vectrexsheets::folder looks:
+# the 38 PNG files tools/fetch-vectrex-overlays.py put in the payload (build.yml
+# runs it; a build by hand runs it into image_payload/vectrex first), and the
+# table saying which game takes which, ours, from frontend/data. Checked by
+# count and by every sheet the table names, so a payload that lost one fails
+# here rather than leaving a game with its bare screen on every console.
+if [[ ! -d "${PAYLOAD}/vectrex" ]]; then
+    log "ERROR: ${PAYLOAD}/vectrex is missing; run tools/fetch-vectrex-overlays.py image_payload/vectrex"
+    exit 1
+fi
+mkdir -p /usr/share/cabinetos/vectrex
+install -m 0644 "${PAYLOAD}"/vectrex/*.png /usr/share/cabinetos/vectrex/
+install -m 0644 /ctx/frontend-data/vectrex-overlays.json /usr/share/cabinetos/vectrex/vectrex-overlays.json
+sheets=$(find /usr/share/cabinetos/vectrex -name '*.png' | wc -l)
+if [[ "${sheets}" -ne 38 ]]; then
+    log "ERROR: ${sheets} Vectrex sheets installed, expected 38"
+    exit 1
+fi
+# Read whole first, so a table this cannot read is a count of 0 and fails,
+# rather than a loop that checks nothing.
+named="$(grep -o '"file": *"[^"]*"' /usr/share/cabinetos/vectrex/vectrex-overlays.json |
+    sed 's/.*"\([^"]*\)"$/\1/')"
+if [[ "$(wc -l <<<"${named}")" -ne 38 ]]; then
+    log "ERROR: the Vectrex table does not name 38 sheets"
+    exit 1
+fi
+while read -r sheet; do
+    if [[ ! -s "/usr/share/cabinetos/vectrex/${sheet}.png" ]]; then
+        log "ERROR: the Vectrex table names ${sheet}.png, which did not land"
+        exit 1
+    fi
+done <<<"${named}"
+log "installed the Vectrex sheets (${sheets} sheets, $(du -sh /usr/share/cabinetos/vectrex | cut -f1))"
 
 group_end
 

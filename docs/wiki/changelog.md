@@ -14,6 +14,17 @@ one you install, so you only ever install the newest.
   and fast forward work, rewind does not, and a 3DS state may not load after
   an update changes the emulator.
 
+## 2026.10.20.4 {#v2026-10-20-4}
+
+*20 October 2026*
+
+- **New:** Vectrex games show the coloured sheet each cartridge came with,
+  over the screen as it sat on the real console: the colours, the artwork
+  and the controls printed around the play area. The pause menu has
+  **Overlays: On / Off** to show the bare screen instead; the choice holds
+  for every Vectrex game. See [Picture and colours](picture.md).
+  ([#224](https://github.com/MMagTech/cabinetos/issues/224))
+
 ## 2026.10.20.3 {#v2026-10-20-3}
 
 *20 October 2026*

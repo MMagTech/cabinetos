@@ -24,6 +24,7 @@ struct EarlyProbeOptions {
     bool playtimeTestMode = false;
     bool discTestMode = false;
     bool filesTestMode = false;
+    bool vectrexSheetsTestMode = false;
     int padsSeconds = 0;
     bool firstRunRulesMode = false;
     bool firstRunWriteMode = false;

@@ -22,6 +22,7 @@
 #include "standalone.h"
 #include "storage.h"
 #include "sysopts.h"
+#include "vectrexsheets.h"
 #include "wii.h"
 #include "wiimii.h"
 #include "wiiremote.h"
@@ -88,6 +89,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
     job.titleId = game.titleId;
     job.platformId = game.platformId;
     job.raHash = game.raHash;
+    job.md5 = game.md5;
     job.fsStem = game.fsName;
     if (const size_t dot = job.fsStem.find_last_of('.'); dot != std::string::npos)
         job.fsStem.erase(dot);
@@ -161,6 +163,11 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
             // The Wii's rumble switch as the last Wii game's HOME Menu left
             // it (#274, wii.h).
             for (const auto& kv : wii::coreOptions(job.coreName, game.platformSlug))
+                opts[kv.first] = kv.second;
+            // A Vectrex game under its sheet, fitted inside the sheet's
+            // window (#224, vectrexsheets.h).
+            for (const auto& kv : vectrexsheets::coreOptions(job.coreName, game.platformSlug,
+                                                             game.md5, job.title, game.fsName))
                 opts[kv.first] = kv.second;
             core.setOptionOverrides(opts);
             quality::logApplied(job.coreName, game.id, level);
@@ -792,6 +799,10 @@ void App::setUpLoadedGame(LaunchContext& c) {
     session.fileSaves = std::move(c.restored);
     if (c.launchTag) session.saveTag = c.launchTag;
     session.snapshots = catalog::snapshotsAllowed(launchJob.coreName.c_str());
+    // A Vectrex game's screen sheet (#224), read and uploaded here behind the
+    // curtain; any other game drops the last one's.
+    vectrexsheets::prepare(launchJob.platformSlug, launchJob.md5, launchJob.title,
+                           launchJob.fsStem);
     if (!session.snapshots)
         std::fprintf(stderr, "[state] no save states on this system, true to the console\n");
     // THE DISCS, and the start disc checked against what the core says:

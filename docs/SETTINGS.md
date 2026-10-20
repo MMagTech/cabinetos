@@ -998,9 +998,13 @@ right there and the choice is about a system:
     that flicker), and **Atari 2600 flicker blending: no row, fixed on
     Medium ghosting** (`ghost_75`; Average still strobed Ms. Pac-Man's
     ghosts and Heavy trailed, judged on the TV 2026-10-02). Each checked on a game known to flicker before it ships.
-  - **Vectrex overlays: dropped for now.** Not a core setting: Cabinet drew
+  - ~~**Vectrex overlays: dropped for now.** Not a core setting: Cabinet drew
     each cartridge's sheet from its own images, none of which is built here.
-    Its own issue, after the first release.
+    Its own issue, after the first release.~~ **Built (#224, decided
+    2026-10-19, docs/PROJECT.md open question 51):** each game's sheet drawn
+    over its picture, and an **Overlays: On / Off** row in the Vectrex pause
+    menu where the Look row would be, on a game that has a sheet. One choice
+    for the system, kept like a look; On by default.
 - **How the rows behave:** centred like every other button, "Screen: Red",
   with an arrow at each edge when selected; they change instantly, in front
   of the game.

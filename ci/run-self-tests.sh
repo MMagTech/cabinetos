@@ -44,6 +44,7 @@ TESTS=(
     --disc-test
     --same-names-test
     --files-test
+    --vectrex-sheets-test
 )
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
