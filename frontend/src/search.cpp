@@ -124,8 +124,20 @@ void App::keyboardUp() {
 // Search's half of keyboardResult (input.cpp), which calls it last.
 void App::searchKeyboardResult(ui::KeyboardResult res) {
     if (res == ui::KeyboardResult::Committed) {
-        if (searchScreen.resultCount() > 0) searchScreen.setFocused(true);
-        else if (!keyboard.isOpen()) goToDestination(2);   // nothing found: type again
+        if (searchScreen.resultCount() > 0) {
+            searchScreen.setFocused(true);
+            // DONE SLIDES THE PANEL OUT, the way leaving Search does, and
+            // the covers grow with it (sizeSearchResults). It vanished at
+            // once, so the covers jumped to their larger size (MMagTech on
+            // the TV, 2026-10-19). With nothing found the keyboard comes
+            // straight back below, so there is nothing to slide.
+            keyboard.keepForSlide();
+            keyboardSlide.from = keyboardSlide.to = 0.0f;
+            keyboardSlide.elapsed = 0.0f;
+            keyboardSlide.retarget(1.0f, kKeyboardSlide);
+        } else if (!keyboard.isOpen()) {
+            goToDestination(2);   // nothing found: type again
+        }
     } else if (res == ui::KeyboardResult::Cancelled) {
         goToDestination(0);
         sound::play(sound::Cue::Back);
@@ -185,11 +197,14 @@ void App::pumpSearch(float dt) {
 
 // The results are sized to the room the keyboard leaves, and the
 // keyboard's height depends on its own layout — so it is asked
-// rather than assumed.
+// rather than assumed. While the panel slides in or out, the room is
+// where the panel is this frame, so the covers grow and shrink with
+// it (MMagTech on the TV, 2026-10-19).
 void App::sizeSearchResults() {
     if (here() == Screen::Search) {
         searchScreen.setKeysUp(keyboard.isOpen());
-        searchScreen.setResultsBottom(keyboard.isOpen() ? keyboard.panelTop()
-                                                        : ui::kCanvasHeight);
+        searchScreen.setResultsBottom(keyboard.isOpen() || keyboard.sliding()
+                                          ? keyboard.panelTop()
+                                          : ui::kCanvasHeight);
     }
 }

@@ -75,10 +75,10 @@ public:
     bool atTopRow() const { return row_ == 0; }
 
     // Where the panel's top edge is, in canvas points, from the last time it
-    // was drawn. A docked keyboard shares the screen, so whatever is above it
-    // has to know where "above it" ends — and the panel's height depends on the
-    // layout, the shift state and whether it is docked, so nothing outside can
-    // work it out for itself.
+    // was drawn, a slide included. A docked keyboard shares the screen, so
+    // whatever is above it has to know where "above it" ends — and the panel's
+    // height depends on the layout, the shift state and whether it is docked,
+    // so nothing outside can work it out for itself.
     float panelTop() const { return panelTop_; }
 
     void open(const Config& config);
@@ -137,7 +137,9 @@ public:
     // keepForSlide() lets it go on drawing after cancel() so it can leave;
     // it takes no input while it does, because it is not open.
     void setSlide(float t) { slide_ = t; }
-    void keepForSlide() { if (open_) ghost_ = true; }
+    // Also right after commit() or cancel(), which close it: Search's Done
+    // slides the panel out rather than dropping it.
+    void keepForSlide() { ghost_ = true; }
     void endSlide() { ghost_ = false; slide_ = 0.0f; }
     bool sliding() const { return ghost_; }
 
