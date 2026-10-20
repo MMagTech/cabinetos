@@ -18714,3 +18714,198 @@ it out, with nothing redecided:
   the layout (the core's default, stacked, until the TV judges it); the
   touchpad and the gyro (pieces of their own, his call).
 
+#### Full features (MMagTech, 2026-10-20)
+
+**The ruling:** a core ships only with every feature the other cores have,
+RetroAchievements where they exist for it, save states and loads included;
+no half implementation to finish later. For the 3DS this replaces the
+"States: none, by question 25's rule" row of the tests above. Researched and
+measured on 2026-10-20; nothing built. Read: this repository at #524's head
+(`5581535`); Azahar at 2126.2 (`219d743`); rcheevos as vendored (v12.5.0,
+`1433173`) and at master (`dfdc64e`, 2026-10-17); RetroAchievements' docs
+(`9de47ca`, 2026-10-18); RomM 5.4.0 (`68f7125`); libretro's core info and
+RetroArch's `core_info.h` (master, 2026-10-20); his live RomM, read-only.
+
+**What a libretro core gets on this console, and the 3DS in #524:**
+
+| Feature | Where | Who lacks it, and the code's reason | #524's 3DS |
+|---|---|---|---|
+| Save state and Load latest state (pause menu; shortcut button and R or L; F5, F8) | `pausemenu.cpp:173`, `play.cpp:371`, `input.cpp:287`, `states.cpp` | `kNoSnapshots` (`savetable.cpp:158`): PCSX2, Dolphin, the five separate emulators (question 25, true to the consoles), and `azahar` | no |
+| States on RomM: tagged, a picture beside each, three kept a game (`uploader.h`, `kStatesKept`) | `savetable.cpp`, `emulatorTag` | every core with states has a tag; `azahar` has a save tag only (`:225`) | no |
+| A state picked on the game's page; Home's Resume loading the newest | `detail.cpp:187-197`, `states.cpp:488-519` | follow `snapshotsAllowed` | no (Resume starts the game fresh) |
+| Fast forward, about 4x (shortcut and ZR) | `play.cpp:441`; `app.h:961-966`, "only where states are" | follows states | no, "No fast forward for this system" |
+| Rewind, a snapshot every half second, about 15 s | `pace.cpp:127-140`, `play.cpp:452-454`, `rewind.h` | follows states, and a core whose state size is 0 | no |
+| RetroAchievements, softcore only (no core has hardcore, #74), progress kept in states (#279) | `achievements.cpp:741-800` | a platform not in `consoleFor` (the 3DS among them); MAME 2003-Plus (`coreReadable`, no memory); a game RomM gave no `ra_hash` | no |
+| Picture levels, and the game's own Picture row | `quality.cpp:175`, `pausemenu.cpp:193` | the systems where a level changes nothing | yes: 1, 3, 5 |
+| Saves to RomM | `savetable.cpp` | none | yes, the PSP way |
+| Time played; screenshots | `launch.cpp:992`; `states.cpp` | none | yes (a 3DS screenshot not yet seen) |
+| Look and the system's own rows | `looks.cpp`, `sysopts.cpp` | every system without a look, DS and PSP among them | none, as DS and PSP |
+
+The touchpad and the gyro are not on this list: no other core has them.
+
+**RetroAchievements for the 3DS: no, for three reasons, any one enough.**
+
+1. **RetroAchievements does not support the 3DS.** Its docs list it under
+   "Unsupported Consoles" (`docs/developer-docs/unsupported-emulators-and-cores.md:246`,
+   the 3DS at `:367`, the three Citra cores marked unusable: "Only exposes
+   64MB of memory", "Does not support save states") and as a rollout still
+   "Pending", with "??" sets (`docs/developer-docs/rollouts.md:81`; the Wii
+   was the last to launch, 2026-03-19, with 183). Its pages for system 62
+   answered this session with a bot check, which was not passed, so no game
+   count was read there; the API's game list needs a web API key the project
+   does not hold. His three games, hashed with rcheevos' own hasher on the
+   A9 (the decrypted path: the NCCH header with its crypto flags cleared,
+   then the ExeFS; no keys): Mario Kart 7 `d8293968fcf5ffce40fc390389e012b6`,
+   Kirby: Planet Robobot `5ab4756dd3aeb78c83077d8bb4fea1fd`, Super Smash
+   Bros. for Nintendo 3DS `da8f2f45bb575e8056c64b96f20b0769`.
+   `dorequest.php?r=gameid` answers `"GameID":0` for each: unknown.
+2. **rcheevos has no 3DS address space**, so no achievement could be read
+   or written for it: console id 62 exists (`include/rc_consoles.h:77`) and
+   a hash, but no memory regions, in v12.5.0 and at master
+   (`rc_console_memory_regions` falls to `rc_memory_regions_none`). With
+   none, `rc_libretro_memory_init` takes only `retro_get_memory_data`'s
+   system RAM (`src/rc_libretro.c:739-740`), and Azahar answers NULL there.
+3. **RomM gives a 3DS game no hash**: 5.4.0's table of RetroAchievements
+   platforms has no 3DS (`backend/adapters/services/rahasher.py:92-156`).
+   His rows 3645, 3646 and 3644: `ra_hash` empty, `ra_id` null. The console
+   knows a game only by RomM's hash (`achievements.cpp:798`); its own copy
+   of rcheevos compiles the 3DS hash out (`RC_HASH_NO_ENCRYPTED`).
+
+**The core's side is there:** Azahar sends `SET_MEMORY_MAPS` with the heap,
+the linear heaps (Old and New) and VRAM at the 3DS's own addresses
+(`citra_libretro.cpp:309-366`), once, at the end of loading (`:416`), and
+answers NULL to `retro_get_memory_data`, "Memory is exposed via
+RETRO_ENVIRONMENT_SET_MEMORY_MAPS instead" (`:740-748`). Not checked: whether
+a map taken at load covers memory a game allocates after it.
+
+**The console reaches RetroAchievements today** through rcheevos' rc_client:
+the requests rc_client builds (to retroachievements.org) go out on one
+libcurl worker (`ra_net.cpp`), and the game is found by RomM's `ra_hash`.
+**When RetroAchievements launches the 3DS:** a `{"3ds",
+RC_CONSOLE_NINTENDO_3DS}` row in `consoleFor`, rcheevos updated to the
+release that has the map, RomM adding 62 to its table (asked of RomM then,
+by the small-gaps rule; no 3DS achievements here until it ships), and the
+map checked against a running game. About five lines here. Nothing now.
+
+**Save states: what the core does, at 2126.2**
+
+- `retro_serialize_size` makes the whole state: it runs the emulation loop
+  for up to 5 s until no kernel work is pending, then `SaveStateBuffer`;
+  `retro_serialize` only copies it (`citra_libretro.cpp:692-720`).
+- The state is a 256-byte header ("CST", the title id, the build's whole git
+  commit, the time, the build's name and version) and the machine,
+  boost-serialized and packed with zstd at its default level
+  (`core/savestate.cpp:245-279`).
+- **A state from another revision:** `LoadStateBuffer` compares the
+  header's 20-byte commit with the core's own, logs "Save state file created
+  from a different revision", and returns false (`savestate.cpp:300-306`),
+  which `retro_unserialize` returns (`citra_libretro.cpp:722-738`). Seen on
+  the A9: a state with only its commit changed was refused in 1.3 ms with
+  that line. The commit is the git HEAD the core was built from
+  (`CMakeModules/GenerateBuildInfo.cmake:24`), so the arm's patch does not
+  change it and any pin move does. Azahar's own window is looser (it loads a
+  state from another commit of the same release, `savestate.cpp:52-82`), but
+  the libretro path is not, and a build of ours names no release anyway
+  ("0", set only for Azahar's CI builds of a tag,
+  `GenerateBuildInfo.cmake:40-55`).
+
+**Measured on the A9, 2026-10-20, headless:** the image's frontend with
+`--core --rom --state-test` in a bare /dev with only the GPU, dummy audio
+and a scratch home (nothing touched the TV's session), the core from run
+39362460074 through a scratch timing wrapper, Vulkan, factor 1 unless named;
+the games from the write-test RomM, all three decrypted (NoCrypto set).
+
+| Game and scene | Mode | On disk (bytes) | Raw (bytes) | Make (ms) | Load (ms) |
+|---|---|---|---|---|---|
+| Mario Kart 7, title, 25 s | Old 3DS | 9,979,259 | 170,671,683 | 270, 273 | 264, 275 |
+| Mario Kart 7, title, 25 s | New 3DS | 9,990,430 | 309,087,995 | 564, 575 | 496, 502 |
+| Mario Kart 7, title, 2 min | New 3DS | 9,982,907 | | 400, 404 | 345, 358 |
+| Kirby, 1 min, sound playing | New 3DS | 23,632,899 | | 526, 537 | 399, 417 |
+| Kirby, the same at factor 5 | New 3DS | 23,810,989 | | 488, 491 | 391, 403 |
+| Smash, 1 min | New 3DS | 20,859,561 | | 634, 853 | 578, 707 |
+
+- The copy, `retro_serialize`, 0.9 to 2.5 ms. Every round trip passed:
+  runs 2 and 3 identical in picture and sound.
+- **The time follows the raw machine**, 128 MB of FCRAM on an Old 3DS and
+  256 MB on a New 3DS, not the picture: factor 5 cost what factor 1 did. The
+  console keeps the core's New 3DS (four New-3DS-only games).
+- **On disk** the file is the core's bytes as they are (no achievement
+  progress to wrap): 10 to 24 MB, three kept a game on RomM, so up to about
+  72 MB a game a person.
+- **What a player notices:** a save stops the picture and the sound for 0.3
+  to 0.9 s on the frame thread (the work is in `retro_serialize_size`,
+  `core_memory.cpp:77`), before "Saving…" shows; a load takes 0.3 to 0.7 s
+  while the game is held anyway.
+- **Not measured:** a state in play (a race, a level); no headless run gets
+  there without a press. It will be larger on disk; its time should be
+  close, since the time tracks the raw size. The hand test's log reads the
+  size ("[state] N bytes saved locally") once states are on.
+
+**Rewind: no.** A snapshot every half second of play (`pace.cpp:127`) at
+270 to 850 ms each on the frame thread is 30 frames of play, then a stall of
+16 to 51 frames: the game would run at 37% to 65% of its speed, stopping
+twice a second. Thirty snapshots of 10 to 24 MB are 300 to 710 MB, past
+rewind's 192 MB ceiling (`rewind.h:52`), so 8 to 19 would be kept (4 to 9
+s). RetroArch offers none either: libretro's core info gives Azahar
+`savestate_features = "basic"`, which RetroArch reads as states without
+rewind (`core_info.h:33-43`). Opera and MAME 2003-Plus are "basic" there
+too, and rewind here today; following that label as a rule would take it
+from them.
+
+**Fast forward:** nothing to build; it comes with states. How near 4x the
+A9 gets in play is the hand test's frame times, not measured here.
+
+**A state stranded by a pin move, as the console stands:** "Couldn't load
+that state" (`states.cpp:61-64`), the words a damaged state gets. The state
+stays on RomM and on the game's page; Home's Resume tries the newest, is
+refused, says the same, and the game starts from the beginning, until three
+new states rotate the old ones out. It says what happened, not why, and the
+player cannot tell a stranded state from a broken one. The options:
+
+- (a) Leave it: every pin move loses every 3DS state on every console with
+  those words, the data loss question 25 warned of, which the ruling accepts.
+- (b) Grey them: read the commit in a 3DS state's header (bytes 12 to 31,
+  from the local copy, or a 32-byte read of RomM's) against the running
+  core's (its version, "219d743", is the commit's first seven characters,
+  so no state has to be made to know it); grey those on the game's page
+  with a short reason, and Resume passes over them. About 60 to 100 lines
+  in `states.cpp` and `detail.cpp`. The words on screen are his.
+- (c) Never move the pin while states exist: not workable, the pin has to
+  move one day.
+
+**Faults found on the way:**
+
+1. **#524 as it stands makes a whole 3DS state at every game's start and
+   throws it away:** `play.cpp:453` calls `core.stateSize()` before it looks
+   at `session.snapshots`, and for Azahar that call is the whole save, 0.3 to
+   0.9 s on the frame thread in its first frames. From the code, not yet seen
+   in a log. Asking `session.snapshots` first fixes it in one line, states or
+   no states.
+2. **On OpenGL the state is made outside the core's context:**
+   `Core::saveState` calls `serialize_size` before its `CoreContext`
+   (`core_memory.cpp:77-83`), and `stateSize` has none (`:71-73`); Azahar
+   runs its emulation loop and its serializer in that call. Nothing changes
+   on Vulkan, where the context does nothing; it matters if the hand test
+   puts the 3DS on OpenGL. About four lines.
+3. **A failed save asks `stateSize()` again for its words**
+   (`states.cpp:79`): for Azahar a second whole state, and 0 when the core
+   gave up waiting (its 5 s limit), so the console would say "No save states
+   for this system". Choosing the words by `snapshotsAllowed` instead: two
+   lines.
+
+**What to build, and the cost:**
+
+| Piece | Where | Lines | Risk |
+|---|---|---|---|
+| States on: `azahar` out of `kNoSnapshots`; its row moved from `saveTag`'s table to `emulatorTag`'s, the tag still `azahar`, so saves keep theirs | `savetable.cpp` | about 10 with comments | every pin move strands every 3DS state (above) |
+| Rewind refused for Azahar, and its probe not run: a `rewindAllowed(core)` beside `snapshotsAllowed`, the rule stated generally (no rewind where a state takes longer than a frame; Azahar's takes 16 to 51), a list because there is no cheap way to ask | `savetable.cpp/.h`, `play.cpp:452-454` | about 15 | none; "No rewind for this system" exists |
+| Fault 1 | `play.cpp:453` | 1 to 3 | none; worth shipping with #524 whatever is decided |
+| Fault 2 | `core_memory.cpp` | about 4 | none on Vulkan |
+| Fault 3 | `states.cpp:79` | about 2 | none |
+| Option (b), if he picks it | `states.cpp`, `detail.cpp` | 60 to 100 | the words are his |
+| RetroAchievements | nothing now; about 5 lines on the day RetroAchievements and RomM both have the 3DS | | |
+| Docs | this question's "States" row; docs/ARCHITECTURE.md for a new function; a changelog line | | |
+
+About 35 lines of code without option (b), about 100 to 130 with it. Then
+on the TV: a state saved and loaded in play, its size and its pause read
+from the log; Resume from Home; fast forward in a race.
