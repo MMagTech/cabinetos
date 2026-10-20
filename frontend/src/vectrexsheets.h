@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <map>
 #include <string>
 
 namespace ui {
@@ -50,6 +51,21 @@ bool ready();
 // in one Vectrex game holds for all. On by default.
 bool on();
 void setOn(bool on);
+
+// THE FIT, for the launch and the option check (optcheck.h): a Vectrex game
+// drawn under its sheet is given the same vecx_scale_x and vecx_scale_y,
+// which shrink the core's picture about its centre, keeping its shape, so
+// what the game draws at the edges of its screen stays inside the sheet's
+// window instead of under its frame; every other game, the core's own 1.
+// Overlays Off gives the whole picture back, live (pausemenu.cpp).
+// The first form decides from the game and the Overlays choice; the second
+// is told, so the check can test both answers.
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug,
+                                               const std::string& md5, const std::string& name,
+                                               const std::string& fsName);
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug, bool fitted);
 
 // The sheet over exactly the core's picture rectangle, in canvas points:
 // alpha composited, premultiplied source over, at full opacity (the files

@@ -34,6 +34,17 @@ State& state() {
 }
 
 std::string prefKey(const std::string& slug) { return "overlays." + slug; }
+bool chosenOn(const std::string& slug) { return prefs::get(prefKey(slug), "on") != "off"; }
+
+// MEASURED ON THE A9, 2026-10-20 (#224), eight games headless, 25 captures
+// each: with the core's own 1 the lines reach x 0 to 868 of the 869-point
+// picture (Web Wars' web, Scramble's ground, Mine Storm's mines as they
+// wrap) and the sheets' windows run from about x 30 to 839, so 850 to 8,700
+// lit pixels a game went under a frame. At 0.92 the lines span x 34 to 835
+// and y 144 to 957, and what is left under a sheet is the system ROM's
+// start-up frame and a few pixels (0 to 74) of the games themselves. The
+// same on both axes keeps the picture's shape.
+constexpr const char* kFit = "0.92";
 
 std::string normalised(const std::string& s) {
     std::string out;
@@ -131,7 +142,7 @@ void prepare(const std::string& platformSlug, const std::string& md5,
     State& s = state();
     s.slug = platformSlug;
     if (platformSlug != "vectrex") return;
-    s.on = prefs::get(prefKey(platformSlug), "on") != "off";
+    s.on = chosenOn(platformSlug);
     const Uint64 since = SDL_GetTicksNS();
     const std::string file =
         sheetFor(textOf(folder() + "/vectrex-overlays.json"), md5, name, fsName);
@@ -162,6 +173,24 @@ void prepare(const std::string& platformSlug, const std::string& md5,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     std::fprintf(stderr, "[vectrex] screen sheet %s, %dx%d, %.1f ms, overlays %s\n",
                  file.c_str(), w, h, (SDL_GetTicksNS() - since) / 1e6, s.on ? "on" : "off");
+}
+
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug, bool fitted) {
+    if (platformSlug != "vectrex" || core != "vecx") return {};
+    const char* v = fitted ? kFit : "1";
+    return {{"vecx_scale_x", v}, {"vecx_scale_y", v}};
+}
+
+std::map<std::string, std::string> coreOptions(const std::string& core,
+                                               const std::string& platformSlug,
+                                               const std::string& md5, const std::string& name,
+                                               const std::string& fsName) {
+    if (platformSlug != "vectrex" || core != "vecx") return {};
+    const bool fitted =
+        chosenOn(platformSlug) &&
+        !sheetFor(textOf(folder() + "/vectrex-overlays.json"), md5, name, fsName).empty();
+    return coreOptions(core, platformSlug, fitted);
 }
 
 bool ready() { return state().texture != 0; }

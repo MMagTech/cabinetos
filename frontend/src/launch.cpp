@@ -164,6 +164,11 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
             // it (#274, wii.h).
             for (const auto& kv : wii::coreOptions(job.coreName, game.platformSlug))
                 opts[kv.first] = kv.second;
+            // A Vectrex game under its sheet, fitted inside the sheet's
+            // window (#224, vectrexsheets.h).
+            for (const auto& kv : vectrexsheets::coreOptions(job.coreName, game.platformSlug,
+                                                             game.md5, job.title, game.fsName))
+                opts[kv.first] = kv.second;
             core.setOptionOverrides(opts);
             quality::logApplied(job.coreName, game.id, level);
         }
