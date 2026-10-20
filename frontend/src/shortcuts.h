@@ -15,7 +15,9 @@
 // models, so it is remembered per KIND of pad (SDL's GUID), not per pad: set
 // once for a Lite 2, every Lite 2 uses it.
 //
-// Unset, a pad uses its mapped Home, which is right for most pads.
+// Unset, a pad uses its mapped Home, which is right for most pads. A chosen
+// button is ADDED to Home, never put in its place, and Select and Start can
+// never be chosen: they are the coin and the pause inside games (#313).
 
 #pragma once
 
