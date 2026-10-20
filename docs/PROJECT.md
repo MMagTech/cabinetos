@@ -343,7 +343,10 @@ down. "Look now at" is where the code or a later decision moved on.
   sheets and 3 variants drawn, the invented ones off, alpha-composited at
   opacity 1 over the core's picture. RetroArch and Bazzite ship none;
   Batocera ships the same sheet art inside Duimon's CC BY-NC-ND console
-  bezels, in four optional sets. His decision: the legal footing.
+  bezels, in four optional sets. Decided late that day: an Overlays
+  On / Off row in the Vectrex pause menu, kept per system like a look,
+  default On, reversing the morning's "no row". Still his: the legal
+  footing.
 
 ---
 
@@ -18729,6 +18732,9 @@ or commit was read, 2026-10-19, unless it says otherwise.
   variants; leave the invented ones (prototypes, the 3D Imager games) in
   the table but off, as Cabinet did. His one decision is the legal one,
   under "Recommendation" below.
+- **Decided later the same day:** an "Overlays: On / Off" row in the
+  Vectrex pause menu after all, remembered per system like a look, default
+  On (the last block before "Recommendation").
 
 #### What Cabinet shipped, and where it came from
 
@@ -19224,6 +19230,32 @@ folder is the sheet alone under MIT. What Batocera adds is a precedent: a
 free Linux distribution has shipped per-game Vectrex sheets inside its image
 since January 2022, under a non-commercial licence, with no claim reported
 that I could find.
+
+#### Decided 2026-10-19, late: an Overlays row in the pause menu, remembered per system
+
+MMagTech, in conversation after reading the research. **This reverses the
+"no on/off row" of his issue comment of 2026-10-19 (the morning's review);
+the comment stands as written, this entry is the later word.** Asked
+whether the sheet should be an option like the looks, the answer given was
+no row (the sheet was part of the hardware, a row is for the few); he
+decided the other way, for a reason of his own: the Vectrex's pause menu is
+nearly empty, since Vectrex has no Look row (`looks.h`: a system with no
+looks), so a row fits there naturally and costs the menu nothing.
+
+- **The row:** "Overlays: On" / "Overlays: Off", in the pause menu where the
+  Look row sits for the other systems, Vectrex only. Default On.
+- **Remembered like the looks:** one choice for the system, not per game.
+  Set in any Vectrex game, it applies to every Vectrex game and is kept,
+  the way `screenfx::choose(platformSlug, index)` keeps a system's look by
+  its RomM platform slug (`looks.h`). The same storage, keyed `vectrex`.
+- **Off shows the bare screen**, the white lines and nothing else, and the
+  bias glow as always (it is white and never samples the picture,
+  `shaders.inc`, `kGlowFS`).
+- **Everything else in this question stands:** the set, the rule for which
+  sheets draw, alpha at opacity 1, no console bezel ever.
+
+The legal footing (the one decision named under "Recommendation") is still
+open as this is written.
 
 #### Recommendation, 2026-10-19 (not decided)
 
