@@ -40,12 +40,15 @@ SDL_GamepadButton mappedTo(SDL_Gamepad* gp, int raw) {
     return out;
 }
 
-// SELECT AND START ARE NEVER THE SHORTCUT BUTTON (#313, MMagTech 2026-10-20):
-// Select is the coin in every arcade game and Start the pause in most games,
-// so a tap of either must reach the game. The row refuses them (pick), and a
-// choice saved before this rule reads as none, so nobody is left with it.
-bool isGameButton(SDL_GamepadButton b) {
-    return b == SDL_GAMEPAD_BUTTON_BACK || b == SDL_GAMEPAD_BUTTON_START;
+// SELECT, START, L3 AND R3 ARE NEVER THE SHORTCUT BUTTON (#313, MMagTech
+// 2026-10-20): Select is the coin in every arcade game and Start the pause in
+// most games, so a tap of either must reach the game; L3+R3 is the pause
+// menu on every pad, and with L3 chosen the tap opened the menu and the R3
+// closed it again. The row refuses them (pick), and a choice saved before
+// this rule reads as none, so nobody is left with it.
+bool isReserved(SDL_GamepadButton b) {
+    return b == SDL_GAMEPAD_BUTTON_BACK || b == SDL_GAMEPAD_BUTTON_START ||
+           b == SDL_GAMEPAD_BUTTON_LEFT_STICK || b == SDL_GAMEPAD_BUTTON_RIGHT_STICK;
 }
 
 // The raw button chosen for this kind of pad, or -1 for none.
@@ -56,7 +59,7 @@ int chosen(SDL_Gamepad* gp) {
     char* end = nullptr;
     const long n = w.empty() ? -1 : std::strtol(w.c_str(), &end, 10);
     int raw = (!w.empty() && end && *end == '\0' && n >= 0) ? static_cast<int>(n) : -1;
-    if (raw >= 0 && isGameButton(mappedTo(gp, raw))) raw = -1;
+    if (raw >= 0 && isReserved(mappedTo(gp, raw))) raw = -1;
     gChosen[key] = raw;
     return raw;
 }
@@ -159,7 +162,9 @@ Pick pick(SDL_Gamepad* gp, int raw) {
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
         case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return Pick::Ignore;
         case SDL_GAMEPAD_BUTTON_BACK:
-        case SDL_GAMEPAD_BUTTON_START: return Pick::Refused;
+        case SDL_GAMEPAD_BUTTON_START:
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK: return Pick::Refused;
         default: break;
     }
     prefs::set(keyFor(gp), std::to_string(raw));

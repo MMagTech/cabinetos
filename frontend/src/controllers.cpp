@@ -277,8 +277,10 @@ bool App::interceptControllers(const SDL_Event& e) {
             const shortcuts::Pick got = shortcuts::pick(
                 SDL_GetGamepadFromID(shortcutListen), e.jbutton.button);
             if (got == shortcuts::Pick::Refused) {
-                shortcutRefused = shortcuts::label(SDL_GetGamepadFromID(shortcutListen),
-                                                   e.jbutton.button);
+                const std::string b = shortcuts::label(SDL_GetGamepadFromID(shortcutListen),
+                                                       e.jbutton.button);
+                shortcutRefused = (b == "L3" || b == "R3") ? "L3 and R3 open the menu"
+                                                           : "Games use " + b;
                 sound::play(sound::Cue::Edge);
                 buildSettings();
             } else if (got != shortcuts::Pick::Ignore) {

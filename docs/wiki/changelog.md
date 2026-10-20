@@ -7,9 +7,11 @@ one you install, so you only ever install the newest.
 ## Next
 
 - **Fixed:** streaming an arcade game to a phone, a tap of Select could open
-  the pause menu instead of putting a coin in. Select and Start can no
-  longer be chosen as the shortcut button, and Home opens the pause menu
-  even when another button was chosen for that kind of controller (#313).
+  the pause menu instead of putting a coin in. Select, Start and the stick
+  buttons can no longer be chosen for shortcuts (games use them, and L3+R3
+  is the pause menu), and Home opens the pause menu even when a spare
+  button was chosen for that kind of controller. The row now reads
+  "Shortcuts use: Home" (#313).
 
 ## 2026.10.20 {#v2026-10-20}
 

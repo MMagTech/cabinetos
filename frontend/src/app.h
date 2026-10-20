@@ -1392,8 +1392,8 @@ struct App {
     // for that same press (same timestamp) goes no further: a B that cancels
     // must not also leave Settings.
     SDL_JoystickID shortcutListen = 0;
-    // The last press while listening was Select or Start: the row says which
-    // until the next press (shortcuts::Pick::Refused). Empty otherwise.
+    // The last press while listening was refused: what the row says until
+    // the next press (shortcuts::Pick::Refused). Empty otherwise.
     std::string shortcutRefused;
     Uint64 shortcutTakenAt = 0;
     std::vector<drives::Drive> formatable;
