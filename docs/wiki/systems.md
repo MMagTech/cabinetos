@@ -128,7 +128,7 @@ downloads anything new into the console's shared BIOS folder.
 - **The two screens side by side**, the top screen on the left.
 - **Touch screen:** the right stick moves a pointer on the touch screen and
   pressing it (R3) touches. The right stick is the New 3DS's C-stick too.
-  Press L3 to swap the two screens, and again to swap them back.
+  Hold L3 to swap the two screens.
 - **Save states and fast forward, no rewind.** A 3DS state may not load
   after an update changes the emulator: *Couldn't load that state*. Saves
   are not affected.

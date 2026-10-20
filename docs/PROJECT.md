@@ -346,8 +346,8 @@ down. "Look now at" is where the code or a later decision moved on.
   met by his go for the testing image ("Build the damn thing already").
   On the TV in 2026.10.20.5: every 3DS game after the first used the first
   game's folders, fixed by a second patch (#534, "Azahar patch: each game
-  sets its own folders (until Azahar fixes SetUserPath)"); L3 swaps on one
-  press and stays swapped, his call.**
+  sets its own folders (until Azahar fixes SetUserPath)"); a toggled L3
+  swap decided, then dropped (a third patch), so L3 stays held.**
 - **51. Vectrex screen overlays, issue #224** ("Vectrex: the cartridges'
   screen overlays"). Researched 2026-10-19, not decided: Cabinet's 38 sheets
   are libretro/overlay-borders' `Game Overlay` folder, byte for byte (MIT,
@@ -19632,8 +19632,7 @@ RomM with a made-up `.cia`: the 3DS shelf showed 4 of the server's 5, the
 Library tile "4 games", Search for its name left it out; his three games
 showed. The test file was deleted after.
 
-**L3 is held to swap, decided 2026-10-20 by the lead session; replaced the
-same evening by the core's Toggle, his call (below)**
+**L3 is held to swap, decided 2026-10-20 by the lead session**
 (`citra_swap_screen_mode` "Hold", `coreoptions.cpp`): with the core's
 "Toggle", the L3 that lands a frame before R3 when a player opens the pause
 menu left the screens swapped behind it; side by side a swap only trades
@@ -19677,7 +19676,7 @@ with those. Build the damn thing already." So every condition is met:
 - **(5) His call:** the 3DS emulator is built into the image, Azahar's own
   libretro core at 2126.2, with the no-network patch.
 
-#### On the TV in 2026.10.20.5: two changes (2026-10-20, evening)
+#### On the TV in 2026.10.20.5: the save folders, and L3 (2026-10-20, evening)
 
 - **Every 3DS game after the first used the first game's folders.**
   Azahar's `SetUserPath` (`src/common/file_util.cpp:935` at 219d743) sets
@@ -19702,11 +19701,15 @@ with those. Build the damn thing already." So every condition is met:
   own folders (until Azahar fixes SetUserPath)"), reported upstream as
   azahar-emu/azahar#2694; dropped when an Azahar release fixes it. Kirby's
   progress from that evening is only in Mario Kart 7's folder on the A9.
-- **L3 swaps the screens on one press, and they stay swapped**, MMagTech's
-  call for the final version, replacing Hold: the core's own Toggle, so the
-  override is gone. Hold existed only for the stray L3 ahead of R3 on the
-  pause pair, and the lone-stick-click hold-back (above) keeps that out of
-  the core.
+- **A toggled L3 swap, decided and then dropped the same evening**
+  (MMagTech): Azahar keeps the toggle in a static flag in `retro_run`
+  (`citra_libretro.cpp:241` at 219d743) that outlives a game, as the
+  folder table did, so after a game ended swapped the next 3DS game's first
+  L3 press would have done nothing; fixing it needed a third patch. His
+  rule: the build carries only the patches the emulator needs to work to
+  the console's expectations (games off the internet, each game and person
+  in its own folders), and a toggled swap is not one. L3 stays held to swap
+  (`citra_swap_screen_mode` "Hold").
 
 Next: the testing image, judged on the TV, then the merge on his go.
 
