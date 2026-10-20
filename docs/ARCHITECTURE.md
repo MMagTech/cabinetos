@@ -236,8 +236,11 @@ power cut).
 2. The upload queue (`uploader.h`) sends it on its own thread as the person
    who made it (`romm_playdata.cpp` makes the request), and removes the
    marker when RomM has it. A marker left by a crash is sent again at the
-   next start (`startSync`). States: the newest three per game and emulator
-   tag are kept on RomM.
+   next start (`startSync`). One that failed is sent again every five
+   minutes, when the server comes back and after a person's next upload
+   works; one RomM refused (an HTTP 4xx) keeps its marker and waits for the
+   next start or a new save of it. States: the newest three per game and
+   emulator tag are kept on RomM.
 3. Each core's saves, where it writes them and the tag they carry on RomM are
    one table, `savetable.cpp`. A launch restores the newest row under its
    tag, except that this console's own copy wins while it is still owed to

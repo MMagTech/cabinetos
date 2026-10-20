@@ -110,6 +110,21 @@ jobs:
           podman run --rm -v "$PWD/wiibridge":/src:Z -w /src cabinetos-builder \
             make 2>&1 | tee -a /tmp/build.log
 
+      # THE WII BRIDGE'S PACING TEST (#480, wiibridge/pacing-test.cpp): two
+      # Remotes on socket pairs through the bridge's own loop, no hardware,
+      # about two seconds. Report only until REPORT_ONLY_UNTIL, then a
+      # failure, as every new check here starts.
+      - name: Test the Wii bridge
+        run: |
+          set -euo pipefail
+          if ! podman run --rm -v "$PWD/wiibridge":/src:Z -w /src cabinetos-builder make test; then
+            if [[ ! "$(date -u +%F)" > "${REPORT_ONLY_UNTIL}" ]]; then
+              echo "::warning::The Wii bridge's pacing test failed. Report only until ${REPORT_ONLY_UNTIL} (UTC): passing. From the next day this fails."
+              exit 0
+            fi
+            exit 1
+          fi
+
       # EVERY OPTION VALUE THE CONSOLE SETS, AGAINST WHAT EACH CORE DECLARES
       # (#63, the version-bump check, frontend/src/optcheck.h). A table that
       # names a key a core does not have, or a value it does not accept,
