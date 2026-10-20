@@ -320,6 +320,24 @@ jobs:
       - name: Pinned downloads, into the payload
         run: ci/fetch-pinned.sh fetch .downloads image_payload/downloads
 
+      # THE VECTREX GAMES' SCREEN SHEETS (#224): libretro/overlay-borders'
+      # Game Overlay folder at a pinned commit, each file checked by its
+      # sha256 (tools/fetch-vectrex-overlays.py, which holds both), kept in
+      # the Actions cache the same way. Not in the repository; the console
+      # never fetches them. build_files/install-frontend.sh installs them.
+      - name: Vectrex sheets, from the cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .vectrex-sheets
+          key: vectrex-sheets-${{ hashFiles('tools/fetch-vectrex-overlays.py') }}
+          restore-keys: vectrex-sheets-
+
+      - name: Vectrex sheets, into the payload
+        run: |
+          python3 tools/fetch-vectrex-overlays.py .vectrex-sheets
+          mkdir -p image_payload/vectrex
+          cp .vectrex-sheets/*.png image_payload/vectrex/
+
       - name: Install just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3  # v4.0.0
 

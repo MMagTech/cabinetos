@@ -365,6 +365,8 @@ struct App {
     bool discTestMode = false;
     // --files-test: what survives a full disk, through cab::writeBytes (#482).
     bool filesTestMode = false;
+    // --vectrex-sheets-test: which Vectrex game takes which sheet (#224).
+    bool vectrexSheetsTestMode = false;
     // Opens the overlay and takes Exit to Home, so the whole leave-a-game path
     // can be proved on a machine with nothing attached.
     bool overlayExitDemo = false;

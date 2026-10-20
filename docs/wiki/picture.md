@@ -62,12 +62,18 @@ behind the menu as you choose, and the choice is kept for that system.
 The looks are RetroArch's own shaders. PS2 and newer, DS, PSP, Virtual Boy and
 Vectrex have no Look row.
 
-Two systems have a row of their own in the pause menu:
+Three systems have a row of their own in the pause menu:
 
 - **Virtual Boy, Screen:** Red, White, Blue, Cyan, Electric cyan, Green,
   Magenta, Yellow, and five 3D glasses pairs (red/blue, red/cyan, red/electric
   cyan, green/magenta, yellow/blue).
 - **Game Boy, Colors:** Off, Auto, Game Boy Color, Super Game Boy.
+- **Vectrex, Overlays:** On, Off. Every Vectrex cartridge came with a
+  coloured sheet that sat in front of the screen, and the console draws each
+  game's over its picture, a little smaller so the edges of the game stay
+  inside the sheet's window; Off shows the bare screen at full size. One
+  choice for every Vectrex game, On to start with. The prototypes, the 3D
+  Imager games and homebrew had no sheet, and show no row.
 
 ## Colours
 
