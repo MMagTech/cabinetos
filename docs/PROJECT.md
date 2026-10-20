@@ -19584,6 +19584,27 @@ after (`--restore`).
   session, whose reaper kills the frontend at once, so a game left that way
   sends no save; it waits on the console and goes at that game's next exit.
 
+**L3 is held to swap, decided 2026-10-20 by the lead session**
+(`citra_swap_screen_mode` "Hold", `coreoptions.cpp`): with the core's
+"Toggle", the L3 that lands a frame before R3 when a player opens the pause
+menu left the screens swapped behind it; side by side a swap only trades
+the screens' sides, so holding costs nothing. Tried on the TV the same day
+in Smash's character select, the fake pad's presses overlapping as a
+person's do (`tools/fake-pad.c`'s `down:` and `up:`):
+
+- **L3 held 2 s:** swapped while held, back on release.
+- **L3 + R3 in the same frame, twice:** the pause menu, no swap.
+- **L3 33 ms before R3, twice:** the screens swapped behind the pause menu
+  and came back on Resume: a flicker, not a swap that stays.
+- **R3 33 ms before L3, twice:** nothing visible. R3 alone did nothing
+  visible either: the pointer rests at the touch screen's top-left corner,
+  which holds nothing there, and in Smash the right stick also moves the
+  game's own hand cursor (the C-stick) and no touch cursor showed, so the
+  pointer could not be put on a target. Whether a stray R3 taps was not
+  shown on the TV; by the code it does (fault 4 above).
+- **Not built, his call:** holding a lone stick click back a frame or two
+  so L3 + R3 never reaches the core (fault 4).
+
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 
 **Researched 2026-10-19, the night; research only, no code; DECIDED 2026-10-19, late.**

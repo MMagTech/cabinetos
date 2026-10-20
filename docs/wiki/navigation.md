@@ -64,7 +64,7 @@ The Home (Guide) button is never passed to a game.
 | System | Button | Does |
 |---|---|---|
 | Nintendo DS | Right stick, **R3** | The right stick moves a pointer on the touch screen; **R3** (press the stick) touches |
-| Nintendo 3DS | Right stick, **R3**, **L3** | The right stick moves a pointer on the touch screen, and is the C-stick too; **R3** touches; **L3** swaps the two screens |
+| Nintendo 3DS | Right stick, **R3**, **L3** | The right stick moves a pointer on the touch screen, and is the C-stick too; **R3** touches; hold **L3** to swap the two screens |
 | PlayStation (PS1) | **L1 + R1 + Select** | The DualShock's ANALOG button, for the few games that need it pressed |
 
 PS1 games get a DualShock: sticks and rumble work in the games made
