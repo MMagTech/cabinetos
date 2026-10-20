@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.20.4 {#v2026-10-20-4}
+
+*20 October 2026*
 
 - **New:** Vectrex games show the coloured sheet each cartridge came with,
   over the screen as it sat on the real console: the colours, the artwork
