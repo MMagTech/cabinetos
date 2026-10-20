@@ -1392,6 +1392,9 @@ struct App {
     // for that same press (same timestamp) goes no further: a B that cancels
     // must not also leave Settings.
     SDL_JoystickID shortcutListen = 0;
+    // The last press while listening was Select or Start: the row says so
+    // until the next press (shortcuts::Pick::Refused).
+    bool shortcutRefused = false;
     Uint64 shortcutTakenAt = 0;
     std::vector<drives::Drive> formatable;
     std::map<int, std::string> driveNames;   // a drive row's id -> its name

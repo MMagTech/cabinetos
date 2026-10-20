@@ -42,10 +42,11 @@ std::string label(SDL_Gamepad* gp);
 
 // Setting it. `raw` is the joystick button number from a
 // SDL_EVENT_JOYSTICK_BUTTON_DOWN on this pad.
-enum class Pick { Taken, Cancel, Ignore };
+enum class Pick { Taken, Cancel, Ignore, Refused };
 // What a press means while the row is listening: B cancels, and a button the
 // game or the shortcuts need (the face buttons, the shoulders, the d-pad) is
-// ignored so listening goes on. Anything else is taken and saved.
+// ignored so listening goes on; Select and Start are refused, which the row
+// says, and listening goes on. Anything else is taken and saved.
 Pick pick(SDL_Gamepad* gp, int raw);
 
 }  // namespace shortcuts

@@ -134,8 +134,9 @@ void App::buildSettings() {
                 if (p.id == settingsLastPad) inHand = &p;
             SDL_Gamepad* gp = SDL_GetGamepadFromID(inHand->id);
             rows.push_back({K::Action, SetShortcutButton, "Shortcut button", inHand->name,
-                            shortcutListen ? "Press a button\xE2\x80\xA6"
-                                           : shortcuts::label(gp)});
+                            !shortcutListen   ? shortcuts::label(gp)
+                            : shortcutRefused ? "Not Select or Start\xE2\x80\xA6"
+                                              : "Press a button\xE2\x80\xA6"});
         }
         cats.push_back({"Controllers", std::move(rows)});
     }
@@ -526,6 +527,7 @@ void App::applySetting(const screens::Result& res) {
     } else if (res.value == SetShortcutButton) {
         // The pad that pressed A, which the row already names.
         const std::vector<players::Pad> pads = players::connected();
+        shortcutRefused = false;
         shortcutListen = pads.empty() ? 0 : pads.front().id;
         for (const players::Pad& p : pads)
             if (p.id == settingsLastPad) shortcutListen = p.id;

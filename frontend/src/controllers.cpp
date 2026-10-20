@@ -276,8 +276,13 @@ bool App::interceptControllers(const SDL_Event& e) {
                    e.jbutton.which == shortcutListen) {
             const shortcuts::Pick got = shortcuts::pick(
                 SDL_GetGamepadFromID(shortcutListen), e.jbutton.button);
-            if (got != shortcuts::Pick::Ignore) {
+            if (got == shortcuts::Pick::Refused) {
+                shortcutRefused = true;
+                sound::play(sound::Cue::Edge);
+                buildSettings();
+            } else if (got != shortcuts::Pick::Ignore) {
                 shortcutListen = 0;
+                shortcutRefused = false;
                 shortcutTakenAt = e.jbutton.timestamp;
                 sound::play(got == shortcuts::Pick::Taken ? sound::Cue::Activate
                                                           : sound::Cue::Back);

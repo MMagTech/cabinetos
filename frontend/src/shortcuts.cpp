@@ -152,9 +152,9 @@ Pick pick(SDL_Gamepad* gp, int raw) {
         case SDL_GAMEPAD_BUTTON_DPAD_UP:
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
         case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
-        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return Pick::Ignore;
         case SDL_GAMEPAD_BUTTON_BACK:
-        case SDL_GAMEPAD_BUTTON_START: return Pick::Ignore;
+        case SDL_GAMEPAD_BUTTON_START: return Pick::Refused;
         default: break;
     }
     prefs::set(keyFor(gp), std::to_string(raw));
