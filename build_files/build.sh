@@ -121,7 +121,7 @@ done
 # The licences, INSIDE the image.
 # ---------------------------------------------------------------------------
 #
-# This image contains twenty-two emulator cores. Most are GPL and six are free
+# This image contains twenty-three emulator cores. Most are GPL and six are free
 # for non-commercial use only, and the person most likely to redistribute it is
 # the one who does `docker pull` and never sees this repository at all. Terms
 # that live only beside the binaries are terms that do not travel with them.

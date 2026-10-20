@@ -45,6 +45,12 @@ struct Entry {
 // principles", 8 (only for something a player gets).
 const Entry kTable[] = {
     {"3do",                  nullptr,     Support::Playable, "opera",           nullptr},
+    // Nintendo 3DS in Azahar's own core (docs/PROJECT.md, open question 50).
+    // Decrypted cartridge dumps play: .3ds, .cci, .cxi and .3dsx, and the
+    // compressed .zcci, .zcxi and .z3dsx, which the core reads as they are
+    // (it reports them as its own extensions). An encrypted dump or a .cia
+    // is refused before the core sees it, with the reason (ncch.h).
+    {"3ds",                  nullptr,     Support::Playable, "azahar",          nullptr},
     // One slug, two platforms, two different cores. This is the case the
     // "never key on slug alone" rule exists for. The fsSlug here is the
     // folder's name with capitals, spaces, dashes, underscores, dots and "+"

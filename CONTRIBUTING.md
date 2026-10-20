@@ -37,7 +37,7 @@ downloads a whole new image and boots into it.
   how a console is recovered by hand: docs/WORKING.md, "Machines".)
 - **The frontend is one C++20 program** (SDL3, EGL with OpenGL ES 3, and a UI
   layer of its own, no toolkit). It draws every screen, and it hosts the
-  emulators: 22 libretro cores and PCSX2 (PlayStation 2, built as a library)
+  emulators: 23 libretro cores and PCSX2 (PlayStation 2, built as a library)
   run inside its process.
 - **Five emulators run as separate programs**, started and stopped by the
   frontend like a game: Eden (Switch) and xemu (Xbox) from Flathub, and RPCS3
@@ -91,7 +91,7 @@ and runs its one test, `wiibridge/pacing-test.cpp` (#480): two Remotes on
 socket pairs through the bridge's own loop, no hardware.
 
 **A libretro core:** `cores/build-core.sh <core>` from the repository root,
-where `<core>` is the name of one of its `case` arms (the same 22 names as
+where `<core>` is the name of one of its `case` arms (the same 23 names as
 `build-core.yml`'s list). Git runs on the host and the compile runs in
 `cabinetos-builder`, so build that first. Each arm holds the core's
 upstream, pinned commit and make arguments. The result lands in
@@ -109,7 +109,7 @@ says how to run it.
 **The whole image** is normally built only by CI (`build.yml`). On a Linux
 box it is `ci/stage-image-payload.sh` with no arguments, which collects and
 checks your local builds into `image_payload/`, then `just build`. It needs
-every piece built first: the frontend, the Wii bridge, all 22 cores,
+every piece built first: the frontend, the Wii bridge, all 23 cores,
 PCSX2, Cemu and Sunshine under `cores/build/`, the two arcade cores' set
 lists (`cores/arcade-sets.sh`) and PPSSPP's and Dolphin's files in
 `cores/system/`. That path is not walked

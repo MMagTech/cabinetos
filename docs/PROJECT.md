@@ -331,7 +331,11 @@ down. "Look now at" is where the code or a later decision moved on.
   an A9 test of Vulkan's frame pacing (azahar-emu/azahar#2093), and his
   legal call. With it, a touchpad as a second way to touch (the core takes
   it beside the stick, unlike melonDS, #288); gyro as a later piece of its
-  own. His server has no 3DS games.
+  own. His server has no 3DS games. **Go given the night of 2026-10-19,
+  with the conditions; built (the core's arm, the catalog row, the levels,
+  saves the PSP way, the encrypted-dump and CIA refusal, games given no
+  network by a patch). The A9 hand test waits for a time he names and a
+  game of his.**
 
 ---
 
@@ -18168,7 +18172,9 @@ motion is a separate, smaller question for him.
 
 ### 50. Nintendo 3DS (Azahar's libretro core)
 
-**Researched 2026-10-19; research only, no code; not decided.** Asked by
+**Researched 2026-10-19; go given the same night, with the conditions
+below; built, the hand test still to come** (see "The go, and the build" at
+the end). Asked by
 MMagTech on the night of 2026-10-19, with no issue: should the console play
 the 3DS, and how. His four questions (a stable core, Vulkan, upscaling for
 the picture quality levels, the pointer), then the tests the Vita had
@@ -18664,3 +18670,44 @@ games were found that need motion somewhere, two of them best-sellers.
 answer in the core host for the 3DS and the Game Boy Advance motion carts;
 a pad without a gyro still stops at those parts. His call, separate from
 the go.
+
+#### The go, and the build (2026-10-19, night)
+
+MMagTech gave the go with the conditions above. Built, as the research lays
+it out, with nothing redecided:
+
+- **The core:** `cores/build-core.sh`'s `azahar` arm at 2126.2
+  (`219d743a1e69`), CMake, `-DENABLE_LIBRETRO=ON -DENABLE_TESTS=OFF
+  -DENABLE_BUILTIN_KEYBLOB=OFF`, Release, and `-DENABLE_LTO=OFF` as Azahar's
+  own Linux libretro release builds it. Condition (1), that it builds in
+  `cabinetos-builder`, is proved or not by the core workflow's run on the
+  pull request's branch, said there.
+- **Games get no network, condition (2), by the recorded fallback**, a
+  patch in the arm, with no upstream option asked for yet (that waits on
+  his go). Reading the source for it found more doors than the Wi-Fi: the
+  patch reports no connection (`ac.cpp`: status, Wi-Fi status, connect),
+  and fails every call that reaches the host's network, as a 3DS with no
+  access point does: a socket, the four name lookups (`soc_u.cpp`), an HTTP
+  request (`http_c.cpp`, `MakeRequest`), and SOC's lookup of the console's
+  own address, which opens a TCP connection to 8.8.8.8 to find it
+  (`GetDefaultInterfaceInfo`). The rest of the network code is not reached
+  by the libretro build (the multiplayer rooms are off, the update-server
+  download has no caller in the core, Artic Base needs an `articbase://`
+  path).
+- **The refusal:** `frontend/src/ncch.cpp` reads the file before the core
+  does, by its bytes: an NCSD's first partition's NCCH header, a `.cxi`'s
+  own, or the same header in a Z3DS file's first zstd frame; NoCrypto clear
+  is "Encrypted 3DS games can't be played", a CIA (by its header's fixed
+  sizes, or the name a Z3DS file gives what it holds) "3DS CIA files can't
+  be played". Anything it cannot read goes to the core.
+- **One correction to the research above:** at 2126.2 the repository's
+  licence file is `license.txt`, the GPL v2's text, and the GPL v3 or later
+  files are thirteen elsewhere in `src/core` (`core.cpp` and `core.h`, which
+  the core is built from, among them), not the two libretro files named
+  above, which say GPL v2 or later. The
+  conclusion stands: the core as built is GPL v3. Both texts ship
+  (`licences/SOURCES`).
+- **Not done here:** RetroAchievements for the 3DS (not in this question);
+  the layout (the core's default, stacked, until the TV judges it); the
+  touchpad and the gyro (pieces of their own, his call).
+

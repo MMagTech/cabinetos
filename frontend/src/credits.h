@@ -38,6 +38,7 @@ constexpr Credit kCredits[] = {
     {"ProSystem", "Atari 7800 \xC2\xB7 GPL v2+"},
     {"Stella 2014", "Atari 2600 \xC2\xB7 GPL v2"},
     {"melonDS", "Nintendo DS \xC2\xB7 GPL v3+"},
+    {"Azahar", "Nintendo 3DS \xC2\xB7 GPL v3"},
     {"DraStic FreeBIOS", "DS BIOS \xC2\xB7 BSD 2-clause"},
     {"vecx", "Vectrex \xC2\xB7 GPL v3"},
     {"mGBA", "Game Boy Advance \xC2\xB7 MPL 2.0"},

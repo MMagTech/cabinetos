@@ -24,6 +24,7 @@
 #include "catalog.h"
 #include "disc.h"
 #include "fileio.h"
+#include "ncch.h"
 #include "romfile.h"
 #include "romm.h"
 #include "saves.h"
@@ -83,8 +84,19 @@ static void fetchLaunchSaves(LaunchJob& job, romm::Client& client, const storage
 
 // The end of every route: the saves fetched, then Ready, unless a cancel
 // came during either.
+//
+// A 3DS FILE AZAHAR CANNOT PLAY ENDS HERE, with the reason, before the core
+// is handed it (ncch.h): an encrypted dump or a .cia. The file stays, as for
+// any launch that fails after its download.
 static void finish(LaunchJob& job, romm::Client& client, const storage::User& user) {
     if (cancelled(job)) return;
+    if (job.coreName == "azahar") {
+        if (std::string why = ncch::refusal(job.romPath); !why.empty()) {
+            job.message = std::move(why);
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+    }
     fetchLaunchSaves(job, client, user);
     if (cancelled(job)) return;
     job.stage = LaunchJob::Stage::Ready;

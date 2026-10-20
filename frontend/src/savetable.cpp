@@ -152,8 +152,11 @@ const char* emulatorTag(const char* core) {
 bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
+    // Azahar too (docs/PROJECT.md question 50): it refuses a state made by
+    // any other revision of itself, so every pin move would strand them all,
+    // and the 3DS has real saves.
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
-                                               "xenia", "cemu"};
+                                               "xenia", "cemu", "azahar"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -215,6 +218,11 @@ const char* saveTag(const char* core) {
         // game, `<title>/user/` and `<title>/meta/` in Cemu's own layout, which
         // drops into any Cemu's mlc01. No Cabinet app plays Wii U either.
         {"cemu", "cemu"},
+        // Nintendo 3DS, in Azahar: a zip of the emulated SD card's
+        // `Nintendo 3DS` folder, which holds this game's save and extra data
+        // in Azahar's own layout and drops into any Azahar's sdmc. No Cabinet
+        // app plays 3DS either. docs/PROJECT.md question 50.
+        {"azahar", "azahar"},
     };
     const std::string name = manifestName(core);
     for (const auto& t : kSaveTags)
@@ -241,6 +249,7 @@ const char* directorySaveRoot(const char* core, const std::string& platformSlug,
                               const std::string& titleId) {
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
+    if (manifestName(core) == "azahar") return "Azahar/sdmc/Nintendo 3DS";
     if (manifestName(core) == "dolphin" && platformSlug == "wii")
         return wii::isMiiChannel(titleId) ? "User/Wii" : "User/Wii/title";
     if (manifestName(core) == "dolphin" && platformSlug == "ngc") {

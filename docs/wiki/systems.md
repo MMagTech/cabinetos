@@ -1,6 +1,6 @@
 # Systems, formats and BIOS
 
-CabinetOS plays **33 systems**, from the Atari 2600 to the Xbox 360, Switch,
+CabinetOS plays **34 systems**, from the Atari 2600 to the Xbox 360, Switch,
 PS3 and Wii U. Everything comes from your RomM server: games, BIOS, firmware
 and keys. CabinetOS ships none of them.
 
@@ -71,6 +71,7 @@ downloads anything new into the console's shared BIOS folder.
 | SNES | `snes` | Snes9x | sfc, smc, swc, fig, bs, st | None |
 | Nintendo 64 | `n64` | Mupen64Plus-Next | z64, n64, v64 | None |
 | Nintendo DS | `nds` | melonDS | nds, dsi, ids | Optional: `bios7.bin`, `bios9.bin`, `firmware.bin` |
+| Nintendo 3DS | `3ds` | Azahar | decrypted 3ds, cci, cxi or 3dsx, or the compressed zcci, zcxi, z3dsx | None. See [Nintendo 3DS](#nintendo-3ds) |
 | GameCube | `ngc` | Dolphin | rvz, iso, gcz, ciso, wia, gcm | None |
 | Wii | `wii` | Dolphin | rvz, iso, wbfs, wia, ciso, wad | None. See [Wii](#wii-and-wii-u) |
 | Wii U | `wiiu` | Cemu | wua | None (a `.wua` is already decrypted) |
@@ -117,6 +118,18 @@ downloads anything new into the console's shared BIOS folder.
 - Wii U games that need a Wii Remote or the GamePad are greyed: *Needs a Wii
   Remote*, *Needs a Wii U GamePad*.
 
+## Nintendo 3DS
+
+- **Decrypted cartridge dumps play.** An encrypted dump does not, and says
+  *Encrypted 3DS games can't be played*. A `.cia` does not either (it is an
+  installer, and the emulator installs nothing): *3DS CIA files can't be
+  played*.
+- **Updates and DLC do not play yet**: they come as `.cia` files.
+- **Touch screen:** the right stick moves a pointer on the bottom screen and
+  pressing it (R3) touches. L3 swaps the two screens.
+- **Games get no internet.** The emulated 3DS has no connection, so online
+  features and downloads inside games do not work.
+
 ## Not supported
 
 - **Game & Watch** is left out on purpose: the games are too small to play on a
@@ -131,6 +144,6 @@ downloads anything new into the console's shared BIOS folder.
 | 2600 to Saturn, N64, Dreamcast, PS1, PSP, DS (built-in emulators) | Yes | Most | Yes |
 | PS2 | No | No | Yes |
 | GameCube, Wii | No | No | Yes |
-| Switch, PS3, Xbox, Xbox 360, Wii U | No | No | No |
+| 3DS, Switch, PS3, Xbox, Xbox 360, Wii U | No | No | No |
 
 Saves sync for every system. See [Saves, states and sync](saves.md).

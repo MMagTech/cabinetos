@@ -26,6 +26,12 @@ namespace catalog {
 // the server and mean nothing on the other end — the reference implementation
 // says exactly that and it is right.
 //
+// NINTENDO 3DS THE SAME WAY (docs/PROJECT.md question 50): Azahar keeps a
+// whole 3DS under `Azahar/` in the save directory, and every game's save and
+// extra data are under its SD card's `Nintendo 3DS/`, rooted there. The save
+// directory holds one game, so the whole folder is that game's. Not the rest
+// of `Azahar/`: its NAND, system data and shader cache stay here.
+//
 // WII TOO, from 2026-09-30, rooted at `User/Wii/title` in Dolphin's user
 // directory, which is under this person's save directory for this game, so
 // it is a NAND of its own. A game saves to `<kind>/<code in hex>/data/`

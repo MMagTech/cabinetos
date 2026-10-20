@@ -174,8 +174,8 @@ Level forGame(int romId) {
 
 bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
-    for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "eden",
-                          "rpcs3", "xemu"})
+    for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
+                          "eden", "rpcs3", "xemu"})
         if (core == c) return true;
     return false;
 }
@@ -260,6 +260,15 @@ std::map<std::string, std::string> coreOptions(const std::string& core,
             {"reicast_internal_resolution", pick(l, kRes)},
             {"reicast_anisotropic_filtering", "16"},
         };
+    }
+    // Nintendo 3DS (docs/PROJECT.md question 50): 1x, the 3DS's own 400x240
+    // top screen, as PSP, N64 and DS are at Performance; 3x (1200x720), at or
+    // just above a 1080p TV's size in any layout; 5x (2000x1200), about a 4K
+    // TV's. Everything else at the core's own value, accurate shader
+    // multiplication included. Not yet measured on the A9.
+    if (core == "azahar") {
+        static const char* const kFactor[] = {"1", "3", "5"};
+        return {{"citra_resolution_factor", pick(l, kFactor)}};
     }
     // FIXED AT EVERY LEVEL (MMagTech, 2026-10-02): the processor-side
     // extras that cost nothing a modern PC notices.

@@ -4,6 +4,14 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** the Nintendo 3DS. Decrypted cartridge dumps play, both screens on
+  the TV; the right stick moves a pointer on the touch screen and R3 taps.
+  Encrypted dumps and `.cia` files do not play, and say so on the game's
+  page; updates and DLC do not play yet. Games get no internet, and there
+  are no save states; saves sync with your server.
+
 ## 2026.10.20 {#v2026-10-20}
 
 *20 October 2026*
