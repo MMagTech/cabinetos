@@ -16742,7 +16742,11 @@ open; the image only carries the launcher and the session (the brief's
 - **Not caught:** the first two handovers sat about 25 s between the frontend
   leaving ("Primary child shut down") and gamescope exiting; every later one
   took about 1.5 s from the press to Steam's display, and the recorder never
-  saw it again. If it comes back the session log shows the gap.
+  saw it again. If it comes back the session log shows the gap. Found
+  under #305 ("Opening Steam sometimes takes 25 seconds instead of a
+  fraction of one"): gamescope's own exit waiting 25.2 s on logind after
+  its app was gone. The session now stops gamescope two seconds after its
+  app, so a stall costs about 3 s.
 
 **Installing with the console on screen** (MMagTech, 2026-10-04: the
 first start was a black screen for as long as Steam's download took, "it
