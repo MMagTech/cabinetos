@@ -18845,6 +18845,63 @@ same scene. Switching is one option, `citra_graphics_api` (`Vulkan`,
     while the pad is clicked is a choice for the TV.
   - **Port 0 only**, as everything in this core: player 1's pad, which is
     the 3DS's one player.
+- **The touchpad elsewhere (2026-10-20).** MMagTech asked, for later and
+  blocking nothing: do other console systems and front ends use a
+  DualSense's or DualShock 4's touchpad for game controls? Read: each
+  project's source at the commit named, its issues, pull requests, release
+  notes and docs, and Valve's Steamworks pages. Nothing ran anywhere.
+  "Not found" means nothing said.
+
+| Where | What the touchpad does in games | Default | How it gets there | Source |
+|---|---|---|---|---|
+| Batocera, Knulli | A mouse. For the DS and 3DS libretro cores each player is handed the mouse that shares the pad's device path, its own touchpad, which RetroArch's udev driver also reports as the pointer (as written it passes a device path where RetroArch reads a number; read, not tested) | automatic; the core's touch mode decides (melonDS: the right stick; Azahar: mouse and pointer on) | evdev; Batocera's SDL is built without HIDAPI | batocera.linux `1af1766`: `associated_mouse_mixin.py:33-43`, `cores/azahar.py:33`, `devices/device.py:141-148`, `sdl3.mk:20`; knulli `ab3a680`: `libretroControllers.py:119-125` |
+| Lakka, ROCKNIX | One more RetroArch mouse (next row); ROCKNIX ships Azahar's touchpad setting off | nothing of their own | evdev | Lakka-v6.1 `4f70542`: `retroarch.cfg:247,287`; ROCKNIX `47b49b6`: `azahar-sa/config/AMD64/qt-config.ini:86-107` |
+| RetroArch, udev input driver | The kernel's touchpad device as an absolute mouse: one finger as pointer, mouse and lightgun over the whole screen, the click as the left button; picked by "Mouse Index", not tied to the pad's port | always, when `/dev/input` is readable | evdev | RetroArch `054ecb4`: `udev_input.c:3580-3583` |
+| RetroArch, SDL2 and SDL3 joypad drivers | The click only, as button 20; the fingers are not read. #16188 (SDL's touchpad as the pointer) closed 2026-10-02: the touchpad waits for an input rewrite, "touch as a per-device capability" | | SDL | `sdl3_joypad.c:67-74,282`; libretro/RetroArch#16188; #19369 (halves as buttons, open) |
+| RetroBat (Windows) | Azahar's bottom screen, from a DSU server the player runs (DS4Windows) | setting "TOUCH DEVICE", CEMUHOOK; the default is the mouse | DSU | emulatorlauncher `7f8dc28`: `Azahar.Controllers.cs:154-162` |
+| EmuDeck | A mouse through Steam Input (both halves absolute mouse, the clicks mouse buttons); its DS and 3DS emulators touch with the mouse | on, in the Steam shortcuts it makes | Steam Input | EmuDeck `dddb302`: `configs/steam-input/emudeck_controller_ps5.vdf:346-390` |
+| Steam Input (SteamOS, Bazzite, ChimeraOS) | The game gets an Xbox pad: no touchpad, the click is Start, unless the player binds the touchpad (mouse, buttons). Since November 2023 a PlayStation pad goes to a game's own support when it has some | per game | Steam has SDL ignore the real pads | Steamworks, "Steam Input Gamepad Emulation: Best Practices"; GamingOnLinux, 2023-11 client beta; libsdl-org/SDL#10073 (smcv) |
+| Bazzite | Nothing for games. Desktop images run Valve's ds-inhibit, which silences the touchpad's evdev device while Steam holds the pad; the Deck (game mode) images remove it | | | bazzite `4be6501`: `Containerfile:281,530,598`; ds-inhibit `ec968e7`: `ds_inhibit.py:122-153` |
+| ChimeraOS | Nothing of its own. InputPlumber runs but leaves outside pads alone; a DualSense it manages becomes a virtual one with the touchpad | not managed | | chimeraos `89b58ba`: `manifest:68`; InputPlumber `d951ef9`: `manager.rs:236` |
+| ES-DE; LaunchBox Big Box | Not found. ES-DE configures no emulator; Big Box is closed source | | | ES-DE `a529a9d`: `FAQ.md:70`; Big Box 13.24 release notes |
+| Sony PS TV | A DualShock 4's touch pad moves the Vita's touch pointer | in the games Sony allowed | | Sony's PS TV user's guide (question 49) |
+| melonDS | Nothing; touch is the mouse. Request #1881 open | | | melonDS `906e9eb`: `Screen.cpp:338-343` |
+| Azahar, its app | The bottom screen: the whole pad on the whole screen, on contact, beside the mouse | setting "Use controller touchpad", off | SDL | azahar-emu/azahar#777 (since 2125.0-rc1, 2026-03-12); `987f184`: `config.cpp:426`, `hid.cpp:285-293` |
+| Azahar, its libretro core | Never reads a pad; takes the front end's `RETRO_DEVICE_POINTER` beside the stick | | libretro | `mouse_tracker.cpp:100-185` (above) |
+| Citra, Lime3DS | The bottom screen, from a DSU server only ("CemuhookUDP" in place of the mouse) | a setting | DSU | Citra `69e758d`: `configure_motion_touch.cpp:84-87` |
+| Vita3K | The front touch screen (the whole pad), up to 8 fingers; the click swaps front and rear | always on, no setting | SDL3 | Vita3K/Vita3K#2904 (2023-09-11); `9a2d096`: `touch.cpp:70-90`, `main_window.cpp:1328-1356` |
+| PPSSPP | The click only, as a button to bind | unbound | SDL | ppsspp `5471f5f`: `SDL/SDLJoystick.cpp:161-162` |
+| Cemu | The Wii U GamePad screen (and the Wii Remote pointer), from a DSU server; SDL's touchpad events ignored. Request #838 open | on once a DSU controller is assigned | DSU only | Cemu `a53cf0e`: `DSUController.cpp:65-100`, `SDLControllerProvider.cpp:195-206` |
+| Dolphin | Inputs to bind, e.g. to the Wii Remote pointer: SDL "Touchpad X/Y", DSU "Touch", evdev "Cursor X/Y" | none bound; the evdev names match the default pointer mapping (#8473) | SDL, DSU, evdev | dolphin-emu/dolphin#13209 (2024-12-10); `cf5cb7e`: `SDLGamepad.cpp:106-121`, `WiimoteEmu.cpp:750-753` |
+| Eden (and yuzu) | The Switch touch screen, two fingers, from a DSU server; no SDL touchpad code | always read; server 127.0.0.1:26760 | DSU only | eden `989768a`: `emulated_console.cpp:24-46`, `settings.h:803-804` |
+| Ryujinx | The click as a button; touch is the mouse | | SDL2 | a 2025-03-07 mirror (the official source did not answer): `TouchScreenManager.cs:11-33` |
+
+  What it means for CabinetOS:
+  - **No system found puts a pad's touchpad on an emulated touch screen by
+    default as its own feature.** Where they use it, it is a mouse;
+    Batocera comes closest, each DS or 3DS player's own touchpad as their
+    RetroArch mouse and pointer. Two emulators take it as touch over SDL
+    (Vita3K always, Azahar's app by a setting), Cemu and Eden only from a
+    DSU server, and RetroArch left SDL's touchpad to a rewrite.
+  - **SDL reports the touchpad only through its HIDAPI driver,** which opens
+    `/dev/hidraw` to read and write; with no access SDL falls back to evdev,
+    which carries neither the touchpad nor its click (the kernel puts both
+    on a separate "Touchpad" device). SDL 3.4.16:
+    `SDL_hidapijoystick.c:510-516`, and only HIDAPI, Apple and virtual
+    drivers add a touchpad; Linux `f47d223`: `hid-playstation.c:947-973`.
+    The console keeps HIDAPI on but for the Wii (`startup.cpp:135`); #288's
+    check on the A9 is whether a DualSense opens through it.
+  - **Reading it through SDL leaves the kernel's device a pointer:** hidraw
+    gives every reader a copy (`hidraw.c:570-590`), and libinput, so
+    gamescope, takes the Touchpad device as a desktop touchpad (#509's
+    arrow). An inhibit (Valve's ds-inhibit, while a program named `steam`
+    holds the pad) or a udev rule stops it; none was found in Bazzite,
+    systemd or libinput.
+  - **An emulator of its own gets nothing here:** the console hands those
+    virtual pads that drop the touchpad, with SDL's HIDAPI off (`vpad.h`,
+    `standalone.cpp:501,540`), as Steam Input's virtual pad has none. A
+    libretro core gets it only if the console answers
+    `RETRO_DEVICE_POINTER`.
 - **L3** is the core's screen swap ("Toggle", `citra_libretro.cpp:239-270`) and the
   3DS HOME button (`:191-193`); HOME does nothing unless a HOME menu was booted
   (`core/hle/service/apt/applet_manager.cpp:1743-1753`), so for a game L3
