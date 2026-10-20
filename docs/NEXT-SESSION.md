@@ -12,7 +12,7 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-10-20, early.** `latest` is **2026.10.19.3** (#519). `testing` is
-**2026.10.20** (revision b1574c0), the night batch: PR #PRNUM, "PRTITLE",
+**2026.10.20** (revision b1574c0), the night batch: PR #521, "Night batch 2026-10-19: Steam's 25-second pause, six small faults, the pause menu, an upload loop",
 waiting on his TV check and merge. Eight sessions built it on the evening
 of 2026-10-19 on separate files; one combined it, built it in the builder,
 ran every self-test and smoke-tested it headless on the A9 through the
@@ -40,7 +40,7 @@ RomM and GitHub" (#215). No issue is opened unless he asks.
 ## Next
 
 1. **His TV check of 2026.10.20, then the merge on his go** (the list is in
-   PR #PRNUM, "For the TV"). After the merge: delete the batch branches
+   PR #521, "For the TV"). After the merge: delete the batch branches
    (`claude/ovn5-*` except `claude/ovn5-stream-3d2bf4` and
    `claude/ovn5-484-romm10`, `claude/test-romm-*`, `claude/checks-week-*`,
    `claude/cabinet-docs-*`, `claude/research-3ds-*`, `ovn5-2026-10-19`) and
