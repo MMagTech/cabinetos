@@ -345,8 +345,8 @@ down. "Look now at" is where the code or a later decision moved on.
   Batocera ships the same sheet art inside Duimon's CC BY-NC-ND console
   bezels, in four optional sets. Decided late that day: an Overlays
   On / Off row in the Vectrex pause menu, kept per system like a look,
-  default On, reversing the morning's "no row". Still his: the legal
-  footing.
+  default On, reversing the morning's "no row". The legal footing:
+  decided go the same night; #224 is buildable as written.
 
 ---
 
@@ -18682,7 +18682,15 @@ the go.
 
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 
-**Researched 2026-10-19, the night; research only, no code; not decided.**
+**Researched 2026-10-19, the night; research only, no code; DECIDED 2026-10-19, late.**
+**Decided: go.** MMagTech, the same night, after the research and the
+Batocera answer: ship the libretro `Game Overlay` set on the same
+non-commercial footing as the Vectrex system ROM, as recommended below;
+#224 is buildable as written, with the Overlays row (the block before
+"Recommendation"). His words: "ship the libretro Game Overlay set on the
+same non-commercial footing as the Vectrex system ROM, as question 51
+recommends. #224 is buildable as written, with the Overlays row."
+
 Asked by MMagTech on 2026-10-19 for #224 ("Vectrex: the cartridges' screen
 overlays"), which he kept in Later that day as a fidelity feature: a Vectrex
 game shows its sheet with no on/off row, a game whose sheet is not reproduced
@@ -19254,8 +19262,7 @@ looks), so a row fits there naturally and costs the menu nothing.
 - **Everything else in this question stands:** the set, the rule for which
   sheets draw, alpha at opacity 1, no console bezel ever.
 
-The legal footing (the one decision named under "Recommendation") is still
-open as this is written.
+The legal footing was decided the same night: go (the top of this question).
 
 #### Recommendation, 2026-10-19 (not decided)
 
