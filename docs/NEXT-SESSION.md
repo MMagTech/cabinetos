@@ -11,15 +11,16 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-20, morning.** `latest` is **2026.10.20** (#521, merged the evening
-before). `testing` is **2026.10.20.2** (revision 6d05cb3): PR #525, "Select
-is never the shortcut button, Home always opens the menu (#313); Search's
-covers follow the keyboard", judged on the TV through the loop on the
-morning of 2026-10-20, waiting on his check of the image and his merge.
-It closes #313: his decision after a long morning was the plainest rule,
-Settings refuses Select and Start as the shortcut button and a chosen
-button is added beside Home, never in its place; the two builds that gave a
-stream its own rule were set aside unjudged. Overnight, on his go, four
+**2026-10-20, morning.** PR #525, "Select is never the shortcut button,
+Home always opens the menu (#313); Search's covers follow the keyboard",
+merged on his go after its first image (2026.10.20.2) was judged on the TV
+through the loop and the second carried only wording; it closes #313. His
+decision after a long morning was the plainest rule: the row reads
+"Shortcuts use: Home", refuses Select, Start, L3 and R3 with the reason,
+and a chosen spare button is added beside Home, never in its place; the two
+builds that gave a stream its own rule were set aside unjudged and deleted.
+His standing rule from that morning: every check and every comment is
+written out in full each time it is asked for, never referred to. Overnight, on his go, four
 Opus sessions ran: the Vectrex stall measured on the TV (no stall in six
 runs at 1x or 4x; `claude/vectrex-pacing`, not pushed), the Vectrex sheets
 built for #224 (judged good on the TV; its session is finishing the fit
@@ -38,27 +39,28 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **His check of 2026.10.20.2, then the merge of PR #525 on his go.** On
-   the phone: tap Select in an arcade game puts a coin in, hold Select opens
-   the menu. Settings, Controllers, Shortcut button, A, Select: "Games use
-   Select…". Search: the covers grow with the keyboard's slide. After the
-   merge, delete `tv-2026-10-20`, `claude/313-select-refused` and
-   `claude/search-keyboard-slide` and their worktrees; the two set-aside
-   #313 branches (`claude/ovn5-stream-3d2bf4`, `claude/ovn5-stream-select-home`)
-   and the merged `ovn5-2026-10-19` go when he says so (asked 2026-10-20).
-2. **#224, the Vectrex sheets:** its session's pull request, then its own
-   testing image and his check (the Overlays row, Mine Storm, Armor Attack).
-3. **The 3DS, draft PR #524:** waits for a dumped game of his and a time
-   for the A9 hand test (PROJECT.md question 50, "The A9 hand test"), and
-   his acceptance of decrypted dumps only.
-4. **Words from him, one at a time, no work:** #253 (close with the drafted
-   comment: the misses are gone on gamescope 3.16.31; "reopen on a
-   report"); #484's "a drive unplugged during Sign out"; the Vita's upstream
-   ask (support on Vita3K/Vita3K#3707, PR #523's recommendation); #181 and
-   #215 (he is unsure of both).
+1. **The 3DS, on the A9, now.** MMagTech has 3DS games on his server as of
+   2026-10-20. Draft PR #524, "Nintendo 3DS through Azahar's own libretro
+   core (decrypted dumps)", is built and green on
+   `claude/3ds-azahar-core-9a119a`; PROJECT.md question 50 holds the
+   design and "The A9 hand test, when he names a time". Brief controller
+   questions first (the right stick and R3 for touch, the DualSense
+   touchpad, the two screens' layout), one at a time, then the hand test
+   through the loop, then its own testing image. Mechanical work in Opus
+   sessions; this parent reads, decides and reports.
+2. **#224, the Vectrex sheets:** PR #526, judged good on the TV
+   2026-10-20; its testing image and merge on his go, after or with the
+   3DS.
+3. **The Vita:** PR #523's answers; "no, for now", upstream first. His
+   word on the support comment on Vita3K/Vita3K#3707.
+4. **Words from him, one at a time, no work:** #253 (close with the
+   drafted comment in PROJECT.md's #253 record: the misses are gone on
+   gamescope 3.16.31; "reopen on a report"); #484's "a drive unplugged
+   during Sign out"; #181 and #215 (he is unsure of both).
 5. **The Vectrex stall:** no fix; the next step is his evening journal of
-   2026-10-19 read for what ran just before each stall (PROJECT.md, "The
-   4K misses measured again", the Vectrex record). Only if it comes back.
+   2026-10-19 read for what ran just before each stall (PROJECT.md, the
+   Vectrex record under "The 4K misses measured again"). Only if it comes
+   back.
 6. **The automatic checks turn strict on 2026-10-26**; nothing to do but
    watch the first pull request after.
 7. **The monthly health check.** With the next real core change: #490's
