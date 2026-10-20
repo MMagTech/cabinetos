@@ -380,10 +380,13 @@ void Keyboard::draw(Renderer& r, TextRenderer& text, float scale) {
     const float restY = config_.dockedBottom
                             ? kCanvasHeight - panelH - kSafeInset * 0.5f
                             : (kCanvasHeight - panelH) * 0.5f;
-    // Where the results stop is where the panel RESTS, not where a slide has
-    // it this frame, or the results would follow it down and back.
-    if (open_) panelTop_ = restY;
+    // Where the results stop is where the panel's top edge IS this frame,
+    // slide included: Search's covers grow and shrink with the slide instead
+    // of jumping to their resting size while the panel is still moving
+    // (MMagTech on the TV, 2026-10-19). Until then it was where the panel
+    // rests, so the results would not follow a slide; they should.
     const float panelY = restY + slide_ * (kCanvasHeight - restY + 24.0f);
+    panelTop_ = panelY;
 
     // Scrim, then ONE piece of frosted glass.
     //
