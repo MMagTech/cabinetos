@@ -72,10 +72,11 @@ for it, and games made for the original pad play as they always did.
 ## In-game shortcuts
 
 Off to start with: Settings, Controllers, **In-game shortcuts**. Shortcuts use
-**Home** (Guide). If your controller's Home does nothing, press **Shortcuts
-use** in the same list and then a spare button; it is remembered for that
-kind of pad, and Home keeps working beside it. Select, Start and the sticks
-cannot be chosen: games use them, and L3+R3 is the pause menu.
+**Home** (Guide), and a controller with a Home button needs nothing set. If
+your controller's Home does nothing, press **Shortcuts use** in the same list
+and then a spare button; it is remembered for that kind of pad, and Home
+keeps working beside it. Select, Start and the sticks cannot be chosen: games
+use them, and L3+R3 is the pause menu.
 
 | Shortcut | Does |
 |---|---|
