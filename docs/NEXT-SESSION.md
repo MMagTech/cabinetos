@@ -11,71 +11,57 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-20, early.** `latest` is **2026.10.19.3** (#519). `testing` is
-**2026.10.20** (revision b1574c0), the night batch: PR #521, "Night batch 2026-10-19: Steam's 25-second pause, six small faults, the pause menu, an upload loop",
-waiting on his TV check and merge. Eight sessions built it on the evening
-of 2026-10-19 on separate files; one combined it, built it in the builder,
-ran every self-test and smoke-tested it headless on the A9 through the
-read-only relay. It closes #305 and #492 and finishes six items of #484.
-**19 issues are open**, 17 once the PR merges. A RomM server for write
-tests now runs on the test VM (RomM 5.4.0, its own admin login, nine free
-homebrew games): the tools read it from `CABINETOS_TEST_ROMM` in his local
-notes, and it is the only RomM server a test may write to; the live one
-stays behind the read-only relay. His server is on RomM 5.4.0. The A9 is
-on the testing channel; its PIN is off. The machines' addresses are in his
-local notes, which CLAUDE.md loads; the tools read them from the
-environment (export the `CABINETOS_*` lines per command; the Mac's shell
-profile does not set them).
+**2026-10-20, morning.** `latest` is **2026.10.20** (#521, merged the evening
+before). `testing` is **2026.10.20.2** (revision 6d05cb3): PR #525, "Select
+is never the shortcut button, Home always opens the menu (#313); Search's
+covers follow the keyboard", judged on the TV through the loop on the
+morning of 2026-10-20, waiting on his check of the image and his merge.
+It closes #313: his decision after a long morning was the plainest rule,
+Settings refuses Select and Start as the shortcut button and a chosen
+button is added beside Home, never in its place; the two builds that gave a
+stream its own rule were set aside unjudged. Overnight, on his go, four
+Opus sessions ran: the Vectrex stall measured on the TV (no stall in six
+runs at 1x or 4x; `claude/vectrex-pacing`, not pushed), the Vectrex sheets
+built for #224 (judged good on the TV; its session is finishing the fit
+check and the pull request), the 3DS core built in CI (draft PR #524), and
+the Vita pointer research (draft PR #523). PR #522 is the Vectrex sheets'
+research, docs only. The A9 is on the testing channel; its PIN is off. The
+machines' addresses are in his local notes.
 
-**His rules from 2026-10-19:** an unattended run never waits on a prompt
-(every session's brief says to skip what needs approval and carry on, and
-the parent sets a timed fallback); decisions are put to him one at a time,
-mechanics first, never with options he did not ask for; a feature with
-hidden state is shown to him on the TV, never explained again in prose
-(#313 below); the console keeps its narrow RomM token and never asks for
-`me.write` (rommapp/romm#5274 asks for a self-revoke route); an opt-in,
-disclosed upload to a site under his control is his exception to "only
-RomM and GitHub" (#215). No issue is opened unless he asks.
+**His rules from 2026-10-19 and 2026-10-20:** anything mechanical (a
+measurement, a build, research) runs in an Opus session, never in the Fable
+parent; an unattended run never waits on a prompt; decisions one at a time,
+mechanics first, in a player's words, never with options he did not ask
+for; a feature with hidden state is shown on the TV; no issue is opened
+unless he asks. Every loop launch past a minute records time played on his
+RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **His TV check of 2026.10.20, then the merge on his go** (the list is in
-   PR #521, "For the TV"). After the merge: delete the batch branches
-   (`claude/ovn5-*` except `claude/ovn5-stream-3d2bf4` and
-   `claude/ovn5-484-romm10`, `claude/test-romm-*`, `claude/checks-week-*`,
-   `claude/cabinet-docs-*`, `claude/research-3ds-*`, `ovn5-2026-10-19`) and
-   their worktrees.
-2. **#313 "On a stream, Select can open the menu instead of reaching the
-   game": shown, not explained.** The Home-always build is on
-   `claude/ovn5-stream-3d2bf4` (dcd2728: a controller through a stream
-   always uses Home as its menu button; TV pads keep their saved choice).
-   Deploy it to the TV with `tools/ui-loop.sh` while he streams with
-   Moonlight in his hand: he taps Select in an arcade game, holds Select,
-   presses Home on a Bluetooth controller. Then build and deploy his own
-   rule beside it: the saved button follows a controller onto a stream,
-   except Select, which becomes Home there (the console cannot tell an
-   Xbox-type controller on the client from Moonlight's on-screen buttons,
-   so Select must stay with the game). He decides at the TV. Six written
-   explanations failed on 2026-10-19; do not write a seventh.
-3. **Search's keyboard, in the loop beside #313** (MMagTech at the TV,
-   2026-10-19): when the keyboard is put away (Start, or its Done key) the
-   covers jump to their larger size at once while the panel slides out,
-   because the results area follows where the panel rests
-   (search.cpp, setResultsBottom; keyboard.cpp, panelTop). Make the covers
-   grow and shrink with the slide; judged on the TV. Down from the results
-   brings the keyboard back with the text kept, which stays as it is.
-4. **Words from him that close or settle issues, no work:** #253 (the
-   night's hour of measurements found nothing to change: the misses the
-   issue was filed for are gone on gamescope 3.16.31, what is left is one
-   held picture at Home about 0.4 a minute; close with "reopen on a
-   report"); the 3DS (PROJECT.md question 50: go with conditions, a hand
-   test on the A9 at a time he names, no 3DS games on his server today;
-   he says whether there is an issue); #484's "a drive unplugged during
-   Sign out" (the docs now say what happens; what to do is his call);
-   #224, #181, #215 (designs on their issues).
-5. **The automatic checks turn strict on 2026-10-26** and `main` passes
-   all four; nothing to do but watch the first pull request after.
-6. **The monthly health check.** With the next real core change: #490's
+1. **His check of 2026.10.20.2, then the merge of PR #525 on his go.** On
+   the phone: tap Select in an arcade game puts a coin in, hold Select opens
+   the menu. Settings, Controllers, Shortcut button, A, Select: "Games use
+   Select…". Search: the covers grow with the keyboard's slide. After the
+   merge, delete `tv-2026-10-20`, `claude/313-select-refused` and
+   `claude/search-keyboard-slide` and their worktrees; the two set-aside
+   #313 branches (`claude/ovn5-stream-3d2bf4`, `claude/ovn5-stream-select-home`)
+   and the merged `ovn5-2026-10-19` go when he says so (asked 2026-10-20).
+2. **#224, the Vectrex sheets:** its session's pull request, then its own
+   testing image and his check (the Overlays row, Mine Storm, Armor Attack).
+3. **The 3DS, draft PR #524:** waits for a dumped game of his and a time
+   for the A9 hand test (PROJECT.md question 50, "The A9 hand test"), and
+   his acceptance of decrypted dumps only.
+4. **Words from him, one at a time, no work:** #253 (close with the drafted
+   comment: the misses are gone on gamescope 3.16.31; "reopen on a
+   report"); #484's "a drive unplugged during Sign out"; the Vita's upstream
+   ask (support on Vita3K/Vita3K#3707, PR #523's recommendation); #181 and
+   #215 (he is unsure of both).
+5. **The Vectrex stall:** no fix; the next step is his evening journal of
+   2026-10-19 read for what ran just before each stall (PROJECT.md, "The
+   4K misses measured again", the Vectrex record). Only if it comes back.
+6. **The automatic checks turn strict on 2026-10-26**; nothing to do but
+   watch the first pull request after.
+7. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
 
 ## Waiting, not for the next session unless MMagTech raises them

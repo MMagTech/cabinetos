@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.20.2 {#v2026-10-20-2}
+
+*20 October 2026*
 
 - **Fixed:** streaming an arcade game to a phone, a tap of Select could open
   the pause menu instead of putting a coin in. Select and Start can no
