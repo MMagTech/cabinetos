@@ -77,7 +77,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 52 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 53 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -322,6 +322,16 @@ down. "Look now at" is where the code or a later decision moved on.
   first four tests pass on paper; recommended no for now, because Sony's
   PS TV list assumes a touch pointer Vita3K lacks (Vita3K/Vita3K#3707), and
   no gyro. The A9 hand test waits for a time he names.
+- **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
+  Researched the same night, not decided: Azahar's own core, pinnable at its
+  2126.2 tag, fits the core host on Vulkan as it is; the touch screen is the
+  DS's right-stick rule by the core's default; no states, by question 25;
+  only decrypted cartridge dumps play. Recommended go with conditions: the
+  build with its key blob off, no network for games (Azahar has no switch),
+  an A9 test of Vulkan's frame pacing (azahar-emu/azahar#2093), and his
+  legal call. With it, a touchpad as a second way to touch (the core takes
+  it beside the stick, unlike melonDS, #288); gyro as a later piece of its
+  own. His server has no 3DS games.
 
 ---
 
@@ -18155,3 +18165,502 @@ pointer comes, and then two games. **It becomes a go with conditions** when
 Vita3K/Vita3K#3707), (2) Sony's list is in hand by title ID to ship as data,
 and (3) the hand test passes. **No gyro for the Vita** in any case. Game Boy
 motion is a separate, smaller question for him.
+
+### 50. Nintendo 3DS (Azahar's libretro core)
+
+**Researched 2026-10-19; research only, no code; not decided.** Asked by
+MMagTech on the night of 2026-10-19, with no issue: should the console play
+the 3DS, and how. His four questions (a stable core, Vulkan, upscaling for
+the picture quality levels, the pointer), then the tests the Vita had
+(question 49). The 3DS was never decided either way: Cabinet's core list had
+no 3DS core, so the catalog has no `3ds` row. Read: Azahar's source at master
+`987f184` (2026-10-17) and at its release 2126.2 (`219d743`, 2026-10-08),
+its releases, issues and compatibility list (`d282515`, 2026-08-20);
+libretro's page for the core, its core info and its Linux buildbot
+(2026-10-19); libretro-common at `7fc7fee` (Azahar's pin of it); RomM's
+source and its 5.4.0 release notes; No-Intro's 3DS DATs (libretro-database
+`9a899f5`, 2026.10.07); Wikipedia's list of best-selling 3DS games; and his
+RomM, read-only with the Mac token. Nothing was built, and nothing ran on the
+A9 or the VM. Azahar's lines below are at master; at 2126.2 the core is the
+same on every point quoted here.
+
+#### What his server holds
+
+**No 3DS games.** His RomM has 38 platforms and none is the 3DS (RomM's slug
+is `3ds`, `backend/utils/platform_slugs.py`), and none of its 1,706 games is
+a 3DS file (`.3ds`, `.cci`, `.cxi`, `.cia`, `.3dsx` or their compressed `z`
+forms). So the test against his own library is empty; the best-sellers below
+stand in for it.
+
+#### 1. The core: Azahar's own, in Azahar's repository
+
+- **Where:** `src/citra_libretro/` in azahar-emu/azahar, branch `master`. It
+  landed on 2026-02-19 (`d9b77cc`, Azahar PR #1215) and builds with the
+  emulator: one CMake switch, `-DENABLE_LIBRETRO=ON`, which turns the Qt
+  window, SDL and the rest off by itself (`CMakeLists.txt:172-195`). The old
+  libretro/citra fork is a different core; the buildbot still builds it as
+  `citra_libretro`.
+- **Built and released by:** Azahar itself, whose every release since
+  2125.0-alpha5 (2026-03-08) carries `azahar-libretro-linux-x86_64-*.zip`
+  (its `.github/workflows/libretro.yml`: Ubuntu 22.04, gcc 12); and
+  libretro's buildbot, nightly (`azahar_libretro.so.zip`, 2026-10-19), whose
+  core info names it "Nintendo - 3DS (Azahar)".
+- **How often it moves:** 34 commits touch the core's folder in eight
+  months, the last on 2026-10-12. Azahar made 10 stable releases with a
+  Linux libretro core in six and a half months, from 2125.0.1 (2026-03-26)
+  to 2126.2 (2026-10-08), each on a release branch that takes backported
+  fixes.
+- **A commit to pin and leave: the 2126.2 tag,
+  `219d743a1e698101fe1ab8bef43e6563126c3c27`** (2026-10-08, branch
+  `azahar-2126`, cut from master at `26e608f` on 2026-09-09). Its backports
+  include "Fix Libretro core crash on unload" (#2572). It lacks what master
+  added after the cut, among it the bundle files (test 3 below) and a fix
+  for taps outside the touch screen (#2563, a mouse matter here).
+- **Licence: GPL.** The repository's `LICENSE.txt` is GPLv3; the core's files
+  say GPLv2 or later, two of them GPLv3 or later (`environment.cpp`,
+  `core_settings.cpp`), so the built core is GPLv3. One more GPL line in
+  docs/LICENCES.md, built from source like Dolphin.
+- **Does it build the way the 22 do: on paper, yes.** One case arm shaped
+  like Dolphin's: `BUILDSYS=cmake`, `CMAKE_TARGET=citra_libretro` (the target
+  Azahar's own workflow builds; the file comes out as `azahar_libretro.so`,
+  which the script's discovery finds),
+  `CMAKEARGS=(-DCMAKE_BUILD_TYPE=Release -DENABLE_LIBRETRO=ON -DENABLE_TESTS=OFF -DENABLE_BUILTIN_KEYBLOB=OFF)`
+  (the last of them under "Keys and the network" below), the tag's commit
+  asserted. Its libraries come in 36 submodules, which the script already
+  fetches; it wants CMake 3.25 or newer. Its options are
+  libretro's v2 kind, which the host and `tools/core-options.c` read.
+  **Not built:** whether it compiles in `cabinetos-builder` (Fedora 44, a
+  newer gcc than Azahar's CI) is the first thing to learn, in CI.
+- **The legal point, named so it is decided rather than missed.** Built into
+  the image, a 3DS emulator is one the project distributes, as Dolphin is.
+  Citra was taken down in 2024 with the Yuzu settlement. Azahar, its
+  continuation, removed encrypted-game support in 2025 (`dc1ebb6`,
+  2025-02-27: "Remove encrypted game support"), is distributed by libretro's buildbot
+  and by Flathub, and no action against it was found in public reports;
+  Nintendo's 2026 takedowns named Switch emulators. Eden stays on Flathub for
+  the Switch reason (question 32, "A legal point"); whether the 3DS needs the
+  same care is his call.
+
+#### 2. Vulkan: the core fits the host as it is
+
+What the core asks for (`citra_libretro.cpp:563-618`):
+
+- **It asks the frontend which API it prefers** and takes the answer while
+  its option `citra_graphics_api` is at its default (`environment.cpp:65-100`).
+  The host answers Vulkan wherever there is a usable device
+  (`core_hwrender.cpp`, `GET_PREFERRED_HW_RENDER`).
+- **On Vulkan:** `RETRO_HW_CONTEXT_VULKAN` at Vulkan 1.1 (`:596-597`,
+  `libretro_vk.cpp:34`), and a context negotiation interface. It declares
+  libretro-common's interface version 2 but fills only version 1's two entry
+  points, `get_application_info` and `create_device` (`:608-615`);
+  version 2's are optional ("If non-NULL", libretro-common
+  `libretro_vulkan.h`), so the host's version 1 is what the core relies on.
+  Its `create_device` keeps the extensions the frontend asks for
+  (`libretro_vk.cpp:83-89`), unlike Flycast's, so the host's external-memory
+  extensions reach the device (`vkhost.cpp`, `createCoreDevice`). It hands
+  each frame over by `set_image` with no semaphores (`libretro_vk.cpp:703-708`),
+  as Dolphin and Flycast do. **Served as is.**
+- **On OpenGL, if its option says so:** desktop OpenGL 4.3 core profile
+  (`:573-575`), and `SET_HW_SHARED_CONTEXT`, which the host refuses
+  (`core_hwrender.cpp`, "No. A shared context is for a core that renders
+  from its own thread") and the core ignores (`:567`). The second desktop
+  context made for the DS (#219, PR #508) serves a 4.3 core where the driver
+  makes one. One thing to check on that path: the core declares a largest
+  picture of 7200x4800 (`environment.cpp:314-316`), and the host sizes the
+  GL render target to the declared largest (`ensureHWTarget`).
+- **Nothing is refused by name, on either API.**
+
+**But Azahar does not stand behind its Vulkan renderer as it does OpenGL:**
+
+- Its compatibility list counts OpenGL only: "Vulkan is not included in this
+  compatibility list, as it is considered to be in an unstable state" (the
+  list's README, unchanged since 2024-11-16).
+- Desktop Azahar starts on OpenGL; only Android starts on Vulkan, since
+  2026-04-06 (`common/settings.h:516-529`).
+- Open since 2026-05-05: azahar-emu/azahar#2093 ("[Libretro] Unsynced Video
+  presentation with Vulkan"): in RetroArch on Vulkan, frames are repeated and
+  skipped (Mario Kart 7; seen again in another game 2026-08-08), and not on
+  OpenGL or in Azahar's own window. Both reports are NVIDIA on Windows; a
+  Radeon on Linux is not reported either way.
+
+By the rule (CONTRIBUTING.md, "The rules": Vulkan where there is a Vulkan
+renderer, OpenGL only "where a measurement on real hardware shows it is
+better"), the core starts on Vulkan and the hand test measures both on the
+same scene. Switching is one option, `citra_graphics_api` (`Vulkan`,
+`OpenGL`).
+
+#### 3. Upscaling, and the three levels
+
+- **The lever:** `citra_resolution_factor`, `1` to `18`, default `1`
+  (`core_settings.cpp:380`): "1x (Native 400x240)" up to "18x (7200x4320)".
+  The bottom screen is 320x240 at the same factor.
+- **What else costs:** "Accurate Shader Multiplication", on by default, "can
+  reduce performance" (`:351`); hardware shaders and the shader recompiler,
+  on; a texture filter (`none`, Anime4K for OpenGL only, Bicubic, ScaleForce,
+  xBRZ, MMPX), off: a look, kept out of the levels as Genesis's NTSC filter
+  is (question 23). The disk shader cache is on (`:366`). Building shaders
+  in the background, Dolphin's Balanced lever, is not a libretro option here.
+- **Where the panel's size falls:** on a 3840x2160 TV the two screens
+  stacked are drawn at 4.5x, side by side at 5.33x; on a 1080p TV at half
+  that.
+- **A mapping in the pattern of `quality.cpp`, to measure:**
+
+| Level | `citra_resolution_factor` | Top screen | Why |
+|---|---|---|---|
+| Performance | 1 | 400x240 | the 3DS's own, as PSP, N64 and DS are at Performance |
+| Balanced | 3 | 1200x720 | at or just above a 1080p TV's size in either layout |
+| Quality | 5 | 2000x1200 | about a 4K TV's size in either layout |
+
+  Everything else at the core's own value at every level, accurate
+  multiplication included, unless the A9 shows it costs a level. `azahar`
+  joins `hasLevels`.
+- **Performance on a Radeon 890M: no public measurement found**, of Azahar
+  or Citra, on it or on any Radeon integrated chip. The nearest is a Steam
+  Deck guide that sets 3x on Vulkan in Azahar's own window ("you can
+  confidently set" it, gardinerbryant.com, 2026 update), with no frame rates.
+  Only the A9 can say.
+
+#### 4. The pointer, and the screens on one TV
+
+- **The core does the DS's rule by itself.** Its "Right Analog Function"
+  (`citra_analog_function`, `core_settings.cpp:628`) defaults to "C-Stick and Touchscreen
+  Pointer": the right stick moves a cursor the core draws on the bottom
+  screen, and R3 touches (`citra_libretro.cpp:130-131`;
+  `mouse_tracker.cpp:138-173`). A full push crosses a twentieth of the
+  screen a frame, about a third of a second across (`:143-144`); a 15%
+  dead zone; the cursor hides after 4 still seconds (`:207-216`). Mouse and
+  touch-device input are options too, but the host answers neither device
+  (#374), so they are inert. **No console code and no option override: the
+  default is #374's rule**, right stick moves, R3 taps.
+- **One difference from the DS:** the 3DS has a C-stick (New 3DS) on the
+  same right stick. In the default the stick is both at once: in a game that
+  turns its camera with the C-stick, the cursor moves and shows too, and only
+  R3 taps. The core's other values are "Touchscreen Pointer" (the C-stick
+  lost) and "C-Stick" (touch lost). The default is the one rule that loses
+  nothing; its cost is a cursor that wanders while the camera turns.
+- **Does one rule hold with no exception per game?** As for the DS (#248,
+  "one rule for every game"): the games built around the stylus suffer, the
+  rest play on buttons with the odd tap. Nothing here needs a per-game
+  choice. How many suffer is counted below.
+- **Touch for play, or for menus and maps only** (MMagTech's addition,
+  2026-10-19). A research pass over 50 games, the 25 best-sellers and 25
+  chosen for their touch use (Kid Icarus: Uprising, the Layton games,
+  rhythm, drawing and puzzle games), from Nintendo's and Capcom's
+  electronic manuals, Wikipedia and reviews; Theatrhythm counted twice
+  because Curtain Call changed its controls, so 51 rows. The sample leans
+  towards touch games on purpose.
+  - **Menus and maps only (30):** Mario Kart 7, Pokémon X and Y, Sun and
+    Moon, Omega Ruby and Alpha Sapphire, Ultra Sun and Ultra Moon, New Super
+    Mario Bros. 2, Animal Crossing: New Leaf, Super Mario 3D Land, Super
+    Smash Bros., Luigi's Mansion: Dark Moon, Ocarina of Time 3D, Majora's
+    Mask 3D, A Link Between Worlds, Monster Hunter Generations and 4
+    Ultimate, Fire Emblem Awakening and Fates, Donkey Kong Country Returns
+    3D, Bravely Default, Kirby: Planet Robobot and Triple Deluxe, Xenoblade
+    Chronicles 3D, Star Fox 64 3D, Paper Mario: Sticker Star, Pilotwings
+    Resort, Pokémon Mystery Dungeon: Gates to Infinity, Fantasy Life,
+    Rhythm Heaven Megamix (touch optional), Theatrhythm: Curtain Call
+    (buttons added), Phoenix Wright: Dual Destinies (the weakest call:
+    StrategyWiki calls it touch-led, a review found the buttons easier).
+    Two have menus that only touch reaches, which the pointer reaches:
+    Ocarina of Time 3D assigns items by touch (its manual), Bravely Default's
+    Norende Village and SP Drink menus.
+  - **Touch for play, throughout (15):** Kid Icarus: Uprising (aiming; but
+    Wikipedia says face buttons aim too), Professor Layton and the Miracle
+    Mask and the Azran Legacy, Tomodachi Life, Nintendogs + Cats, Style
+    Savvy: Trendsetters, Picross 3D: Round 2, Happy Home Designer, Super
+    Mario Maker for Nintendo 3DS (its editor), Yo-kai Watch and Yo-kai Watch
+    2 (the battle wheel), Theatrhythm Final Fantasy ("controlled solely with
+    the stylus", Nintendo World Report), Brain Age: Concentration Training,
+    Steel Diver, Dillon's Rolling Western.
+  - **Touch for play, in parts (6):** Professor Layton vs. Phoenix Wright
+    (story puzzles), Metroid: Samus Returns (switching beams, the Grapple
+    Beam among them), Mario & Luigi: Dream Team (Luiginary Works), Kingdom
+    Hearts 3D (Reality Shifts, needed in some boss fights), WarioWare Gold
+    (Touch League), Mario Party: Island Tour (some minigames).
+  - **What the stick pointer covers, with no rule per game:** it reaches
+    every tap and drag (R3 held while the stick moves), at stick speed. So
+    it carries the 30 menu games and the 10 whose touch play waits for the
+    player (the Layton three, Tomodachi Life, Nintendogs + Cats, Style
+    Savvy, Picross 3D, Happy Home Designer, Super Mario Maker's editor,
+    Dream Team): **40 of 51, 78%, of a sample that leans to touch.** The 11
+    whose touch play is against the clock (Kid Icarus, Theatrhythm Final
+    Fantasy, Brain Age, Dillon, the two Yo-kai Watch games, WarioWare Gold,
+    Mario Party: Island Tour, Kingdom Hearts 3D, Steel Diver, Metroid's beam
+    switching in a fight) are where a stick likely cannot keep up; that
+    split is a reading of the sources' descriptions, for the TV to confirm.
+    **Of the best-sellers alone** (24 classified; Japan's Monster Hunter 4
+    was not), 17 use touch for menus only and 4 more wait for the player:
+    **21 of 24**. The other three are the Yo-kai Watch games and Island
+    Tour's minigames.
+  - **His own 3DS games:** none on his server to sort.
+  - **The timed 11 are where a touchpad helps** (below): direct touch, as a
+    stylus, for the players whose pad has one.
+- **A touchpad as the bottom screen, beside the stick (#288's question,
+  asked again for the 3DS, MMagTech 2026-10-19).** melonDS takes one touch
+  mode at a time, so the DS's touchpad would have cost the stick (#288, set
+  aside). **This core takes both at once.** One pass of its pointer code
+  reads the mouse button and libretro's absolute pointer
+  (`RETRO_DEVICE_POINTER`, pressed, X and Y), then the right stick and R3,
+  and ORs the presses: the pointer sets the position, the stick moves it
+  from there, either one touches (`input/mouse_tracker.cpp:100-188` at
+  master; the same order at 2126.2, `:132-240`). Both inputs are on by
+  default ("Mouse Touchscreen Support", "Touch Device Support"). So the
+  console could answer `RETRO_DEVICE_POINTER` from player 1's touchpad when
+  that pad has one, and every pad keeps the stick: one rule, no setting.
+  What it would take, and what to know:
+  - **SDL brings touchpad events into the host already,** in process: the
+    console's event filter names `SDL_EVENT_GAMEPAD_TOUCHPAD_*`, to drop a
+    set-aside pad's (`startup.cpp`); SDL reports a DualShock 4's or a
+    DualSense's touchpad.
+    Whether those events arrive under CabinetOS is still #288's open check,
+    on the A9. `core_input.cpp` answers only the pad and its sticks today;
+    the pointer is new code there.
+  - **Map the touchpad onto the bottom screen's rectangle,** not the whole
+    picture: the core counts a touch only where it starts on the bottom
+    screen (`mouse_tracker.cpp:120`), and the pointer's range is the whole
+    frame (`:114-117`). The console sets the layout, so it knows where the
+    bottom screen is. (At 2126.2 a touch off the bottom screen still taps at
+    the last position, which master fixed in #2563; a mapping that never
+    leaves the rectangle never meets it.)
+  - **No cursor for a touch:** the cursor wakes only when the stick moves
+    (`:167-185`) and hides after 4 still seconds, so touches aim by feel.
+    "Touch Pointer Timeout" off would keep it on screen in every game.
+  - **A brushing thumb taps.** The touchpad touches on contact; #509
+    already met thumbs brushing a DualSense's pad. Touch on contact or only
+    while the pad is clicked is a choice for the TV.
+  - **Port 0 only**, as everything in this core: player 1's pad, which is
+    the 3DS's one player.
+- **L3** is the core's screen swap ("Toggle", `citra_libretro.cpp:239-270`) and the
+  3DS HOME button (`:191-193`); HOME does nothing unless a HOME menu was booted
+  (`core/hle/service/apt/applet_manager.cpp:1743-1753`), so for a game L3
+  only swaps the screens.
+- **The layouts** (`citra_layout_option`, `core_settings.cpp:476`; sizes from
+  `emu_window/libretro_window.cpp:237-293`), on a 3840x2160 TV:
+
+| Layout | Picture | Top screen | Bottom screen |
+|---|---|---|---|
+| "Default Top-Bottom" (the core's default) | 400x480 a factor, fills the height | 1800x1080 | 1440x1080 |
+| "Side by Side" | 720x240 a factor, fills the width | 2133x1280 | 1707x1280 |
+| "Large Screen, Small Screen" (4x proportion, the default) | 480x240 a factor | 3200x1920 | 640x480 |
+| "Single Screen Only" | one screen | top only: no touch screen | |
+
+  The DS precedent is both screens at once, stacked, melonDS's default
+  (#248). For the 3DS the same is the core's default. **My view: side by
+  side.** On a 16:9 TV it draws both screens 19% larger than stacked, and the
+  bottom screen stays large enough to aim a cursor at; Large Screen draws
+  the touch screen at a quarter of the top screen's scale (640x480 on a 4K
+  TV). The downside: it is not how
+  the DS looks here, and a game that carries one scene across both screens
+  reads naturally only stacked. Judged on the TV in the hand test, then one
+  layout for every game.
+
+#### The tests
+
+| Test | Answer | Why |
+|---|---|---|
+| What it needs from RomM | **passes, for decrypted cartridge dumps** | A game is one file. The core loads `.3ds`, `.cci`, `.cxi`, `.3dsx` and the compressed `.zcci`, `.zcxi`, `.z3dsx` (`environment.cpp:267-273`). **Encrypted dumps are refused**: the loader checks the header's NoCrypto flag (`core/file_sys/ncch_container.cpp:261-263`) and the core says the game "must be decrypted" (`citra_libretro.cpp:535-537`); Azahar no longer decrypts games, so no keys are wanted for them. **A `.cia` does not load**: the loader has no CIA case (`core/loader/loader.cpp`, `GetFileLoader`), a CIA has to be installed, and the core installs nothing. No firmware: Azahar carries open-source stand-ins for the shared font, the Mii data, the country list and the bad-word list (`core/file_sys/archive_ncch.cpp:157-205`); Chinese, Korean and Taiwanese games get the Western font, which "will not display properly" (`:193-197`). Nothing goes in RomM's per-platform firmware folder: real system files are a NAND tree from a 3DS, not single files, and Azahar's way to carry them with a game is the bundle file (test 3) |
+| No user interaction | **passes** | Nothing to set up for a decrypted game. A game's on-screen keyboard is answered at once with the 3DS user name, `AZAHAR` (`core/frontend/applets/swkbd.cpp:149-165`, `core/hle/service/cfg/cfg_defaults.cpp:41`); the Mii picker returns a standard Mii (`mii_selector.cpp:55-57`). The core reports a refused game only through `SET_MESSAGE`, which the host does not answer, so the console must look first: read the header flag before launch and refuse an encrypted dump or a `.cia` with a plain reason, as a PS2 disc that will not run gets "Disc can't be read" (`play.cpp`, `refuseLaunch`) |
+| The cache model | **passes: one file per game, nothing installed** | The file is the game. A `.3ds` is its cartridge's size, 128 MB to 4 GB (No-Intro); RomM 5.4.0's library conversion can store it as `.zcci` instead (lossless, the server owner's choice, off by default), which the core reads as it is. Updates and DLC: a 3DS installs them as CIAs, which the core cannot. Azahar's answer is the bundle file, `.bcci`/`.bcxi`, a cartridge dump with its update and DLC CIAs in one uncompressed tar, "simulated as being installed" (Azahar PR #2369, merged 2026-10-12), in master and the 2127.0 alphas from alpha2 only. Until a stable release has it, updates wait with #181 ("Updates and DLC as separate files in RomM (Switch, PS3, Xbox 360)"). For a `.cia` download: RomM 5.4.0 can serve one as `.cci` with `?format=cci` when the server turns its converter on (`ROM_CONVERTO_ENABLED` and `download_conversion_enabled`, both off by default; decryption left out), and says so in the game's `download_formats`; the console could take that when it is offered, which needs no change on RomM |
+| Saves per person | **passes, the PSP way** | At the default "Save Data Location" (`core_settings.cpp:612`), the core keeps its whole 3DS (SD card, NAND, system data, shader cache) in `<save directory>/Azahar/` (`:1078-1110`). The console hands each person their own folder per game (`launch.cpp`, `storage::savesDir`), so that 3DS is per person and per game. Every game's save, cartridge or download, is the folder `sdmc/Nintendo 3DS/<id>/<id>/title/<high>/<low>/data/` (`archive_source_sd_savedata.cpp:22-34`, `core/hle/service/fs/archive.cpp:373-375`), and extdata beside it (`archive_extsavedata.cpp:194-196`). Since the folder holds one game, the directory save is `Azahar/sdmc/Nintendo 3DS`, zipped and sent as PSP's `PSP/SAVEDATA` is (`savetable.cpp`, `directorySaveRoot`), with a save tag of its own. The shader cache sits in the same folder, per person, and is not sent |
+| States | **none, by question 25's rule** | Azahar refuses a state made by any other git revision of itself (`core/savestate.cpp:300-305`), so every pin move would strand every state; the 3DS has real saves; Cabinet has no 3DS core. That is the rule's case exactly ("cannot be trusted to load ... on a console that has a real save system of its own"): `azahar` joins `kNoSnapshots` (`savetable.cpp`, `snapshotsAllowed`), and rewind goes with it. Rewind would not suit anyway: the core's `retro_serialize_size` makes the whole state itself (`citra_libretro.cpp:692-710`), and rewind takes one every half second (`pace.cpp`) |
+| Playability | **his call; on the labels, ahead of the Vita and Xbox 360** | below |
+
+**Playability, counted 2026-10-19** from Azahar's list (players' reports on
+any hardware, accepted once a second player agrees, OpenGL only, Azahar's own
+window, not the libretro core):
+
+| | Titles | Share of rated |
+|---|---|---|
+| Perfect | 177 | 32.1% |
+| Great | 188 | 34.1% |
+| Okay ("playable from beginning to end") | 117 | 21.2% |
+| **Playable to the end** | **482** | **87.5%** |
+| Bad, Intro/Menu, Won't Boot | 43, 19, 7 | 12.5% |
+| Not tested | 663 of 1,214 | |
+
+The scales differ from question 49's: there, Vita3K 56.9% playable of its
+reports, Xenia Canary 25.8%.
+
+**The 25 best-selling 3DS games** (Wikipedia's list, from Nintendo's
+figures): 21 are rated Okay or better in every version. Perfect: Mario Kart 7,
+New Super Mario Bros. 2, Animal Crossing: New Leaf, Ocarina of Time 3D,
+Majora's Mask 3D, Donkey Kong Country Returns 3D. Great or Okay: Pokémon X
+and Y, Sun and Moon, Ultra Sun and Ultra Moon, Super Mario 3D Land, Super
+Smash Bros. for Nintendo 3DS (Okay), Yo-kai Watch and Yo-kai Watch 2,
+Tomodachi Life, Luigi's Mansion: Dark Moon (Okay), Nintendogs + Cats,
+Monster Hunter Generations, Monster Hunter 4 Ultimate, A Link Between
+Worlds, Happy Home Designer, Mario Party: Island Tour. The other four:
+Pokémon Omega Ruby "Bad" (Alpha Sapphire "Okay"), Super Mario Maker for
+Nintendo 3DS "Bad", Fire Emblem Fates: Birthright "Bad" (Conquest "Okay"),
+and Japan's Monster Hunter 4, not listed.
+
+#### Keys and the network: two rules the stock build breaks
+
+- **Keys.** Azahar compiles a blob of the 3DS's own keys into the binary
+  unless it is built with `-DENABLE_BUILTIN_KEYBLOB=OFF` (`CMakeLists.txt:160`,
+  `core/hw/aes/key.cpp`, "encrypted in the source to prevent easy access");
+  its own releases and libretro's buildbot leave it on. The project ships
+  "no games, BIOS or keys" (CONTRIBUTING.md, "The rules"), so the arm turns
+  it off. Azahar's own words for the cost (PR #2024, 2026-04-12): without
+  the keys it is "impossible to use some features such as multiplayer,
+  amiibo or accessing the eshop", none of which the console offers. Games
+  do not need them: Azahar no longer decrypts games. Nintendo's HTTPS client
+  certificate is also compiled in, always (`core/hle/service/http/ctr-common-1-*.h`),
+  but as ciphertext that only key slot 0x0D opens (`http_c.cpp:2262-2266`),
+  which the blob would supply; with the blob off it cannot be used. Whether
+  shipping it that way is acceptable is his call.
+- **The network.** The emulated 3DS reaches the real network for a game: its
+  sockets are the host's (`core/hle/service/soc/soc_u.cpp:1823`), its HTTP
+  service makes real requests (`http_c.cpp`), and its Wi-Fi reports
+  connected as soon as a game asks (`core/hle/service/ac/ac.cpp:41-56,
+  122-127`). No setting turns this off (none in `common/settings.h`; the
+  libretro options have none). That breaks "The console connects only to
+  fixed places the code chooses ... Never to an address found in the data"
+  (CONTRIBUTING.md): a game's servers are in the game. PPSSPP's own
+  `ppsspp_enable_wlan` is off by default, and Vita3K's `http-enable` was
+  listed to turn off (question 49); Azahar has no such switch. **Upstream
+  first, on his go:** ask Azahar for an option that gives games no network
+  (a small ask; their PR #2024 added a build switch for the keys the same
+  way). The fallback, written on the issue in full as the rule says: a
+  source patch in the arm that makes the emulated Wi-Fi report no
+  connection.
+
+#### The New 3DS's extras, gyro and the microphone
+
+- **New 3DS:** the core starts as a New 3DS by default (`core_settings.cpp:201`,
+  `17f4c52`), so the New-3DS-only cartridges start. No-Intro's "Nintendo - New
+  Nintendo 3DS" DAT has four games: Xenoblade Chronicles 3D (Great), Fire
+  Emblem Warriors (Okay), Minecraft: New Nintendo 3DS Edition (Okay), Runbow
+  Pocket (Great). ZL and ZR are L2 and R2, the C-stick the right stick
+  (`citra_libretro.cpp:185-202`). One pad: every binding is port 0, as on
+  the machine.
+- **Gyro: the core takes motion through libretro's sensor interface**
+  (MMagTech's addition, 2026-10-19). Every 3DS has a gyroscope and an
+  accelerometer. With "Gyroscope/Accelerometer Support" on, its default
+  (`core_settings.cpp:699`), the core asks `GET_SENSOR_INTERFACE`, turns both
+  sensors on at 60 Hz with `set_sensor_state`, and reads accelerometer X, Y,
+  Z in g and gyroscope X, Y, Z in radians a second, times "Motion
+  Sensitivity", from port 0 (`input/input_factory.cpp:99-170`,
+  `environment.cpp:57-59`). The host does not answer it today, so a game
+  sees a 3DS lying still: gravity straight down, no turn.
+- **So a DualSense's gyro could serve it** if the host answered that
+  interface. The host reads the real pads in process through SDL, which
+  reports a DualSense's and a DualShock 4's gyroscope and accelerometer (its
+  event filter already handles `SDL_EVENT_GAMEPAD_SENSOR_UPDATE`,
+  `startup.cpp`). What it would take: SDL's accelerometer is in m/s², so it
+  is divided by standard gravity; the axes are turned from a pad held flat to
+  a 3DS held up, and checked by hand; and `set_sensor_state` is refused for
+  a pad with no sensors, so the core keeps its lying-still values instead of
+  reading no gravity at all (`:113-140` reads a sensor only once
+  `set_sensor_state` turned it on, `:162-170`). One
+  rule by pad, not by game: a pad with a gyro moves the 3DS, any other pad
+  holds it still. The same piece serves mGBA's motion carts (question 49).
+- **Which games need motion to play**, not as an option: a research pass
+  over public sources, 2026-10-19. No list exists to read it from: Wikipedia's
+  3DS lists record no controls, and the two community lists found would not
+  open (a GameFAQs thread, the Emulation General wiki's page, which is up for
+  deletion). Found:
+  - **Needed to play at all (3):** Face Raiders (built in), Spirit Camera:
+    The Cursed Memoir, Pokémon Dream Radar. All three need the camera too.
+  - **Needed in a part, a mode or a minigame (13):** Luigi's Mansion: Dark
+    Moon (balance beams); Kirby: Triple Deluxe ("you have to use the 3DS'
+    gyroscope features in order to progress", Nintendo World Report);
+    Yoshi's New Island (every transformation, Wikipedia); Metal Gear Solid:
+    Snake Eater 3D (balancing on walkways); Mario & Luigi: Dream Team (some
+    Giant battles); Sonic Lost World (Special Stages); LEGO City Undercover:
+    The Chase Begins (the scanner, needed in mission 2,
+    azahar-emu/azahar#1309); WarioWare Gold (Twist League); Rhythm Thief &
+    the Emperor's Treasure (gyro stages); Mario Party: Island Tour and Mario
+    Party: The Top 100 (some minigames); Mario & Sonic at the London 2012
+    Olympic Games (Long Jump); Pac-Man & Galaga Dimensions (Pac-Man Tilt).
+  - **Optional, a button or stick does it too (13):** Super Monkey Ball 3D,
+    Cubic Ninja, Ocarina of Time 3D and Majora's Mask 3D (aiming), Star Fox
+    64 3D, Steel Diver, Super Mario 3D Land, Mario Kart 7, Pokémon Sun and
+    Moon (Poké Finder) and Ultra Sun and Ultra Moon, Resident Evil
+    Revelations, Mario Tennis Open, Luigi's Mansion (2018).
+  - **None found (24 checked),** among them Kid Icarus: Uprising,
+    Nintendogs + Cats, Rhythm Heaven Megamix, Kirby: Planet Robobot, New
+    Super Mario Bros. 2, Pokémon X and Y, Animal Crossing: New Leaf.
+  - **Not settled:** whether Ultra Sun and Ultra Moon's first Ultra Warp Ride
+    forces the gyro, and whether Yoshi's and Snake Eater's sections can be
+    skipped.
+  - **Of the 25 best-sellers, two have a required motion part:** Luigi's
+    Mansion: Dark Moon and Mario Party: Island Tour.
+- **Without a gyro**, a game stops at its motion part, and nothing says
+  which game will before it does (Azahar's list does not mark them). **My
+  view: worth building, as its own small piece after the 3DS.** It is one
+  answer in the core host for two systems, the motion parts are in
+  mainstream games (Kirby, Yoshi, Luigi's Mansion), and the rule is the pad,
+  not the game. The downside: a player with an Xbox or 8BitDo pad still
+  stops there, and there is no stick stand-in in the core.
+- **Camera, AR cards and the microphone** (the same pass): the three games
+  above need the camera; Mario Party: Island Tour has an AR-card minigame;
+  WarioWare Gold's Ultra League adds microphone microgames; in Nintendogs +
+  Cats a pet learns its name by voice. The core asks for libretro's
+  microphone interface (`environment.cpp:61-63`), not answered here, so
+  games hear silence; "Static Noise" is the core's other value. No camera.
+
+#### For when it is built
+
+A case arm (above), with the keys off and the network answer in place;
+`cores/options/azahar.txt` from `tools/core-options.c`;
+a catalog row, `3ds` to `azahar`; the levels in `quality.cpp`; the layout,
+if not the core's default, in `coreoptions.cpp`; `azahar` in
+`kNoSnapshots`, a save tag and its directory save root in `savetable.cpp`;
+the header check that greys encrypted dumps and `.cia` files; docs/LICENCES.md
+and docs/ARCHITECTURE.md. No pointer code.
+
+#### The A9 hand test, when he names a time
+
+Needs: the A9 free and him at the TV; 3DS games of his own on RomM, dumped
+decrypted from his cartridges (the console ships no games; the upload is a
+write to his server, so his); a branch with the arm, the row and the option
+table, built in CI and run with `tools/ui-loop.sh`; saves sent to the
+write-test RomM, never his. To see: the core builds; a game starts with no
+dialog, and an encrypted dump is refused in the log; Mario Kart 7 (the
+#2093 game) on Vulkan and on OpenGL at 1x, 3x and 5x, with frames.py and a
+look for repeated or skipped frames; the first play's shader stutter, then
+the second's; the three layouts, judged on the TV; the right stick and R3 on
+a touch menu, and the cursor in a game that turns its camera with the
+C-stick; a save made, the game quit and reopened, the save's zip on the
+write-test server; leaving by the pause menu (the unload crash #2572 fixed);
+with the keys off, that the games still start and that no game opens a
+connection (the log, and `ss` on the A9 while one plays); with his
+DualSense, whether SDL reports its touchpad and its gyro on the A9 (#288's
+open check), before either piece is built.
+
+#### Recommendation, 2026-10-19 (not decided)
+
+**Go, with conditions.** Every test passes on paper: one decrypted file per
+game, nothing to set up, saves per person the PSP way, no states by question
+25's rule, and the touch screen is #374's rule by the core's own default with
+no console code. The core is upstream's own, with a stable tag to pin, and
+on the labels the 3DS is further along than the Vita or Xbox 360 were (87.5%
+of rated titles, 21 of the 25 best-sellers). The conditions: (1) it builds in
+`cabinetos-builder` at 2126.2, with its key blob off; (2) games get no
+network, by an upstream option (asked on his go) or the recorded patch;
+(3) the hand test passes on Vulkan, frame pacing included
+(azahar-emu/azahar#2093), or OpenGL wins by measurement; (4) he accepts
+that only decrypted cartridge dumps play, `.cia` files and encrypted dumps
+greyed with the reason, and updates wait for bundles in a stable release or
+#181; (5) his legal call on building a 3DS emulator into the image.
+His server has no 3DS games today, so this is for the players who have
+them.
+
+**Touch:** the stick pointer, the core's default, carries 21 of the 24
+best-sellers sorted and 40 of a 51-game sample leaning to touch; the rest
+are timed touch games where a stick likely falls behind. **Recommended
+with it: the touchpad as a second way to touch**, for the pads that have
+one (a DualSense, a DualShock 4), because this core, unlike melonDS, takes
+the touchpad and the stick at once: every pad keeps the stick, a pad with a
+touchpad also touches directly, one rule with no setting. It is #288's
+idea, set aside for the DS only because melonDS could not take both. Its
+open check is SDL reporting the touchpad on the A9.
+
+**Gyro:** the core takes motion through libretro's sensor interface, so a
+DualSense's gyro could serve it once the host answers that interface. 16
+games were found that need motion somewhere, two of them best-sellers.
+**My view: worth building as a small piece of its own after the 3DS**, one
+answer in the core host for the 3DS and the Game Boy Advance motion carts;
+a pad without a gyro still stops at those parts. His call, separate from
+the go.
