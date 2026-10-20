@@ -251,20 +251,6 @@ struct App {
     // The same audit with the prose and the value list, which is what turns
     // "here are 78 keys" into something a person can decide from.
     bool coreOptionsDetail = false;
-    // One core option, set from the command line, for finding out what a value
-    // actually does before writing it into catalog::optionOverrides.
-    //
-    // It exists because the alternative is a rebuild per value, and an option
-    // is exactly the kind of thing that has to be tried rather than reasoned
-    // about — `catalog::optionOverrides` already says so, and open question 7
-    // asks for Cabinet's whole per-platform table to be brought across "with a
-    // reason recorded beside each choice", which means somebody has to be able
-    // to see the difference each one makes. Two of the four overrides in that
-    // table today were found by a launch failing, not by reading.
-    //
-    // These are applied ON TOP of catalog::optionOverrides, so this can also be
-    // used to take a shipped override back off and see what it was buying.
-    std::map<std::string, std::string> cliOptionOverrides;
     const char* initialScreen = nullptr;
     int initialTile = 0;
     const char* navScript = nullptr;

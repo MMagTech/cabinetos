@@ -346,7 +346,7 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             coreOptionsDetail = true;
         } else if (SDL_strcmp(argv[i], "--core-option") == 0 && i + 1 < argc) {
             //   --core-option dolphin_shader_compilation_mode=Synchronous
-            // Repeatable. See cliOptionOverrides.
+            // Repeatable. See Core::setCommandLineOption.
             const std::string kv = argv[++i];
             const size_t eq = kv.find('=');
             if (eq == std::string::npos || eq == 0) {
@@ -354,7 +354,7 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
                              kv.c_str());
                 return 1;
             }
-            cliOptionOverrides[kv.substr(0, eq)] = kv.substr(eq + 1);
+            cab::Core::setCommandLineOption(kv.substr(0, eq), kv.substr(eq + 1));
         } else if (SDL_strcmp(argv[i], "--storage") == 0) {
             storageReport = true;
         } else if (SDL_strcmp(argv[i], "--tab") == 0 && i + 1 < argc) {

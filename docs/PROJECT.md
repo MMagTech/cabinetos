@@ -18909,3 +18909,52 @@ player cannot tell a stranded state from a broken one. The options:
 About 35 lines of code without option (b), about 100 to 130 with it. Then
 on the TV: a state saved and loaded in play, its size and its pause read
 from the log; Resume from Home; fast forward in a race.
+
+#### Before the hand test: headless on the A9 (2026-10-20)
+
+His three 3DS games went on his RomM on 2026-10-20, so the library is no
+longer empty. Read from it with the Mac token, copied to the write-test
+RomM (its platform 7, `3ds`), and started there headless on the A9 with
+this branch's frontend and the CI core (run 39362460074), in a scratch
+HOME and storage root with no input devices. Nothing ran on the TV.
+
+- **All three are decrypted cartridge dumps.** Each `.7z` holds one `.3ds`
+  (an NCSD, its first NCCH 0x4000 in, NoCrypto set) and a 27-byte
+  `readme.txt`, which the unpacking writes beside it and the core never
+  sees: Mario Kart 7 (USA) (Rev 1), 634 MB to 1 GiB, `CTR-P-AMKE`; Kirby:
+  Planet Robobot (USA), 621 MB to 1 GiB, `CTR-P-AT3A`; Super Smash Bros.
+  for Nintendo 3DS (USA) (Rev 10), 1.19 GB to 2 GiB, `CTR-P-AXCE`.
+- **Each started with no dialog of the console's, on Vulkan,** at Quality
+  (5x, the A9's own level): the core made its own device, and game frames
+  ran at 60 a second (headless, paced by the clock) with 3 to 6 skipped in
+  the first ten seconds and none after. OpenGL, through
+  `--core-option citra_graphics_api=OpenGL`, started too: the core's own
+  OpenGL 4.6 context (4.3 core asked), 60 a second, the picture upright.
+  Side by side and Large Screen came out as the table above says (720x240
+  at Performance, 2400x1200 at Quality).
+- **Every start unpacks the archive again**, the first and every one after
+  ("already downloaded", then "Unpacking…" on the Play row): to the core,
+  about 12 s for Mario Kart 7, 21 s for Kirby, 37 s for Smash. The
+  download from the write-test RomM over the A9's Wi-Fi took 6 to 13 s.
+  One download of six stalled at 190 MB inside the write-test VM (its
+  rootless port forwarding stopped taking data from RomM's nginx); the
+  console said "Couldn't download this game" after 175 s and the retry
+  took 8 s. Not seen from the live server.
+- **The games' own first screens:** Mario Kart 7 opens on its message that
+  there are no Mii characters in Mii Maker, with an OK on the touch screen;
+  Smash on "Extra data will be created for this software on the SD card",
+  with an OK; Kirby on its intro film.
+- **No connection while a game plays:** no TCP, UDP or raw socket on the
+  process in 85 one-second samples across the three games (`ss`), with the
+  no-network patch in and the keys off; the core logs the HTTP certificate
+  it cannot open ("NormalKey in KeySlot 0x0D missing") and the local
+  wireless it does not start, as expected.
+- **The refusals:** a made-up header-only `.3ds` with NoCrypto clear and a
+  made-up `.cia` header on the write-test RomM were refused before the
+  core, with "Encrypted 3DS games can't be played" and "3DS CIA files can't
+  be played".
+- **Found and fixed on the branch:** the host logged "the core asked for
+  the render interface" every time a core asked, and Azahar asks on every
+  frame, 44 lines a second in the journal; now once per answer, each game.
+  And `--core-option` reached only `--core`; it now reaches a library
+  launch too, which is how the TV switches API and layout without a build.
