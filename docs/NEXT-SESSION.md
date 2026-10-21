@@ -95,8 +95,8 @@ RomM: keep test launches under a minute, or have his go.
 
 - **Needs the TV or a device:** #473 (a press while an emulator of its own
   has the screen), #411 (Moonlight), #381 (the HDMI cable out), #290 (the
-  C1, before a release), #228 (the measurement in PROJECT.md section 46
-  when the sound dies again), #132 (the Bluetooth wake test).
+  C1, before a release), and #228 (the measurement in PROJECT.md section
+  46 when the sound dies again).
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
   (RomM's save channels; revisit mid-January 2027), #545, the RomM
   token revoke (rommapp/romm#5274; the code is PR #528),
