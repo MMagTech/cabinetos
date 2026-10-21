@@ -18028,8 +18028,8 @@ discussed again.
 
 ### 49. PS Vita (Vita3K), issue #198
 
-**Researched 2026-10-19; decided 2026-10-20: a go, built after the 3DS
-(#524) merges, by the plan in "Decided, 2026-10-20: the build plan" at the
+**Researched 2026-10-19; decided 2026-10-20: a go, ready to build now that
+the 3DS (#524) has merged, by the plan in "Decided, 2026-10-20: the build plan" at the
 end of this question, which supersedes the recommendations above it.** The brief
 is MMagTech's comment on #198 of the same day: five tests, a failure on any
 of the first four a plain no, the fifth his call on the numbers; then which
@@ -18571,13 +18571,13 @@ go with conditions once the hand test passes.
 #### Decided, 2026-10-20: the build plan
 
 **A go.** Settled with MMagTech on 2026-10-20, one choice at a time, to be
-built once the 3DS (#524, "Nintendo 3DS through Azahar's own libretro core
-(decrypted dumps)") merges. It supersedes "Recommendation, 2026-10-19" and
+built after the 3DS (#524, "Nintendo 3DS through Azahar's own libretro core
+(decrypted dumps)"), which merged the same day. It supersedes "Recommendation, 2026-10-19" and
 the addendum's "My view": the console builds its own pointer now instead of
 waiting on Vita3K/Vita3K#3707. Nothing was built and nothing ran on the A9
 or the VM; the one piece of new research is Sony's own description of the
 PS TV pointer, below. The full-features rule (question 50, "Full
-features", on #524's branch) applies: states, RetroAchievements and levels
+features") applies: states, RetroAchievements and levels
 are each answered here.
 
 ##### His decisions
