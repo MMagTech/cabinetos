@@ -335,7 +335,7 @@ down. "Look now at" is where the code or a later decision moved on.
   build plan" at the end of the question. **Built 2026-10-21** (#540, "PS
   Vita through Vita3K, played as a PlayStation TV"), unattended:
   "Built, 2026-10-21" after the plan says what the build found and what was
-  checked; the probe and the hand test wait for the TV.
+  checked. The probe passed on the TV; the hand test waits for him.
 - **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
   Researched the same night, not decided: Azahar's own core, pinnable at its
   2126.2 tag, fits the core host on Vulkan as it is; the touch screen is the
@@ -18818,10 +18818,18 @@ mid-game (back Home), the console quitting mid-game (save zipped and sent),
 a power cut mid-game (the next start sent it). `--check-option-tables`
 passes; no new warnings.
 
-**Not checked yet:** the probe (a touch reaching Vita3K as a finger: it
-needs the TV session's gamescope, and the TV was not allowed overnight), so
-the pointer has not touched anything; frame times, so the levels are the
-plan's candidates (1x, 2x, 4x); a game's own exit; the hand test's list.
+**The probe passed** (2026-10-21, on the TV session, MMagTech's go): Vita3K
+by hand on the TV's gamescope with Shovel Knight, `touch_click_mode` 4, and
+two taps from the console's virtual touch screen (`vtouch.cpp`). SDL's event
+log inside Vita3K showed each as `SDL_EVENT_FINGER_DOWN` and `UP`: the tap at
+0.5, 0.5 of the screen arrived at 0.5005, 0.5009 of the window, the one at
+0.2, 0.8 at 0.197, 0.801 (the window is a little narrower than the screen,
+the Vita's shape). So a touch reaches Vita3K as a finger, mapped into the
+game's window by gamescope, and no patch is needed.
+
+**Not checked yet:** the dots and the long press on the TV with a real pad;
+frame times, so the levels are the plan's candidates (1x, 2x, 4x); a game's
+own exit; the hand test's list.
 
 **Open:** his server's `psvita` folder (ES-DE's 26 launch files) shows as a
 game; Play on it says "Couldn't open this game's file".
