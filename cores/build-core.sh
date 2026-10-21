@@ -875,7 +875,8 @@ if [ "$CORE" = azahar ]; then
     # are addresses in the game, and the console connects only to fixed places
     # the code chooses (CONTRIBUTING.md, "The rules"). Azahar has no switch
     # for it, so this is the fallback docs/PROJECT.md question 50 records,
-    # until Azahar has an option of its own: the emulated 3DS has no
+    # until Azahar has an option of its own (tracked on #537, asked for as
+    # azahar-emu/azahar#2695): the emulated 3DS has no
     # connection. Its Wi-Fi reports none, and so that a game which never asks
     # gets no further, every door to the host's network fails the way it does
     # on a 3DS with no access point: a socket, a name lookup, an HTTP request,
