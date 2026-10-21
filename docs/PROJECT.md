@@ -18827,9 +18827,33 @@ log inside Vita3K showed each as `SDL_EVENT_FINGER_DOWN` and `UP`: the tap at
 the Vita's shape). So a touch reaches Vita3K as a finger, mapped into the
 game's window by gamescope, and no patch is needed.
 
-**Not checked yet:** the dots and the long press on the TV with a real pad;
-frame times, so the levels are the plan's candidates (1x, 2x, 4x); a game's
-own exit; the hand test's list.
+**On the TV with MMagTech, 2026-10-21, testing image 2026.10.21.3:** the
+firmware and four installs (WipEout 2048 first, so both firmware files then);
+the pointer in WipEout 2048's menus, which need a tap (the dots, the long
+press and L2's tap all worked; the touch screen made at the first long press
+and removed at the game's end, gamescope's touch mode put back); saves up to
+his RomM from Shovel Knight and WipEout 2048, and Shovel Knight's back at the
+next start; the pause menu and Exit; the right stick (Riddled Corpses EX).
+**The levels hold at Quality, 4x**, measured with frames.py and the graphics
+chip's busy percentage, a minute each: Shovel Knight 59.9 frames a second,
+median 16.68 ms, GPU 27%; WipEout 2048 in a race 30.0 (its own rate), median
+33.33 ms, GPU 46% at 1,694 of 2,900 MHz; Gravity Rush (its opening, so light)
+30.0, GPU 28%. So Performance 1x, Balanced 2x and Quality 4x stay as built.
+**Vita3K's, not the console's:** Gravity Rush's opening cutscene looked washed
+out and its camera did not follow the right stick (Vita3K's own reports note
+graphics faults in this game; the right stick reaches the virtual pad at full
+range); **Geometry Wars 3: Dimensions crashes as its first level starts**, a
+GPU page fault (amdgpu, TCP client, permission fault) and then Vulkan's
+device lost, twice on the TV. Reproduced headless with scripted presses and
+the same fault every time at 34 s: as Vita3K ships with none of the
+console's settings, at 1x and 4x, with anisotropic filtering on and off,
+with its memory mapping off, on OpenGL as well as Vulkan, and on build 4206
+as on 4210. Nobody has reported it; the one report for this release (build
+3816, Windows, AMD) says it plays. One rule for every game: it waits for
+Vita3K, and a report goes to Vita3K only on his go.
+
+**Not checked yet:** a game's own exit; Killzone: Mercenary and Skullgirls
+2nd Encore; two controllers; the first-run stutter test.
 
 **Open:** his server's `psvita` folder (ES-DE's 26 launch files) shows as a
 game; Play on it says "Couldn't open this game's file".
