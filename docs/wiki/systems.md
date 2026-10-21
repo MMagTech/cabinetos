@@ -1,7 +1,7 @@
 # Systems, formats and BIOS
 
-CabinetOS plays **34 systems**, from the Atari 2600 to the Xbox 360, Switch,
-PS3 and Wii U. Everything comes from your RomM server: games, BIOS, firmware
+CabinetOS plays **35 systems**, from the Atari 2600 to the Xbox 360, Switch,
+PS3, Wii U and PS Vita. Everything comes from your RomM server: games, BIOS, firmware
 and keys. CabinetOS ships none of them.
 
 ## How the console finds your games
@@ -80,6 +80,7 @@ downloads anything new into the console's shared BIOS folder.
 | PlayStation | `psx` | PCSX ReARMed | chd, cue, bin, pbp, m3u, img, iso | Optional: `scph5501.bin` (or `scph5500`, `scph5502`, `scph1001`, `scph7001`, `scph101`). Without one it uses its own. |
 | PlayStation 2 | `ps2` | PCSX2 | chd, iso | **Required:** a PS2 BIOS dump, for example `SCPH-70012.bin` (any name). With several, each game uses the one for its region, else a USA one |
 | PSP | `psp` | PPSSPP | iso, cso, chd, pbp | None |
+| PlayStation Vita | `psvita` | Vita3K | zip or vpk, with its licence inside (NoNpDrm) | **Required:** both of Sony's files: the system software (`PSVUPDAT.PUP`) and the font package (Sony names it `PSP2UPDAT.PUP`), any names. See [PlayStation Vita](#playstation-vita) |
 | PlayStation 3 | `ps3` | RPCS3 | decrypted iso, or pkg | **Required:** `PS3UPDAT.PUP` (installed once). A PKG game also needs its `.rap` licence in the same RomM game folder. |
 | TurboGrafx-16 | `tg16` | Beetle PCE Fast | pce | None |
 | TurboGrafx-CD | `turbografx-cd` | Beetle PCE Fast | chd, cue, ccd | **Required:** `syscard3.pce` (256 KB, any name) |
@@ -135,12 +136,33 @@ downloads anything new into the console's shared BIOS folder.
 - **Games get no internet.** The emulated 3DS has no connection, so online
   features and downloads inside games do not work.
 
+## PlayStation Vita
+
+- **Played as a PlayStation TV.** Each controller is its own player, and
+  games that support the PS TV get L2, R2, L3 and R3.
+- **The first Play installs** the firmware (once per console) and the game.
+  Installing takes about twice the game's size on the drive while it runs. A
+  removed game takes its install with it.
+- **The touch screen:** hold **L3** for half a second to show two dots; hold
+  it again to hide them. The **left stick** moves the white dot and **L2**
+  touches with it: hold L2 and move to drag. Move the **right stick** for a
+  red dot, which **R2** touches with; hiding the dots puts it away until you
+  move the right stick again. While the dots show, the sticks, L2 and R2 work
+  them and every other button goes to the game. A click of L3 still goes to
+  the game.
+- **What a PS TV could not do, the console cannot either:** the rear touch
+  pad, tilting and the camera. A game that needs them may stop where it does.
+  Sony kept those games off the PS TV.
+- **No save states**, fast forward or rewind. Saves sync with your server. A
+  real Vita's saves do not load.
+- **Updates and DLC do not play yet.** Games get no internet.
+
 ## Not supported
 
 - **Game & Watch** is left out on purpose: the games are too small to play on a
   television.
-- Platforms not in the table above (for example Jaguar, ColecoVision, Vita)
-  get no tile.
+- Platforms not in the table above (for example Jaguar, ColecoVision) get no
+  tile.
 
 ## What works where
 
@@ -150,6 +172,6 @@ downloads anything new into the console's shared BIOS folder.
 | PS2 | No | No | Yes |
 | GameCube, Wii | No | No | Yes |
 | 3DS | States and fast forward; no rewind | No | No |
-| Switch, PS3, Xbox, Xbox 360, Wii U | No | No | No |
+| Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita | No | No | No |
 
 Saves sync for every system. See [Saves, states and sync](saves.md).

@@ -7,8 +7,8 @@ The same menu in every game, on every system.
 ## Open it
 
 - **Press both sticks in together (L3 + R3).** Always, on any pad.
-- **Escape** on a USB keyboard. In PS2, Switch, PS3, Xbox, Xbox 360 and Wii U
-  games the keyboard does not reach the menu: use a pad.
+- **Escape** on a USB keyboard. In PS2, Switch, PS3, Xbox, Xbox 360, Wii U
+  and PS Vita games the keyboard does not reach the menu: use a pad.
 - A tap of the **shortcut button** (Home, unless you chose another), when
   [In-game shortcuts](navigation.md#in-game-shortcuts) are on.
 - **Hold HOME** for a second on a Wii Remote, in a Wii game.
@@ -38,7 +38,7 @@ Remote Play stream starts or ends.
 Rows appear only where they apply:
 
 - **Save state** and **Load latest state**: not on PS2, GameCube, Wii,
-  Switch, PS3, Xbox, Xbox 360 or Wii U, which have no save states. A 3DS
+  Switch, PS3, Xbox, Xbox 360, Wii U or PS Vita, which have no save states. A 3DS
   state may not load after an update changes the emulator.
 - **Picture**: only on systems with picture levels, and only for the owner
   when a PIN is set.

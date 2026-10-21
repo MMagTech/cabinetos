@@ -841,6 +841,36 @@ struct App {
     // held back because the other was already down (Emulator::blocksBackStart).
     struct { bool passed[2] = {false, false}, held[2] = {false, false}; }
         backStart[cab::vpad::kMaxPlayers];
+    // THE POINTER over a game whose emulator is touched through the console
+    // (Emulator::touchPointer: the Vita, played as a PS TV, docs/PROJECT.md
+    // question 49, decision 4). Two dots, white and red, drawn by this window
+    // over the game: the sticks move them and L2 and R2 touch with them,
+    // through the virtual touch screen (vtouch.h). A long press of L3 shows
+    // and hides them. standalone_play.cpp, pointerButton and the rest.
+    struct Pointer {
+        bool on = false;          // the dots show
+        int player = -1;          // who drives them: whoever long-pressed L3
+        float x[2] = {0.5f, 0.5f}, y[2] = {0.5f, 0.5f};   // fractions of the screen
+        bool second = false;      // the red dot has come, since the dots last showed
+        float stick[4] = {};      // the driver's sticks, -1 to 1: left x, y, right x, y
+        bool finger[2] = {};      // L2 and R2 holding a finger down
+        // The driver's sticks and triggers as they are, by SDL's axis number,
+        // given back to the game when the dots go.
+        int16_t raw[SDL_GAMEPAD_AXIS_COUNT] = {};
+        // L3's press, held back until it is a click (the game's) or a long
+        // press (the dots'): whose, and since when (SDL_GetTicks).
+        int l3Player = -1;
+        uint64_t l3SinceMs = 0;
+        // A click passed on, released this long after (the game reads L3 as
+        // a held state, so a press and release in one instant is missed).
+        int clickPlayer = -1;
+        uint64_t clickUpAtMs = 0;
+        // The touch screen made and gamescope asked to pass touch through,
+        // for this game, at the first long press.
+        bool madeTouch = false;
+        // Frames still to draw: the dots moved, came or went.
+        int dirty = 0;
+    } pointer;
     // A screenshot being written by gamescope, which takes about two seconds.
     // askedMs and checkedMs are SDL_GetTicks: when it was asked for, and when
     // its size was last looked at (pumpStandaloneShot).
@@ -2154,6 +2184,12 @@ struct App {
     bool takeStandaloneEvent(const SDL_Event& e);
     bool watchStandalone(float dt);
     void closeStandaloneAtExit();
+    bool pointerButton(int player, SDL_GamepadButton b, bool down);
+    bool pointerAxis(int player, SDL_GamepadAxis a, int16_t value);
+    void pointerTick(float dt);
+    void showPointer(bool on, int player);
+    void endPointer();
+    void drawPointer();
     // play.cpp
     void followRemotesInGame();
     bool readGameInput(cab::Core& core);

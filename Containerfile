@@ -123,6 +123,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-xenia.sh
 
+# Vita3K, the PlayStation Vita emulator: its developers' own numbered build,
+# pinned by checksum, 258 MB. A layer of its own after Xenia's, since its pin
+# may move more often than the cores'. build_files/install-vita3k.sh says why.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-vita3k.sh
+
 # Wii U: Cemu, built from source at a pin by build-cemu.yml, from the payload.
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \

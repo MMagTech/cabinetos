@@ -330,7 +330,12 @@ down. "Look now at" is where the code or a later decision moved on.
   at least one in ten of Sony's passed games; no frontend gives Vita3K a stick
   pointer (everyone has a touch surface); downloads are mostly Android; the
   console could build one as a virtual touch screen (medium). Still no for
-  now, upstream first; his call: ask Vita3K or build it here.
+  now, upstream first; his call: ask Vita3K or build it here. **Decided
+  2026-10-20: a go**, the console's own pointer, by "Decided, 2026-10-20: the
+  build plan" at the end of the question. **Built 2026-10-21** (#540, "PS
+  Vita through Vita3K, played as a PlayStation TV"), unattended:
+  "Built, 2026-10-21" after the plan says what the build found and what was
+  checked. The probe passed on the TV; the hand test waits for him.
 - **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
   Researched the same night, not decided: Azahar's own core, pinnable at its
   2126.2 tag, fits the core host on Vulkan as it is; the touch screen is the
@@ -18775,6 +18780,109 @@ After the probe passes and the build is on the A9:
   RomM.
 - Two controllers in Skullgirls 2nd Encore.
 - A game's own exit.
+
+#### Built, 2026-10-21
+
+Built overnight by an unattended session, to the plan above, with nothing
+asked of MMagTech. Vita3K numbered build 4210 (`649d7d69`, 2026-10-21),
+installed as Xenia is (`build_files/install-vita3k.sh`); the launcher
+`frontend/src/standalone_vita3k.cpp`; the virtual touch screen
+`frontend/src/vtouch.cpp` and `vtouch.h`; the pointer in
+`standalone_play.cpp`; the levels in `quality.cpp`; the save tag in
+`savetable.cpp`. Measured on the A9, headless (a headless gamescope of its
+own, a bare `/dev` with the GPU and `/dev/uinput`, dummy sound), against the
+write-test RomM with Shovel Knight, TxK and both firmware files copied there
+from his server.
+
+**What the build found that the plan did not know:**
+
+- **The AppImage is a "sharun" build:** `bin/Vita3K` runs `shared/bin/Vita3K`
+  with its own glibc and libraries, its own Mesa 26.2.5 Vulkan drivers first
+  whatever the environment says (the image has 26.2.4). Its launcher runs
+  hooks, one of which updates the AppImage from the internet, so the image
+  leaves the launcher out and the console sets what it would have: `APPDIR`
+  (without it Vita3K crashes at boot, finding no built-in shaders).
+- **Vulkan crashed at every boot** under the SDL frontend: the AppImage
+  carries its Vulkan loader only as `libvulkan.so.1.4.363`, so the SDL inside
+  Vita3K loaded the system's `libvulkan.so.1` while Vita3K had made its
+  instance with its own (gdb: a call through a bad dispatch table). OpenGL
+  ran. The install adds the link `lib/libvulkan.so.1` and the console names
+  it in `SDL_VULKAN_LIBRARY`: Vulkan on the RADV STRIX1, no patch. A report
+  to Vita3K (or its AppImage packaging) is for his go.
+- **The first run with no `config.yml` crashes a firmware install**
+  (`create_directories("")`, exit 134), so the settings are written before
+  every run, installs included.
+- **Installing with no window:** the SDL frontend given the zip installs it,
+  decrypts it with `work.bin`, then fails to open a window under SDL's dummy
+  video (exit 255): the log's "installed successfully!" decides. Shovel
+  Knight, 138 MB: 0.8 s, 265 MB on the disk at the peak; TxK the same way.
+- **The firmware:** `PSVUPDAT.PUP` is the system software (`os0/`, `vs0/`,
+  1.2 s), `PSP2UPDAT.PUP` the font package (`sa0/`, 1.1 s); the console tells
+  them apart by those folders.
+- **Vita3K's default camera is the machine's webcam** (camera type 2): set to
+  a plain colour, as a PS TV has no camera.
+- **Trophies live under Vita3K's one user**, so they are linked to the
+  person's folder for the game, as the saves are, and stay on the console (a
+  PS3 game's trophies do the same in its `hdd0`). The person's name is the
+  Vita user's, cut to sixteen bytes.
+
+**Checked, all passed:** two games in a row (only the playing game linked
+in; TxK wrote its own save, two files); the save round trip (deleted on the
+console, the same bytes back from RomM before Vita3K started); two people
+(after a switch, person 2 started with no save, their own folder and name,
+and their save went up as user 2; person 1's untouched); after a switch,
+opening the Vita shelf; offline (an installed game played with the server
+away and its save went up at the next start online); the quit paths: Exit
+(SIGTERM, 0.1 s, exit 0), the pause menu's freeze then Exit, Vita3K killed
+mid-game (back Home), the console quitting mid-game (save zipped and sent),
+a power cut mid-game (the next start sent it). `--check-option-tables`
+passes; no new warnings.
+
+**The probe passed** (2026-10-21, on the TV session, MMagTech's go): Vita3K
+by hand on the TV's gamescope with Shovel Knight, `touch_click_mode` 4, and
+two taps from the console's virtual touch screen (`vtouch.cpp`). SDL's event
+log inside Vita3K showed each as `SDL_EVENT_FINGER_DOWN` and `UP`: the tap at
+0.5, 0.5 of the screen arrived at 0.5005, 0.5009 of the window, the one at
+0.2, 0.8 at 0.197, 0.801 (the window is a little narrower than the screen,
+the Vita's shape). So a touch reaches Vita3K as a finger, mapped into the
+game's window by gamescope, and no patch is needed.
+
+**On the TV with MMagTech, 2026-10-21, testing image 2026.10.21.3:** the
+firmware and four installs (WipEout 2048 first, so both firmware files then);
+the pointer in WipEout 2048's menus, which need a tap (the dots, the long
+press and L2's tap all worked; the touch screen made at the first long press
+and removed at the game's end, gamescope's touch mode put back); saves up to
+his RomM from Shovel Knight and WipEout 2048, and Shovel Knight's back at the
+next start; the pause menu and Exit; the right stick (Riddled Corpses EX).
+**The levels hold at Quality, 4x**, measured with frames.py and the graphics
+chip's busy percentage, a minute each: Shovel Knight 59.9 frames a second,
+median 16.68 ms, GPU 27%; WipEout 2048 in a race 30.0 (its own rate), median
+33.33 ms, GPU 46% at 1,694 of 2,900 MHz; Gravity Rush (its opening, so light)
+30.0, GPU 28%. So Performance 1x, Balanced 2x and Quality 4x stay as built.
+**Vita3K's, not the console's:** Gravity Rush's opening cutscene looked washed
+out and its camera did not follow the right stick (Vita3K's own reports note
+graphics faults in this game; the right stick reaches the virtual pad at full
+range); **Geometry Wars 3: Dimensions crashes as its first level starts**, a
+GPU page fault (amdgpu, TCP client, permission fault) and then Vulkan's
+device lost, twice on the TV. Reproduced headless with scripted presses and
+the same fault every time at 34 s: as Vita3K ships with none of the
+console's settings, at 1x and 4x, with anisotropic filtering on and off,
+with its memory mapping off, on OpenGL as well as Vulkan, and on build 4206
+as on 4210. A survey of the reports (2026-10-21): it has never been reported
+playing on Linux. The one Linux AMD report (RX 6600, build 4056, 2026-06-18)
+reached the autosave screen, no level; every report of play is Windows or
+Android (Vita3K/compatibility#3743, #35). Vita3K/Vita3K#3099, open since
+2023, collects Vulkan crashes and hangs on Steam Deck and AMD Linux in other
+games, one with the same `ErrorDeviceLost` on RADV (Persona 4 Dancing All
+Night). So it fits a known Vita3K fault on AMD Linux, not the console. One
+rule for every game: it waits for Vita3K, and a comment on #3099 goes only on
+his go.
+
+**Not checked yet:** a game's own exit; Killzone: Mercenary and Skullgirls
+2nd Encore; two controllers; the first-run stutter test.
+
+**Open:** his server's `psvita` folder (ES-DE's 26 launch files) shows as a
+game; Play on it says "Couldn't open this game's file".
 
 ### 50. Nintendo 3DS (Azahar's libretro core)
 

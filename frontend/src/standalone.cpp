@@ -25,7 +25,7 @@ namespace cab::standalone {
 namespace {
 
 // Eden and xemu are pinned in system_files/usr/share/cabinetos/flatpaks.list.
-// RPCS3 is in the image (build_files/install-rpcs3.sh).
+// RPCS3, Xenia, Cemu and Vita3K are in the image (build_files/install-*.sh).
 const Emulator kEmulators[] = {
     // Eden's words for a game it cannot load (yuzu/main_window.cpp, before its
     // "Error while loading ROM!" box).
@@ -45,7 +45,7 @@ const Emulator kEmulators[] = {
      // folder (user/save/), as Xenia and Cemu do, so a session cut off by a
      // crash, a power cut or an app restart is sent at the next start or
      // launch instead of being overwritten by the older copy on RomM.
-     "nsp|xci", "keys", false, false, false, false, false, true},
+     "nsp|xci", "keys", false, false, false, false, false, true, false},
 
     // PLAYSTATION 3. Its log sits beside its cache, in the game's folder
     // (XDG_CACHE_HOME, rpcs3/ appended: Utilities/File.cpp, get_cache_dir).
@@ -62,7 +62,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying (#213): its savedata is in the person's folder too
      // (hdd0/home/<user>/savedata), the same case as Eden's.
-     "iso|pkg", "firmware", true, true, true, false, false, true},
+     "iso|pkg", "firmware", true, true, true, false, false, true, false},
 
     // ORIGINAL XBOX. xemu keeps no log of its own; what it prints is it. A
     // game is a folder, as a PS3 game is, because its hard drive lives beside
@@ -75,7 +75,7 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr, nullptr, nullptr},
      nullptr, nullptr,
      nullptr, 0, nullptr,
-     "iso|xiso", "BIOS", true, false, false, true, true, false},
+     "iso|xiso", "BIOS", true, false, false, true, true, false, false},
 
     // XBOX 360. Xenia Edge's own Linux build, in the image
     // (build_files/install-xenia.sh). Its log is where the console tells it
@@ -94,7 +94,7 @@ const Emulator kEmulators[] = {
      nullptr,
      "x> ",
      "Xenia-edge", 2, nullptr,
-     "iso|xex|zar", "", false, false, true, false, false, true},
+     "iso|xex|zar", "", false, false, true, false, false, true, false},
 
     // WII U. Cemu main, built from source at a pin (cores/build-cemu.sh) and in
     // the image at /usr/lib/cabinetos/cemu. Its log is under its home
@@ -113,7 +113,28 @@ const Emulator kEmulators[] = {
      nullptr,
      "Unrecoverable error in Vulkan",
      nullptr, 0, "Error",
-     "wua", "", false, false, true, false, false, true},
+     "wua", "", false, false, true, false, false, true, false},
+
+    // PLAYSTATION VITA. Vita3K's own build, in the image
+    // (build_files/install-vita3k.sh), started through its SDL frontend: a
+    // plain window that runs the one game and quits with it, with the game's
+    // own exit status, so no title watch and no error box. A game it cannot
+    // start is one of these two lines in its log (sdl-frontend/session.cpp),
+    // and it exits by itself, 255. SIGTERM is SDL's quit, which stops the
+    // game and exits (measured on the A9 2026-10-20: 0.1 s). Its log is under
+    // its home (XDG_CACHE_HOME/Vita3K). A game is installed before it runs,
+    // as a PS3 package is (`installs`): its zip, with the licence inside, is
+    // extracted and decrypted into the game's folder by Vita3K itself.
+    // Issue #198; open question 49.
+    {"vita3k", nullptr, "/usr/lib/cabinetos/vita3k/bin/Vita3K", "Vita3K", "Vita3K/vita3k.log",
+     {"Failed to load or start the app session", "in apps list"},
+     {nullptr, nullptr, nullptr, nullptr},
+     nullptr,
+     nullptr,
+     nullptr, 0, nullptr,
+     // notesPlaying: Vita3K writes the saves straight into the person's
+     // folder, through the link standalone_vita3k.cpp makes, as Xenia does.
+     "zip|vpk", "firmware", true, false, false, false, false, true, true},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -329,6 +350,13 @@ std::string bootPath(const std::string& entryPath) {
         const std::string eboot = entryPath + "/" + name + "/USRDIR/EBOOT.BIN";
         if (isFile(eboot)) return eboot;
     }
+    // An installed Vita game, in the folder's own Vita storage
+    // (standalone_vita3k.cpp): what Vita3K is started on, by its title ID.
+    {
+        const std::string apps = entryPath + "/" + kVitaGameFs + "/ux0/app";
+        for (const std::string& id : listDir(apps))
+            if (isFile(apps + "/" + id + "/eboot.bin")) return apps + "/" + id;
+    }
     // A stamped decrypted disc image, which RPCS3 opens as it is (open
     // question 19). The largest, should there ever be more than one.
     std::string pick;
@@ -350,6 +378,8 @@ bool installGame(const Emulator& e, const std::string& entryPath,
                  std::string* message) {
     if (std::strcmp(e.core, "xemu") == 0)
         return installXbox(entryPath, cancel, romPath, message);
+    if (std::strcmp(e.core, "vita3k") == 0)
+        return installVita3k(e, entryPath, cancel, romPath, message);
     if (std::strcmp(e.core, "rpcs3") != 0) {
         *message = "Couldn't install this game";
         return false;
@@ -370,6 +400,8 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
         return prepareXemu(e, entryPath, players, level, missingKeys, err);
     if (std::strcmp(e.core, "xenia") == 0) return prepareXenia(e, saveDir, err);
     if (std::strcmp(e.core, "cemu") == 0) return prepareCemu(e, saveDir, players, err);
+    if (std::strcmp(e.core, "vita3k") == 0)
+        return prepareVita3k(e, entryPath, saveDir, player, players, level, missingKeys, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -386,6 +418,8 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
     if (std::strcmp(e.core, "rpcs3") == 0)
         return saveDir + "/hdd0/home/" + kPs3User + "/savedata";
     if (std::strcmp(e.core, "eden") == 0) return edenSaveRoot(e, saveDir);
+    // Vita: the person's `savedata/`, linked in as Vita3K's ux0/user/00/savedata.
+    if (std::strcmp(e.core, "vita3k") == 0) return vita3kSaveRoot(saveDir);
     return {};
 }
 
@@ -506,6 +540,8 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
             xeniaArgs(full, dir, saveDir, logPath_, level, romPath);
         } else if (std::strcmp(e.core, "cemu") == 0) {
             cemuArgs(full, dir, romPath);
+        } else if (std::strcmp(e.core, "vita3k") == 0) {
+            vita3kArgs(full, e, dir, romPath);
         } else {
             full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
         }
