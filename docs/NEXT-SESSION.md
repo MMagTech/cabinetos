@@ -80,10 +80,8 @@ RomM: keep test launches under a minute, or have his go.
    a controller connected mid-game waits for the next launch, without
    eden-emulator/Issue-Reports#739; a stale Batocera comment in
    `frontend/src/standalone_eden.cpp` near line 327.
-6. **Words from him, one at a time, no work:** #253 (close with the
-   drafted comment in PROJECT.md's #253 record: the misses are gone on
-   gamescope 3.16.31; "reopen on a report"); #484's "a drive unplugged
-   during Sign out"; #181 and #215 (he is unsure of both).
+6. **Words from him, one at a time, no work:** #181 and #215 (he is
+   unsure of both).
 7. **The Vectrex stall:** no fix; the next step is his evening journal of
    2026-10-19 read for what ran just before each stall (PROJECT.md, the
    Vectrex record under "The 4K misses measured again"). Only if it comes
@@ -100,8 +98,8 @@ RomM: keep test launches under a minute, or have his go.
   C1, before a release), #228 (the measurement in PROJECT.md section 46
   when the sound dies again), #132 (the Bluetooth wake test).
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
-  (RomM's save channels; revisit mid-January 2027), ROMM-10 on #484
-  (rommapp/romm#5274; the revoke code is on `claude/ovn5-484-romm10`),
+  (RomM's save channels; revisit mid-January 2027), #545, the RomM
+  token revoke (rommapp/romm#5274; the code is PR #528),
   #203 closed until libretro/dolphin#508 moves.
 - **An idea of his, 2026-10-19, not scheduled:** a channel-change animation
   when a game starts and when it exits, on the console's own layers only,
