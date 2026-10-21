@@ -81,7 +81,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 55 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 56 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -377,6 +377,16 @@ down. "Look now at" is where the code or a later decision moved on.
   by the title), the Settings row, the cup's look while off, marking states
   made with cheats, and the phase order (he leans toward codes through the
   core first).
+- **53. Gameplay recording, and clips in RomM.** MMagTech's proposal of
+  2026-10-21, reviewed the same day, no issue. **Paused by him until RomM
+  answers:** RomM has nowhere to keep a person's clips, and the console
+  manages nothing RomM should (his rule). He commented on rommapp/romm#5135
+  with an implementation sketch the same day, and would build RomM's side
+  himself as a pull request if RomM wants one. The console side is
+  feasible: gamescope's PipeWire stream for every game, encoded on the
+  Radeon, paused whenever the game is not on screen. Open: RomM's answer,
+  clip length and bitrate (RomM's upload limit decides them), sound, the
+  menu rows, Remote Play, and the shortcut over emulators run as programs.
 
 ---
 
@@ -20743,3 +20753,254 @@ though RetroArch's cheat addresses count from the start of the core's system
 RAM blocks laid end to end (from memory), not as rcheevos' addresses do; and
 the per-frame hook, `Core::setAfterFrame`, holds one function, which
 achievements use (`pace.cpp`), so an engine would have to share it.
+
+### 53. Gameplay recording, and clips in RomM
+
+**Proposed by MMagTech 2026-10-21 and reviewed the same day; paused by him
+until RomM answers.** His words at the pause: "Let's park it. To see what they
+say. But don't lose any insight to the discussion we've already had in the
+implementation of it." Nothing was built, nothing ran on the A9, and there is
+no issue. The review read the code, gamescope's source and RomM's; the
+measurements it calls for were not made.
+
+#### The proposal, as he gave it (2026-10-21)
+
+His document, "CabinetOS Proposal: In-Game Recording (Capture)", is not in the
+repository; this is its substance.
+
+- Gameplay video recording, a sibling of screenshots, in game only.
+- His hunch: the encode cost is manageable, since Remote Play already encodes
+  RPCS3 live with no impact he noticed; reuse the hardware path Remote Play
+  uses, confirmed rather than assumed.
+- One fixed profile, never shown: H.264, 1080p, 60 frames a second, about 6
+  Mbps. 720p and H.265 were considered; 1080p for the 3D systems at their 4x
+  levels, H.264 for playback everywhere.
+- Two ways in. On the shortcut layer, the screenshot combination keeps a tap
+  for a screenshot and adds a hold for record. In the pause menu, Screenshot
+  becomes a "Capture" row with two arrow choices, Screenshot and Record, each
+  fired by confirm. The menu stays open after either, as it does for a
+  screenshot today; while recording, the row reads "Stop recording".
+- The source: the one screenshots use, the emulator's picture under the
+  console's drawing. The menu, the indicator and notices are never in a clip.
+- Record arms it; recording starts on resume, pauses while the menu is open
+  and continues on resume, so a clip never holds frozen frames. Stop in the
+  menu ends it.
+- A small red indicator while recording, and "Recording saved" in the existing
+  notice style on stop.
+- A hard cap of about 15 minutes. Leaving the game stops and saves, never
+  discards.
+- Clips go to RomM with the saves and states, retried the same way, and the
+  console's copy is deleted once RomM confirms it (checked if practical). No
+  gallery or list on the console: RomM is the only place they live.
+- His questions: should recording be unavailable during Remote Play; is a hold
+  on the screenshot combination safe from accidental presses; is pausing
+  across menu visits simple, or is recording the paused frames cleaner; does
+  anything conflict with the structure after #398.
+
+#### Why it waits: RomM
+
+**His rule, 2026-10-21:** "I don't want the OS to become a management client
+to features already offered in RomM." The console uses what RomM offers (games
+load from it, saves and states sync through it, screenshots go to its gallery,
+RetroAchievements show in it), and RomM is where people view, share and
+delete. A clip endpoint would serve every RomM client, not only this one.
+
+**What RomM 5.4 has** (its API description on the project's write-test RomM,
+and RomM's master on GitHub, both read 2026-10-21):
+
+- No endpoint for a person's clips. Its video fields (`video_path`,
+  `video_url`, `youtube_video_id`, `path_video`) are game media from
+  ScreenScraper, LaunchBox and gamelists, not a person's.
+- `POST /api/screenshots` refuses a video: its allow-list is images only
+  (RomM's `media_types.py`), and an `.mp4` gets HTTP 400 with nothing stored.
+  Its web gallery draws each item as an image.
+- A per-upload cap on saves, states and screenshots,
+  `MAX_ASSET_UPLOAD_SIZE_BYTES`, 512 MiB by default (0 removes it). RomM's own
+  nginx sets no limit.
+- Chunked upload exists for ROM files only (`/api/roms/upload/start` and the
+  rest), not for a person's files.
+- Argosy (rommapp/argosy-launcher) records no video; it uploads still
+  screenshots only.
+- Two requests: rommapp/romm#5135 ("Videos/clips storage to go along with
+  Screenshots", 2026-10-04, a person storing a Switch album's MP4s by hand
+  under `assets/users/<id>/videos/<platform>/<rom_id>/`, the screenshot
+  layout) and rommapp/romm#4656 ("Adding our own Videos", 2026-09-20, gameplay
+  videos and playthroughs in the Media tab, shared with an instance's other
+  users). No maintainer had replied on either.
+
+**The options named, and the one chosen:**
+
+1. Wait for RomM to store clips. Chosen.
+2. Keep clips on the console, reached through File access. Rejected: it breaks
+   "RomM is the only place", and the decision of 2026-09-27 that screenshots
+   have no gallery on the console.
+3. Put them in RomM another way, as a save or as a file in the game's own
+   folder through RomM's ROM upload. Rejected: a stand-in, against "RomM's
+   docs are the line"; a game's folder is shared with everyone who can see the
+   game.
+
+**His comment on rommapp/romm#5135**, 2026-10-21, 9:18 AM Eastern
+(https://github.com/rommapp/romm/issues/5135#issuecomment-6317066753),
+introduces him as the owner and maintainer of CabinetOS, thanks RomM, gives
+the reason above, and sketches an implementation that copies RomM's per-user
+screenshots (rommapp/romm#3549):
+
+- a `videos` table like `screenshots` (`rom_id`, `user_id`, `is_public`,
+  private by default);
+- `POST /api/videos?rom_id=` with `videoFile`, scope `ASSETS_WRITE`, checked
+  against RomM's existing `ALLOWED_VIDEO_EXTENSIONS`;
+- stored at `assets/users/<user>/videos/<platform>/<rom_id>/`, the layout
+  rommapp/romm#5135's author already uses;
+- `GET /api/videos/{id}/content` inline with Range support (RomM serves
+  anything that is not an image as an attachment today), and `PUT` for
+  visibility and `DELETE`, owner only;
+- listed on `GET /api/roms/{id}` as `user_videos` and `all_user_videos`;
+- an optional poster image on the same upload, linked by file name stem as a
+  state's picture is, so RomM needs no ffmpeg (its image has none) and its web
+  page can use the plain video element it already has;
+- `/api/videos` under the 512 MiB cap, which holds about 10 minutes of 1080p60
+  at about 6 Mbps; chunked uploads later if longer clips are wanted.
+
+It says what the console would send (H.264 and AAC in MP4 at 1080p60, up to
+about 10 minutes, with a PNG poster) and offers to test a branch.
+
+**If RomM wants a pull request** (his offer, 2026-10-21, "not for today"):
+
+- First a maintainer's yes. RomM's CONTRIBUTING.md asks for an issue and a
+  talk on their Discord before a large feature, and a pull request nobody
+  agreed to can be declined. He already talks with one of RomM's developers.
+- A separate project: a fork of rommapp/romm under his account (public, so his
+  go on the day), in a folder of its own beside this repository, with its
+  sessions' context kept out of RomM's repository: the goal, RomM's rules,
+  where testing happens, and never his live RomM.
+- RomM's rules for the pull request: AI use disclosed in it (their
+  CONTRIBUTING.md calls leaving it out rude), a Conventional Commits title,
+  their template with `Closes #5135`, a diagram for a design change and
+  screenshots for a UI change (their AGENTS.md).
+- Testing on a development RomM built from the branch, on the test VM, on its
+  own port, beside the write-test RomM and not in place of it. GitHub can
+  build the image from the fork, so the VM only downloads it. Then a check
+  list against it: upload through the API, play and skip ahead in the web
+  page, private and shared between two people, delete, a file over the limit
+  refused, and RomM's own tests. Later, the console's recording tested against
+  it.
+- The test VM cannot hold it yet: measured 2026-10-21, 378 MB free of 22 GB on
+  `/var`, and 3 GB of memory. More disk (about 40 GB) and memory (6 to 8 GB)
+  first, on the VM's host, which is his to do.
+
+#### The review (2026-10-21): the console side is feasible
+
+**Remote Play's encoder.** Sunshine reads the screen through KMS and encodes
+with VA-API on the Radeon's video block
+(`system_files/usr/libexec/cabinetos-remoteplay`: `capture = kms`, `encoder =
+vaapi`). The encode is fixed-function hardware, which is why RPCS3 did not
+notice it. Sunshine itself is not reusable: it is a separate streaming server,
+it writes no file, and KMS sees the menus. The base image already carries what
+recording needs (`base-manifest.txt`): GStreamer's VA plugin
+(`gstreamer1-plugins-bad-free`), `pipewire-gstreamer`, and ffmpeg 8.1. The
+measurement of 2026-10-09 (gamescope's node into `vah264enc` at 1080p60)
+converted and scaled on the CPU, which RPCS3 and Eden would feel; a product
+asks gamescope for 1080p instead.
+
+**What a screenshot reads is three things:** a core's frame copied once, at
+the game's own resolution (`screenshotNow`, `frontend/src/states.cpp`);
+PCSX2's window read back once (`Core::snapshot`,
+`frontend/src/core_picture.cpp`); and, for an emulator run as a program,
+`gamescopectl screenshot`, whose default type is the base plane only
+(`App::standaloneScreenshot`). None of them keeps up at 60 frames a second.
+
+**gamescope 3.16.31's PipeWire stream** (its source, read 2026-10-21; the base
+carries `terra-gamescope` 3.16.31):
+
+- Its size is the output's, clamped down to a size the consumer asks for,
+  aspect kept; gamescope scales on the GPU. It offers BGRx and NV12, as
+  DMA-BUF (linear, one plane) or as shared memory.
+- Frames come when a window commits (damage-driven; its frame rate is 0/1).
+- A consumer can make the stream follow one app, and then the overlay window
+  is left out. Without `--steam`, which the console's gamescope does not have
+  (`system_files/usr/bin/cabinetos-session`), an app is chosen by its X window
+  id.
+- A narrow `STEAM_OVERLAY` window without `STEAM_INPUT_FOCUS` goes in
+  gamescope's notification slot, which the stream never paints.
+
+**Recommended: one path for every game.** gamescope's stream, following the
+game's window, encoded by a child process started with `proc::spawn`
+(`frontend/src/proc.h`). For programs and PS2 that leaves the console's
+overlay out. For a core, the game and the console's drawing are one window, so
+recording pauses whenever the game is not on screen (the frame loop's
+`gameOnScreen`, `frontend/src/frame.cpp`), which keeps the menu out; the red
+dot lives in a small notification-slot window (`frontend/src/overlaywin.cpp`
+marks windows today); and notices during play go there too, or wait. A core's
+clip then shows the picture as the TV shows it (screen look, framing, bars),
+not the raw frame a screenshot takes. The alternative, recording inside the
+frontend for cores, means two capture paths, new libraries linked in, and work
+on the frame thread every frame.
+
+**His questions, answered:**
+
+- Remote Play: both can run at once. The video block runs several encodes, and
+  the two read different sources. Keep Record available unless one measurement
+  shows a cost.
+- The hold: unlikely to fire by accident, since while the shortcut button is
+  held the game hears nothing from that pad, and shortcuts are off by default.
+  But the screenshot moves from Y's press to its release, the hold needs the
+  dot as instant feedback, and the combinations exist only for cores and PS2
+  (`readGameInput`, `frontend/src/play.cpp`). Over emulators run as programs
+  the shortcut button only opens the menu (`takeStandaloneEvent`,
+  `frontend/src/standalone_play.cpp`), so Home+Y would be built there first,
+  screenshot included.
+- Pausing: required on the recommended path, not optional, since it keeps the
+  menu out of a core's clip. Simplest as segments: one ends when the game
+  leaves the screen, the next starts on its return, and they are joined at
+  Stop without re-encoding. A finished segment also survives a crash.
+- The structure: no conflict. The recorder is a file of its own
+  (`recorder.cpp`). It touches `pausemenu.cpp` and `app.h` (a menu item),
+  `play.cpp`, `standalone_play.cpp`, `frame.cpp`, `overlaywin.cpp`,
+  `storage.h`, `pending.h`, and `uploader.h`, where `who` stays the last field
+  of a job. Whether the encoder is `gst-launch-1.0` (GStreamer calls it a
+  debugging tool) or a small program of the project's own is his call: a new
+  program is a new kind of place (CONTRIBUTING.md, rule 2).
+
+**Pushback on the proposal:**
+
+- It has no sound. The game's sound and the interface sounds are separate
+  streams (`frontend/src/launch.cpp`, `frontend/src/sound.cpp`), so a clip can
+  carry the game alone; to be measured, sync included.
+- 15 minutes does not fit RomM's default limit. At 6 Mbps plus sound, about
+  0.77 MB a second, 15 minutes is about 690 MB; about 11 minutes fits in 512
+  MiB. And 6 Mbps is lean for fast 3D on a hardware encoder (YouTube
+  recommends 12 Mbps for 1080p60). Both numbers wait for RomM's limit. H.264
+  and 1080p stand.
+- A fixed 60 makes 50 Hz games judder; the stream's frames can keep the game's
+  own timing.
+- Two plain menu rows, "Screenshot" and "Record" (reading "Stop recording"),
+  rather than a Capture row with arrows. Picture and Look step their value on
+  A, so a row where A fires would be the only one of its kind, and Record
+  would hide behind an arrow (unearned focus).
+- The upload path cannot carry a clip. The request is built whole in memory
+  (`postMultipart`, `frontend/src/romm_http.cpp`) with a 30 second limit
+  (`kTimeoutSec`, `frontend/src/romm_internal.h`). A clip needs a streamed
+  upload from its file, a lane of its own so saves never wait behind it, and
+  an accepted cost at power off: the console waits up to 25 seconds for
+  uploads (`frontend/src/power_menu.cpp`), so a clip still sending starts over
+  at the next start.
+- Found on the way: screenshots stay on the console after they upload; nothing
+  removes them.
+
+**To measure on the A9 before building:** the menu absent from a stream that
+follows a program's window; the dot window on the TV and absent from the
+stream; RPCS3 and Eden frame times with recording off, on, and on during
+Remote Play; game-only sound, in sync; how much of the first second a segment
+restart loses.
+
+#### Open when it resumes
+
+- RomM's answer on rommapp/romm#5135, and whether he builds RomM's side.
+- Clip length and bitrate, set by RomM's upload limit.
+- Where the sound comes from, and its sync.
+- The menu rows, and Record pressed before resume (pressing Stop then cancels,
+  with nothing saved).
+- Remote Play: available, or greyed after a measurement.
+- The shortcut over emulators run as programs.
+- Whether the console's own screenshot copies should go once RomM has them, as
+  the proposal wants for clips.
