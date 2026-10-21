@@ -60,7 +60,10 @@ RomM: keep test launches under a minute, or have his go.
    prove the caching, then the merge on his word. Its session is "Rebuild
    only the core whose recipe changed".
 3. **Stop at an out-of-range array write, at the line that does it.**
-   Tonight's crash was a write past a two-entry array that landed
+   **Not before his weekly limit resets (Saturday 2026-10-24, about 9 PM
+   Eastern; MMagTech, 2026-10-21).** Estimated 300k to 500k Opus tokens
+   (1.2 to 2 weekly points) if no check fires; more if one does.
+   The crash of 2026-10-20 was a write past a two-entry array that landed
    silently on the grid screen next to it. Build the frontend with
    `-D_GLIBCXX_ASSERTIONS` and make the fixed arrays indexed by a value
    set at run time `std::array` (`pillFocus_` in `libraryscreen.h`,
@@ -80,10 +83,8 @@ RomM: keep test launches under a minute, or have his go.
    a controller connected mid-game waits for the next launch, without
    eden-emulator/Issue-Reports#739; a stale Batocera comment in
    `frontend/src/standalone_eden.cpp` near line 327.
-6. **Words from him, one at a time, no work:** #253 (close with the
-   drafted comment in PROJECT.md's #253 record: the misses are gone on
-   gamescope 3.16.31; "reopen on a report"); #484's "a drive unplugged
-   during Sign out"; #181 and #215 (he is unsure of both).
+6. **Words from him, one at a time, no work:** #181 and #215 (he is
+   unsure of both).
 7. **The Vectrex stall:** no fix; the next step is his evening journal of
    2026-10-19 read for what ran just before each stall (PROJECT.md, the
    Vectrex record under "The 4K misses measured again"). Only if it comes
@@ -96,12 +97,12 @@ RomM: keep test launches under a minute, or have his go.
 ## Waiting, not for the next session unless MMagTech raises them
 
 - **Needs the TV or a device:** #473 (a press while an emulator of its own
-  has the screen), #411 (Moonlight), #381 (the HDMI cable out), #290 (the
-  C1, before a release), #228 (the measurement in PROJECT.md section 46
-  when the sound dies again), #132 (the Bluetooth wake test).
+  has the screen), #411 (Moonlight), #290 (the
+  C1, before a release), and #228 (the measurement in PROJECT.md section
+  46 when the sound dies again).
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
-  (RomM's save channels; revisit mid-January 2027), ROMM-10 on #484
-  (rommapp/romm#5274; the revoke code is on `claude/ovn5-484-romm10`),
+  (RomM's save channels; revisit mid-January 2027), #545, the RomM
+  token revoke (rommapp/romm#5274; the code is PR #528),
   #203 closed until libretro/dolphin#508 moves.
 - **An idea of his, 2026-10-19, not scheduled:** a channel-change animation
   when a game starts and when it exits, on the console's own layers only,
