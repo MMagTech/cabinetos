@@ -330,7 +330,11 @@ down. "Look now at" is where the code or a later decision moved on.
   at least one in ten of Sony's passed games; no frontend gives Vita3K a stick
   pointer (everyone has a touch surface); downloads are mostly Android; the
   console could build one as a virtual touch screen (medium). Still no for
-  now, upstream first; his call: ask Vita3K or build it here.
+  now, upstream first; his call: ask Vita3K or build it here. **Decided
+  2026-10-20: a go**, the console's own pointer, by "Decided, 2026-10-20: the
+  build plan" at the end of the question. **Built 2026-10-21**, unattended:
+  "Built, 2026-10-21" after the plan says what the build found and what was
+  checked; the probe and the hand test wait for the TV.
 - **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
   Researched the same night, not decided: Azahar's own core, pinnable at its
   2126.2 tag, fits the core host on Vulkan as it is; the touch screen is the
@@ -18755,6 +18759,71 @@ After the probe passes and the build is on the A9:
   RomM.
 - Two controllers in Skullgirls 2nd Encore.
 - A game's own exit.
+
+#### Built, 2026-10-21
+
+Built overnight by an unattended session, to the plan above, with nothing
+asked of MMagTech. Vita3K numbered build 4210 (`649d7d69`, 2026-10-21),
+installed as Xenia is (`build_files/install-vita3k.sh`); the launcher
+`frontend/src/standalone_vita3k.cpp`; the virtual touch screen
+`frontend/src/vtouch.cpp` and `vtouch.h`; the pointer in
+`standalone_play.cpp`; the levels in `quality.cpp`; the save tag in
+`savetable.cpp`. Measured on the A9, headless (a headless gamescope of its
+own, a bare `/dev` with the GPU and `/dev/uinput`, dummy sound), against the
+write-test RomM with Shovel Knight, TxK and both firmware files copied there
+from his server.
+
+**What the build found that the plan did not know:**
+
+- **The AppImage is a "sharun" build:** `bin/Vita3K` runs `shared/bin/Vita3K`
+  with its own glibc and libraries, its own Mesa 26.2.5 Vulkan drivers first
+  whatever the environment says (the image has 26.2.4). Its launcher runs
+  hooks, one of which updates the AppImage from the internet, so the image
+  leaves the launcher out and the console sets what it would have: `APPDIR`
+  (without it Vita3K crashes at boot, finding no built-in shaders).
+- **Vulkan crashed at every boot** under the SDL frontend: the AppImage
+  carries its Vulkan loader only as `libvulkan.so.1.4.363`, so the SDL inside
+  Vita3K loaded the system's `libvulkan.so.1` while Vita3K had made its
+  instance with its own (gdb: a call through a bad dispatch table). OpenGL
+  ran. The install adds the link `lib/libvulkan.so.1` and the console names
+  it in `SDL_VULKAN_LIBRARY`: Vulkan on the RADV STRIX1, no patch. A report
+  to Vita3K (or its AppImage packaging) is for his go.
+- **The first run with no `config.yml` crashes a firmware install**
+  (`create_directories("")`, exit 134), so the settings are written before
+  every run, installs included.
+- **Installing with no window:** the SDL frontend given the zip installs it,
+  decrypts it with `work.bin`, then fails to open a window under SDL's dummy
+  video (exit 255): the log's "installed successfully!" decides. Shovel
+  Knight, 138 MB: 0.8 s, 265 MB on the disk at the peak; TxK the same way.
+- **The firmware:** `PSVUPDAT.PUP` is the system software (`os0/`, `vs0/`,
+  1.2 s), `PSP2UPDAT.PUP` the font package (`sa0/`, 1.1 s); the console tells
+  them apart by those folders.
+- **Vita3K's default camera is the machine's webcam** (camera type 2): set to
+  a plain colour, as a PS TV has no camera.
+- **Trophies live under Vita3K's one user**, so they are linked to the
+  person's folder for the game, as the saves are, and stay on the console (a
+  PS3 game's trophies do the same in its `hdd0`). The person's name is the
+  Vita user's, cut to sixteen bytes.
+
+**Checked, all passed:** two games in a row (only the playing game linked
+in; TxK wrote its own save, two files); the save round trip (deleted on the
+console, the same bytes back from RomM before Vita3K started); two people
+(after a switch, person 2 started with no save, their own folder and name,
+and their save went up as user 2; person 1's untouched); after a switch,
+opening the Vita shelf; offline (an installed game played with the server
+away and its save went up at the next start online); the quit paths: Exit
+(SIGTERM, 0.1 s, exit 0), the pause menu's freeze then Exit, Vita3K killed
+mid-game (back Home), the console quitting mid-game (save zipped and sent),
+a power cut mid-game (the next start sent it). `--check-option-tables`
+passes; no new warnings.
+
+**Not checked yet:** the probe (a touch reaching Vita3K as a finger: it
+needs the TV session's gamescope, and the TV was not allowed overnight), so
+the pointer has not touched anything; frame times, so the levels are the
+plan's candidates (1x, 2x, 4x); a game's own exit; the hand test's list.
+
+**Open:** his server's `psvita` folder (ES-DE's 26 launch files) shows as a
+game; Play on it says "Couldn't open this game's file".
 
 ### 50. Nintendo 3DS (Azahar's libretro core)
 

@@ -3,7 +3,7 @@
 <h1 align="center">CabinetOS</h1>
 
 <p align="center"><b>Your whole game library, on the TV, as a console.</b><br>
-34 systems, from the Atari 2600 to the Switch, played from your own
+35 systems, from the Atari 2600 to the Switch, played from your own
 <a href="https://github.com/rommapp/romm">RomM</a> server, up to four players at once.</p>
 
 <p align="center">
@@ -22,7 +22,7 @@ from your whole library.
 
 - **Pick up where you left off.** Saves and save states go to RomM by
   themselves, and every game page shows your last three states with a picture.
-- **Every system tuned.** An emulator chosen and set up for each of 34 systems,
+- **Every system tuned.** An emulator chosen and set up for each of 35 systems,
   rendering up to 4K, with one pause menu in every game.
 - **Make it look right.** CRT and LCD looks per system, and sixteen colours for
   the menus, bright ones included.

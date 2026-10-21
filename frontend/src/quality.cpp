@@ -175,7 +175,7 @@ Level forGame(int romId) {
 bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
-                          "eden", "rpcs3", "xemu"})
+                          "eden", "rpcs3", "xemu", "vita3k"})
         if (core == c) return true;
     return false;
 }
@@ -356,6 +356,24 @@ std::vector<std::string> xenia(Level l) {
         "--draw_resolution_scale_y=" + s,
         "--anisotropic_override=5",
     };
+}
+
+std::string vita3k(Level l) {
+    // PlayStation Vita, 960x544: 1x, 2x (1920x1088, the 1080p step) and 4x
+    // (3840x2176, the 4K step), the candidates of docs/PROJECT.md question
+    // 49's plan, by this file's rule. Not yet measured on the A9: the hand
+    // test's frame times fix them, stepped down where the A9 cannot hold a
+    // game's full speed. Shaders built in the background (Vita3K's
+    // asynchronous pipeline compilation, on as it ships) above Performance
+    // and when first needed at it, as Dolphin's and Eden's are; kept only if
+    // the hand test's first runs show it helps. Anisotropic filtering 16x at
+    // every level. Lines of Vita3K's config.yml, which
+    // standalone_vita3k.cpp writes whole.
+    static const char* const kScale[] = {"1", "2", "4"};
+    static const char* const kAsync[] = {"false", "true", "true"};
+    return std::string("resolution-multiplier: ") + pick(l, kScale) +
+           "\nasync-pipeline-compilation: " + pick(l, kAsync) +
+           "\nanisotropic-filtering: 16\n";
 }
 
 void logApplied(const std::string& who, int romId, Level l) {

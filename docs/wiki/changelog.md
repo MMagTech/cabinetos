@@ -4,6 +4,20 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** the PlayStation Vita, played as a PlayStation TV. A game is a zip
+  with its licence inside; the first Play installs it, and both of Sony's
+  firmware files (the system software and the font package) must be on your
+  server. Each controller is its own player. To touch the screen, hold L3
+  for half a second: two dots show. The left stick moves the white one and
+  L2 touches (hold to drag); the right stick brings a red one that R2
+  touches. Hold L3 again to hide them. Games that need the rear touch pad,
+  tilting or the camera may stop where they need them, as on a PS TV. Saves
+  sync with your server; no save states. Updates and DLC do not play yet.
+  See [Systems](systems.md#playstation-vita).
+  ([#198](https://github.com/MMagTech/cabinetos/issues/198))
+
 ## 2026.10.21.2 {#v2026-10-21-2}
 
 *20 October 2026*

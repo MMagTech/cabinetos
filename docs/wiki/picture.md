@@ -27,6 +27,7 @@ render. The console starts on the level its graphics chip suits.
 | Switch | 1x | 1x | 2x |
 | PS3 | 100% | 150% | 150% |
 | Xbox | 1x | 2x | 4x |
+| PS Vita | 1x (original) | 2x | 4x |
 
 On the Nintendo DS, Balanced and Quality use melonDS's OpenGL renderer, which
 draws the 3D larger; the 2D stays at the DS's own pixels. A DS game that looks

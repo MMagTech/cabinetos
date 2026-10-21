@@ -166,7 +166,7 @@ bool snapshotsAllowed(const char* core) {
     // Not the 3DS, a handheld, by MMagTech's decision of 2026-10-20, though
     // its states may not survive an emulator update (emulatorTag).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
-                                               "xenia", "cemu"};
+                                               "xenia", "cemu", "vita3k"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -243,6 +243,13 @@ const char* saveTag(const char* core) {
         // game, `<title>/user/` and `<title>/meta/` in Cemu's own layout, which
         // drops into any Cemu's mlc01. No Cabinet app plays Wii U either.
         {"cemu", "cemu"},
+        // PlayStation Vita, in Vita3K: a zip of the person's
+        // `ux0/user/00/savedata/` for the game, one folder per save directory
+        // the game names (usually its title ID), which drops into any
+        // Vita3K's. A real Vita's saves are sealed to that Vita and do not
+        // load. No Cabinet app plays the Vita either (docs/PROJECT.md, open
+        // question 49).
+        {"vita3k", "vita3k"},
         //
         // Nintendo 3DS has states, so its save tag comes from emulatorTag
         // above: a zip of the emulated SD card's `Nintendo 3DS` folder

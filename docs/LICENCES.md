@@ -155,6 +155,8 @@ here. See `frontend/src/catalog.cpp`.
 | **The Xbox EEPROM**, `/usr/share/cabinetos/xemu/eeprom.bin` | made once by this project's `tools/xbox-eeprom.py`, the way xemu makes one | MIT, as CabinetOS |
 | **Xenia Edge**, in `/usr/lib/cabinetos/xenia` | its developer's official Linux build, release `a7c39fa` of `has207/xenia-edge` (`xenia_edge_linux.AppImage`), unmodified, pinned by checksum in `build_files/install-xenia.sh`; source is `has207/xenia-edge` at commit `a7c39fa7d9c54d83022e431da62c1c65bf3e6196` | BSD 3-Clause |
 | **The libraries Xenia Edge's build carries** (GTK 3, GLib, cairo, SDL 3, X11 libraries and others, in its `usr/lib`) | bundled by Edge's own AppImage build, unchanged | each under its own licence, as Edge ships them (GTK, GLib and cairo LGPL, SDL zlib, the X11 libraries MIT) |
+| **Vita3K**, in `/usr/lib/cabinetos/vita3k` | its developers' official Linux build, numbered build `4210` of `Vita3K/Vita3K-builds` (`Vita3K-x86_64.AppImage`), unpacked without its launcher and unmodified apart from one link naming its own Vulkan loader, pinned by checksum in `build_files/install-vita3k.sh`; source is `Vita3K/Vita3K` at commit `649d7d69b2da2eb55f17233376f861a3a32cf12a` | GPL v2 or later |
+| **The libraries Vita3K's build carries** (glibc, Qt 6, FFmpeg with x264 and Xvid, Mesa's Vulkan drivers, the X11 and Wayland libraries and others, in its `lib`; SDL 3 is linked into the program) | bundled by Vita3K's own AppImage build, unchanged | each under its own licence, as Vita3K ships them (glibc LGPL v2.1 or later, Qt LGPL v3, FFmpeg LGPL v2.1 or later, x264 and Xvid GPL v2 or later, Mesa MIT, SDL zlib, the X11 libraries MIT) |
 | **Cemu**, in `/usr/lib/cabinetos/cemu` | built from source by `cores/build-cemu.sh`, unmodified, `cemu-project/Cemu` at commit `4e3c824faa00f6b85782db019f20f29f063f3a2a`, with Cemu's own game profiles and resources from the same commit | MPL 2.0, except its shared fonts (Noto Sans CJK, OFL 1.1) |
 | **The libraries compiled into Cemu** (wxWidgets, Boost, fmt, SDL 3, OpenSSL, curl, glslang, pugixml, libzip, zstd and others) | built by Cemu's own vcpkg recipe at the versions its pinned commit names, linked statically, unchanged | each under its own licence (wxWidgets licence, Boost licence, fmt MIT, SDL zlib, OpenSSL Apache 2.0, curl MIT-style, glslang BSD-style, pugixml MIT, libzip BSD 3-Clause, zstd BSD) |
 | **Sunshine** (Remote Play), `/usr/bin/sunshine` and `/usr/share/sunshine` | built from source by `cores/build-sunshine.sh` with LizardByte's own Fedora 44 recipe, `LizardByte/Sunshine` at tag `v2026.914.233613`, **modified**: our patches in `cores/sunshine-patches/` (#304); `build_files/install-sunshine.sh` removes only the file capability the package sets and its own service and launchers | GPL v3 |
@@ -185,6 +187,11 @@ developer publishes it and only unpacked; nothing is patched. The profile file
 the console writes for it (`frontend/src/x360profile.cpp`) is encrypted the
 way Edge encrypts its own, with the key Edge publishes in its BSD-licensed
 source; no game, BIOS or firmware is involved, and Xbox 360 needs none.
+**PLAYSTATION VITA IS A WHOLE PROGRAM TOO**, Vita3K's own numbered build,
+shipped as its developers publish it and only unpacked, with a link added so
+the SDL inside it finds the Vulkan loader it carries; nothing is patched. No
+firmware ships: the Vita's system software and fonts come from the person's
+RomM, and Vita3K installs them on the console.
 **WII U IS A WHOLE PROGRAM TOO**, Cemu built here from its own source at a
 pinned commit by its own recipe, with nothing patched; MPL 2.0 asks that its
 source be available, and it is, at that commit. The console reads a `.wua`'s
