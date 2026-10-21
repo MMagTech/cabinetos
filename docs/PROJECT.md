@@ -19359,6 +19359,12 @@ rewind (`core_info.h:33-43`). Opera and MAME 2003-Plus are "basic" there
 too, and rewind here today; following that label as a rule would take it
 from them.
 
+**The rule is MMagTech's, 2026-10-20:** the general rule in
+`catalog::rewindAllowed` (`savetable.cpp`), no rewind for an emulator whose
+save state takes longer than one frame to make (today only Azahar), was
+written by a session and put to him afterwards; he agreed, noting that it
+matches RetroArch, which offers no rewind for this core.
+
 **Fast forward:** nothing to build; it comes with states. How near 4x the
 A9 gets in play is the hand test's frame times, not measured here.
 
