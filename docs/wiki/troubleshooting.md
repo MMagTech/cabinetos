@@ -10,11 +10,27 @@ The system's name in a message is RomM's name for the platform.
 | *No Nintendo Switch keys on your server* | Add `prod.keys` as Switch firmware in RomM. |
 | *Needs newer Nintendo Switch keys on your server* | The game needs keys from a newer firmware. Replace `prod.keys`. |
 | *No PlayStation 3 firmware on your server* | Add `PS3UPDAT.PUP` as PS3 firmware. |
+| *No PlayStation Vita firmware on your server* | Add Sony's Vita system software, `PSVUPDAT.PUP`, as Vita firmware. |
+| *No PlayStation Vita font package on your server* | Add Sony's Vita font package (Sony names it `PSP2UPDAT.PUP`) as Vita firmware too. The Vita needs both files. |
+| *Couldn't install the PlayStation Vita firmware* | One of the Vita firmware files on the server is damaged or is not a Vita file. Replace it in RomM. |
+| *Encrypted 3DS games can't be played* | The dump is encrypted. Use a decrypted cartridge dump (`.3ds`, `.cci`, `.cxi`). |
+| *3DS CIA files can't be played* | A CIA has to be installed, which the console does not do. Use a decrypted cartridge dump instead. |
 | *No license for this game on your server* | Put the game's `.rap` file in the same RomM game folder as its PKG. |
 | *No Xbox BIOS on your server* | Add the MCPX boot ROM and a flash BIOS as Xbox firmware. |
 | *This game's file is a web page, not a game* | The file on the server is a saved download page. Replace it in RomM. |
 | *Needs X.X GB more space* | Remove downloads (Settings, Storage, Downloads) or plug in a drive. |
 | *Couldn't start this game* | Check the format against [Systems](systems.md#file-formats-in-short). A zipped Dreamcast, GameCube, Wii or Saturn disc will not start: use CHD, RVZ or ISO. |
+
+## A game crashes, freezes or looks wrong
+
+Some games do this inside their emulator, and no setting on the console
+changes it. You are brought back to Home and your save is still sent. Every
+game plays as its emulator plays it, so a game like this waits for the
+emulator to be fixed.
+
+On the PlayStation Vita, Vita3K has a known problem with some games on AMD
+graphics under Linux:
+[Vita3K/Vita3K#3099](https://github.com/Vita3K/Vita3K/issues/3099).
 
 ## The Library
 
@@ -36,8 +52,8 @@ The system's name in a message is RomM's name for the platform.
   controller in pairing mode again, and keep it close.
 - **A Wii Remote will not pair.** Press the red sync button inside the battery
   cover, not the 1 and 2 buttons.
-- **No pause menu with the keyboard.** In PS2 and in Switch, PS3, Xbox, Xbox 360
-  and Wii U games, use a pad: both sticks pressed together.
+- **No pause menu with the keyboard.** In PS2 and in Switch, PS3, Xbox, Xbox 360,
+  Wii U and PS Vita games, use a pad: both sticks pressed together.
 
 ## The screen
 

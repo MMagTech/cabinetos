@@ -1,12 +1,14 @@
 // Emulators that are whole applications, played as games.
 //
 // WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu), Xbox 360 (Xenia
-// Edge) and Wii U (Cemu) are not libretro cores and cannot be loaded into this
-// process the way the other systems are (PS2 included). Eden and xemu come
-// from Flathub, pinned in flatpaks.list; RPCS3 is the RPCS3 team's own build,
-// in the image (build_files/install-rpcs3.sh), because its Flatpak shows a
-// warning box on every start; Xenia Edge is its developer's own build, in the
-// image too (build_files/install-xenia.sh), because it is not on Flathub.
+// Edge), Wii U (Cemu) and PlayStation Vita (Vita3K) are not libretro cores and
+// cannot be loaded into this process the way the other systems are (PS2
+// included). Eden and xemu come from Flathub, pinned in flatpaks.list; RPCS3
+// is the RPCS3 team's own build, in the image (build_files/install-rpcs3.sh),
+// because its Flatpak shows a warning box on every start; Xenia Edge and
+// Vita3K are their developers' own builds, in the image too
+// (build_files/install-xenia.sh, install-vita3k.sh), because neither is on
+// Flathub.
 // Each one opens its own window and draws its own picture.
 // So the console starts the emulator as a separate program, hands it the
 // television, and takes the screen back when it ends. docs/PROJECT.md, open
@@ -21,9 +23,9 @@
 //
 // WHERE THE CODE IS. standalone.cpp is the mechanism and the table; each
 // emulator's own setup is in its file (standalone_eden.cpp,
-// standalone_rpcs3.cpp, standalone_xemu.cpp, standalone_xenia.cpp and
-// standalone_cemu.cpp), and what they share is standalone_internal.h. Since the
-// restructure (#398).
+// standalone_rpcs3.cpp, standalone_xemu.cpp, standalone_xenia.cpp,
+// standalone_cemu.cpp and standalone_vita3k.cpp), and what they share is
+// standalone_internal.h. Since the restructure (#398).
 //
 // WHERE ITS STATE LIVES. Each emulator gets `emulators/<core>/` under the
 // storage root and runs with that as its working directory. Eden treats a
@@ -100,16 +102,17 @@ struct Emulator {
     // What it cannot start a game without, in the words the console refuses
     // with: "No Switch keys on your server", "No PS3 firmware on your server".
     const char* needs;
-    // GAMES THAT HAVE TO BE INSTALLED BEFORE THEY RUN (a PS3 PKG). The game is
-    // always a folder, fetched file by file into it, and installGame runs
-    // before it is started. The folder is also where the emulator keeps what
+    // GAMES THAT HAVE TO BE INSTALLED BEFORE THEY RUN (a PS3 PKG, a Vita
+    // game's zip). The game is always a folder, fetched file by file into it,
+    // and installGame runs before it is started. The folder is also where the emulator keeps what
     // it builds for that game (`cacheInGame`), so removing the game removes
     // both, and the cache never has to be told about either.
     bool installs;
     bool cacheInGame;
     // ASKED TO CLOSE THROUGH ITS WINDOW, as a person closing it would, rather
     // than by SIGTERM: RPCS3 has no handler for SIGTERM and simply dies, where
-    // a close asks the game to stop first. Set for RPCS3, Xenia and Cemu.
+    // a close asks the game to stop first. Set for RPCS3, Xenia and Cemu; not
+    // for Vita3K, whose SDL takes SIGTERM as its quit.
     bool closesByWindow;
     // BACK AND START TOGETHER OPEN THE EMULATOR'S OWN MENU (xemu: for pads
     // with no Guide button), which nothing can turn off. So the console holds
@@ -130,6 +133,11 @@ struct Emulator {
     // of the console, or of that game, means the last game never got its
     // saves sent, and the whole folder goes then (beforeStart).
     bool notesPlaying;
+    // ITS GAMES ARE TOUCHED THROUGH THE CONSOLE'S POINTER: two dots on the
+    // sticks, shown and hidden by a long press of L3, touching through the
+    // virtual touch screen (vtouch.h; App::pointerButton). The Vita, played
+    // as a PS TV (docs/PROJECT.md question 49, decision 4).
+    bool touchPointer;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
@@ -153,7 +161,8 @@ std::string home(const Emulator& e);
 bool installedFile(const std::string& entryPath, const std::string& fileName,
                    int64_t sizeBytes);
 // What to start in a game's folder, or empty when there is nothing: the
-// installed game's EBOOT.BIN, or a disc image.
+// installed PS3 game's EBOOT.BIN, an installed Vita game's folder, or a disc
+// image.
 std::string bootPath(const std::string& entryPath);
 // Runs on the download worker, after the files are in `entryPath`: whatever
 // the console must install once (PS3 firmware, from `bios/`), then every

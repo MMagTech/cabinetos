@@ -39,11 +39,11 @@ downloads a whole new image and boots into it.
   layer of its own, no toolkit). It draws every screen, and it hosts the
   emulators: 23 libretro cores and PCSX2 (PlayStation 2, built as a library)
   run inside its process.
-- **Five emulators run as separate programs**, started and stopped by the
+- **Six emulators run as separate programs**, started and stopped by the
   frontend like a game: Eden (Switch) and xemu (Xbox) from Flathub, and RPCS3
-  (PlayStation 3), Xenia Edge (Xbox 360) and Cemu (Wii U) built into the
-  image. Steam's Big Picture is a sixth, an optional entry that hands the
-  screen over and comes back.
+  (PlayStation 3), Xenia Edge (Xbox 360), Cemu (Wii U) and Vita3K
+  (PlayStation Vita) built into the image. Steam's Big Picture is a seventh,
+  an optional entry that hands the screen over and comes back.
 - **Everything comes from RomM:** games, covers, firmware, saves and save
   states. The console keeps a cache of downloaded games and its own
   settings, and nothing else the server does not know. Updates come from the

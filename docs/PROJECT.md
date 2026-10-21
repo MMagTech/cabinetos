@@ -81,7 +81,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 54 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 56 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -330,7 +330,12 @@ down. "Look now at" is where the code or a later decision moved on.
   at least one in ten of Sony's passed games; no frontend gives Vita3K a stick
   pointer (everyone has a touch surface); downloads are mostly Android; the
   console could build one as a virtual touch screen (medium). Still no for
-  now, upstream first; his call: ask Vita3K or build it here.
+  now, upstream first; his call: ask Vita3K or build it here. **Decided
+  2026-10-20: a go**, the console's own pointer, by "Decided, 2026-10-20: the
+  build plan" at the end of the question. **Built 2026-10-21** (#540, "PS
+  Vita through Vita3K, played as a PlayStation TV"), unattended:
+  "Built, 2026-10-21" after the plan says what the build found and what was
+  checked. The probe passed on the TV; the hand test waits for him.
 - **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
   Researched the same night, not decided: Azahar's own core, pinnable at its
   2126.2 tag, fits the core host on Vulkan as it is; the touch screen is the
@@ -367,6 +372,26 @@ down. "Look now at" is where the code or a later decision moved on.
   On / Off row in the Vectrex pause menu, kept per system like a look,
   default On, reversing the morning's "no row". The legal footing:
   decided go the same night; #224 is buildable as written.
+- **52. Genie Mode: cheats, opt-in per person.** MMagTech's brief of
+  2026-10-20, discussed 2026-10-20 and 2026-10-21, no issue. **Paused by
+  him, not decided whether to build; not to be raised until he raises it.**
+  If it goes ahead: per person; cheats chosen before launch only, never
+  mid-game, and remembered per person and game; what a cheat changed can
+  stay in saves and states; no achievements in a play with a cheat on.
+  Open: where on the game page cheats are chosen (no new row, no more icons
+  by the title), the Settings row, the cup's look while off, marking states
+  made with cheats, and the phase order (he leans toward codes through the
+  core first).
+- **53. Gameplay recording, and clips in RomM.** MMagTech's proposal of
+  2026-10-21, reviewed the same day, no issue. **Paused by him until RomM
+  answers:** RomM has nowhere to keep a person's clips, and the console
+  manages nothing RomM should (his rule). He commented on rommapp/romm#5135
+  with an implementation sketch the same day, and would build RomM's side
+  himself as a pull request if RomM wants one. The console side is
+  feasible: gamescope's PipeWire stream for every game, encoded on the
+  Radeon, paused whenever the game is not on screen. Open: RomM's answer,
+  clip length and bitrate (RomM's upload limit decides them), sound, the
+  menu rows, Remote Play, and the shortcut over emulators run as programs.
 
 ---
 
@@ -18756,6 +18781,109 @@ After the probe passes and the build is on the A9:
 - Two controllers in Skullgirls 2nd Encore.
 - A game's own exit.
 
+#### Built, 2026-10-21
+
+Built overnight by an unattended session, to the plan above, with nothing
+asked of MMagTech. Vita3K numbered build 4210 (`649d7d69`, 2026-10-21),
+installed as Xenia is (`build_files/install-vita3k.sh`); the launcher
+`frontend/src/standalone_vita3k.cpp`; the virtual touch screen
+`frontend/src/vtouch.cpp` and `vtouch.h`; the pointer in
+`standalone_play.cpp`; the levels in `quality.cpp`; the save tag in
+`savetable.cpp`. Measured on the A9, headless (a headless gamescope of its
+own, a bare `/dev` with the GPU and `/dev/uinput`, dummy sound), against the
+write-test RomM with Shovel Knight, TxK and both firmware files copied there
+from his server.
+
+**What the build found that the plan did not know:**
+
+- **The AppImage is a "sharun" build:** `bin/Vita3K` runs `shared/bin/Vita3K`
+  with its own glibc and libraries, its own Mesa 26.2.5 Vulkan drivers first
+  whatever the environment says (the image has 26.2.4). Its launcher runs
+  hooks, one of which updates the AppImage from the internet, so the image
+  leaves the launcher out and the console sets what it would have: `APPDIR`
+  (without it Vita3K crashes at boot, finding no built-in shaders).
+- **Vulkan crashed at every boot** under the SDL frontend: the AppImage
+  carries its Vulkan loader only as `libvulkan.so.1.4.363`, so the SDL inside
+  Vita3K loaded the system's `libvulkan.so.1` while Vita3K had made its
+  instance with its own (gdb: a call through a bad dispatch table). OpenGL
+  ran. The install adds the link `lib/libvulkan.so.1` and the console names
+  it in `SDL_VULKAN_LIBRARY`: Vulkan on the RADV STRIX1, no patch. A report
+  to Vita3K (or its AppImage packaging) is for his go.
+- **The first run with no `config.yml` crashes a firmware install**
+  (`create_directories("")`, exit 134), so the settings are written before
+  every run, installs included.
+- **Installing with no window:** the SDL frontend given the zip installs it,
+  decrypts it with `work.bin`, then fails to open a window under SDL's dummy
+  video (exit 255): the log's "installed successfully!" decides. Shovel
+  Knight, 138 MB: 0.8 s, 265 MB on the disk at the peak; TxK the same way.
+- **The firmware:** `PSVUPDAT.PUP` is the system software (`os0/`, `vs0/`,
+  1.2 s), `PSP2UPDAT.PUP` the font package (`sa0/`, 1.1 s); the console tells
+  them apart by those folders.
+- **Vita3K's default camera is the machine's webcam** (camera type 2): set to
+  a plain colour, as a PS TV has no camera.
+- **Trophies live under Vita3K's one user**, so they are linked to the
+  person's folder for the game, as the saves are, and stay on the console (a
+  PS3 game's trophies do the same in its `hdd0`). The person's name is the
+  Vita user's, cut to sixteen bytes.
+
+**Checked, all passed:** two games in a row (only the playing game linked
+in; TxK wrote its own save, two files); the save round trip (deleted on the
+console, the same bytes back from RomM before Vita3K started); two people
+(after a switch, person 2 started with no save, their own folder and name,
+and their save went up as user 2; person 1's untouched); after a switch,
+opening the Vita shelf; offline (an installed game played with the server
+away and its save went up at the next start online); the quit paths: Exit
+(SIGTERM, 0.1 s, exit 0), the pause menu's freeze then Exit, Vita3K killed
+mid-game (back Home), the console quitting mid-game (save zipped and sent),
+a power cut mid-game (the next start sent it). `--check-option-tables`
+passes; no new warnings.
+
+**The probe passed** (2026-10-21, on the TV session, MMagTech's go): Vita3K
+by hand on the TV's gamescope with Shovel Knight, `touch_click_mode` 4, and
+two taps from the console's virtual touch screen (`vtouch.cpp`). SDL's event
+log inside Vita3K showed each as `SDL_EVENT_FINGER_DOWN` and `UP`: the tap at
+0.5, 0.5 of the screen arrived at 0.5005, 0.5009 of the window, the one at
+0.2, 0.8 at 0.197, 0.801 (the window is a little narrower than the screen,
+the Vita's shape). So a touch reaches Vita3K as a finger, mapped into the
+game's window by gamescope, and no patch is needed.
+
+**On the TV with MMagTech, 2026-10-21, testing image 2026.10.21.3:** the
+firmware and four installs (WipEout 2048 first, so both firmware files then);
+the pointer in WipEout 2048's menus, which need a tap (the dots, the long
+press and L2's tap all worked; the touch screen made at the first long press
+and removed at the game's end, gamescope's touch mode put back); saves up to
+his RomM from Shovel Knight and WipEout 2048, and Shovel Knight's back at the
+next start; the pause menu and Exit; the right stick (Riddled Corpses EX).
+**The levels hold at Quality, 4x**, measured with frames.py and the graphics
+chip's busy percentage, a minute each: Shovel Knight 59.9 frames a second,
+median 16.68 ms, GPU 27%; WipEout 2048 in a race 30.0 (its own rate), median
+33.33 ms, GPU 46% at 1,694 of 2,900 MHz; Gravity Rush (its opening, so light)
+30.0, GPU 28%. So Performance 1x, Balanced 2x and Quality 4x stay as built.
+**Vita3K's, not the console's:** Gravity Rush's opening cutscene looked washed
+out and its camera did not follow the right stick (Vita3K's own reports note
+graphics faults in this game; the right stick reaches the virtual pad at full
+range); **Geometry Wars 3: Dimensions crashes as its first level starts**, a
+GPU page fault (amdgpu, TCP client, permission fault) and then Vulkan's
+device lost, twice on the TV. Reproduced headless with scripted presses and
+the same fault every time at 34 s: as Vita3K ships with none of the
+console's settings, at 1x and 4x, with anisotropic filtering on and off,
+with its memory mapping off, on OpenGL as well as Vulkan, and on build 4206
+as on 4210. A survey of the reports (2026-10-21): it has never been reported
+playing on Linux. The one Linux AMD report (RX 6600, build 4056, 2026-06-18)
+reached the autosave screen, no level; every report of play is Windows or
+Android (Vita3K/compatibility#3743, #35). Vita3K/Vita3K#3099, open since
+2023, collects Vulkan crashes and hangs on Steam Deck and AMD Linux in other
+games, one with the same `ErrorDeviceLost` on RADV (Persona 4 Dancing All
+Night). So it fits a known Vita3K fault on AMD Linux, not the console. One
+rule for every game: it waits for Vita3K, and a comment on #3099 goes only on
+his go.
+
+**Not checked yet:** a game's own exit; Killzone: Mercenary and Skullgirls
+2nd Encore; two controllers; the first-run stutter test.
+
+**Open:** his server's `psvita` folder (ES-DE's 26 launch files) shows as a
+game; Play on it says "Couldn't open this game's file".
+
 ### 50. Nintendo 3DS (Azahar's libretro core)
 
 **Researched 2026-10-19; go given the same night, with the conditions
@@ -20507,3 +20635,480 @@ sheets ships them this way and none has been asked to stop that I could
 find; and the alternative is no sheets, since no cleaner set exists.
 Yes means #224 is buildable as written. No means #224 closes with the reason
 recorded here.
+
+### 52. Genie Mode: cheats, opt-in per person
+
+**Discussed 2026-10-20 and 2026-10-21 with MMagTech; paused by him, not
+decided whether to build.** His words at the pause: the feature "is only
+being discussed for possible further implementation", it "needs to be not
+thought of again until I bring it up, but we can't forget the discussion we've
+already had". When he raises it, he will either continue it or scratch it.
+Nothing was built, nothing ran on the A9, and there is no issue. Every
+decision below holds only if Genie Mode goes ahead.
+
+#### The brief, as he gave it (2026-10-20)
+
+His brief, "Genie Mode Phase One Brief", is not in the repository; this is
+its substance. It cites his survey of the cheat files (a `cht_survey.py`
+output), which was not read in this discussion.
+
+- **The feature:** an opt-in cheat feature for every system, framed on the
+  Game Genie. Hard rules, in order: (1) off by default, and while off nothing
+  about cheats appears anywhere; (2) when on, the only change is one entry in
+  the in-game menu, the launch flow never changes and no cheat list is shown
+  unprompted; (3) cheats apply live where the core allows, with a restart
+  offered when one does not take; (4) saves and states are unaffected, a
+  state made with cheats on loading fine with them off; (5) RetroAchievements
+  off whenever any cheat is active; (6) the cheat database a read-only SQLite
+  file compiled at image build and replaced each release, never fetched at
+  run time; (7) each person's enabled cheats kept with their other per-game
+  data, keyed by system, normalised game name and cheat description, to
+  survive database refreshes and cache eviction.
+- **The roadmap, a draft he has not settled** ("treat it as context and don't
+  lock any of it in"): a build-time compiler that clones libretro-database
+  and parses every `.cht` file line by line against the survey's faults
+  (unclosed quotes, wrong `cheats = N` counts, entries without a code, empty
+  separators, HTML entities, non-UTF-8, CRLF, stray keys, `.xml` files, `??`
+  and `XX` placeholders), ignoring the enabled-by-default flag; matching by
+  name (system plus title without region, version and device tags,
+  preferring a region match); a filter pipeline (one file per game; hide and
+  auto-apply master codes; hide `[Off]` entries, section headers and rumble
+  files; merge multi-part entries; dedupe and show player 1 only; fold
+  numbered quantities into an infinite entry or a value picker; sections and
+  numbered runs as pickers under "more codes"); a default view of at most
+  eight rows, ideally six, from an allowlist in priority order (lives,
+  health, invincibility, level select, time, ammo, unlock all, one hit kill,
+  debug, movement, money, with synonyms and German descriptions), a
+  blocklist (computer, enemy, player 2 and away-team handicaps, modifiers,
+  button activators, Wi-Fi, anti-piracy and region bypasses, frame-rate and
+  PAL fixes), the first six unblocked entries for the fifth of files that
+  match nothing, and a slur filter; two backends behind one interface, code
+  strings to the core through `retro_cheat_set` (about 1.2 million entries)
+  and RAM edits by an engine the console owns (about 21,600 entries); and a
+  per-core support matrix (RetroArch's cores; PSP through PPSSPP's own cheat
+  file).
+- **Phase one as written:** the RAM-edit engine only, proven on Flycast with
+  one Dreamcast cheat from the database: RetroArch's RAM view from the core's
+  memory descriptors, falling back to `retro_get_memory_data`; each active
+  cheat applied every frame at `memory_search_size` 3, 4 or 5 (8, 16, 32
+  bits) honouring `big_endian` and `address_bit_position`; `cheat_type` 1
+  built, types 4 to 6 and the `repeat_*` fields recognised and left as TODO;
+  one interface taking a normalised cheat with a handler (0 the core, 1 the
+  RAM engine), the code path stubbed; a report on whether Flycast's mapping
+  carries to Stella, FBNeo and the MSX cores. A couple of hundred lines plus
+  tests, no dependencies.
+
+#### Decided in the discussion (if it goes ahead)
+
+1. **The name stays Genie Mode.** "Cheats" was put to him as plainer, the
+   usual word, and free of the Game Genie trademark; he kept Genie Mode:
+   "most everyone knows that a genie grants you three wishes and they're
+   usually obnoxious ones". The screen never says "Game Genie" (the brief's
+   rule 2 wording).
+2. **Per person, a hard requirement** ("if it goes ahead at all"), as
+   RetroAchievements is.
+3. **Cheats are chosen before launch only, never changed mid-game.** His
+   reason: that is how it worked on the systems; codes went in before the
+   game, and changing them meant switching off and going back to the code
+   screen. This replaces the brief's rule 2 (an entry in the in-game menu,
+   the launch flow unchanged) and removes rule 3: codes are in from the
+   first frame, so codes that act at the start of a game and cores that read
+   codes only at load both work, and there is no "does not take" to detect
+   or restart for. Nothing goes in the pause menu.
+4. **The chosen cheats are remembered per person and per game**, so Play,
+   Home's Resume and Recent all start the game with the same cheats; they
+   change only where they are chosen. Fresh each time was the alternative:
+   Resume and Recent skip the game page and would have dropped the cheats a
+   state was played with.
+5. **Rule 4 reworded:** the cheat list is never stored in a save or state;
+   what a cheat changed in the game can be. A RAM cheat writes memory every
+   frame, so a state taken with 99 lives keeps 99 with Genie Mode off, and a
+   game that saves its money while a money cheat is on keeps the money in its
+   save, which goes to RomM for that person. His words: "if that's a by
+   product of the feature we'd have to live with it." Per person keeps it
+   within that person's saves.
+6. **Achievements, his rules (2026-10-21):** a play started with any cheat
+   on checks no achievements; with Genie Mode on but no cheat on for that
+   game, achievements are as normal; Genie Mode never changes the
+   RetroAchievements setting itself, so turning it off restores nothing.
+   The cup on the game page shows when achievements are off for a game; how
+   it looks is open (below).
+7. **The cheat files' licence is no obstacle.** libretro-database is CC
+   BY-SA 4.0 (GitHub's reading of its licence file): a database compiled
+   from it ships with credit, a note that it was changed, and the same
+   licence, as one entry in docs/LICENCES.md.
+
+#### Open when he raises it
+
+- **Where a person chooses the cheats.** A third row on the game page under
+  Play and Download was proposed and rejected: the page's layout was worked
+  on at length, and the cup was chosen over a third row on 2026-10-06
+  because the row pushed Continue from to the foot of the screen
+  (`detailscreen.h`, the `Achievements` struct). A mark beside the heart and
+  the cup was then proposed (a lamp, lit while a cheat is on, absent for a
+  game with no codes as the cup is); he would rather not keep adding icons
+  to the title's corner. Unanswered. The one other place named was Play
+  opening a code screen before every game, like the cartridge at power-on,
+  set against for the extra press on every game and because Resume and
+  Recent skip it.
+- **Turning it on.** Proposed, not confirmed: a row in Settings in the
+  person's own section beside RetroAchievements (`settingsflow.cpp`), named
+  Genie Mode with "Cheats for your games" in grey under it, off by default;
+  the one trace of the feature while it is off, as RetroAchievements' row
+  is. Turned off, the person's choices are kept for when it is turned on
+  again (an assumption, not discussed).
+- **The cup's look while achievements are off.** He asked for the cup to
+  show it and questioned whether grey is the best look. The cup already has
+  three looks, outlined with none earned, filled with some, gold with all,
+  and is dimmer at rest than focused (`detailscreen.cpp`), so a grey cup
+  would read as either. Proposed: a diagonal line through it, the usual
+  "off" sign, over whichever look it has. Hiding it would read as "this game
+  has no achievements". To judge on the TV.
+- **States made with cheats on (his question: how would the console know?).**
+  Proposed: the console writes every state itself, and already wraps one in
+  RetroArch's block layout when it has achievement progress (`statefile.h`:
+  "MEM " for the core, "ACHV" for the progress); one more block marks a
+  state made with any cheat on. Loading a marked state, from the pause menu,
+  a Continue from card or Home's Resume, turns achievements off for the rest
+  of that play. To check before relying on it: that RetroArch's loader skips
+  a block it does not know, so these states still load there. A game's own
+  saves (battery saves, memory cards) are not tracked: the save is rewritten
+  each time, so a mark would block achievements on it for good. Asked, not
+  answered.
+- **The phase order.** He leans toward the code path first: it carries
+  about 1.2 million of the entries and the Game Genie's own systems (NES,
+  SNES, Genesis, Game Boy), and proving it is small (below); the RAM engine
+  second. Not settled.
+- **Not yet discussed:** which systems get cheats (the brief's matrix is
+  RetroArch's cores; the console ships one core per system, its catalog has
+  Flycast, Stella, FBNeo, MAME 2003-Plus and PPSSPP and no MSX core was
+  found, and the separate emulators get nothing from either backend, except
+  perhaps those that read cheat files when a game starts, PPSSPP as the
+  brief says and possibly PCSX2, unchecked); cheat kinds the brief leaves
+  out (1, 2 and 4 bit sizes, and types 2, 3 and 7, from memory of
+  RetroArch's format, unchecked against the survey); "three wishes", up to
+  three cheats on per game, an idea only.
+
+#### Research, 2026-10-20 and 2026-10-21
+
+**Proving one NES Game Genie code.** The NES core is fceumm (`catalog.cpp`),
+pinned at `236ccdf` (`cores/build-core.sh`). Read at that commit
+(`src/drivers/libretro/libretro.c`, `src/cheat.c`):
+
+- `retro_cheat_set` takes Game Genie codes (6 or 8 letters), Pro Action
+  Replay (8 characters), and raw `xxxx:xx` and `xxxx?cc:vv`, several in one
+  string split on `+ , ; . _` and space. It returns nothing; a bad code is
+  logged at debug level only. It ignores its `enabled` argument, so a code
+  passed as disabled is still added: the only way to turn one off is
+  `retro_cheat_reset`, which clears every cheat, then sending the ones still
+  on (RetroArch rebuilds its list the same way, from memory).
+- A Game Genie code, and a raw code at 0x0100 and above, is a read hook: the
+  CPU's read of that address returns the new value, from the next read, with
+  no reset. A raw code below 0x0100 is a RAM write made at the start of every
+  frame. Cheats are not in the state data, survive a state load and a reset,
+  and are capped at 256.
+- A fault: one entry mixing a raw zero-page code before a Game Genie code
+  turns the Game Genie part into a RAM write (the type is not reset between
+  parts).
+- `retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)` is the 2 KB of work RAM,
+  and the core sends a memory map.
+
+So the proof is about 40 lines: load `retro_cheat_reset` and
+`retro_cheat_set` with the other calls (`core.cpp`; `libretro.h` declares
+them, nothing loads them yet), one method that clears and sends the codes
+that are on, after the game loads (`Core::loadGame`), a test flag on the
+`--core <core> <rom>` path as `--core-option` is, and a log line. The real
+proof is on the TV: "Infinite Lives", `SXIOPO` (libretro-database's
+`Super Mario Bros. (World) (Game Genie).cht`), lives held after a death. A
+headless run can only check a raw code read back from RAM, such as
+`075A:08`, since a Game Genie code changes cartridge reads, not memory, and
+with no controller the game never leaves its title screen; like
+`--state-test` it needs a core and a game, so it runs on the A9 and not in
+CI.
+
+**Matching a game to its cheat file**, his RomM read with the Mac's token
+against libretro-database at `12c21cf` (No-Intro lists for the cartridges,
+Redump's for the Dreamcast):
+
+| | Games | By hash | Hash, then a cheat file by exact name | By name alone | Name matches more than one file |
+|---|---|---|---|---|---|
+| NES | 97 | 94 | 81 | 97 | 88 |
+| SNES | 96 | 92 | 77 | 95 | 92 |
+| Genesis | 49 | 45 | 35 | 43 | 42 |
+| Dreamcast | 29 | 0 | 0 | 19 | 3 |
+
+- RomM's hash of a `.zip` or `.7z` is the ROM inside it, and for NES the
+  whole file with its 16-byte header, which No-Intro's list also carries. So
+  a hash finds the exact release: `Super Mario Bros.zip` is "Super Mario
+  Bros. (World)".
+- From hash to file the gap is names: cheat files write "&" as "_", and some
+  lack tags such as "(Rev 1)" or "(En)"; a build step that normalises both
+  sides the same way closes most of it.
+- A name alone rarely picks one file: other regions, and separate
+  "(Game Genie)", "(Action Replay)" and "(Rumbles)" files. Super Mario Bros.
+  matches five by name; its main file holds 725 entries, mostly raw codes,
+  and its Game Genie file 7 hand-picked ones, a possible default list for a
+  feature named after the Game Genie.
+- The Dreamcast games are CHDs, and Redump lists track hashes, so they match
+  by name only: 19 of 29, and 10 (Ikaruga and Bangai-O among them) not at
+  all.
+- Proposed if it goes ahead: hash first, then name, as the Vectrex sheets
+  are matched (RomM's md5, then the longest name token, `vectrexsheets.cpp`).
+
+**Already in the console, for a RAM engine:** the core's memory map is kept
+for achievements (`core_memory.cpp`, `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`),
+though RetroArch's cheat addresses count from the start of the core's system
+RAM blocks laid end to end (from memory), not as rcheevos' addresses do; and
+the per-frame hook, `Core::setAfterFrame`, holds one function, which
+achievements use (`pace.cpp`), so an engine would have to share it.
+
+### 53. Gameplay recording, and clips in RomM
+
+**Proposed by MMagTech 2026-10-21 and reviewed the same day; paused by him
+until RomM answers.** His words at the pause: "Let's park it. To see what they
+say. But don't lose any insight to the discussion we've already had in the
+implementation of it." Nothing was built, nothing ran on the A9, and there is
+no issue. The review read the code, gamescope's source and RomM's; the
+measurements it calls for were not made.
+
+#### The proposal, as he gave it (2026-10-21)
+
+His document, "CabinetOS Proposal: In-Game Recording (Capture)", is not in the
+repository; this is its substance.
+
+- Gameplay video recording, a sibling of screenshots, in game only.
+- His hunch: the encode cost is manageable, since Remote Play already encodes
+  RPCS3 live with no impact he noticed; reuse the hardware path Remote Play
+  uses, confirmed rather than assumed.
+- One fixed profile, never shown: H.264, 1080p, 60 frames a second, about 6
+  Mbps. 720p and H.265 were considered; 1080p for the 3D systems at their 4x
+  levels, H.264 for playback everywhere.
+- Two ways in. On the shortcut layer, the screenshot combination keeps a tap
+  for a screenshot and adds a hold for record. In the pause menu, Screenshot
+  becomes a "Capture" row with two arrow choices, Screenshot and Record, each
+  fired by confirm. The menu stays open after either, as it does for a
+  screenshot today; while recording, the row reads "Stop recording".
+- The source: the one screenshots use, the emulator's picture under the
+  console's drawing. The menu, the indicator and notices are never in a clip.
+- Record arms it; recording starts on resume, pauses while the menu is open
+  and continues on resume, so a clip never holds frozen frames. Stop in the
+  menu ends it.
+- A small red indicator while recording, and "Recording saved" in the existing
+  notice style on stop.
+- A hard cap of about 15 minutes. Leaving the game stops and saves, never
+  discards.
+- Clips go to RomM with the saves and states, retried the same way, and the
+  console's copy is deleted once RomM confirms it (checked if practical). No
+  gallery or list on the console: RomM is the only place they live.
+- His questions: should recording be unavailable during Remote Play; is a hold
+  on the screenshot combination safe from accidental presses; is pausing
+  across menu visits simple, or is recording the paused frames cleaner; does
+  anything conflict with the structure after #398.
+
+#### Why it waits: RomM
+
+**His rule, 2026-10-21:** "I don't want the OS to become a management client
+to features already offered in RomM." The console uses what RomM offers (games
+load from it, saves and states sync through it, screenshots go to its gallery,
+RetroAchievements show in it), and RomM is where people view, share and
+delete. A clip endpoint would serve every RomM client, not only this one.
+
+**What RomM 5.4 has** (its API description on the project's write-test RomM,
+and RomM's master on GitHub, both read 2026-10-21):
+
+- No endpoint for a person's clips. Its video fields (`video_path`,
+  `video_url`, `youtube_video_id`, `path_video`) are game media from
+  ScreenScraper, LaunchBox and gamelists, not a person's.
+- `POST /api/screenshots` refuses a video: its allow-list is images only
+  (RomM's `media_types.py`), and an `.mp4` gets HTTP 400 with nothing stored.
+  Its web gallery draws each item as an image.
+- A per-upload cap on saves, states and screenshots,
+  `MAX_ASSET_UPLOAD_SIZE_BYTES`, 512 MiB by default (0 removes it). RomM's own
+  nginx sets no limit.
+- Chunked upload exists for ROM files only (`/api/roms/upload/start` and the
+  rest), not for a person's files.
+- Argosy (rommapp/argosy-launcher) records no video; it uploads still
+  screenshots only.
+- Two requests: rommapp/romm#5135 ("Videos/clips storage to go along with
+  Screenshots", 2026-10-04, a person storing a Switch album's MP4s by hand
+  under `assets/users/<id>/videos/<platform>/<rom_id>/`, the screenshot
+  layout) and rommapp/romm#4656 ("Adding our own Videos", 2026-09-20, gameplay
+  videos and playthroughs in the Media tab, shared with an instance's other
+  users). No maintainer had replied on either.
+
+**The options named, and the one chosen:**
+
+1. Wait for RomM to store clips. Chosen.
+2. Keep clips on the console, reached through File access. Rejected: it breaks
+   "RomM is the only place", and the decision of 2026-09-27 that screenshots
+   have no gallery on the console.
+3. Put them in RomM another way, as a save or as a file in the game's own
+   folder through RomM's ROM upload. Rejected: a stand-in, against "RomM's
+   docs are the line"; a game's folder is shared with everyone who can see the
+   game.
+
+**His comment on rommapp/romm#5135**, 2026-10-21, 9:18 AM Eastern
+(https://github.com/rommapp/romm/issues/5135#issuecomment-6317066753),
+introduces him as the owner and maintainer of CabinetOS, thanks RomM, gives
+the reason above, and sketches an implementation that copies RomM's per-user
+screenshots (rommapp/romm#3549):
+
+- a `videos` table like `screenshots` (`rom_id`, `user_id`, `is_public`,
+  private by default);
+- `POST /api/videos?rom_id=` with `videoFile`, scope `ASSETS_WRITE`, checked
+  against RomM's existing `ALLOWED_VIDEO_EXTENSIONS`;
+- stored at `assets/users/<user>/videos/<platform>/<rom_id>/`, the layout
+  rommapp/romm#5135's author already uses;
+- `GET /api/videos/{id}/content` inline with Range support (RomM serves
+  anything that is not an image as an attachment today), and `PUT` for
+  visibility and `DELETE`, owner only;
+- listed on `GET /api/roms/{id}` as `user_videos` and `all_user_videos`;
+- an optional poster image on the same upload, linked by file name stem as a
+  state's picture is, so RomM needs no ffmpeg (its image has none) and its web
+  page can use the plain video element it already has;
+- `/api/videos` under the 512 MiB cap, which holds about 10 minutes of 1080p60
+  at about 6 Mbps; chunked uploads later if longer clips are wanted.
+
+It says what the console would send (H.264 and AAC in MP4 at 1080p60, up to
+about 10 minutes, with a PNG poster) and offers to test a branch.
+
+**If RomM wants a pull request** (his offer, 2026-10-21, "not for today"):
+
+- First a maintainer's yes. RomM's CONTRIBUTING.md asks for an issue and a
+  talk on their Discord before a large feature, and a pull request nobody
+  agreed to can be declined. He already talks with one of RomM's developers.
+- A separate project: a fork of rommapp/romm under his account (public, so his
+  go on the day), in a folder of its own beside this repository, with its
+  sessions' context kept out of RomM's repository: the goal, RomM's rules,
+  where testing happens, and never his live RomM.
+- RomM's rules for the pull request: AI use disclosed in it (their
+  CONTRIBUTING.md calls leaving it out rude), a Conventional Commits title,
+  their template with `Closes #5135`, a diagram for a design change and
+  screenshots for a UI change (their AGENTS.md).
+- Testing on a development RomM built from the branch, on the test VM, on its
+  own port, beside the write-test RomM and not in place of it. GitHub can
+  build the image from the fork, so the VM only downloads it. Then a check
+  list against it: upload through the API, play and skip ahead in the web
+  page, private and shared between two people, delete, a file over the limit
+  refused, and RomM's own tests. Later, the console's recording tested against
+  it.
+- The test VM cannot hold it yet: measured 2026-10-21, 378 MB free of 22 GB on
+  `/var`, and 3 GB of memory. More disk (about 40 GB) and memory (6 to 8 GB)
+  first, on the VM's host, which is his to do.
+
+#### The review (2026-10-21): the console side is feasible
+
+**Remote Play's encoder.** Sunshine reads the screen through KMS and encodes
+with VA-API on the Radeon's video block
+(`system_files/usr/libexec/cabinetos-remoteplay`: `capture = kms`, `encoder =
+vaapi`). The encode is fixed-function hardware, which is why RPCS3 did not
+notice it. Sunshine itself is not reusable: it is a separate streaming server,
+it writes no file, and KMS sees the menus. The base image already carries what
+recording needs (`base-manifest.txt`): GStreamer's VA plugin
+(`gstreamer1-plugins-bad-free`), `pipewire-gstreamer`, and ffmpeg 8.1. The
+measurement of 2026-10-09 (gamescope's node into `vah264enc` at 1080p60)
+converted and scaled on the CPU, which RPCS3 and Eden would feel; a product
+asks gamescope for 1080p instead.
+
+**What a screenshot reads is three things:** a core's frame copied once, at
+the game's own resolution (`screenshotNow`, `frontend/src/states.cpp`);
+PCSX2's window read back once (`Core::snapshot`,
+`frontend/src/core_picture.cpp`); and, for an emulator run as a program,
+`gamescopectl screenshot`, whose default type is the base plane only
+(`App::standaloneScreenshot`). None of them keeps up at 60 frames a second.
+
+**gamescope 3.16.31's PipeWire stream** (its source, read 2026-10-21; the base
+carries `terra-gamescope` 3.16.31):
+
+- Its size is the output's, clamped down to a size the consumer asks for,
+  aspect kept; gamescope scales on the GPU. It offers BGRx and NV12, as
+  DMA-BUF (linear, one plane) or as shared memory.
+- Frames come when a window commits (damage-driven; its frame rate is 0/1).
+- A consumer can make the stream follow one app, and then the overlay window
+  is left out. Without `--steam`, which the console's gamescope does not have
+  (`system_files/usr/bin/cabinetos-session`), an app is chosen by its X window
+  id.
+- A narrow `STEAM_OVERLAY` window without `STEAM_INPUT_FOCUS` goes in
+  gamescope's notification slot, which the stream never paints.
+
+**Recommended: one path for every game.** gamescope's stream, following the
+game's window, encoded by a child process started with `proc::spawn`
+(`frontend/src/proc.h`). For programs and PS2 that leaves the console's
+overlay out. For a core, the game and the console's drawing are one window, so
+recording pauses whenever the game is not on screen (the frame loop's
+`gameOnScreen`, `frontend/src/frame.cpp`), which keeps the menu out; the red
+dot lives in a small notification-slot window (`frontend/src/overlaywin.cpp`
+marks windows today); and notices during play go there too, or wait. A core's
+clip then shows the picture as the TV shows it (screen look, framing, bars),
+not the raw frame a screenshot takes. The alternative, recording inside the
+frontend for cores, means two capture paths, new libraries linked in, and work
+on the frame thread every frame.
+
+**His questions, answered:**
+
+- Remote Play: both can run at once. The video block runs several encodes, and
+  the two read different sources. Keep Record available unless one measurement
+  shows a cost.
+- The hold: unlikely to fire by accident, since while the shortcut button is
+  held the game hears nothing from that pad, and shortcuts are off by default.
+  But the screenshot moves from Y's press to its release, the hold needs the
+  dot as instant feedback, and the combinations exist only for cores and PS2
+  (`readGameInput`, `frontend/src/play.cpp`). Over emulators run as programs
+  the shortcut button only opens the menu (`takeStandaloneEvent`,
+  `frontend/src/standalone_play.cpp`), so Home+Y would be built there first,
+  screenshot included.
+- Pausing: required on the recommended path, not optional, since it keeps the
+  menu out of a core's clip. Simplest as segments: one ends when the game
+  leaves the screen, the next starts on its return, and they are joined at
+  Stop without re-encoding. A finished segment also survives a crash.
+- The structure: no conflict. The recorder is a file of its own
+  (`recorder.cpp`). It touches `pausemenu.cpp` and `app.h` (a menu item),
+  `play.cpp`, `standalone_play.cpp`, `frame.cpp`, `overlaywin.cpp`,
+  `storage.h`, `pending.h`, and `uploader.h`, where `who` stays the last field
+  of a job. Whether the encoder is `gst-launch-1.0` (GStreamer calls it a
+  debugging tool) or a small program of the project's own is his call: a new
+  program is a new kind of place (CONTRIBUTING.md, rule 2).
+
+**Pushback on the proposal:**
+
+- It has no sound. The game's sound and the interface sounds are separate
+  streams (`frontend/src/launch.cpp`, `frontend/src/sound.cpp`), so a clip can
+  carry the game alone; to be measured, sync included.
+- 15 minutes does not fit RomM's default limit. At 6 Mbps plus sound, about
+  0.77 MB a second, 15 minutes is about 690 MB; about 11 minutes fits in 512
+  MiB. And 6 Mbps is lean for fast 3D on a hardware encoder (YouTube
+  recommends 12 Mbps for 1080p60). Both numbers wait for RomM's limit. H.264
+  and 1080p stand.
+- A fixed 60 makes 50 Hz games judder; the stream's frames can keep the game's
+  own timing.
+- Two plain menu rows, "Screenshot" and "Record" (reading "Stop recording"),
+  rather than a Capture row with arrows. Picture and Look step their value on
+  A, so a row where A fires would be the only one of its kind, and Record
+  would hide behind an arrow (unearned focus).
+- The upload path cannot carry a clip. The request is built whole in memory
+  (`postMultipart`, `frontend/src/romm_http.cpp`) with a 30 second limit
+  (`kTimeoutSec`, `frontend/src/romm_internal.h`). A clip needs a streamed
+  upload from its file, a lane of its own so saves never wait behind it, and
+  an accepted cost at power off: the console waits up to 25 seconds for
+  uploads (`frontend/src/power_menu.cpp`), so a clip still sending starts over
+  at the next start.
+- Found on the way: screenshots stay on the console after they upload; nothing
+  removes them.
+
+**To measure on the A9 before building:** the menu absent from a stream that
+follows a program's window; the dot window on the TV and absent from the
+stream; RPCS3 and Eden frame times with recording off, on, and on during
+Remote Play; game-only sound, in sync; how much of the first second a segment
+restart loses.
+
+#### Open when it resumes
+
+- RomM's answer on rommapp/romm#5135, and whether he builds RomM's side.
+- Clip length and bitrate, set by RomM's upload limit.
+- Where the sound comes from, and its sync.
+- The menu rows, and Record pressed before resume (pressing Stop then cancels,
+  with nothing saved).
+- Remote Play: available, or greyed after a measurement.
+- The shortcut over emulators run as programs.
+- Whether the console's own screenshot copies should go once RomM has them, as
+  the proposal wants for clips.

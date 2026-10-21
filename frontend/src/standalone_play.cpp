@@ -1,11 +1,13 @@
 // A game whose emulator is its own application (#169): started with the
 // console's virtual pads, its presses passed on, watched while it has the
 // television, paused under the same menu, and its saves sent when it
-// ends (#398, restructure batch f).
+// ends (#398, restructure batch f). And the pointer over a game that is
+// touched through the console, the Vita's (#198, pointerButton).
 
 #include "app.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "cache.h"
@@ -17,6 +19,7 @@
 #include "saves.h"
 #include "shortcuts.h"
 #include "storage.h"
+#include "vtouch.h"
 
 using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
@@ -153,6 +156,8 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     curtain.elapsed = curtain.duration;
     standaloneClearFrames = 30;
     standalonePaused = false;
+    // No dots until somebody asks for them, and then in the middle.
+    pointer = Pointer{};
     // From here every press and release is the emulator's (takeStandaloneEvent),
     // so nothing still held may stay held for this loop.
     letGoOfHeld();
@@ -178,6 +183,7 @@ void App::finishStandalone() {
     // restart to finish.
     if (const cab::standalone::Emulator* ran = cab::standalone::find(session.standaloneCore))
         cab::standalone::finished(*ran, session.saveDir);
+    endPointer();
     cab::vpad::close();
     players::setInGame(false);
     if (playClock.active()) {
@@ -240,6 +246,11 @@ void App::openStandaloneMenu() {
     if (!standaloneRun.active() || standaloneRun.stopping() || standalonePaused) return;
     standaloneRun.freeze();
     cab::vpad::releaseAll();
+    // The pointer's fingers come off with everything else, and an L3 held
+    // back is neither a click nor a long press now.
+    cab::vtouch::liftAll();
+    for (bool& f : pointer.finger) f = false;
+    pointer.l3Player = pointer.clickPlayer = -1;
     rumble::update(false);
     cab::overlaywin::mark(window, /*takeInput=*/true);
     standalonePaused = true;
@@ -316,6 +327,8 @@ bool App::takeStandaloneEvent(const SDL_Event& e) {
                     if (shortcut) break;   // held: the game hears none of it
                 }
                 if (b == SDL_GAMEPAD_BUTTON_GUIDE) break;
+                // L3, held back for the pointer's long press (pointerButton).
+                if (pointerButton(p, b, down)) break;
                 // BACK AND START TOGETHER never reach an emulator that
                 // opens its own menu on them (xemu): the second one
                 // down is held back, press and release both.
@@ -338,11 +351,14 @@ bool App::takeStandaloneEvent(const SDL_Event& e) {
                 cab::vpad::button(p, b, down);
                 break;
             }
-            case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-                cab::vpad::axis(players::playerOf(e.gaxis.which),
-                                static_cast<SDL_GamepadAxis>(e.gaxis.axis),
-                                e.gaxis.value);
+            case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+                const int p = players::playerOf(e.gaxis.which);
+                const auto a = static_cast<SDL_GamepadAxis>(e.gaxis.axis);
+                // The dots' driver's sticks and triggers are the dots'.
+                if (pointerAxis(p, a, e.gaxis.value)) break;
+                cab::vpad::axis(p, a, e.gaxis.value);
                 break;
+            }
             case SDL_EVENT_GAMEPAD_ADDED:
                 players::added(e.gdevice.which);
                 break;
@@ -407,7 +423,18 @@ bool App::watchStandalone(float dt) {
     // see, nothing drawn, and a short sleep so a watcher does not take a
     // core from the game. Play time counts as it does for any game.
     if (standaloneRun.active() && !standalonePaused) {
-        if (standaloneClearFrames > 0) {
+        // THE POINTER: its long press, its dots moving, and drawn while they
+        // change. Over the dots, the frames that clear this window draw them
+        // instead, so they stay over the game.
+        pointerTick(dt);
+        if (pointer.on && standaloneClearFrames > 0) {
+            pointer.dirty = std::max(pointer.dirty, standaloneClearFrames);
+            standaloneClearFrames = 0;
+        }
+        if (pointer.dirty > 0) {
+            --pointer.dirty;
+            drawPointer();
+        } else if (standaloneClearFrames > 0) {
             --standaloneClearFrames;
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glDisable(GL_SCISSOR_TEST);
@@ -456,4 +483,209 @@ void App::closeStandaloneAtExit() {
         while (standaloneRun.poll()) SDL_Delay(50);
         finishStandalone();
     }
+}
+
+// --- The pointer (#198) -------------------------------------------------------
+//
+// SONY'S PS TV POINTER, WITH TWO CHANGES (docs/PROJECT.md question 49,
+// decision 4, MMagTech 2026-10-20). The left stick moves a white dot and L2
+// touches with it; held, it is a finger kept down, so holding and moving
+// drags. Moving the right stick brings a second, red dot, which R2 touches
+// with. While the dots show, the sticks, L2 and R2 of whoever brought them
+// work the dots and every other button goes to the game. The changes: a long
+// press of L3 (half a second) shows and hides them, where the PS TV used a
+// click of L3 behind a switch in its own menu, so a click of L3 stays the
+// game's; and no rear pointer, since a touch screen reaches only the front.
+//
+// WHO DRIVES THEM: whichever player held L3. A dot starts in the middle of
+// the screen and stays where it was left, for the rest of the game. THE RED
+// DOT GOES WHEN THE DOTS ARE HIDDEN: each long press shows the white dot
+// alone, and the red one comes again only when the right stick moves or R2
+// is pulled, since most games want one finger (MMagTech, 2026-10-21, after
+// it kept coming back in WipEout 2048). The long press counts only while R3
+// stays up, so L3 and R3 together still open the pause menu and never show a
+// dot.
+
+namespace {
+// The long press, as the plan says: about half a second.
+constexpr uint64_t kPointerHoldMs = 500;
+// A click of L3 passed on is held this long: the game reads the button's
+// state about once a frame.
+constexpr uint64_t kClickMs = 60;
+// The sticks: nothing inside the dead zone, and past it the dot speeds up
+// with the square of the push, so a small push places it finely. Full push
+// crosses the screen's height in this many seconds' worth: 1.4 heights a
+// second.
+constexpr float kDeadZone = 0.15f;
+constexpr float kHeightsPerSecond = 1.4f;
+// L2 and R2 touch past half way and let go under a third, so a finger
+// resting on a trigger does not flicker.
+constexpr int16_t kTriggerDown = 16384, kTriggerUp = 10000;
+// The dots, in design points (ui.h's 1920 by 1080): 15 across a radius, a
+// little smaller while touching.
+constexpr float kDotRadius = 15.0f, kDotPressed = 12.0f;
+}  // namespace
+
+bool App::pointerButton(int p, SDL_GamepadButton b, bool down) {
+    const cab::standalone::Emulator* running = standaloneRun.emulator();
+    if (!running || !running->touchPointer || b != SDL_GAMEPAD_BUTTON_LEFT_STICK || p < 0 ||
+        p >= cab::vpad::kMaxPlayers)
+        return false;
+    if (down) {
+        pointer.l3Player = p;
+        pointer.l3SinceMs = SDL_GetTicks();
+    } else if (pointer.l3Player == p) {
+        // Let go before the long press: a click, and the game's.
+        pointer.l3Player = -1;
+        cab::vpad::button(p, b, true);
+        pointer.clickPlayer = p;
+        pointer.clickUpAtMs = SDL_GetTicks() + kClickMs;
+    }
+    // A release after a long press, or after L3 and R3 opened the menu, goes
+    // nowhere: the game never had the press.
+    return true;
+}
+
+bool App::pointerAxis(int p, SDL_GamepadAxis a, int16_t v) {
+    if (!pointer.on || p != pointer.player || a < 0 || a >= SDL_GAMEPAD_AXIS_COUNT) return false;
+    pointer.raw[a] = v;
+    const float f = std::max(-1.0f, v / 32767.0f);
+    switch (a) {
+        case SDL_GAMEPAD_AXIS_LEFTX: pointer.stick[0] = f; break;
+        case SDL_GAMEPAD_AXIS_LEFTY: pointer.stick[1] = f; break;
+        case SDL_GAMEPAD_AXIS_RIGHTX: pointer.stick[2] = f; break;
+        case SDL_GAMEPAD_AXIS_RIGHTY: pointer.stick[3] = f; break;
+        case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
+        case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: {
+            const int which = a == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? 0 : 1;
+            const bool held = pointer.finger[which] ? v > kTriggerUp : v > kTriggerDown;
+            if (held == pointer.finger[which]) break;
+            pointer.finger[which] = held;
+            // R2 brings the red dot too, where it was left.
+            if (which == 1) pointer.second = true;
+            if (held) cab::vtouch::touch(which, pointer.x[which], pointer.y[which]);
+            else cab::vtouch::lift(which);
+            pointer.dirty = std::max(pointer.dirty, 3);
+            break;
+        }
+        default: break;
+    }
+    if (std::abs(pointer.stick[2]) > kDeadZone || std::abs(pointer.stick[3]) > kDeadZone)
+        pointer.second = true;
+    return true;
+}
+
+void App::pointerTick(float dt) {
+    const uint64_t now = SDL_GetTicks();
+    if (pointer.clickPlayer >= 0 && now >= pointer.clickUpAtMs) {
+        cab::vpad::button(pointer.clickPlayer, SDL_GAMEPAD_BUTTON_LEFT_STICK, false);
+        pointer.clickPlayer = -1;
+    }
+    // THE LONG PRESS: the dots come for this player, go if they were theirs,
+    // or pass to them from whoever had them.
+    if (pointer.l3Player >= 0 && !r3Down && now - pointer.l3SinceMs >= kPointerHoldMs) {
+        const int who = pointer.l3Player;
+        pointer.l3Player = -1;
+        showPointer(!(pointer.on && pointer.player == who), who);
+    }
+    if (!pointer.on) return;
+    // Each stick moves its dot at the same speed across as down: a height of
+    // the screen is a smaller fraction of its width.
+    const float aspect = ui::kCanvasWidth / ui::kCanvasHeight;
+    for (int d = 0; d < 2; ++d) {
+        if (d == 1 && !pointer.second) break;
+        bool moved = false;
+        for (int axis = 0; axis < 2; ++axis) {
+            const float s = pointer.stick[d * 2 + axis];
+            const float m = std::abs(s);
+            if (m <= kDeadZone) continue;
+            const float push = (m - kDeadZone) / (1.0f - kDeadZone);
+            float step = (s < 0 ? -1.0f : 1.0f) * push * push * kHeightsPerSecond * dt;
+            if (axis == 0) step /= aspect;
+            float& v = axis == 0 ? pointer.x[d] : pointer.y[d];
+            v = std::clamp(v + step, 0.0f, 1.0f);
+            moved = true;
+        }
+        if (!moved) continue;
+        if (pointer.finger[d]) cab::vtouch::touch(d, pointer.x[d], pointer.y[d]);
+        pointer.dirty = std::max(pointer.dirty, 3);
+    }
+}
+
+void App::showPointer(bool on, int p) {
+    if (on && !pointer.madeTouch) {
+        // THE TOUCH SCREEN, at the first long press of this game rather than
+        // at its start, so a game nobody points at never has one; gamescope
+        // has it registered well before the first touch, which takes at
+        // least a trigger's pull.
+        if (!cab::vtouch::open()) {
+            std::fprintf(stderr, "[pointer] no touch screen; no dots\n");
+            return;
+        }
+        cab::vtouch::passThrough(true);
+        pointer.madeTouch = true;
+    }
+    // Whoever had them gives the game back their sticks and triggers as
+    // they are now.
+    if (pointer.on) {
+        cab::vtouch::liftAll();
+        for (bool& f : pointer.finger) f = false;
+        for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a)
+            cab::vpad::axis(pointer.player, static_cast<SDL_GamepadAxis>(a), pointer.raw[a]);
+    }
+    if (on) {
+        // And the new driver's go still in the game, until the dots go.
+        for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a)
+            cab::vpad::axis(p, static_cast<SDL_GamepadAxis>(a), 0);
+        for (int16_t& r : pointer.raw) r = 0;
+        for (float& s : pointer.stick) s = 0.0f;
+        pointer.player = p;
+        pointer.dirty = 3;
+    } else {
+        // This window clears, which takes the dots off the game, and the red
+        // dot is forgotten until the right stick or R2 brings it again.
+        standaloneClearFrames = 30;
+        pointer.dirty = 0;
+        pointer.second = false;
+    }
+    pointer.on = on;
+    std::fprintf(stderr, "[pointer] dots %s for player %d\n", on ? "on" : "off", p + 1);
+}
+
+void App::endPointer() {
+    if (pointer.clickPlayer >= 0)
+        cab::vpad::button(pointer.clickPlayer, SDL_GAMEPAD_BUTTON_LEFT_STICK, false);
+    if (pointer.madeTouch) {
+        cab::vtouch::close();
+        cab::vtouch::passThrough(false);
+    }
+    pointer = Pointer{};
+}
+
+// THE DOTS, ON THIS WINDOW OVER THE GAME, and nothing else: it is gamescope's
+// overlay while the emulator has the screen (startStandalone), drawn
+// transparent wherever nothing is. White for the left stick's, red for the
+// right's, as Sony's two pointers are; each with a dark rim so it shows on
+// any picture, and a little smaller while it touches.
+void App::drawPointer() {
+    int dw = 0, dh = 0;
+    SDL_GetWindowSizeInPixels(window, &dw, &dh);
+    renderer.beginFrame(dw, dh);
+    renderer.presentScene();
+    for (int d = 0; d < 2; ++d) {
+        if (d == 1 && !pointer.second) break;
+        const float r = pointer.finger[d] ? kDotPressed : kDotRadius;
+        ui::Rect dot;
+        dot.x = pointer.x[d] * ui::kCanvasWidth - r;
+        dot.y = pointer.y[d] * ui::kCanvasHeight - r;
+        dot.w = dot.h = 2.0f * r;
+        dot.radius = r;
+        dot.fill = d == 0 ? ui::Color::white(0.92f) : ui::Color::rgb(0xE8343A, 0.92f);
+        dot.border = 3.0f;
+        dot.borderColor = ui::Color::black(0.55f);
+        dot.shadowBlur = 8.0f;
+        dot.shadowColor = ui::Color::black(0.4f);
+        renderer.draw(dot);
+    }
+    SDL_GL_SwapWindow(window);
 }

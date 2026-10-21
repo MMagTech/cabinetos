@@ -216,8 +216,8 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
     charging; again only after it has charged back above it. A pad that
     goes low on a top-bar screen shows red there and the notice waits for
     the game. Wii Remotes warn only in the row (in a game Dolphin has them).
-    In a game whose emulator is its own program (PS3, Switch, Xbox, Wii
-    U) it waits for the pause menu or the game's end, because the console
+    In a game whose emulator is its own program (PS3, Switch, Xbox, Xbox
+    360, Wii U, PS Vita) it waits for the pause menu or the game's end, because the console
     draws nothing over those while they play. Not during a Steam game
     (the console app is not running then).
 - **A playing pad dropping out opens the pause menu**, as on Switch and

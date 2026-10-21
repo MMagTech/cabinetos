@@ -62,7 +62,7 @@ void setGameChoice(int romId, std::optional<Level> l);
 // What a game runs at: its own choice, else the console's.
 Level forGame(int romId);
 
-// Whether a level changes anything for `core` (its manifest name): the eleven
+// Whether a level changes anything for `core` (its manifest name): the twelve
 // systems with a resolution to move, the DS only where its OpenGL renderer
 // can run (Core::canServeDesktopGL, #219). Only these get the pause menu's
 // row; Wii U (Cemu) has no lever without resolution packs (#207), Xbox 360 is
@@ -103,6 +103,8 @@ std::string rpcs3(Level l);
 std::string xemu(Level l);
 // Xenia Edge's command line.
 std::vector<std::string> xenia(Level l);
+// Vita3K's config.yml: lines for the whole file standalone_vita3k.cpp writes.
+std::string vita3k(Level l);
 
 // One line on stderr saying what was applied, so a log shows the level a game
 // actually ran at.

@@ -99,6 +99,9 @@ const Entry kTable[] = {
     {"ps3",                  nullptr,     Support::Playable, "rpcs3",           nullptr},
     {"xbox",                 nullptr,     Support::Playable, "xemu",            nullptr},
     {"xbox360",              nullptr,     Support::Playable, "xenia",           nullptr},
+    // PlayStation Vita in Vita3K, played as a PlayStation TV (docs/PROJECT.md,
+    // open question 49): every game shows, with no greying.
+    {"psvita",               nullptr,     Support::Playable, "vita3k",          nullptr},
     // Wii U in Cemu. Which games play on a pad is per game, in coverageFor
     // below (wiiu.h), as for Wii.
     {"wiiu",                 nullptr,     Support::Playable, "cemu",            nullptr},

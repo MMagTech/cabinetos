@@ -1,7 +1,8 @@
 // What the standalone emulators' files share: the helpers, defined in
 // standalone.cpp, and each emulator's own entry points, defined in its file.
 // Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
-// standalone_xenia.cpp, standalone_cemu.cpp and standalone_xemu.cpp include it.
+// standalone_xenia.cpp, standalone_cemu.cpp, standalone_xemu.cpp and
+// standalone_vita3k.cpp include it.
 // Moved out of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
@@ -22,6 +23,9 @@ constexpr const char* kInstalledNote = ".cabinetos-installed";
 // them (App::recoverDriveSaves). cache.cpp spells it out as well, to leave a
 // game's folder holding one alone.
 constexpr const char* kPlayingNote = ".cabinetos-playing";
+// The Vita storage inside an installed Vita game's folder, which holds the
+// game at ux0/app/<title ID> (standalone_vita3k.cpp; bootPath finds it).
+constexpr const char* kVitaGameFs = "vita";
 // RPCS3's one user, as it names the folder. The console's people are told
 // apart by whose save folder `hdd0` is, not by PS3 users.
 constexpr const char* kPs3User = "00000001";
@@ -74,6 +78,18 @@ bool prepareCemu(const Emulator& e, const std::string& saveDir, int players, std
 // Run::start's arguments for Cemu, as for xeniaArgs: the environment entries
 // before the program, then `-g`, the game's path and `-f` after it.
 void cemuArgs(std::vector<std::string>& full, const std::string& dir, const std::string& romPath);
+
+// PlayStation Vita (standalone_vita3k.cpp).
+std::string vita3kSaveRoot(const std::string& saveDir);
+bool prepareVita3k(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
+                   const std::string& player, int players, quality::Level level, bool* missing,
+                   std::string* err);
+bool installVita3k(const Emulator& e, const std::string& entryPath,
+                   const std::atomic<bool>& cancel, std::string* romPath, std::string* message);
+// Run::start's arguments for Vita3K, as for xeniaArgs: the environment entries
+// before the program, then the game, by its title ID, after it.
+void vita3kArgs(std::vector<std::string>& full, const Emulator& e, const std::string& dir,
+                const std::string& romPath);
 
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,
