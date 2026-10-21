@@ -332,7 +332,8 @@ down. "Look now at" is where the code or a later decision moved on.
   console could build one as a virtual touch screen (medium). Still no for
   now, upstream first; his call: ask Vita3K or build it here. **Decided
   2026-10-20: a go**, the console's own pointer, by "Decided, 2026-10-20: the
-  build plan" at the end of the question. **Built 2026-10-21**, unattended:
+  build plan" at the end of the question. **Built 2026-10-21** (#540, "PS
+  Vita through Vita3K, played as a PlayStation TV"), unattended:
   "Built, 2026-10-21" after the plan says what the build found and what was
   checked; the probe and the hand test wait for the TV.
 - **50. Nintendo 3DS (Azahar's libretro core).** Asked 2026-10-19, no issue.
