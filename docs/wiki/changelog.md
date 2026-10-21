@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.21.3 {#v2026-10-21-3}
+
+*21 October 2026*
 
 - **New:** the PlayStation Vita, played as a PlayStation TV. A game is a zip
   with its licence inside; the first Play installs it, and both of Sony's
