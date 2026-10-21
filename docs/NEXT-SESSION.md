@@ -2,8 +2,9 @@
 
 Every session: `docs/lessons/README.md` (ten rules), then the lessons file
 named on the item. New here? `CONTRIBUTING.md`, then `docs/ARCHITECTURE.md`.
-The specification is `docs/PROJECT.md`; its index, at the top, gives
-every section and every numbered question with where it ended. Name every issue and pull request by
+`docs/PROJECT.md` is the record of what was decided and why: look up the
+question in hand (its index, at the top, gives every section and numbered
+question with where it ended), never read it through. Name every issue and pull request by
 its title as well as its number, every time. Replies to reporters are in
 MMagTech's voice ("I"), ask them to test, and never claim a fix nobody
 reproduced. RomM's documentation together with RomM's behaviour is the
@@ -11,23 +12,22 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-20, morning.** PR #525, "Select is never the shortcut button,
-Home always opens the menu (#313); Search's covers follow the keyboard",
-merged on his go after its first image (2026.10.20.2) was judged on the TV
-through the loop and the second carried only wording; it closes #313. His
-decision after a long morning was the plainest rule: the row reads
-"Shortcuts use: Home", refuses Select, Start, L3 and R3 with the reason,
-and a chosen spare button is added beside Home, never in its place; the two
-builds that gave a stream its own rule were set aside unjudged and deleted.
-His standing rule from that morning: every check and every comment is
-written out in full each time it is asked for, never referred to. Overnight, on his go, four
-Opus sessions ran: the Vectrex stall measured on the TV (no stall in six
-runs at 1x or 4x; `claude/vectrex-pacing`, not pushed), the Vectrex sheets
-built for #224 (judged good on the TV; its session is finishing the fit
-check and the pull request), the 3DS core built in CI (draft PR #524), and
-the Vita pointer research (draft PR #523). PR #522 is the Vectrex sheets'
-research, docs only. The A9 is on the testing channel; its PIN is off. The
-machines' addresses are in his local notes.
+**2026-10-20, night.** The 3DS is in: PR #524, "Nintendo 3DS through
+Azahar's own libretro core (decrypted dumps)", merged on his go, and every
+console is offered 2026.10.21.2. Its last fix was not the 3DS: moving up
+from the Library's fourth system and then opening any system crashed the
+console's program (a write past a two-entry array, since c1fa0bb), found
+on the TV that night and fixed in the same PR. The Azahar patches each have
+a tracking issue linked to a request upstream: #534, "Azahar patch: each
+game sets its own folders (until Azahar fixes SetUserPath)"
+(azahar-emu/azahar#2694), and #537, "Azahar patch: games get no network
+(until Azahar has an option)" (azahar-emu/azahar#2695). Also merged: #526
+(the Vectrex sheets, #224), #535, "PS Vita: the settled build plan, in
+question 49", and #536, "PROJECT.md's header: a record to look things up
+in, not read first". The A9 is on the testing channel and still runs
+2026.10.21; its PIN is off. The machines' addresses are in his local notes.
+His standing rule: every check and every comment is written out in full
+each time it is asked for, never referred to.
 
 **His rules from 2026-10-19 and 2026-10-20:** anything mechanical (a
 measurement, a build, research) runs in an Opus session, never in the Fable
@@ -39,31 +39,58 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **The 3DS, on the A9, now.** MMagTech has 3DS games on his server as of
-   2026-10-20. Draft PR #524, "Nintendo 3DS through Azahar's own libretro
-   core (decrypted dumps)", is built and green on
-   `claude/3ds-azahar-core-9a119a`; PROJECT.md question 50 holds the
-   design and "The A9 hand test, when he names a time". Brief controller
-   questions first (the right stick and R3 for touch, the DualSense
-   touchpad, the two screens' layout), one at a time, then the hand test
-   through the loop, then its own testing image. Mechanical work in Opus
-   sessions; this parent reads, decides and reports.
-2. **#224, the Vectrex sheets:** PR #526, judged good on the TV
-   2026-10-20; its testing image and merge on his go, after or with the
-   3DS.
-3. **The Vita:** PR #523's answers; "no, for now", upstream first. His
-   word on the support comment on Vita3K/Vita3K#3707.
-4. **Words from him, one at a time, no work:** #253 (close with the
+1. **The PS Vita (Vita3K), now.** Build it to PROJECT.md question 49,
+   "Decided, 2026-10-20: the build plan": every choice there is settled,
+   build it as written. The probe on the A9 comes first (a touch from the
+   console's own virtual touch screen reaching Vita3K as a finger); if it
+   fails, stop and bring him the patch route, named, before any code. Then
+   the build, and before asking for a testing image, what a person would
+   hit: two games in a row, two people (switch person, then browse and
+   open the Vita shelf), the save round trip, offline, every quit path.
+   The testing push only on his words; the hand test from the plan's list
+   with every step and its success written out first; the merge on his
+   word "merge". The Vita does not touch `cores/build-core.sh` (its
+   AppImage installs as Xenia's does), so it does not wait on item 2.
+2. **PR #533, "CI: a change to one emulator rebuilds only that
+   emulator":** update it from main (four conflicts, all in comments, in
+   `cores/build-core.sh` and `cores/arcade-sets.sh`), check the azahar
+   arm and both its patches are in its cache key, and write "#537" beside
+   the no-network patch's comment in the same change (any edit to
+   `build-core.sh` before #533 rebuilds all 23 cores). A testing image to
+   prove the caching, then the merge on his word. Its session is "Rebuild
+   only the core whose recipe changed".
+3. **Stop at an out-of-range array write, at the line that does it.**
+   Tonight's crash was a write past a two-entry array that landed
+   silently on the grid screen next to it. Build the frontend with
+   `-D_GLIBCXX_ASSERTIONS` and make the fixed arrays indexed by a value
+   set at run time `std::array` (`pillFocus_` in `libraryscreen.h`,
+   `slotFocus` and `slotPress` in `app.h`, and the others a grep finds),
+   so a bad index stops the program and names the line instead of
+   damaging what sits beside it. Measure the frame times on Home and a
+   large grid on the A9 before and after; if the cost shows, stop and
+   say so. One PR, CI green, his word to merge.
+4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+   Kirby: Planet Robobot saved into Mario Kart 7's folder, so Mario Kart
+   7's save on his RomM still carries Kirby's first save (4 files). He
+   wants it gone (2026-10-20). Each Mario Kart 7 start unpacks RomM's copy
+   over the folder, so deleting it on the A9 alone does not last: Mario
+   Kart 7's save on RomM has to be replaced. Restate exactly what goes and
+   wait for his yes before anything is deleted.
+5. **#529's leftovers, his word first:** PROJECT.md question 32 still says
+   a controller connected mid-game waits for the next launch, without
+   eden-emulator/Issue-Reports#739; a stale Batocera comment in
+   `frontend/src/standalone_eden.cpp` near line 327.
+6. **Words from him, one at a time, no work:** #253 (close with the
    drafted comment in PROJECT.md's #253 record: the misses are gone on
    gamescope 3.16.31; "reopen on a report"); #484's "a drive unplugged
    during Sign out"; #181 and #215 (he is unsure of both).
-5. **The Vectrex stall:** no fix; the next step is his evening journal of
+7. **The Vectrex stall:** no fix; the next step is his evening journal of
    2026-10-19 read for what ran just before each stall (PROJECT.md, the
    Vectrex record under "The 4K misses measured again"). Only if it comes
    back.
-6. **The automatic checks turn strict on 2026-10-26**; nothing to do but
+8. **The automatic checks turn strict on 2026-10-26**; nothing to do but
    watch the first pull request after.
-7. **The monthly health check.** With the next real core change: #490's
+9. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
 
 ## Waiting, not for the next session unless MMagTech raises them
