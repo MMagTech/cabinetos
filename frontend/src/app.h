@@ -851,7 +851,7 @@ struct App {
         bool on = false;          // the dots show
         int player = -1;          // who drives them: whoever long-pressed L3
         float x[2] = {0.5f, 0.5f}, y[2] = {0.5f, 0.5f};   // fractions of the screen
-        bool second = false;      // the red dot has come
+        bool second = false;      // the red dot has come, since the dots last showed
         float stick[4] = {};      // the driver's sticks, -1 to 1: left x, y, right x, y
         bool finger[2] = {};      // L2 and R2 holding a finger down
         // The driver's sticks and triggers as they are, by SDL's axis number,

@@ -498,9 +498,13 @@ void App::closeStandaloneAtExit() {
 // game's; and no rear pointer, since a touch screen reaches only the front.
 //
 // WHO DRIVES THEM: whichever player held L3. A dot starts in the middle of
-// the screen and stays where it was left, for the rest of the game. The long
-// press counts only while R3 stays up, so L3 and R3 together still open the
-// pause menu and never show a dot.
+// the screen and stays where it was left, for the rest of the game. THE RED
+// DOT GOES WHEN THE DOTS ARE HIDDEN: each long press shows the white dot
+// alone, and the red one comes again only when the right stick moves or R2
+// is pulled, since most games want one finger (MMagTech, 2026-10-21, after
+// it kept coming back in WipEout 2048). The long press counts only while R3
+// stays up, so L3 and R3 together still open the pause menu and never show a
+// dot.
 
 namespace {
 // The long press, as the plan says: about half a second.
@@ -638,9 +642,11 @@ void App::showPointer(bool on, int p) {
         pointer.player = p;
         pointer.dirty = 3;
     } else {
-        // This window clears, which takes the dots off the game.
+        // This window clears, which takes the dots off the game, and the red
+        // dot is forgotten until the right stick or R2 brings it again.
         standaloneClearFrames = 30;
         pointer.dirty = 0;
+        pointer.second = false;
     }
     pointer.on = on;
     std::fprintf(stderr, "[pointer] dots %s for player %d\n", on ? "on" : "off", p + 1);

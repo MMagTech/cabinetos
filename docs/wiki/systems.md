@@ -146,9 +146,10 @@ downloads anything new into the console's shared BIOS folder.
 - **The touch screen:** hold **L3** for half a second to show two dots; hold
   it again to hide them. The **left stick** moves the white dot and **L2**
   touches with it: hold L2 and move to drag. Move the **right stick** for a
-  red dot, which **R2** touches with. While the dots show, the sticks, L2 and
-  R2 work them and every other button goes to the game. A click of L3 still
-  goes to the game.
+  red dot, which **R2** touches with; hiding the dots puts it away until you
+  move the right stick again. While the dots show, the sticks, L2 and R2 work
+  them and every other button goes to the game. A click of L3 still goes to
+  the game.
 - **What a PS TV could not do, the console cannot either:** the rear touch
   pad, tilting and the camera. A game that needs them may stop where it does.
   Sony kept those games off the PS TV.
