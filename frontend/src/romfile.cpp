@@ -389,4 +389,20 @@ bool prepare(const std::vector<uint8_t>& downloaded, const std::string& validExt
     return true;
 }
 
+std::vector<uint8_t> unzstd(const std::vector<uint8_t>& in, size_t limit) {
+    std::vector<uint8_t> out;
+    archive* a = archive_read_new();
+    archive_read_support_filter_zstd(a);
+    archive_read_support_format_raw(a);
+    archive_entry* e = nullptr;
+    if (archive_read_open_memory(a, in.data(), in.size()) == ARCHIVE_OK &&
+        archive_read_next_header(a, &e) == ARCHIVE_OK) {
+        uint8_t buf[16384];
+        for (la_ssize_t n; out.size() < limit && (n = archive_read_data(a, buf, sizeof buf)) > 0;)
+            out.insert(out.end(), buf, buf + n);
+    }
+    archive_read_free(a);
+    return out;
+}
+
 }  // namespace romfile

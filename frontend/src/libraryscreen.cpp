@@ -231,6 +231,11 @@ void LibraryScreen::moveFocus(int dx, int dy) {
         leave();
         rememberedTileSlot_ = slot_;
         row_ = 0;
+        // THE SWITCHER HAS TWO PLACES. The third or fourth tile's place, kept
+        // here, indexed pillFocus_ past its two and wrote into the grid screen
+        // beside this one, and the next grid opened crashed (A9, 2026-10-20).
+        // Past the second tile, focus goes to the nearer word, Collections.
+        slot_ = std::min(slot_, 1);
         arrive();
         return;
     }

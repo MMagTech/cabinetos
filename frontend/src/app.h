@@ -251,20 +251,6 @@ struct App {
     // The same audit with the prose and the value list, which is what turns
     // "here are 78 keys" into something a person can decide from.
     bool coreOptionsDetail = false;
-    // One core option, set from the command line, for finding out what a value
-    // actually does before writing it into catalog::optionOverrides.
-    //
-    // It exists because the alternative is a rebuild per value, and an option
-    // is exactly the kind of thing that has to be tried rather than reasoned
-    // about — `catalog::optionOverrides` already says so, and open question 7
-    // asks for Cabinet's whole per-platform table to be brought across "with a
-    // reason recorded beside each choice", which means somebody has to be able
-    // to see the difference each one makes. Two of the four overrides in that
-    // table today were found by a launch failing, not by reading.
-    //
-    // These are applied ON TOP of catalog::optionOverrides, so this can also be
-    // used to take a shipped override back off and see what it was buying.
-    std::map<std::string, std::string> cliOptionOverrides;
     const char* initialScreen = nullptr;
     int initialTile = 0;
     const char* navScript = nullptr;
@@ -960,6 +946,28 @@ struct App {
         SDL_JoystickID pad = 0;
     };
     ShortcutHold shortcutHold[players::kMax];
+    // A LONE STICK CLICK WAITS kStickPairMs BEFORE THE GAME HEARS IT
+    // (MMagTech, 2026-10-20). L3 + R3 is the pause menu (input.cpp), and the
+    // clicks used to reach the core one by one as well, so whichever landed a
+    // frame first got through as the menu opened: on the DS and the 3DS an R3
+    // tapped the touch screen, on the 3DS an L3 swapped the screens. Now a
+    // click the other one joins inside the window reaches nobody; one it does
+    // not is delivered when the window ends, and one let go inside it is
+    // delivered for a frame, then let go, so no click is lost or reordered.
+    // Two frames, about 33 ms: shipped, to reopen on a report.
+    static constexpr Uint64 kStickPairMs = 33;
+    struct StickClick {
+        bool raw = false;      // the pad's button as it is
+        bool heard = false;    // delivered to the game
+        bool paired = false;   // the other click joined it: the menu's
+        bool tapped = false;   // let go inside the window, delivered for a frame
+        Uint64 downAt = 0;
+    };
+    struct StickPair {
+        StickClick l3, r3;
+        SDL_JoystickID pad = 0;   // as ShortcutHold: another pad in the seat drops it
+    };
+    StickPair stickPair[players::kMax];
     // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
     // normal on release, the sound discarded meanwhile. About 4x, a fixed top
     // speed rather than a setting. ONLY WHERE STATES ARE (MMagTech,

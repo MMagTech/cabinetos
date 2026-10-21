@@ -180,6 +180,8 @@ jobs:
           # GameCube, added 2026-09-21. Wii comes free from the same core when
           # somebody has Wii games to try it with.
           - dolphin
+          # Nintendo 3DS, Azahar's own core (docs/PROJECT.md question 50).
+          - azahar
 
     steps:
       - name: Checkout

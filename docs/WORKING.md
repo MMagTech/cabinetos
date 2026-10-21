@@ -79,6 +79,45 @@ plain statement. Check the running machine before theorising, and say what is
 verified and what is assumed. **Use the `MMagTech` handle, never a personal
 name**: the repo is public.
 
+## Keeping the cost down
+
+The 3DS (PR #524) cost far more than any core before it, for reasons a
+session controls (MMagTech, 2026-10-20). From now on:
+
+- **Settle the choices before building.** Every decision the work needs
+  (layout, levels, controls, what plays) is put to MMagTech and answered
+  before the build session starts. A change after that is a new piece of
+  work, said as such.
+- **One fresh session per phase**: research, build, TV run, testing push,
+  each with a short brief that names the files and what done looks like. No
+  session carries a feature from start to finish.
+- **The lead session stays small.** It reads, decides, briefs and reports.
+  Past about 300,000 tokens of context it hands over to a fresh lead with a
+  written brief, between phases, when no session it started is running.
+- **TV runs read logs before pictures.** A screenshot only where only a
+  picture can answer, at the smallest scale that answers it.
+- **Research only what decides something.** A survey that will not change
+  what gets built is offered as a later card, not run.
+- **Side findings go to a card or the pull request's notes**, not into the
+  running session's work.
+- **Sonnet for mechanical pieces** (docs edits, tables, checks, watching
+  CI); Opus for code and research; Fable only when MMagTech names it.
+
+## Patches to an emulator's code
+
+MMagTech's rule of 2026-10-20, for any change to an emulator's own source (a
+patch applied in `cores/build-core.sh` or any other build script):
+
+- **Named before it is built.** The patch is put to MMagTech first, in plain
+  words: what it changes, why, and what happens without it. A condition
+  inside research does not count as naming it.
+- **Tracked on an issue.** Each patch he approves gets a CabinetOS issue that
+  links the bug or request filed upstream (filed on his go), names where the
+  patch lives in the recipe, and says what to check when the emulator's pin
+  moves: fixed upstream, so drop the patch and close the issue; or adjust
+  the patch to the new code. Every replacement in a patch is asserted, so a
+  pin move never quietly ships without it.
+
 ## The image, the build and CI
 
 How the image is built, what it carries and what CI checks on a pull

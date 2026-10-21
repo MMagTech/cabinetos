@@ -62,7 +62,7 @@ void setGameChoice(int romId, std::optional<Level> l);
 // What a game runs at: its own choice, else the console's.
 Level forGame(int romId);
 
-// Whether a level changes anything for `core` (its manifest name): the ten
+// Whether a level changes anything for `core` (its manifest name): the eleven
 // systems with a resolution to move, the DS only where its OpenGL renderer
 // can run (Core::canServeDesktopGL, #219). Only these get the pause menu's
 // row; Wii U (Cemu) has no lever without resolution packs (#207), Xbox 360 is

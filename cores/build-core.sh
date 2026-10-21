@@ -607,6 +607,48 @@ dolphin)
     ASSET_SRC=Data
     ASSETS=(Sys)
     ;;
+azahar)
+    REPO=https://github.com/azahar-emu/azahar.git
+    COMMIT=219d743a1e698101fe1ab8bef43e6563126c3c27
+    # Nintendo 3DS, the twenty-third core: Azahar's own libretro core, built
+    # from Azahar's repository with the emulator (src/citra_libretro). The
+    # old libretro/citra fork is a different core. The research and the
+    # conditions of the go are docs/PROJECT.md, open question 50.
+    #
+    # The commit is the 2126.2 release tag (2026-10-08, branch azahar-2126),
+    # which carries the backported fix for a crash on unload (#2572). The
+    # core reports the short commit as its version (GenerateBuildInfo.cmake,
+    # BUILD_FULLNAME) whenever the build cannot see a tag in the GitHub
+    # environment, which inside the container it never can.
+    #
+    # CMake, shaped like Dolphin's arm. ENABLE_LIBRETRO forces the Qt window,
+    # SDL, the web services, the scripting server, the GDB stub, OpenAL,
+    # cubeb, libusb and the multiplayer rooms off by itself (CMakeLists.txt,
+    # _LIBRETRO_INCOMPATIBLE_OPTIONS); restating them here would rot when that
+    # list changes. The target is citra_libretro; its file comes out as
+    # azahar_libretro.so, which is this arm's name, so nothing is renamed.
+    #
+    #   ENABLE_TESTS=OFF     the test executable, which nothing here runs.
+    #   ENABLE_BUILTIN_KEYBLOB=OFF
+    #                        Azahar compiles a blob of the 3DS's own keys into
+    #                        the binary unless told not to, and the project
+    #                        ships no keys (CONTRIBUTING.md, "The rules").
+    #                        Games do not need them: Azahar loads only
+    #                        decrypted games. What goes is multiplayer, amiibo
+    #                        and the eShop, none of which the console offers.
+    #   ENABLE_LTO=OFF       as Azahar's own Linux libretro release builds it
+    #                        (.github/workflows/libretro.yml), which is the
+    #                        build its players run.
+    BUILDSYS=cmake
+    CMAKE_TARGET=citra_libretro
+    CMAKEARGS=(
+        -DCMAKE_BUILD_TYPE=Release
+        -DENABLE_LIBRETRO=ON
+        -DENABLE_TESTS=OFF
+        -DENABLE_BUILTIN_KEYBLOB=OFF
+        -DENABLE_LTO=OFF
+    )
+    ;;
 *)
     echo "unknown core: $CORE" >&2
     exit 1
@@ -810,6 +852,106 @@ if [ "$CORE" = ppsspp ]; then
         exit 1
     }
     echo "patched: the core names its own CPU engine at boot"
+fi
+
+if [ "$CORE" = azahar ]; then
+    # Each replacement in these patches is literal and must match exactly
+    # once, or the build stops: a patch that matches nothing is a green build
+    # without it, with games online or every game in the first game's folders.
+    patch_once() {
+        FROM="$2" TO="$3" perl -0pi -e '
+            my $n = () = /\Q$ENV{FROM}\E/g;
+            die "matched $n times\n" unless $n == 1;
+            s/\Q$ENV{FROM}\E/$ENV{TO}/;
+        ' "$SRC/$1" || {
+            echo "azahar patch did not apply to $1; upstream shape changed" >&2
+            exit 1
+        }
+    }
+
+    # GAMES GET NO NETWORK. The emulated 3DS reaches the real network for a
+    # game: its sockets are the host's, its HTTP service makes real requests,
+    # and its Wi-Fi says connected the moment a game asks. A game's servers
+    # are addresses in the game, and the console connects only to fixed places
+    # the code chooses (CONTRIBUTING.md, "The rules"). Azahar has no switch
+    # for it, so this is the fallback docs/PROJECT.md question 50 records,
+    # until Azahar has an option of its own: the emulated 3DS has no
+    # connection. Its Wi-Fi reports none, and so that a game which never asks
+    # gets no further, every door to the host's network fails the way it does
+    # on a 3DS with no access point: a socket, a name lookup, an HTTP request,
+    # and the lookup SOC makes of the console's own address, which opens a
+    # connection to 8.8.8.8 to find it. Local play between 3DSes goes through
+    # the multiplayer rooms, which ENABLE_LIBRETRO leaves out.
+    AC=src/core/hle/service/ac/ac.cpp
+    patch_once "$AC" 'rb.Push<u32>(static_cast<u32>(Status::STATUS_INTERNET));' \
+        'rb.Push<u32>(static_cast<u32>(Status::STATUS_DISCONNECTED)); // cabinetos: no network'
+    patch_once "$AC" 'rb.Push<u32>(static_cast<u32>(WifiStatus::STATUS_CONNECTED_SLOT1));' \
+        'rb.Push<u32>(static_cast<u32>(WifiStatus::STATUS_DISCONNECTED)); // cabinetos: no network'
+    patch_once "$AC" 'ac->ac_connected = true;' \
+        'ac->ac_connected = false; // cabinetos: no network'
+    SOC=src/core/hle/service/soc/soc_u.cpp
+    patch_once "$SOC" 'u64 ret = static_cast<u64>(::socket(domain, type, protocol));' \
+        'LOG_WARNING(Service_SOC, "cabinetos: a game asked for a socket; games get no network");
+    errno = ENETDOWN;
+    u64 ret = static_cast<u64>(SOCKET_ERROR_VALUE);'
+    patch_once "$SOC" '    struct hostent* result =
+        ::gethostbyaddr(reinterpret_cast<char*>(&platform_addr), platform_addr_len, type);' \
+        '    (void)platform_addr, (void)platform_addr_len, (void)type;
+    struct hostent* result = nullptr; // cabinetos: no network
+    errno = ENETDOWN;'
+    patch_once "$SOC" 'struct hostent* result = ::gethostbyname(reinterpret_cast<char*>(host_name.data()));' \
+        'struct hostent* result = nullptr; // cabinetos: no network
+    errno = ENETDOWN;'
+    patch_once "$SOC" 'ret = getaddrinfo(node_data, service_data, &hints, &out);' \
+        'ret = EAI_FAIL; // cabinetos: no network
+        (void)hints;'
+    patch_once "$SOC" 'ret = getaddrinfo(node_data, service_data, nullptr, &out);' \
+        'ret = EAI_FAIL; // cabinetos: no network
+        (void)node_data, (void)service_data;'
+    patch_once "$SOC" 's32 ret = getnameinfo(reinterpret_cast<sockaddr*>(&sa), sa_len, host_data, hostlen, serv_data,
+                          servlen, flags);' \
+        's32 ret = EAI_FAIL; // cabinetos: no network
+    (void)sa, (void)sa_len, (void)host_data, (void)serv_data, (void)flags;'
+    patch_once "$SOC" 'std::optional<SOC_U::InterfaceInfo> SOC_U::GetDefaultInterfaceInfo() {' \
+        'std::optional<SOC_U::InterfaceInfo> SOC_U::GetDefaultInterfaceInfo() {
+    return std::nullopt; // cabinetos: no network'
+    HTTP=src/core/hle/service/http/http_c.cpp
+    patch_once "$HTTP" '    if (url_info.is_https) {
+        MakeRequestSSL(request, url_info, pending_headers);
+    } else {
+        MakeRequestNonSSL(request, url_info, pending_headers);
+    }' \
+        '    // cabinetos: no network. Ends as a request that could not connect does.
+    (void)request, (void)pending_headers;
+    LOG_WARNING(Service_HTTP, "cabinetos: a game asked for {}; games get no network", url);
+    state = RequestState::Completed;
+    FinishTransfer();'
+    echo "patched: games get no network (Wi-Fi off, sockets, lookups and HTTP refused)"
+
+    # EACH GAME SETS ITS OWN FOLDERS. Azahar's bug, not ours, tracked on
+    # #534 (reported as azahar-emu/azahar#2694); drop this patch when
+    # an Azahar release fixes SetUserPath. Every start hands the core that
+    # game's and that person's save folder, and SetUserPath
+    # (src/common/file_util.cpp) fills its table of folders with emplace,
+    # which never replaces an entry already there. The core is never really
+    # unloaded (glibc keeps a library with GNU unique symbols loaded, and
+    # Azahar has thousands), so the table outlives the game: every 3DS game
+    # after the first since the frontend started, and every person after the
+    # first, read and wrote the first game's sdmc, nand, sysdata and shader
+    # folders, and their saves went up to RomM under the first game. The
+    # table is emptied only when the folder changes: the core calls
+    # SetUserPath again, with the same folder, whenever an option changes
+    # while a game runs (the pause menu's rows), and emptying it then would
+    # free paths the running game may be reading. Nothing fills the table
+    # before it in this build (UpdateUserPath is the Qt window's alone), so
+    # nothing is lost.
+    patch_once src/common/file_util.cpp 'void SetUserPath(const std::string& path) {
+    std::string& user_path = g_paths[UserPath::UserDir];' \
+        'void SetUserPath(const std::string& path) {
+    if (path != g_paths[UserPath::UserDir])
+        g_paths.clear(); // cabinetos: each game sets its own folders
+    std::string& user_path = g_paths[UserPath::UserDir];'
+    echo "patched: each game sets its own folders (SetUserPath drops the last game's)"
 fi
 
 # platform=unix is the core's own Linux case, and on every Makefile-based core

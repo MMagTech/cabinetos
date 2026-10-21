@@ -38,7 +38,8 @@ Remote Play stream starts or ends.
 Rows appear only where they apply:
 
 - **Save state** and **Load latest state**: not on PS2, GameCube, Wii,
-  Switch, PS3, Xbox, Xbox 360 or Wii U, which have no save states.
+  Switch, PS3, Xbox, Xbox 360 or Wii U, which have no save states. A 3DS
+  state may not load after an update changes the emulator.
 - **Picture**: only on systems with picture levels, and only for the owner
   when a PIN is set.
 - **Widescreen**: only on PS2 games that have a widescreen patch.

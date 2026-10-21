@@ -1,5 +1,6 @@
 #include "catalog.h"
 #include "catalog_internal.h"
+#include "ncch.h"
 #include "players.h"
 
 #include "standalone.h"
@@ -45,6 +46,12 @@ struct Entry {
 // principles", 8 (only for something a player gets).
 const Entry kTable[] = {
     {"3do",                  nullptr,     Support::Playable, "opera",           nullptr},
+    // Nintendo 3DS in Azahar's own core (docs/PROJECT.md, open question 50).
+    // Decrypted cartridge dumps play: .3ds, .cci, .cxi and .3dsx, and the
+    // compressed .zcci, .zcxi and .z3dsx, which the core reads as they are
+    // (it reports them as its own extensions). An encrypted dump or a .cia
+    // is refused before the core sees it, with the reason (ncch.h).
+    {"3ds",                  nullptr,     Support::Playable, "azahar",          nullptr},
     // One slug, two platforms, two different cores. This is the case the
     // "never key on slug alone" rule exists for. The fsSlug here is the
     // folder's name with capitals, spaces, dashes, underscores, dots and "+"
@@ -347,6 +354,9 @@ Coverage coverageFor(const romm::Platform& p) {
     }
     return answer(lookup(p.slug, p.fsSlug));
 }
+// The one platform whose CIA games are Hidden (coverageFor, below).
+static bool hidesCias(const std::string& slug) { return slug == "3ds"; }
+
 Coverage coverageFor(const romm::Game& g) {
     Coverage c = genericArcade(g.platformSlug, g.platformFsSlug)
         ? arcadeGame(g) : answer(lookup(g.platformSlug, g.platformFsSlug));
@@ -376,8 +386,21 @@ Coverage coverageFor(const romm::Game& g) {
                 break;
         }
     }
+    // A 3DS GAME THAT IS A CIA SHOWS NOWHERE (MMagTech, 2026-10-20): Azahar
+    // plays no CIA. By the name RomM gives the game in every list
+    // (ncch::namesCia), since a list carries no file's bytes. A folder game's
+    // files are not in RomM's lists, so a folder shows, and Play starts its
+    // playable file (Azahar lists no `cia`); a folder of only CIAs, or an
+    // archive whose name hides one, is refused after its download (ncch.h).
+    if (c.support == Support::Playable && hidesCias(g.platformSlug) && !g.multiFile &&
+        ncch::namesCia(g.fsName)) {
+        c.support = Support::Hidden;
+        c.reason = "3DS CIA files can't be played";
+    }
     return c;
 }
+
+bool hidesSomeGames(const romm::Platform& p) { return hidesCias(p.slug); }
 
 const char* shortReason(Support s) {
     switch (s) {
@@ -391,6 +414,7 @@ const char* shortReason(Support s) {
         case Support::NotInstalled: return "Core not built yet";
         case Support::NeedsController: return "Needs a Wii Remote";
         case Support::UnsupportedGame: return "Not supported here";
+        case Support::Hidden: return "Not shown here";
     }
     return "Not playable here";
 }

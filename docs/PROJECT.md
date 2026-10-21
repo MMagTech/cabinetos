@@ -1,14 +1,18 @@
 # CabinetOS
 
-> **Read this file first.**
-> This is the living specification for CabinetOS. Every session working on this
-> repository should read it before touching anything else, and should update it
-> when decisions are made, phases change status, or new uncertainty appears.
+> **The record of what was decided, and why: look things up here, do not
+> read it through.** It holds every decision since the project began
+> (2026-09-13) with the research behind it, and is far too long to read
+> whole. A contributor needs CONTRIBUTING.md, docs/ARCHITECTURE.md and
+> docs/lessons/; their rules point to the section here that explains each
+> one. A session searches it for the question in hand (the Index below lists
+> them), and updates it when a decision is made, a phase changes status, or
+> new uncertainty appears.
 >
-> **Starting a session?** `docs/NEXT-SESSION.md` is the short version — what
+> **Starting a session?** `docs/NEXT-SESSION.md` is the short version: what
 > state things are in, what to pick up, and the things that waste a day if
-> nobody says them. This file is the specification and is authoritative; that
-> one is the handover. Rewrite it at the end of a session.
+> nobody says them. This file is the record; that one is the handover.
+> Rewrite it at the end of a session.
 >
 > **Cabinet, the Apple TV, iPhone and Mac app CabinetOS was ported from, is
 > retired.** Until 2026-10-19 this note called it shipping and its source
@@ -336,7 +340,18 @@ down. "Look now at" is where the code or a later decision moved on.
   an A9 test of Vulkan's frame pacing (azahar-emu/azahar#2093), and his
   legal call. With it, a touchpad as a second way to touch (the core takes
   it beside the stick, unlike melonDS, #288); gyro as a later piece of its
-  own. His server has no 3DS games.
+  own. His server has no 3DS games. **Go given the night of 2026-10-19,
+  with the conditions; built (the core's arm, the catalog row, the levels,
+  saves the PSP way, the encrypted-dump and CIA refusal, games given no
+  network by a patch), #524 ("Nintendo 3DS through Azahar's own libretro
+  core (decrypted dumps)"). On 2026-10-20: states yes, by his decision (the
+  exception to question 25), side by side, levels 1x, 3x and 6x; tested on
+  the TV with three of his games on Vulkan; CIAs hidden; conditions 4 and 5
+  met by his go for the testing image ("Build the damn thing already").
+  On the TV in 2026.10.20.5: every 3DS game after the first used the first
+  game's folders, fixed by a second patch (#534, "Azahar patch: each game
+  sets its own folders (until Azahar fixes SetUserPath)"); a toggled L3
+  swap decided, then dropped (a third patch), so L3 stays held.**
 - **51. Vectrex screen overlays, issue #224** ("Vectrex: the cartridges'
   screen overlays"). Researched 2026-10-19, not decided: Cabinet's 38 sheets
   are libretro/overlay-borders' `Game Overlay` folder, byte for byte (MIT,
@@ -13500,6 +13515,14 @@ console that has a real save system of its own.** A new emulator is checked
 against that the day it lands (PS3, Switch and the like will fail it), and
 goes on the list if it does.
 
+**The exception: the Nintendo 3DS has states, by MMagTech's decision of
+2026-10-20.** Azahar's fail the rule (a state loads only in the Azahar commit
+that made it, so an emulator update can strand them), and he chose states
+anyway, as on every other handheld here, with backwards compatibility not
+promised; a stranded one says *Couldn't load that state*. No rewind: a 3DS
+state takes 270 to 850 ms on the A9 (`catalog::rewindAllowed`). Question 50,
+"Full features".
+
 #### WHAT PEOPLE ACTUALLY WANT IS RESUME, WHICH IS A DIFFERENT FEATURE
 
 The thing a person wants on a television is not a slot. It is: turn the console
@@ -18028,7 +18051,9 @@ discussed again.
 
 ### 49. PS Vita (Vita3K), issue #198
 
-**Researched 2026-10-19; research only, no code; not decided.** The brief
+**Researched 2026-10-19; decided 2026-10-20: a go, ready to build now that
+the 3DS (#524) has merged, by the plan in "Decided, 2026-10-20: the build plan" at the
+end of this question, which supersedes the recommendations above it.** The brief
 is MMagTech's comment on #198 of the same day: five tests, a failure on any
 of the first four a plain no, the fifth his call on the numbers; then which
 games are unique, whether touch was play or navigation (Sony's PS TV list as
@@ -18250,7 +18275,7 @@ Blog and Wikipedia (the game's own manuals are encrypted, above).
   AppImage is, fetched from GitHub at build time only. 92 numbered builds in
   the last 90 days. The SDL frontend is ten days old.
 
-#### The A9 hand test (step 3 of #198), when he names a time
+#### The A9 hand test (step 3 of #198), when he names a time (superseded 2026-10-20 by the plan's hand test, below)
 
 Needs: the A9 free and him at the TV; the two Sony firmware files on RomM
 (his upload, a write to his server); a numbered Vita3K build run by hand in
@@ -18263,7 +18288,7 @@ Rush) at 1x and 2x resolution; Killzone and Skullgirls, to see whether their
 labels hold here; a close by SIGTERM (time, exit code) and a save made just
 before it; two pads with `pstv-mode` in Skullgirls; a game's own exit.
 
-#### Recommendation, 2026-10-19 (not decided)
+#### Recommendation, 2026-10-19 (not decided; superseded 2026-10-20, below)
 
 **No, for now.** None of the first four tests fails, and on the labels
 Vita3K is no further from finished than Xbox 360. But Sony's own pad rule
@@ -18566,9 +18591,177 @@ support on Vita3K/Vita3K#3707 in his voice, on his go) and wait, or have
 the console build its own pointer now, which would turn question 49 into a
 go with conditions once the hand test passes.
 
+#### Decided, 2026-10-20: the build plan
+
+**A go.** Settled with MMagTech on 2026-10-20, one choice at a time, to be
+built after the 3DS (#524, "Nintendo 3DS through Azahar's own libretro core
+(decrypted dumps)"), which merged the same day. It supersedes "Recommendation, 2026-10-19" and
+the addendum's "My view": the console builds its own pointer now instead of
+waiting on Vita3K/Vita3K#3707. Nothing was built and nothing ran on the A9
+or the VM; the one piece of new research is Sony's own description of the
+PS TV pointer, below. The full-features rule (question 50, "Full
+features") applies: states, RetroAchievements and levels
+are each answered here.
+
+##### His decisions
+
+1. **Seamless start.** Play goes straight into the game, as PS3 and Wii do:
+   Vita3K's SDL frontend only (test 2), never its Qt window, so no Vita3K,
+   Vita or PlayStation screen is ever shown. The firmware install and each
+   game's install run in the background.
+2. **The pointer is the console's own:** the addendum's virtual touch screen
+   (section 4), a uinput touch screen whose touches gamescope passes to the
+   window (`touch_click_mode` set to passthrough around a Vita game), with
+   the dots drawn by the console. No patch to Vita3K, so nothing to track.
+3. **`pstv-mode` on for every game:** each controller is its own player,
+   and L2, R2, L3 and R3 reach games that ask for the PS TV's pad
+   (`ctrl.cpp:199-219, 263-287`). It blocks nothing: Vita3K has no PS TV
+   ban list, so every game starts with it on.
+4. **Sony's PS TV layout, with two changes.** The left stick moves the dot
+   and L2 taps; L2 held is a finger kept down, so hold and move drags.
+   Moving the right stick brings a second, red dot, tapped with R2. While a
+   dot shows, both sticks, L2 and R2 work the dots and every other button
+   goes to the game. The changes: a long press of L3 (about half a second)
+   shows and hides the dots, where the PS TV used a plain L3 click behind a
+   switch in its PS button menu, so L3 stays the game's on a click; and no
+   rear pointer (Sony's R3), since a virtual touch screen reaches only the
+   front. Chosen over a right-stick-and-R3 layout matching the DS (#374,
+   "Nintendo DS: the touch screen probably does nothing; set it to the right
+   stick") and the 3DS, because Sony judged its list playable with this
+   exact pointer, a trigger taps without nudging the aim, drags come
+   naturally, and it has two fingers. The cost: the game gets neither stick
+   while a dot shows.
+5. **No touch pad.** The sticks are the one way to touch, on every
+   controller. A DualSense's touch pad would have served only the Vita (the
+   3DS is settled without one; melonDS takes one touch mode at a time,
+   `coreoptions.cpp:143-158`), on a check nobody has run (#288, "Nintendo
+   DS: a controller's touchpad as the touch screen").
+6. **Every Vita game shows, with no greying.** The Vita plays as a PS TV:
+   games Sony kept off it may stop where they need a swipe, the rear pad or
+   tilting, and nothing beyond Sony's list is promised. No maintained data
+   says which games need touch or motion: Wikipedia's PS TV column is by
+   name and mixes real needs with publisher choices, and the `param.sfo`
+   PS TV flag was not checked against it. The changelog entry says it in
+   one line.
+7. **Missing firmware follows the PS3's rule** (`installPs3Firmware`,
+   `standalone_rpcs3.cpp:99-135`): installed once per console at the first
+   Play, again only when RomM's file changes; with none on the server the
+   game does not start and the console says "No PlayStation Vita firmware
+   on your server"; a failed install says "Couldn't install the PlayStation
+   Vita firmware". Both files are needed: with the font package missing,
+   "No PlayStation Vita font package on your server". The two are told
+   apart by what Vita3K installs from each, not by their names. MMagTech
+   says both are on his server (2026-10-20; not read this session).
+8. **Levels from measurement.** Resolution candidates by `quality.cpp`'s
+   rule: 1x (960x544), 2x (1920x1088, the 1080p step), 4x (3840x2176, the
+   4K step), fixed only from the hand test's frame times and stepped down
+   where the A9 cannot hold the game's full speed. Anisotropic filtering
+   16x at every level, with no test: PCSX2 at 5x with the GPU at 99% ran
+   the same with it off (`quality.cpp:283-296`, 2026-10-04), so 8x would
+   free nothing. Shaders built in the background above Performance and when
+   first needed at it, as Dolphin's and Eden's levels do, if Vita3K at the
+   pin has the setting, and kept only if the hand test's first runs show it
+   helps. The level moves only resolution and shader building (2026-10-02).
+   FXAA, screen filters, FSR and accuracy settings stay off or as Vita3K
+   ships them. Vulkan.
+9. **No gyro,** as on the PS TV, which gave Vita games none.
+10. **No save states:** Vita3K has none, so no fast forward and no rewind,
+    as for the other separate emulators. **No RetroAchievements:** as far
+    as known it does not support the Vita; confirm against
+    RetroAchievements' docs before the build (not read this session).
+
+##### The PS TV pointer, as Sony documents it (read 2026-10-20)
+
+Read: Sony's PS TV guide (manuals.playstation.net, `pstv/game/touchpointer.html`,
+`basic/menu.html`, `basic/usecontroller.html`), its quick start guide
+(VTE-1016), and The Sixth Axis of 2013-09-09.
+
+- **A switch the player turns on:** hold the PS button and tick "Use Touch
+  Pointer in Games". Whether it starts on, and whether it is per game, is
+  not stated. It works in "some supported" games; Sony's list of them is
+  not in the guide.
+- **The buttons:** L3 shows the front pointer (as does touching a DUALSHOCK
+  4's touch pad), R3 the rear one, both together both. The left stick or
+  the touch pad moves it; L2 selects, as do Cross on a DUALSHOCK 3 and the
+  pad's button on a DUALSHOCK 4. Moving the right stick brings a second,
+  red pointer, tapped with R2. How a pointer is hidden is not described.
+  Never on the home screen or LiveArea.
+- **Nothing says how the pointer and a game's own L2, R2, L3 and R3 were
+  reconciled.** Sony's apparent answers, a player's switch and a chosen set
+  of games, are both unavailable here (no Sony menu; one rule for every
+  game), hence the long press.
+
+##### The rest, from the console's existing patterns
+
+- **Who drives the dots:** whichever player holds L3. A dot starts at the
+  screen's middle and stays where it was left. The long press counts only
+  while R3 stays up, so L3 + R3 opens the pause menu and never shows a dot.
+- **Order of work:** first, on the A9, a throwaway probe (a uinput touch
+  screen, `gamescopectl touch_click_mode 4`, a numbered Vita3K build by
+  hand) to see a touch reach Vita3K as a finger: the addendum's first two
+  unknowns. If either fails, stop and bring the patch route (the pointer
+  inside Vita3K, as Vita3K/Vita3K#3707, "PSTV 'touch pointer' function",
+  asks) to MMagTech, named, before any code; a patch would get a tracking
+  issue linked to #3707.
+- **Pin:** a numbered build from Vita3K/Vita3K-builds, its x86-64 AppImage
+  by tag and checksum, in the image as Xenia's is, fetched from GitHub at
+  image build only. Vita3K's `config.yml` written before each start (test
+  2): `discord-rich-presence: false`, `http-enable: false`,
+  `show-compile-shaders: false`, a log level, `pstv-mode: true`, the
+  level's settings, Vulkan.
+- **Download and install:** as test 3, installed with its `work.bin` into
+  the game's folder on the download worker and the zip removed after; about
+  twice the game's size free during it (Killzone: Mercenary, 3.2 GB).
+  Removing the game removes the install. The shader cache is console-wide,
+  as Xenia's is.
+- **Saves:** `ux0/user/00/savedata/<dir>` zipped to RomM per person, as
+  PSP's and Xbox 360's are, kept in the person's folder, tagged with the
+  emulator's name, `vita3k`. A real Vita's saves will not load.
+- **Quitting:** Quit closes Vita3K by SIGTERM, with a kill after a wait, as
+  for the others; a game's own exit returns Home.
+- **Offline:** an installed game plays with no server; its save goes up
+  when the server is back, as for the others.
+- **Updates and DLC:** wait on #181, "Updates and DLC as separate files in
+  RomM (Switch, PS3, Xbox 360)"; Killzone: Mercenary stays at 1.00, before
+  its PS TV update, until then.
+- **Parity:** the build session lists every feature the other separate
+  emulators have (time played, Recent, Resume, saves, the pause menu's
+  rows) from `standalone.cpp`'s table and matches each one.
+- **Upstream:** nothing to ask, since Vita3K is unchanged; a comment of
+  support on Vita3K/Vita3K#3707 only on MMagTech's go.
+- **Files:** new `frontend/src/standalone_vita3k.cpp` (the launcher) and
+  `frontend/src/vtouch.cpp` with `vtouch.h` (the virtual touch screen, its
+  own job beside `vpad.cpp`); changes to `standalone_play.cpp` (the pointer
+  mode), the overlay (the dots), `quality.cpp`, `savetable.cpp`, the
+  image's install of the AppImage beside Xenia's, `docs/ARCHITECTURE.md`,
+  `docs/wiki/changelog.md`, and `docs/LICENCES.md` (GPL-2.0).
+
+##### The A9 hand test, with MMagTech at the TV
+
+After the probe passes and the build is on the A9:
+
+- Both firmware files install without a window.
+- Three game installs, timed, with peak disk; Killzone: Mercenary is the
+  largest.
+- A game starts with nothing on screen but the game, filling the TV.
+- The pointer: Table Top Racing's main menu, and TxK's tap in play.
+- Frame times (frames.py) at 1x, 2x and 4x in Shovel Knight and in WipEout
+  2048 or Gravity Rush.
+- Stutters on a first run with the shader cache emptied, background
+  building on and off.
+- Whether Killzone: Mercenary and Skullgirls 2nd Encore play here despite
+  their reports.
+- Quit from the pause menu with a save made just before it, and the save on
+  RomM.
+- Two controllers in Skullgirls 2nd Encore.
+- A game's own exit.
+
 ### 50. Nintendo 3DS (Azahar's libretro core)
 
-**Researched 2026-10-19; research only, no code; not decided.** Asked by
+**Researched 2026-10-19; go given the same night, with the conditions
+below; built, tested on the TV, and every condition met on 2026-10-20**
+(see "The go, and the build", "The TV run" and "Conditions 4 and 5" at the
+end). Asked by
 MMagTech on the night of 2026-10-19, with no issue: should the console play
 the 3DS, and how. His four questions (a stable core, Vulkan, upscaling for
 the picture quality levels, the pointer), then the tests the Vita had
@@ -18830,6 +19023,63 @@ same scene. Switching is one option, `citra_graphics_api` (`Vulkan`,
     while the pad is clicked is a choice for the TV.
   - **Port 0 only**, as everything in this core: player 1's pad, which is
     the 3DS's one player.
+- **The touchpad elsewhere (2026-10-20).** MMagTech asked, for later and
+  blocking nothing: do other console systems and front ends use a
+  DualSense's or DualShock 4's touchpad for game controls? Read: each
+  project's source at the commit named, its issues, pull requests, release
+  notes and docs, and Valve's Steamworks pages. Nothing ran anywhere.
+  "Not found" means nothing said.
+
+| Where | What the touchpad does in games | Default | How it gets there | Source |
+|---|---|---|---|---|
+| Batocera, Knulli | A mouse. For the DS and 3DS libretro cores each player is handed the mouse that shares the pad's device path, its own touchpad, which RetroArch's udev driver also reports as the pointer (as written it passes a device path where RetroArch reads a number; read, not tested) | automatic; the core's touch mode decides (melonDS: the right stick; Azahar: mouse and pointer on) | evdev; Batocera's SDL is built without HIDAPI | batocera.linux `1af1766`: `associated_mouse_mixin.py:33-43`, `cores/azahar.py:33`, `devices/device.py:141-148`, `sdl3.mk:20`; knulli `ab3a680`: `libretroControllers.py:119-125` |
+| Lakka, ROCKNIX | One more RetroArch mouse (next row); ROCKNIX ships Azahar's touchpad setting off | nothing of their own | evdev | Lakka-v6.1 `4f70542`: `retroarch.cfg:247,287`; ROCKNIX `47b49b6`: `azahar-sa/config/AMD64/qt-config.ini:86-107` |
+| RetroArch, udev input driver | The kernel's touchpad device as an absolute mouse: one finger as pointer, mouse and lightgun over the whole screen, the click as the left button; picked by "Mouse Index", not tied to the pad's port | always, when `/dev/input` is readable | evdev | RetroArch `054ecb4`: `udev_input.c:3580-3583` |
+| RetroArch, SDL2 and SDL3 joypad drivers | The click only, as button 20; the fingers are not read. #16188 (SDL's touchpad as the pointer) closed 2026-10-02: the touchpad waits for an input rewrite, "touch as a per-device capability" | | SDL | `sdl3_joypad.c:67-74,282`; libretro/RetroArch#16188; #19369 (halves as buttons, open) |
+| RetroBat (Windows) | Azahar's bottom screen, from a DSU server the player runs (DS4Windows) | setting "TOUCH DEVICE", CEMUHOOK; the default is the mouse | DSU | emulatorlauncher `7f8dc28`: `Azahar.Controllers.cs:154-162` |
+| EmuDeck | A mouse through Steam Input (both halves absolute mouse, the clicks mouse buttons); its DS and 3DS emulators touch with the mouse | on, in the Steam shortcuts it makes | Steam Input | EmuDeck `dddb302`: `configs/steam-input/emudeck_controller_ps5.vdf:346-390` |
+| Steam Input (SteamOS, Bazzite, ChimeraOS) | The game gets an Xbox pad: no touchpad, the click is Start, unless the player binds the touchpad (mouse, buttons). Since November 2023 a PlayStation pad goes to a game's own support when it has some | per game | Steam has SDL ignore the real pads | Steamworks, "Steam Input Gamepad Emulation: Best Practices"; GamingOnLinux, 2023-11 client beta; libsdl-org/SDL#10073 (smcv) |
+| Bazzite | Nothing for games. Desktop images run Valve's ds-inhibit, which silences the touchpad's evdev device while Steam holds the pad; the Deck (game mode) images remove it | | | bazzite `4be6501`: `Containerfile:281,530,598`; ds-inhibit `ec968e7`: `ds_inhibit.py:122-153` |
+| ChimeraOS | Nothing of its own. InputPlumber runs but leaves outside pads alone; a DualSense it manages becomes a virtual one with the touchpad | not managed | | chimeraos `89b58ba`: `manifest:68`; InputPlumber `d951ef9`: `manager.rs:236` |
+| ES-DE; LaunchBox Big Box | Not found. ES-DE configures no emulator; Big Box is closed source | | | ES-DE `a529a9d`: `FAQ.md:70`; Big Box 13.24 release notes |
+| Sony PS TV | A DualShock 4's touch pad moves the Vita's touch pointer | in the games Sony allowed | | Sony's PS TV user's guide (question 49) |
+| melonDS | Nothing; touch is the mouse. Request #1881 open | | | melonDS `906e9eb`: `Screen.cpp:338-343` |
+| Azahar, its app | The bottom screen: the whole pad on the whole screen, on contact, beside the mouse | setting "Use controller touchpad", off | SDL | azahar-emu/azahar#777 (since 2125.0-rc1, 2026-03-12); `987f184`: `config.cpp:426`, `hid.cpp:285-293` |
+| Azahar, its libretro core | Never reads a pad; takes the front end's `RETRO_DEVICE_POINTER` beside the stick | | libretro | `mouse_tracker.cpp:100-185` (above) |
+| Citra, Lime3DS | The bottom screen, from a DSU server only ("CemuhookUDP" in place of the mouse) | a setting | DSU | Citra `69e758d`: `configure_motion_touch.cpp:84-87` |
+| Vita3K | The front touch screen (the whole pad), up to 8 fingers; the click swaps front and rear | always on, no setting | SDL3 | Vita3K/Vita3K#2904 (2023-09-11); `9a2d096`: `touch.cpp:70-90`, `main_window.cpp:1328-1356` |
+| PPSSPP | The click only, as a button to bind | unbound | SDL | ppsspp `5471f5f`: `SDL/SDLJoystick.cpp:161-162` |
+| Cemu | The Wii U GamePad screen (and the Wii Remote pointer), from a DSU server; SDL's touchpad events ignored. Request #838 open | on once a DSU controller is assigned | DSU only | Cemu `a53cf0e`: `DSUController.cpp:65-100`, `SDLControllerProvider.cpp:195-206` |
+| Dolphin | Inputs to bind, e.g. to the Wii Remote pointer: SDL "Touchpad X/Y", DSU "Touch", evdev "Cursor X/Y" | none bound; the evdev names match the default pointer mapping (#8473) | SDL, DSU, evdev | dolphin-emu/dolphin#13209 (2024-12-10); `cf5cb7e`: `SDLGamepad.cpp:106-121`, `WiimoteEmu.cpp:750-753` |
+| Eden (and yuzu) | The Switch touch screen, two fingers, from a DSU server; no SDL touchpad code | always read; server 127.0.0.1:26760 | DSU only | eden `989768a`: `emulated_console.cpp:24-46`, `settings.h:803-804` |
+| Ryujinx | The click as a button; touch is the mouse | | SDL2 | a 2025-03-07 mirror (the official source did not answer): `TouchScreenManager.cs:11-33` |
+
+  What it means for CabinetOS:
+  - **No system found puts a pad's touchpad on an emulated touch screen by
+    default as its own feature.** Where they use it, it is a mouse;
+    Batocera comes closest, each DS or 3DS player's own touchpad as their
+    RetroArch mouse and pointer. Two emulators take it as touch over SDL
+    (Vita3K always, Azahar's app by a setting), Cemu and Eden only from a
+    DSU server, and RetroArch left SDL's touchpad to a rewrite.
+  - **SDL reports the touchpad only through its HIDAPI driver,** which opens
+    `/dev/hidraw` to read and write; with no access SDL falls back to evdev,
+    which carries neither the touchpad nor its click (the kernel puts both
+    on a separate "Touchpad" device). SDL 3.4.16:
+    `SDL_hidapijoystick.c:510-516`, and only HIDAPI, Apple and virtual
+    drivers add a touchpad; Linux `f47d223`: `hid-playstation.c:947-973`.
+    The console keeps HIDAPI on but for the Wii (`startup.cpp:135`); #288's
+    check on the A9 is whether a DualSense opens through it.
+  - **Reading it through SDL leaves the kernel's device a pointer:** hidraw
+    gives every reader a copy (`hidraw.c:570-590`), and libinput, so
+    gamescope, takes the Touchpad device as a desktop touchpad (#509's
+    arrow). An inhibit (Valve's ds-inhibit, while a program named `steam`
+    holds the pad) or a udev rule stops it; none was found in Bazzite,
+    systemd or libinput.
+  - **An emulator of its own gets nothing here:** the console hands those
+    virtual pads that drop the touchpad, with SDL's HIDAPI off (`vpad.h`,
+    `standalone.cpp:501,540`), as Steam Input's virtual pad has none. A
+    libretro core gets it only if the console answers
+    `RETRO_DEVICE_POINTER`.
 - **L3** is the core's screen swap ("Toggle", `citra_libretro.cpp:239-270`) and the
   3DS HOME button (`:191-193`); HOME does nothing unless a HOME menu was booted
   (`core/hle/service/apt/applet_manager.cpp:1743-1753`), so for a game L3
@@ -18862,7 +19112,7 @@ same scene. Switching is one option, `citra_graphics_api` (`Vulkan`,
 | No user interaction | **passes** | Nothing to set up for a decrypted game. A game's on-screen keyboard is answered at once with the 3DS user name, `AZAHAR` (`core/frontend/applets/swkbd.cpp:149-165`, `core/hle/service/cfg/cfg_defaults.cpp:41`); the Mii picker returns a standard Mii (`mii_selector.cpp:55-57`). The core reports a refused game only through `SET_MESSAGE`, which the host does not answer, so the console must look first: read the header flag before launch and refuse an encrypted dump or a `.cia` with a plain reason, as a PS2 disc that will not run gets "Disc can't be read" (`play.cpp`, `refuseLaunch`) |
 | The cache model | **passes: one file per game, nothing installed** | The file is the game. A `.3ds` is its cartridge's size, 128 MB to 4 GB (No-Intro); RomM 5.4.0's library conversion can store it as `.zcci` instead (lossless, the server owner's choice, off by default), which the core reads as it is. Updates and DLC: a 3DS installs them as CIAs, which the core cannot. Azahar's answer is the bundle file, `.bcci`/`.bcxi`, a cartridge dump with its update and DLC CIAs in one uncompressed tar, "simulated as being installed" (Azahar PR #2369, merged 2026-10-12), in master and the 2127.0 alphas from alpha2 only. Until a stable release has it, updates wait with #181 ("Updates and DLC as separate files in RomM (Switch, PS3, Xbox 360)"). For a `.cia` download: RomM 5.4.0 can serve one as `.cci` with `?format=cci` when the server turns its converter on (`ROM_CONVERTO_ENABLED` and `download_conversion_enabled`, both off by default; decryption left out), and says so in the game's `download_formats`; the console could take that when it is offered, which needs no change on RomM |
 | Saves per person | **passes, the PSP way** | At the default "Save Data Location" (`core_settings.cpp:612`), the core keeps its whole 3DS (SD card, NAND, system data, shader cache) in `<save directory>/Azahar/` (`:1078-1110`). The console hands each person their own folder per game (`launch.cpp`, `storage::savesDir`), so that 3DS is per person and per game. Every game's save, cartridge or download, is the folder `sdmc/Nintendo 3DS/<id>/<id>/title/<high>/<low>/data/` (`archive_source_sd_savedata.cpp:22-34`, `core/hle/service/fs/archive.cpp:373-375`), and extdata beside it (`archive_extsavedata.cpp:194-196`). Since the folder holds one game, the directory save is `Azahar/sdmc/Nintendo 3DS`, zipped and sent as PSP's `PSP/SAVEDATA` is (`savetable.cpp`, `directorySaveRoot`), with a save tag of its own. The shader cache sits in the same folder, per person, and is not sent |
-| States | **none, by question 25's rule** | Azahar refuses a state made by any other git revision of itself (`core/savestate.cpp:300-305`), so every pin move would strand every state; the 3DS has real saves; Cabinet has no 3DS core. That is the rule's case exactly ("cannot be trusted to load ... on a console that has a real save system of its own"): `azahar` joins `kNoSnapshots` (`savetable.cpp`, `snapshotsAllowed`), and rewind goes with it. Rewind would not suit anyway: the core's `retro_serialize_size` makes the whole state itself (`citra_libretro.cpp:692-710`), and rewind takes one every half second (`pace.cpp`) |
+| States | **none, by question 25's rule** (superseded 2026-10-20: states on, no rewind, by his decision; "Full features" below) | Azahar refuses a state made by any other git revision of itself (`core/savestate.cpp:300-305`), so every pin move would strand every state; the 3DS has real saves; Cabinet has no 3DS core. That is the rule's case exactly ("cannot be trusted to load ... on a console that has a real save system of its own"): `azahar` joins `kNoSnapshots` (`savetable.cpp`, `snapshotsAllowed`), and rewind goes with it. Rewind would not suit anyway: the core's `retro_serialize_size` makes the whole state itself (`citra_libretro.cpp:692-710`), and rewind takes one every half second (`pace.cpp`) |
 | Playability | **his call; on the labels, ahead of the Vita and Xbox 360** | below |
 
 **Playability, counted 2026-10-19** from Azahar's list (players' reports on
@@ -19064,6 +19314,589 @@ games were found that need motion somewhere, two of them best-sellers.
 answer in the core host for the 3DS and the Game Boy Advance motion carts;
 a pad without a gyro still stops at those parts. His call, separate from
 the go.
+
+#### The go, and the build (2026-10-19, night)
+
+MMagTech gave the go with the conditions above. Built, as the research lays
+it out, with nothing redecided:
+
+- **The core:** `cores/build-core.sh`'s `azahar` arm at 2126.2
+  (`219d743a1e69`), CMake, `-DENABLE_LIBRETRO=ON -DENABLE_TESTS=OFF
+  -DENABLE_BUILTIN_KEYBLOB=OFF`, Release, and `-DENABLE_LTO=OFF` as Azahar's
+  own Linux libretro release builds it. **Condition (1) is met:** it built
+  in `cabinetos-builder` on CI on 2026-10-20 (the core workflow run by hand
+  on #524's branch, about 15 minutes), with the patch applied, the revision
+  read back as `219d743`, its 32 options as listed, and a 62 MB core that
+  needs only glibc and the C++ runtime.
+- **Games get no network, condition (2), by the recorded fallback**, a
+  patch in the arm, with no upstream option asked for yet (that waits on
+  his go). Reading the source for it found more doors than the Wi-Fi: the
+  patch reports no connection (`ac.cpp`: status, Wi-Fi status, connect),
+  and fails every call that reaches the host's network, as a 3DS with no
+  access point does: a socket, the four name lookups (`soc_u.cpp`), an HTTP
+  request (`http_c.cpp`, `MakeRequest`), and SOC's lookup of the console's
+  own address, which opens a TCP connection to 8.8.8.8 to find it
+  (`GetDefaultInterfaceInfo`). The rest of the network code is not reached
+  by the libretro build (the multiplayer rooms are off, the update-server
+  download has no caller in the core, Artic Base needs an `articbase://`
+  path).
+- **The refusal:** `frontend/src/ncch.cpp` reads the file before the core
+  does, by its bytes: an NCSD's first partition's NCCH header, a `.cxi`'s
+  own, or the same header in a Z3DS file's first zstd frame; NoCrypto clear
+  is "Encrypted 3DS games can't be played", a CIA (by its header's fixed
+  sizes, or the name a Z3DS file gives what it holds) "3DS CIA files can't
+  be played". Anything it cannot read goes to the core.
+- **One correction to the research above:** at 2126.2 the repository's
+  licence file is `license.txt`, the GPL v2's text, and the GPL v3 or later
+  files are thirteen elsewhere in `src/core` (`core.cpp` and `core.h`, which
+  the core is built from, among them), not the two libretro files named
+  above, which say GPL v2 or later. The
+  conclusion stands: the core as built is GPL v3. Both texts ship
+  (`licences/SOURCES`).
+- **Not done here:** RetroAchievements for the 3DS (not in this question);
+  the layout (the core's default, stacked, until the TV judges it); the
+  touchpad and the gyro (pieces of their own, his call).
+
+#### Full features (MMagTech, 2026-10-20)
+
+**The ruling:** a core ships only with every feature the other cores have,
+RetroAchievements where they exist for it, save states and loads included;
+no half implementation to finish later. For the 3DS this replaces the
+"States: none, by question 25's rule" row of the tests above. Researched and
+measured on 2026-10-20; nothing built. Read: this repository at #524's head
+(`5581535`); Azahar at 2126.2 (`219d743`); rcheevos as vendored (v12.5.0,
+`1433173`) and at master (`dfdc64e`, 2026-10-17); RetroAchievements' docs
+(`9de47ca`, 2026-10-18); RomM 5.4.0 (`68f7125`); libretro's core info and
+RetroArch's `core_info.h` (master, 2026-10-20); his live RomM, read-only.
+
+**Decided, 2026-10-20** (MMagTech on states and RetroAchievements; the rest
+by the 3DS work's lead session, which he left the 3DS details to, his bar
+"fits the console and is fun"):
+
+- **Save states: yes**, as on every other handheld here, on the
+  understanding that backwards compatibility is not promised: an Azahar
+  update can make older 3DS states stop loading (option (a) below). A build
+  item, planned at the end of this section.
+- **RetroAchievements: built if RetroAchievements supports the 3DS**,
+  whether or not his three games are recognised or their hashes match; his
+  own games are not a gate. Today it does not (below), so nothing is built.
+- **Controls stay as Azahar ships them:** the right stick is both the touch
+  pointer and the C-stick, R3 touches, L3 swaps the screens. No DualSense
+  touchpad piece: the stick is the one rule, as on the DS.
+- **Layout "Side by Side"** for every game.
+- **Levels `citra_resolution_factor` 1, 3, 6** (6x is the 4K step side by
+  side), stepped down only if the A9 cannot hold full speed. The layout and
+  the levels are built by the hand test's session.
+
+**What a libretro core gets on this console, and the 3DS in #524:**
+
+| Feature | Where | Who lacks it, and the code's reason | #524's 3DS |
+|---|---|---|---|
+| Save state and Load latest state (pause menu; shortcut button and R or L; F5, F8) | `pausemenu.cpp:173`, `play.cpp:371`, `input.cpp:287`, `states.cpp` | `kNoSnapshots` (`savetable.cpp:158`): PCSX2, Dolphin, the five separate emulators (question 25, true to the consoles), and `azahar` | no |
+| States on RomM: tagged, a picture beside each, three kept a game (`uploader.h`, `kStatesKept`) | `savetable.cpp`, `emulatorTag` | every core with states has a tag; `azahar` has a save tag only (`:225`) | no |
+| A state picked on the game's page; Home's Resume loading the newest | `detail.cpp:187-197`, `states.cpp:488-519` | follow `snapshotsAllowed` | no (Resume starts the game fresh) |
+| Fast forward, about 4x (shortcut and ZR) | `play.cpp:441`; `app.h:961-966`, "only where states are" | follows states | no, "No fast forward for this system" |
+| Rewind, a snapshot every half second, about 15 s | `pace.cpp:127-140`, `play.cpp:452-454`, `rewind.h` | follows states, and a core whose state size is 0 | no |
+| RetroAchievements, softcore only (no core has hardcore, #74), progress kept in states (#279) | `achievements.cpp:741-800` | a platform not in `consoleFor` (the 3DS among them); MAME 2003-Plus (`coreReadable`, no memory); a game RomM gave no `ra_hash` | no |
+| Picture levels, and the game's own Picture row | `quality.cpp:175`, `pausemenu.cpp:193` | the systems where a level changes nothing | yes: 1, 3, 5 |
+| Saves to RomM | `savetable.cpp` | none | yes, the PSP way |
+| Time played; screenshots | `launch.cpp:992`; `states.cpp` | none | yes (a 3DS screenshot not yet seen) |
+| Look and the system's own rows | `looks.cpp`, `sysopts.cpp` | every system without a look, DS and PSP among them | none, as DS and PSP |
+
+The touchpad and the gyro are not on this list: no other core has them.
+
+**The levels, read against 1, 3, 6.** `quality.cpp` builds each core's
+levels as the system's own resolution at Performance, then the first step
+at or above a 1080p TV and a 4K TV. Side by side the picture is 720x240 a
+factor; a 3840x2160 TV draws it at 5.33x, a 1920x1080 one at 2.67x, so the
+first steps at or above are 6 and 3, and 1 is the 3DS's own, as PSP, N64
+and DS are at Performance. (1, 3, 5 was the same reading for the stacked
+layout, 4.5x on a 4K TV.) Nothing else Azahar offers belongs in the levels:
+it has no anisotropic filtering (none of the 32 options in
+`cores/options/azahar.txt`; Dolphin, PPSSPP and Flycast set 16x because
+they have one), building shaders in the background is not a libretro
+option here (Dolphin's and Eden's levels use theirs), accurate shader
+multiplication is accuracy and stays at the core's value unless the A9
+shows it costs a level, and the texture filter and sampling are looks, kept
+out as Genesis's NTSC filter is (question 23). The level does not change a
+state's cost: factor 5 made and loaded one as fast as factor 1.
+
+**RetroAchievements for the 3DS: no, for three reasons, any one enough.**
+
+1. **RetroAchievements does not support the 3DS.** Its docs list it under
+   "Unsupported Consoles" (`docs/developer-docs/unsupported-emulators-and-cores.md:246`,
+   the 3DS at `:367`, the three Citra cores marked unusable: "Only exposes
+   64MB of memory", "Does not support save states") and as a rollout still
+   "Pending", with "??" sets (`docs/developer-docs/rollouts.md:81`; the Wii
+   was the last to launch, 2026-03-19, with 183). Its pages for system 62
+   answered this session with a bot check, which was not passed, so no game
+   count was read there; the API's game list needs a web API key the project
+   does not hold. His three games, hashed with rcheevos' own hasher on the
+   A9 (the decrypted path: the NCCH header with its crypto flags cleared,
+   then the ExeFS; no keys): Mario Kart 7 `d8293968fcf5ffce40fc390389e012b6`,
+   Kirby: Planet Robobot `5ab4756dd3aeb78c83077d8bb4fea1fd`, Super Smash
+   Bros. for Nintendo 3DS `da8f2f45bb575e8056c64b96f20b0769`.
+   `dorequest.php?r=gameid` answers `"GameID":0` for each: unknown.
+2. **rcheevos has no 3DS address space**, so no achievement could be read
+   or written for it: console id 62 exists (`include/rc_consoles.h:77`) and
+   a hash, but no memory regions, in v12.5.0 and at master
+   (`rc_console_memory_regions` falls to `rc_memory_regions_none`). With
+   none, `rc_libretro_memory_init` takes only `retro_get_memory_data`'s
+   system RAM (`src/rc_libretro.c:739-740`), and Azahar answers NULL there.
+3. **RomM gives a 3DS game no hash**: 5.4.0's table of RetroAchievements
+   platforms has no 3DS (`backend/adapters/services/rahasher.py:92-156`).
+   His rows 3645, 3646 and 3644: `ra_hash` empty, `ra_id` null. The console
+   knows a game only by RomM's hash (`achievements.cpp:798`); its own copy
+   of rcheevos compiles the 3DS hash out (`RC_HASH_NO_ENCRYPTED`).
+
+**The core's side is there:** Azahar sends `SET_MEMORY_MAPS` with the heap,
+the linear heaps (Old and New) and VRAM at the 3DS's own addresses
+(`citra_libretro.cpp:309-366`), once, at the end of loading (`:416`), and
+answers NULL to `retro_get_memory_data`, "Memory is exposed via
+RETRO_ENVIRONMENT_SET_MEMORY_MAPS instead" (`:740-748`). Not checked: whether
+a map taken at load covers memory a game allocates after it.
+
+**The console reaches RetroAchievements today** through rcheevos' rc_client:
+the requests rc_client builds (to retroachievements.org) go out on one
+libcurl worker (`ra_net.cpp`), and the game is found by RomM's `ra_hash`.
+**When RetroAchievements launches the 3DS:** a `{"3ds",
+RC_CONSOLE_NINTENDO_3DS}` row in `consoleFor`, rcheevos updated to the
+release that has the map, RomM adding 62 to its table (asked of RomM then,
+by the small-gaps rule; no 3DS achievements here until it ships), and the
+map checked against a running game. About five lines here. Nothing now.
+
+**Save states: what the core does, at 2126.2**
+
+- `retro_serialize_size` makes the whole state: it runs the emulation loop
+  for up to 5 s until no kernel work is pending, then `SaveStateBuffer`;
+  `retro_serialize` only copies it (`citra_libretro.cpp:692-720`).
+- The state is a 256-byte header ("CST", the title id, the build's whole git
+  commit, the time, the build's name and version) and the machine,
+  boost-serialized and packed with zstd at its default level
+  (`core/savestate.cpp:245-279`).
+- **A state from another revision:** `LoadStateBuffer` compares the
+  header's 20-byte commit with the core's own, logs "Save state file created
+  from a different revision", and returns false (`savestate.cpp:300-306`),
+  which `retro_unserialize` returns (`citra_libretro.cpp:722-738`). Seen on
+  the A9: a state with only its commit changed was refused in 1.3 ms with
+  that line. The commit is the git HEAD the core was built from
+  (`CMakeModules/GenerateBuildInfo.cmake:24`), so the arm's patch does not
+  change it and any pin move does. Azahar's own window is looser (it loads a
+  state from another commit of the same release, `savestate.cpp:52-82`), but
+  the libretro path is not, and a build of ours names no release anyway
+  ("0", set only for Azahar's CI builds of a tag,
+  `GenerateBuildInfo.cmake:40-55`).
+
+**Measured on the A9, 2026-10-20, headless:** the image's frontend with
+`--core --rom --state-test` in a bare /dev with only the GPU, dummy audio
+and a scratch home (nothing touched the TV's session), the core from run
+39362460074 through a scratch timing wrapper, Vulkan, factor 1 unless named;
+the games from the write-test RomM, all three decrypted (NoCrypto set).
+
+| Game and scene | Mode | On disk (bytes) | Raw (bytes) | Make (ms) | Load (ms) |
+|---|---|---|---|---|---|
+| Mario Kart 7, title, 25 s | Old 3DS | 9,979,259 | 170,671,683 | 270, 273 | 264, 275 |
+| Mario Kart 7, title, 25 s | New 3DS | 9,990,430 | 309,087,995 | 564, 575 | 496, 502 |
+| Mario Kart 7, title, 2 min | New 3DS | 9,982,907 | | 400, 404 | 345, 358 |
+| Kirby, 1 min, sound playing | New 3DS | 23,632,899 | | 526, 537 | 399, 417 |
+| Kirby, the same at factor 5 | New 3DS | 23,810,989 | | 488, 491 | 391, 403 |
+| Smash, 1 min | New 3DS | 20,859,561 | | 634, 853 | 578, 707 |
+
+- The copy, `retro_serialize`, 0.9 to 2.5 ms. Every round trip passed:
+  runs 2 and 3 identical in picture and sound.
+- **The time follows the raw machine**, 128 MB of FCRAM on an Old 3DS and
+  256 MB on a New 3DS, not the picture: factor 5 cost what factor 1 did. The
+  console keeps the core's New 3DS (four New-3DS-only games).
+- **On disk** the file is the core's bytes as they are (no achievement
+  progress to wrap): 10 to 24 MB, three kept a game on RomM, so up to about
+  72 MB a game a person.
+- **What a player notices:** a save stops the picture and the sound for 0.3
+  to 0.9 s on the frame thread (the work is in `retro_serialize_size`,
+  `core_memory.cpp:77`), before "Saving…" shows; a load takes 0.3 to 0.7 s
+  while the game is held anyway.
+- **Not measured:** a state in play (a race, a level); no headless run gets
+  there without a press. It will be larger on disk; its time should be
+  close, since the time tracks the raw size. The hand test's log reads the
+  size ("[state] N bytes saved locally") once states are on.
+
+**Rewind: no.** A snapshot every half second of play (`pace.cpp:127`) at
+270 to 850 ms each on the frame thread is 30 frames of play, then a stall of
+16 to 51 frames: the game would run at 37% to 65% of its speed, stopping
+twice a second. Thirty snapshots of 10 to 24 MB are 300 to 710 MB, past
+rewind's 192 MB ceiling (`rewind.h:52`), so 8 to 19 would be kept (4 to 9
+s). RetroArch offers none either: libretro's core info gives Azahar
+`savestate_features = "basic"`, which RetroArch reads as states without
+rewind (`core_info.h:33-43`). Opera and MAME 2003-Plus are "basic" there
+too, and rewind here today; following that label as a rule would take it
+from them.
+
+**The rule is MMagTech's, 2026-10-20:** the general rule in
+`catalog::rewindAllowed` (`savetable.cpp`), no rewind for an emulator whose
+save state takes longer than one frame to make (today only Azahar), was
+written by a session and put to him afterwards; he agreed, noting that it
+matches RetroArch, which offers no rewind for this core.
+
+**Fast forward:** nothing to build; it comes with states. How near 4x the
+A9 gets in play is the hand test's frame times, not measured here.
+
+**A state stranded by a pin move, as the console stands:** "Couldn't load
+that state" (`states.cpp:61-64`), the words a damaged state gets. The state
+stays on RomM and on the game's page; Home's Resume tries the newest, is
+refused, says the same, and the game starts from the beginning, until three
+new states rotate the old ones out. It says what happened, not why, and the
+player cannot tell a stranded state from a broken one. **Decided: (a)**,
+backwards compatibility not promised. The options as they were put:
+
+- (a) Leave it: every pin move loses every 3DS state on every console with
+  those words, the data loss question 25 warned of, which the ruling accepts.
+- (b) Grey them: read the commit in a 3DS state's header (bytes 12 to 31,
+  from the local copy, or a 32-byte read of RomM's) against the running
+  core's (its version, "219d743", is the commit's first seven characters,
+  so no state has to be made to know it); grey those on the game's page
+  with a short reason, and Resume passes over them. About 60 to 100 lines
+  in `states.cpp` and `detail.cpp`. Not in the plan; there if he asks.
+- (c) Never move the pin while states exist: not workable, the pin has to
+  move one day.
+
+**Faults found on the way:**
+
+1. **#524 as it stands makes a whole 3DS state at every game's start and
+   throws it away:** `play.cpp:453` calls `core.stateSize()` before it looks
+   at `session.snapshots`, and for Azahar that call is the whole save, 0.3 to
+   0.9 s on the frame thread in its first frames. From the code, not yet seen
+   in a log. Asking `session.snapshots` first fixes it in one line, states or
+   no states.
+2. **On OpenGL the state is made outside the core's context:**
+   `Core::saveState` calls `serialize_size` before its `CoreContext`
+   (`core_memory.cpp:77-83`), and `stateSize` has none (`:71-73`); Azahar
+   runs its emulation loop and its serializer in that call. Nothing changes
+   on Vulkan, where the context does nothing; it matters if the hand test
+   puts the 3DS on OpenGL. About four lines.
+3. **A failed save asks `stateSize()` again for its words**
+   (`states.cpp:79`): for Azahar a second whole state, and 0 when the core
+   gave up waiting (its 5 s limit), so the console would say "No save states
+   for this system". Not `snapshotsAllowed` instead (that would break #222's
+   words for a core with no states at all); a flag in `Core` keeping the
+   size the failed save got would spare the second state (about 6 lines),
+   and the words for a timed-out drain would still be wrong, since the core
+   answers 0 either way. Rare (a save that failed); left out of the plan.
+4. **L3 + R3 for the pause menu reaches the core first.** Each stick click
+   goes to the core on its own (`play.cpp:285-291`, by Cabinet's rule that
+   the menu pair "applies regardless of what either button is otherwise
+   bound to"); the pair is caught on the button-down events
+   (`input.cpp:388-407`, `toggleOverlay` once both are down), and the core
+   is not stepped once the menu is open. So whichever click lands a frame
+   before the other reaches Azahar: L3 first swaps the screens, on its press
+   edge, and they stay swapped (Toggle, `citra_libretro.cpp:239-270`); R3
+   first is a touch at the pointer for as long as it is held
+   (`input/mouse_tracker.cpp:193`). Only two clicks in the same frame's
+   events reach neither. The DS already has the R3 half (#374's tap); the
+   3DS adds the swap, undone by L3 once more. From the code, not tried on
+   the TV. A fix for every core would hold a lone stick click back for a
+   frame or two before the core gets it (about 20 lines in `play.cpp`, and
+   that delay on every stick click in every game); not in the plan, his
+   call.
+
+**The build: save states for the 3DS** (decided; the faults above that it
+carries are 1 and 2). All in #524's branch, about 30 lines of code:
+
+1. **States on** (`savetable.cpp`): take `"azahar"` out of `kNoSnapshots`
+   (`:158`) and rewrite the comment above it (`:154-157`, which gives the
+   old reason). Move its row from `saveTag`'s table (`:221-225`) to
+   `emulatorTag`'s (`kTags`), keeping the tag `azahar`, with the comment it
+   needs: no Cabinet app plays the 3DS, so the name is the emulator's; a
+   state loads only in the same Azahar commit (`core/savestate.cpp:300-306`),
+   so an Azahar update can strand them, accepted (this question). `saveTag`
+   answers from `emulatorTag` first, so saves keep the same tag and rows.
+   Update the doc comment of `snapshotsAllowed` in `savetable.h:350-360` if
+   it names the list. Fast forward, the pause menu's two rows, the shortcut
+   button with R or L, F5 and F8, the game page's states and Home's Resume
+   all follow `snapshotsAllowed` and `emulatorTag`; nothing else changes.
+2. **Rewind refused, its probe not run:** a `bool rewindAllowed(const char*
+   manifestCoreName)` in `savetable.h/.cpp` beside `snapshotsAllowed`: false
+   where states are not allowed, and for a short list, `{"azahar"}`, under a
+   rule stated for every core: no rewind where a state takes longer than a
+   frame, since rewind takes one every half second on the frame thread
+   (`pace.cpp:127`); Azahar's takes 270 to 850 ms on the A9 (measured
+   2026-10-20, 16 to 51 frames), and RetroArch offers none for it either
+   ("basic"). A list, because the only way to ask the core is to make a
+   state. Then `play.cpp:452-454`: decide `allowed = session.snapshots &&
+   catalog::rewindAllowed(session.core.c_str())` first and call
+   `core.stateSize()` only when it is true; `rewindAvailable` from both.
+   That is fault 1's fix as well, and the player hears the words that exist,
+   "No rewind for this system" (`play.cpp:472-475`).
+3. **The context** (fault 2, `core_memory.cpp:71-85`): `serialize_size`
+   inside `CoreContext` in `saveState` (move the call into the scope at
+   `:82-85`) and a `CoreContext` in `stateSize`. A no-op on Vulkan.
+4. **Docs:** this question's tests row "States" (superseded by this
+   section); `docs/wiki/changelog.md`'s entry under "Next", which says
+   "there are no save states" (states now, no rewind, an update can stop
+   older 3DS states loading); #524's body ("there are no save states",
+   `kNoSnapshots`); docs/ARCHITECTURE.md needs nothing new (`savetable.cpp`
+   is already named for both tags).
+5. **Checks:** the build with no new warnings in the touched files; the
+   self-tests. On the A9 with the TV, in play: a state saved (the log's
+   "[state] N bytes saved locally", then "Saved to RomM" on the write-test
+   server), Load latest state, one picked on the game's page, Home's Resume,
+   fast forward in a race, and rewind saying "No rewind for this system"
+   with no pause at the game's start.
+
+**RetroAchievements:** nothing to build until RetroAchievements supports
+the 3DS. On that day, by the decision above and whatever his games' hashes
+say: a `{"3ds", RC_CONSOLE_NINTENDO_3DS}` row in `consoleFor`
+(`achievements.cpp:741-776`); `frontend/third_party/rcheevos` updated to
+the release that carries the 3DS memory map (the same files, and its
+`VERSION` note); RomM giving 3DS games an `ra_hash` (5.4.0's
+`rahasher.py:92-156` has no 3DS; asked of RomM then, by the small-gaps
+rule); and a check on a running game that Azahar's map, sent once at load,
+covers what the set reads.
+
+#### Before the hand test: headless on the A9 (2026-10-20)
+
+His three 3DS games went on his RomM on 2026-10-20, so the library is no
+longer empty. Read from it with the Mac token, copied to the write-test
+RomM (its platform 7, `3ds`), and started there headless on the A9 with
+this branch's frontend and the CI core (run 39362460074), in a scratch
+HOME and storage root with no input devices. Nothing ran on the TV.
+
+- **All three are decrypted cartridge dumps.** Each `.7z` holds one `.3ds`
+  (an NCSD, its first NCCH 0x4000 in, NoCrypto set) and a 27-byte
+  `readme.txt`, which the unpacking writes beside it and the core never
+  sees: Mario Kart 7 (USA) (Rev 1), 634 MB to 1 GiB, `CTR-P-AMKE`; Kirby:
+  Planet Robobot (USA), 621 MB to 1 GiB, `CTR-P-AT3A`; Super Smash Bros.
+  for Nintendo 3DS (USA) (Rev 10), 1.19 GB to 2 GiB, `CTR-P-AXCE`.
+- **Each started with no dialog of the console's, on Vulkan,** at Quality
+  (5x, the A9's own level): the core made its own device, and game frames
+  ran at 60 a second (headless, paced by the clock) with 3 to 6 skipped in
+  the first ten seconds and none after. OpenGL, through
+  `--core-option citra_graphics_api=OpenGL`, started too: the core's own
+  OpenGL 4.6 context (4.3 core asked), 60 a second, the picture upright.
+  Side by side and Large Screen came out as the table above says (720x240
+  at Performance, 2400x1200 at Quality).
+- **Every start unpacks the archive again**, the first and every one after
+  ("already downloaded", then "Unpacking…" on the Play row): to the core,
+  about 12 s for Mario Kart 7, 21 s for Kirby, 37 s for Smash. The
+  download from the write-test RomM over the A9's Wi-Fi took 6 to 13 s.
+  One download of six stalled at 190 MB inside the write-test VM (its
+  rootless port forwarding stopped taking data from RomM's nginx); the
+  console said "Couldn't download this game" after 175 s and the retry
+  took 8 s. Not seen from the live server.
+- **The games' own first screens:** Mario Kart 7 opens on its message that
+  there are no Mii characters in Mii Maker, with an OK on the touch screen;
+  Smash on "Extra data will be created for this software on the SD card",
+  with an OK; Kirby on its intro film.
+- **No connection while a game plays:** no TCP, UDP or raw socket on the
+  process in 85 one-second samples across the three games (`ss`), with the
+  no-network patch in and the keys off; the core logs the HTTP certificate
+  it cannot open ("NormalKey in KeySlot 0x0D missing") and the local
+  wireless it does not start, as expected.
+- **The refusals:** a made-up header-only `.3ds` with NoCrypto clear and a
+  made-up `.cia` header on the write-test RomM were refused before the
+  core, with "Encrypted 3DS games can't be played" and "3DS CIA files can't
+  be played".
+- **Found and fixed on the branch:** the host logged "the core asked for
+  the render interface" every time a core asked, and Azahar asks on every
+  frame, 44 lines a second in the journal; now once per answer, each game.
+  And `--core-option` reached only `--core`; it now reaches a library
+  launch too, which is how the TV switches API and layout without a build.
+
+#### The TV run (2026-10-20, unattended)
+
+On the A9's own session, through `tools/ui-loop.sh`, this branch with side
+by side and the levels 1x, 3x, 6x, against the write-test RomM in a scratch
+HOME and storage root; presses by ydotool's keyboard (the frontend's player
+one) and, for the stick clicks, `tools/fake-pad.c`. MMagTech was at work;
+his Xbox pad was connected for part of it. Frame times from gamescope
+(`frames.py`, 15 to 25 s windows), repeated and skipped game frames from
+the console's own `[pace]` lines. The console was put back on its image
+after (`--restore`).
+
+| Game, scene | Level | Vulkan, first play | Vulkan, second play | OpenGL, second play |
+|---|---|---|---|---|
+| Mario Kart 7, Toad Circuit race | 6x | 59.7/s, 99th 17.75 ms, worst 112 ms, 5 over 34 ms | 60.0/s, worst 18.3 ms, none over 20 ms | 60.0/s, worst 17.8 ms, none over 20 ms |
+| | 3x | | 60.0/s, worst 18.5 ms, none over 20 ms | |
+| | 1x | | 60.0/s, worst 17.8 ms, none over 20 ms | |
+| Kirby: Planet Robobot, stage 1-1 | 6x | 58.4/s, 99th 24.3 ms, worst 118 ms, 8 over 34 ms | 60.0/s, worst 17.6 ms, none over 20 ms | |
+| | 3x | | 60.0/s, worst 18.4 ms | |
+| | 1x | | 60.0/s, worst 17.9 ms | |
+| Smash Bros., a fight | 6x | 59.7/s, 99th 24.2 ms, worst 57.8 ms, 3 over 34 ms | 59.7/s, 99th 18.9 to 20.8 ms, worst 42 to 63 ms, 3 over 34 ms | 59.6/s, 99th 19.5 ms, worst 60 ms, 4 over 34 ms (first GL fight 59.4/s, 7 over 34 ms) |
+| | 5x | | 59.8/s, 99th 19.3 ms, worst 43 ms, 3 over 34 ms | |
+| | 3x | | 59.9/s, 99th 18.5 ms, worst 40.5 ms, 2 over 34 ms | |
+| | 1x | | 59.9/s, 99th 17.7 ms, worst 38.5 ms, 2 over 34 ms | |
+
+- **6x holds full speed** in all three; Quality stays 6x. Smash's few
+  hitches are there at 1x too and the same at 5x, so they are the game's,
+  not the resolution's.
+- **Vulkan stays:** OpenGL tied it in Mario Kart 7 and was a little worse
+  in Smash (3 to 6 refreshes missed in 10 s against Vulkan's 1).
+- **azahar-emu/azahar#2093 not seen:** in play, Vulkan's 10-second windows
+  show 0 to 5 repeated or skipped game frames out of 600 and 0 to 2 missed
+  refreshes, OpenGL's the same or more.
+- **The first play's shader stutter** is real and short: 3 to 8 frames over
+  34 ms in the first 20 s of a new track, stage or fight; none on the
+  second play of the same scene (the disk shader cache, per person per
+  game).
+- **Side by side** filled the TV's width, the top screen on the left
+  (stills in the session's notes folder). **L3** swapped the screens and
+  swapped them back. **L3 + R3** pressed in the same frame opened the pause
+  menu with no swap and no tap (the fake pad presses both at once; a
+  person's two presses a frame apart are "Full features", fault 4, from the
+  code).
+- **Saves:** each game's save zip reached the write-test RomM at Exit to
+  Home (Mario Kart 7 1,585 bytes, Kirby 6,537, Smash 16,459), and Mario
+  Kart 7's came back at its next start. Every game left by the pause menu
+  without a crash (#2572).
+- **States:** made and uploaded under the tag `azahar`: 18.4 MB (a demo),
+  22.4 MB (a race), 20.6 MB (Kirby), 30.4 MB (Smash), each about 0.5 s to
+  make and about a second's hold with its 4320x1440 picture; a load 0.8 s
+  from the press, then "Press (A) to continue". Loaded by Load latest state
+  and by Home's Resume, on Vulkan and OpenGL, at every level.
+- **No connection** from the frontend in 30 one-second `ss` samples while a
+  game played.
+- **Found and fixed:** the first state load crashed the console 2 ms later
+  (radv, in `vk::present()`'s blit): Azahar rebuilds its system to load a
+  state, renderer included, and the host blitted from the image the old one
+  had handed over, while the game waited on "Press (A) to continue".
+  `Core::loadState` now has the host forget that image
+  (`vk::forgetCoreImage`).
+- **Seen, not explained:** two of sixteen loads on Vulkan at 6x showed a
+  black picture after continuing while the game ran on (the same states
+  loaded with their pictures fourteen times after, at every level and on
+  OpenGL). Both were in one run, the one where his Xbox pad connected seven
+  seconds before the first. **Looked for again the same day, not
+  reproduced in 24 more loads:** 6x and 1x; after the frontend was killed
+  in a load's "Press (A) to continue" (the run with the blacks was the
+  first after the load crash); two right after a pad connected; holds of
+  70 and 100 s (the two blacks were held 63 and 98 s, every good load 5 s
+  or less); a still taken during the hold; both together. The host's log
+  of that run matches a good run's line for line; no GPU fault in the
+  kernel's log; no Remote Play stream; Azahar's one warning after a load
+  ("Depth scale unsupported by hardware") comes in good loads too. What
+  is known: it held for the whole run, both loads and across Exit to Home
+  and a new start. Azahar's own lines below warnings are not kept
+  (`core.cpp` keeps warnings and errors), so its renderer's rebuild is not
+  in the log. Not fixed; watch for it. The notes are kept in #531 ("3DS: a
+  black picture after loading a save state (seen twice, not reproduced)"),
+  opened and closed at once on MMagTech's ask.
+- **For the test, not the console:** a `ui-loop.sh` redeploy stops the
+  session, whose reaper kills the frontend at once, so a game left that way
+  sends no save; it waits on the console and goes at that game's next exit.
+
+**3DS CIAs are hidden, not greyed (MMagTech, 2026-10-20, from his
+Discord testers):** a 3DS game that is a CIA by its name in RomM (`.cia`,
+`.zcia`, or an archive named `.cia.7z`, `.cia.zip` and the like) shows
+nowhere: not on the shelf, in Search, Recent, Continue, collections or
+favourites. Built as one answer, `catalog::Support::Hidden` from
+`catalog::coverageFor` (`ncch::namesCia`), which every list already asks
+after counting the game, so the grids' paging (#471) still counts it; the
+3DS tile is counted from its list (`catalog::hidesSomeGames`), so a server
+whose 3DS games are all CIAs gets "0 games", as a platform with none does.
+By the name, because a list carries no file's bytes. A folder game's files
+are not in RomM's lists (`files` is empty there), so a folder shows, and
+Play starts its playable file: Azahar lists no `cia` among its extensions
+at 2126.2, so a folder's CIA never outranks a `.3ds`. A folder of only CIAs,
+or an archive whose name hides one, is still refused after its download
+(`ncch.cpp`), as are encrypted dumps. Not built, measured: RomM 5.4.0's list
+takes `with_files=true`, which would let a folder of only CIAs hide too; on
+his library it adds 12% to every list (31.52 to 35.31 MB, 3.0 to 4.2 s for
+all 1,709 games), a cost on every system, so it waits on his call. **A fact
+for later, not built:** RomM 5.4.0 can serve a CIA converted to `.cci` when
+the server owner turns its converter on (`ROM_CONVERTO_ENABLED` and
+`download_conversion_enabled`, shown in a game's `download_formats`), which
+would make such a game playable; until the console asks for that, those
+games stay hidden too. Tested headless on the A9 against the write-test
+RomM with a made-up `.cia`: the 3DS shelf showed 4 of the server's 5, the
+Library tile "4 games", Search for its name left it out; his three games
+showed. The test file was deleted after.
+
+**L3 is held to swap, decided 2026-10-20 by the lead session**
+(`citra_swap_screen_mode` "Hold", `coreoptions.cpp`): with the core's
+"Toggle", the L3 that lands a frame before R3 when a player opens the pause
+menu left the screens swapped behind it; side by side a swap only trades
+the screens' sides, so holding costs nothing. Tried on the TV the same day
+in Smash's character select, the fake pad's presses overlapping as a
+person's do (`tools/fake-pad.c`'s `down:` and `up:`):
+
+- **L3 held 2 s:** swapped while held, back on release.
+- **L3 + R3 in the same frame, twice:** the pause menu, no swap.
+- **L3 33 ms before R3, twice:** the screens swapped behind the pause menu
+  and came back on Resume: a flicker, not a swap that stays.
+- **R3 33 ms before L3, twice:** nothing visible. R3 alone did nothing
+  visible either: the pointer rests at the touch screen's top-left corner,
+  which holds nothing there, and in Smash the right stick also moves the
+  game's own hand cursor (the C-stick) and no touch cursor showed, so the
+  pointer could not be put on a target. Whether a stray R3 taps was not
+  shown on the TV; by the code it does (fault 4 above).
+- **Built, his call (2026-10-20, "Yeah, I think I agree with that"):** a
+  lone stick click is held back from the core for `App::kStickPairMs`, 33
+  ms, two frames (`play.cpp`); if the other click joins it inside that, the
+  pair reaches only the pause menu, and otherwise the click is delivered, a
+  quick one for a frame, so none is lost. Every libretro core. Fault 4 is
+  fixed by it. **Checked on the TV the same day** (Mario Kart 7's results
+  screen, the same overlapping presses): L3 held still swapped the screens
+  while held; L3 33 ms ahead of R3 now opened the pause menu with no swap
+  behind it, twice (before the change it swapped every time); R3 33 ms
+  ahead and both in one frame opened it with no swap. No game on the
+  write-test RomM uses L3 outside the 3DS, so a lone click reaching another
+  system was not shown there; it is the same code for every core.
+
+#### Conditions 4 and 5: his go for the testing image (2026-10-20)
+
+MMagTech, 2026-10-20, asked about the last two conditions: "Yes, I'm fine
+with those. Build the damn thing already." So every condition is met:
+
+- **(4) Accepted:** only decrypted cartridge dumps play. Encrypted dumps
+  are refused after their download ("Encrypted 3DS games can't be
+  played"), CIAs are hidden (above), and updates and DLC do not play yet
+  (#181, "Updates and DLC as separate files in RomM (Switch, PS3, Xbox
+  360)", or Azahar's bundles in a stable release).
+- **(5) His call:** the 3DS emulator is built into the image, Azahar's own
+  libretro core at 2126.2, with the no-network patch.
+
+#### On the TV in 2026.10.20.5: the save folders, and L3 (2026-10-20, evening)
+
+- **Every 3DS game after the first used the first game's folders.**
+  Azahar's `SetUserPath` (`src/common/file_util.cpp:935` at 219d743) sets
+  each folder with `emplace`, which never replaces one already there, and
+  the core is never really unloaded: `azahar_libretro.so` has about 12,000
+  GNU unique symbols, so glibc keeps it after `dlclose`
+  (`frontend/src/core.cpp`'s `Core::unload`), and its statics outlive the
+  game ("Reinitializing logging backend" at every later start). So every
+  3DS game after the first since the frontend started, and every person
+  after the first (switching person happens inside the same frontend),
+  read and wrote the first game's sdmc, nand, sysdata and shader folders,
+  and their saves went up under the first game. Seen on the A9: Kirby's
+  save, extdata and shader cache in Mario Kart 7's folder, Kirby's own
+  folder empty, and Mario Kart 7's upload carrying them. Every other core
+  checked: only Dolphin and PPSSPP also stay loaded, and both set every
+  folder at each start (each A9 folder holds only its own game). **Fixed by
+  a second patch**, his go ("Yeah, go ahead, build it so I can get this
+  dang thing tested and pushed"): `SetUserPath` empties its table when the
+  folder changes (not when it stays the same, since the core calls it again
+  whenever an option changes during play), in `cores/build-core.sh`'s
+  azahar patch block. Tracked on #534 ("Azahar patch: each game sets its
+  own folders (until Azahar fixes SetUserPath)"), reported upstream as
+  azahar-emu/azahar#2694; dropped when an Azahar release fixes it. Kirby's
+  progress from that evening is only in Mario Kart 7's folder on the A9.
+- **A toggled L3 swap, decided and then dropped the same evening**
+  (MMagTech): Azahar keeps the toggle in a static flag in `retro_run`
+  (`citra_libretro.cpp:241` at 219d743) that outlives a game, as the
+  folder table did, so after a game ended swapped the next 3DS game's first
+  L3 press would have done nothing; fixing it needed a third patch. His
+  rule: the build carries only the patches the emulator needs to work to
+  the console's expectations (games off the internet, each game and person
+  in its own folders), and a toggled swap is not one. L3 stays held to swap
+  (`citra_swap_screen_mode` "Hold").
+
+The testing image 2026.10.21, built from a702faa with the save-folder
+patch, was played on the TV that evening (Mario Kart 7 and Kirby as him,
+then another person's games in their own folders). The frontend crashed once,
+opening the 3DS shelf after a person switch: not the 3DS. Moving up from
+the Library's fourth system wrote past the switcher's two focus animations
+into the grid screen (since c1fa0bb removed `tabChange_`), and the next
+grid opened crashed. Reproduced headless on the A9 and fixed in 500cb88;
+2026.10.21.2 is the testing image with it. He chose no TV check (the
+headless proof stands), and the merge waits on his go.
 
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 

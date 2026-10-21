@@ -120,6 +120,11 @@ const retro_hw_render_interface_vulkan* renderInterface();
 // before a core's first frame rather than an error.
 bool present();
 
+// Forget the picture the core last handed over, so present() draws nothing
+// new until the core hands over another: after a state is loaded, when a core
+// may have rebuilt its renderer and destroyed that image (Core::loadState).
+void forgetCoreImage();
+
 // The picture, in the frontend's own GL context. Zero until the first
 // successful present.
 GLuint texture();

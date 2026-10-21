@@ -156,6 +156,16 @@ public:
     // wants something other than what the core ships with.
     void setOptionOverrides(const std::map<std::string, std::string>& overrides);
 
+    // One option from the command line (`--core-option key=value`,
+    // repeatable), for finding out what a value does before it goes into
+    // catalog::optionOverrides or quality.cpp, without a rebuild per value.
+    // Laid ON TOP of every setOptionOverrides, so it reaches a library launch
+    // (`--launch <id>`, or Play on the television) as well as `--core`, wins
+    // over the picture level and the system's own rows, and can take a
+    // shipped override back off to see what it was buying. Said in the log
+    // at each launch. Before the first launch: cli.cpp, as it reads the flag.
+    static void setCommandLineOption(const std::string& key, const std::string& value);
+
     // One option changed WHILE THE GAME RUNS (the pause menu's system rows,
     // #73): kept with the overrides, and the core is told on its next
     // GET_VARIABLE_UPDATE that something changed, so it reads it again. Only

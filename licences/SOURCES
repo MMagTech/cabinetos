@@ -38,6 +38,12 @@ melonds                libretro/melonDS                    66b5d2634cd0a79030562
 drastic-freebios       libretro/melonDS                    66b5d2634cd0a79030562811e6e05f5532f800ba  freebios/drastic_bios_readme.txt#L1-24
 vecx                   libretro/libretro-vecx              8f671cc9d737f2890c3ce19e177e2984dcae121f  LICENSE.md
 mgba                   libretro/mgba                       e31759b24e7a4e3899285ff720d7b573ac328ae7  LICENSE
+# Azahar's repository carries the GPL v2 text only; some files the core is
+# built from (src/core/core.cpp among them) are GPL v3 or later, so the core
+# as built is GPL v3, whose text is taken from PCSX2's tree at its pin (the
+# same GNU text).
+azahar                 azahar-emu/azahar                   219d743a1e698101fe1ab8bef43e6563126c3c27  license.txt
+azahar-gpl3            PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  COPYING.GPLv3
 # --- the whole programs and what they carry ---
 pcsx2                  PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  COPYING.GPLv3
 pcsx2-roboto           PCSX2/pcsx2                         fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3  bin/resources/fonts/Roboto-Regular-copyright
