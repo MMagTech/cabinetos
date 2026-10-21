@@ -21,6 +21,17 @@ The system's name in a message is RomM's name for the platform.
 | *Needs X.X GB more space* | Remove downloads (Settings, Storage, Downloads) or plug in a drive. |
 | *Couldn't start this game* | Check the format against [Systems](systems.md#file-formats-in-short). A zipped Dreamcast, GameCube, Wii or Saturn disc will not start: use CHD, RVZ or ISO. |
 
+## A game crashes, freezes or looks wrong
+
+Some games do this inside their emulator, and no setting on the console
+changes it. You are brought back to Home and your save is still sent. Every
+game plays as its emulator plays it, so a game like this waits for the
+emulator to be fixed.
+
+On the PlayStation Vita, Vita3K has a known problem with some games on AMD
+graphics under Linux:
+[Vita3K/Vita3K#3099](https://github.com/Vita3K/Vita3K/issues/3099).
+
 ## The Library
 
 - **A system is missing.** Its RomM platform slug must match the
