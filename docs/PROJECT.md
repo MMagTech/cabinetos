@@ -18047,7 +18047,9 @@ discussed again.
 
 ### 49. PS Vita (Vita3K), issue #198
 
-**Researched 2026-10-19; research only, no code; not decided.** The brief
+**Researched 2026-10-19; decided 2026-10-20: a go, ready to build now that
+the 3DS (#524) has merged, by the plan in "Decided, 2026-10-20: the build plan" at the
+end of this question, which supersedes the recommendations above it.** The brief
 is MMagTech's comment on #198 of the same day: five tests, a failure on any
 of the first four a plain no, the fifth his call on the numbers; then which
 games are unique, whether touch was play or navigation (Sony's PS TV list as
@@ -18269,7 +18271,7 @@ Blog and Wikipedia (the game's own manuals are encrypted, above).
   AppImage is, fetched from GitHub at build time only. 92 numbered builds in
   the last 90 days. The SDL frontend is ten days old.
 
-#### The A9 hand test (step 3 of #198), when he names a time
+#### The A9 hand test (step 3 of #198), when he names a time (superseded 2026-10-20 by the plan's hand test, below)
 
 Needs: the A9 free and him at the TV; the two Sony firmware files on RomM
 (his upload, a write to his server); a numbered Vita3K build run by hand in
@@ -18282,7 +18284,7 @@ Rush) at 1x and 2x resolution; Killzone and Skullgirls, to see whether their
 labels hold here; a close by SIGTERM (time, exit code) and a save made just
 before it; two pads with `pstv-mode` in Skullgirls; a game's own exit.
 
-#### Recommendation, 2026-10-19 (not decided)
+#### Recommendation, 2026-10-19 (not decided; superseded 2026-10-20, below)
 
 **No, for now.** None of the first four tests fails, and on the labels
 Vita3K is no further from finished than Xbox 360. But Sony's own pad rule
@@ -18584,6 +18586,171 @@ console. **His one decision:** ask Vita3K for the pointer (a comment of
 support on Vita3K/Vita3K#3707 in his voice, on his go) and wait, or have
 the console build its own pointer now, which would turn question 49 into a
 go with conditions once the hand test passes.
+
+#### Decided, 2026-10-20: the build plan
+
+**A go.** Settled with MMagTech on 2026-10-20, one choice at a time, to be
+built after the 3DS (#524, "Nintendo 3DS through Azahar's own libretro core
+(decrypted dumps)"), which merged the same day. It supersedes "Recommendation, 2026-10-19" and
+the addendum's "My view": the console builds its own pointer now instead of
+waiting on Vita3K/Vita3K#3707. Nothing was built and nothing ran on the A9
+or the VM; the one piece of new research is Sony's own description of the
+PS TV pointer, below. The full-features rule (question 50, "Full
+features") applies: states, RetroAchievements and levels
+are each answered here.
+
+##### His decisions
+
+1. **Seamless start.** Play goes straight into the game, as PS3 and Wii do:
+   Vita3K's SDL frontend only (test 2), never its Qt window, so no Vita3K,
+   Vita or PlayStation screen is ever shown. The firmware install and each
+   game's install run in the background.
+2. **The pointer is the console's own:** the addendum's virtual touch screen
+   (section 4), a uinput touch screen whose touches gamescope passes to the
+   window (`touch_click_mode` set to passthrough around a Vita game), with
+   the dots drawn by the console. No patch to Vita3K, so nothing to track.
+3. **`pstv-mode` on for every game:** each controller is its own player,
+   and L2, R2, L3 and R3 reach games that ask for the PS TV's pad
+   (`ctrl.cpp:199-219, 263-287`). It blocks nothing: Vita3K has no PS TV
+   ban list, so every game starts with it on.
+4. **Sony's PS TV layout, with two changes.** The left stick moves the dot
+   and L2 taps; L2 held is a finger kept down, so hold and move drags.
+   Moving the right stick brings a second, red dot, tapped with R2. While a
+   dot shows, both sticks, L2 and R2 work the dots and every other button
+   goes to the game. The changes: a long press of L3 (about half a second)
+   shows and hides the dots, where the PS TV used a plain L3 click behind a
+   switch in its PS button menu, so L3 stays the game's on a click; and no
+   rear pointer (Sony's R3), since a virtual touch screen reaches only the
+   front. Chosen over a right-stick-and-R3 layout matching the DS (#374,
+   "Nintendo DS: the touch screen probably does nothing; set it to the right
+   stick") and the 3DS, because Sony judged its list playable with this
+   exact pointer, a trigger taps without nudging the aim, drags come
+   naturally, and it has two fingers. The cost: the game gets neither stick
+   while a dot shows.
+5. **No touch pad.** The sticks are the one way to touch, on every
+   controller. A DualSense's touch pad would have served only the Vita (the
+   3DS is settled without one; melonDS takes one touch mode at a time,
+   `coreoptions.cpp:143-158`), on a check nobody has run (#288, "Nintendo
+   DS: a controller's touchpad as the touch screen").
+6. **Every Vita game shows, with no greying.** The Vita plays as a PS TV:
+   games Sony kept off it may stop where they need a swipe, the rear pad or
+   tilting, and nothing beyond Sony's list is promised. No maintained data
+   says which games need touch or motion: Wikipedia's PS TV column is by
+   name and mixes real needs with publisher choices, and the `param.sfo`
+   PS TV flag was not checked against it. The changelog entry says it in
+   one line.
+7. **Missing firmware follows the PS3's rule** (`installPs3Firmware`,
+   `standalone_rpcs3.cpp:99-135`): installed once per console at the first
+   Play, again only when RomM's file changes; with none on the server the
+   game does not start and the console says "No PlayStation Vita firmware
+   on your server"; a failed install says "Couldn't install the PlayStation
+   Vita firmware". Both files are needed: with the font package missing,
+   "No PlayStation Vita font package on your server". The two are told
+   apart by what Vita3K installs from each, not by their names. MMagTech
+   says both are on his server (2026-10-20; not read this session).
+8. **Levels from measurement.** Resolution candidates by `quality.cpp`'s
+   rule: 1x (960x544), 2x (1920x1088, the 1080p step), 4x (3840x2176, the
+   4K step), fixed only from the hand test's frame times and stepped down
+   where the A9 cannot hold the game's full speed. Anisotropic filtering
+   16x at every level, with no test: PCSX2 at 5x with the GPU at 99% ran
+   the same with it off (`quality.cpp:283-296`, 2026-10-04), so 8x would
+   free nothing. Shaders built in the background above Performance and when
+   first needed at it, as Dolphin's and Eden's levels do, if Vita3K at the
+   pin has the setting, and kept only if the hand test's first runs show it
+   helps. The level moves only resolution and shader building (2026-10-02).
+   FXAA, screen filters, FSR and accuracy settings stay off or as Vita3K
+   ships them. Vulkan.
+9. **No gyro,** as on the PS TV, which gave Vita games none.
+10. **No save states:** Vita3K has none, so no fast forward and no rewind,
+    as for the other separate emulators. **No RetroAchievements:** as far
+    as known it does not support the Vita; confirm against
+    RetroAchievements' docs before the build (not read this session).
+
+##### The PS TV pointer, as Sony documents it (read 2026-10-20)
+
+Read: Sony's PS TV guide (manuals.playstation.net, `pstv/game/touchpointer.html`,
+`basic/menu.html`, `basic/usecontroller.html`), its quick start guide
+(VTE-1016), and The Sixth Axis of 2013-09-09.
+
+- **A switch the player turns on:** hold the PS button and tick "Use Touch
+  Pointer in Games". Whether it starts on, and whether it is per game, is
+  not stated. It works in "some supported" games; Sony's list of them is
+  not in the guide.
+- **The buttons:** L3 shows the front pointer (as does touching a DUALSHOCK
+  4's touch pad), R3 the rear one, both together both. The left stick or
+  the touch pad moves it; L2 selects, as do Cross on a DUALSHOCK 3 and the
+  pad's button on a DUALSHOCK 4. Moving the right stick brings a second,
+  red pointer, tapped with R2. How a pointer is hidden is not described.
+  Never on the home screen or LiveArea.
+- **Nothing says how the pointer and a game's own L2, R2, L3 and R3 were
+  reconciled.** Sony's apparent answers, a player's switch and a chosen set
+  of games, are both unavailable here (no Sony menu; one rule for every
+  game), hence the long press.
+
+##### The rest, from the console's existing patterns
+
+- **Who drives the dots:** whichever player holds L3. A dot starts at the
+  screen's middle and stays where it was left. The long press counts only
+  while R3 stays up, so L3 + R3 opens the pause menu and never shows a dot.
+- **Order of work:** first, on the A9, a throwaway probe (a uinput touch
+  screen, `gamescopectl touch_click_mode 4`, a numbered Vita3K build by
+  hand) to see a touch reach Vita3K as a finger: the addendum's first two
+  unknowns. If either fails, stop and bring the patch route (the pointer
+  inside Vita3K, as Vita3K/Vita3K#3707, "PSTV 'touch pointer' function",
+  asks) to MMagTech, named, before any code; a patch would get a tracking
+  issue linked to #3707.
+- **Pin:** a numbered build from Vita3K/Vita3K-builds, its x86-64 AppImage
+  by tag and checksum, in the image as Xenia's is, fetched from GitHub at
+  image build only. Vita3K's `config.yml` written before each start (test
+  2): `discord-rich-presence: false`, `http-enable: false`,
+  `show-compile-shaders: false`, a log level, `pstv-mode: true`, the
+  level's settings, Vulkan.
+- **Download and install:** as test 3, installed with its `work.bin` into
+  the game's folder on the download worker and the zip removed after; about
+  twice the game's size free during it (Killzone: Mercenary, 3.2 GB).
+  Removing the game removes the install. The shader cache is console-wide,
+  as Xenia's is.
+- **Saves:** `ux0/user/00/savedata/<dir>` zipped to RomM per person, as
+  PSP's and Xbox 360's are, kept in the person's folder, tagged with the
+  emulator's name, `vita3k`. A real Vita's saves will not load.
+- **Quitting:** Quit closes Vita3K by SIGTERM, with a kill after a wait, as
+  for the others; a game's own exit returns Home.
+- **Offline:** an installed game plays with no server; its save goes up
+  when the server is back, as for the others.
+- **Updates and DLC:** wait on #181, "Updates and DLC as separate files in
+  RomM (Switch, PS3, Xbox 360)"; Killzone: Mercenary stays at 1.00, before
+  its PS TV update, until then.
+- **Parity:** the build session lists every feature the other separate
+  emulators have (time played, Recent, Resume, saves, the pause menu's
+  rows) from `standalone.cpp`'s table and matches each one.
+- **Upstream:** nothing to ask, since Vita3K is unchanged; a comment of
+  support on Vita3K/Vita3K#3707 only on MMagTech's go.
+- **Files:** new `frontend/src/standalone_vita3k.cpp` (the launcher) and
+  `frontend/src/vtouch.cpp` with `vtouch.h` (the virtual touch screen, its
+  own job beside `vpad.cpp`); changes to `standalone_play.cpp` (the pointer
+  mode), the overlay (the dots), `quality.cpp`, `savetable.cpp`, the
+  image's install of the AppImage beside Xenia's, `docs/ARCHITECTURE.md`,
+  `docs/wiki/changelog.md`, and `docs/LICENCES.md` (GPL-2.0).
+
+##### The A9 hand test, with MMagTech at the TV
+
+After the probe passes and the build is on the A9:
+
+- Both firmware files install without a window.
+- Three game installs, timed, with peak disk; Killzone: Mercenary is the
+  largest.
+- A game starts with nothing on screen but the game, filling the TV.
+- The pointer: Table Top Racing's main menu, and TxK's tap in play.
+- Frame times (frames.py) at 1x, 2x and 4x in Shovel Knight and in WipEout
+  2048 or Gravity Rush.
+- Stutters on a first run with the shader cache emptied, background
+  building on and off.
+- Whether Killzone: Mercenary and Skullgirls 2nd Encore play here despite
+  their reports.
+- Quit from the pause menu with a save made just before it, and the save on
+  RomM.
+- Two controllers in Skullgirls 2nd Encore.
+- A game's own exit.
 
 ### 50. Nintendo 3DS (Azahar's libretro core)
 
