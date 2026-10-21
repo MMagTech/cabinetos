@@ -60,7 +60,10 @@ RomM: keep test launches under a minute, or have his go.
    prove the caching, then the merge on his word. Its session is "Rebuild
    only the core whose recipe changed".
 3. **Stop at an out-of-range array write, at the line that does it.**
-   Tonight's crash was a write past a two-entry array that landed
+   **Not before his weekly limit resets (Saturday 2026-10-24, about 9 PM
+   Eastern; MMagTech, 2026-10-21).** Estimated 300k to 500k Opus tokens
+   (1.2 to 2 weekly points) if no check fires; more if one does.
+   The crash of 2026-10-20 was a write past a two-entry array that landed
    silently on the grid screen next to it. Build the frontend with
    `-D_GLIBCXX_ASSERTIONS` and make the fixed arrays indexed by a value
    set at run time `std::array` (`pillFocus_` in `libraryscreen.h`,
