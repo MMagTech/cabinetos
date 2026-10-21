@@ -81,7 +81,7 @@ code cites them more than a hundred times.
 - **Non goals**.
 - **Constraints and principles**: the numbered rules CONTRIBUTING.md cites.
 - **Phase plan**: history; its status lines say so at its top.
-- **Open questions**: the 54 below, plus two unnumbered sections ("Prior
+- **Open questions**: the 55 below, plus two unnumbered sections ("Prior
   art: how Cabinet and Grout already do this", after question 13, and
   "PSP save sync, BUILT AND PROVEN 2026-09-17", after question 18).
 
@@ -367,6 +367,16 @@ down. "Look now at" is where the code or a later decision moved on.
   On / Off row in the Vectrex pause menu, kept per system like a look,
   default On, reversing the morning's "no row". The legal footing:
   decided go the same night; #224 is buildable as written.
+- **52. Genie Mode: cheats, opt-in per person.** MMagTech's brief of
+  2026-10-20, discussed 2026-10-20 and 2026-10-21, no issue. **Paused by
+  him, not decided whether to build; not to be raised until he raises it.**
+  If it goes ahead: per person; cheats chosen before launch only, never
+  mid-game, and remembered per person and game; what a cheat changed can
+  stay in saves and states; no achievements in a play with a cheat on.
+  Open: where on the game page cheats are chosen (no new row, no more icons
+  by the title), the Settings row, the cup's look while off, marking states
+  made with cheats, and the phase order (he leans toward codes through the
+  core first).
 
 ---
 
@@ -20507,3 +20517,229 @@ sheets ships them this way and none has been asked to stop that I could
 find; and the alternative is no sheets, since no cleaner set exists.
 Yes means #224 is buildable as written. No means #224 closes with the reason
 recorded here.
+
+### 52. Genie Mode: cheats, opt-in per person
+
+**Discussed 2026-10-20 and 2026-10-21 with MMagTech; paused by him, not
+decided whether to build.** His words at the pause: the feature "is only
+being discussed for possible further implementation", it "needs to be not
+thought of again until I bring it up, but we can't forget the discussion we've
+already had". When he raises it, he will either continue it or scratch it.
+Nothing was built, nothing ran on the A9, and there is no issue. Every
+decision below holds only if Genie Mode goes ahead.
+
+#### The brief, as he gave it (2026-10-20)
+
+His brief, "Genie Mode Phase One Brief", is not in the repository; this is
+its substance. It cites his survey of the cheat files (a `cht_survey.py`
+output), which was not read in this discussion.
+
+- **The feature:** an opt-in cheat feature for every system, framed on the
+  Game Genie. Hard rules, in order: (1) off by default, and while off nothing
+  about cheats appears anywhere; (2) when on, the only change is one entry in
+  the in-game menu, the launch flow never changes and no cheat list is shown
+  unprompted; (3) cheats apply live where the core allows, with a restart
+  offered when one does not take; (4) saves and states are unaffected, a
+  state made with cheats on loading fine with them off; (5) RetroAchievements
+  off whenever any cheat is active; (6) the cheat database a read-only SQLite
+  file compiled at image build and replaced each release, never fetched at
+  run time; (7) each person's enabled cheats kept with their other per-game
+  data, keyed by system, normalised game name and cheat description, to
+  survive database refreshes and cache eviction.
+- **The roadmap, a draft he has not settled** ("treat it as context and don't
+  lock any of it in"): a build-time compiler that clones libretro-database
+  and parses every `.cht` file line by line against the survey's faults
+  (unclosed quotes, wrong `cheats = N` counts, entries without a code, empty
+  separators, HTML entities, non-UTF-8, CRLF, stray keys, `.xml` files, `??`
+  and `XX` placeholders), ignoring the enabled-by-default flag; matching by
+  name (system plus title without region, version and device tags,
+  preferring a region match); a filter pipeline (one file per game; hide and
+  auto-apply master codes; hide `[Off]` entries, section headers and rumble
+  files; merge multi-part entries; dedupe and show player 1 only; fold
+  numbered quantities into an infinite entry or a value picker; sections and
+  numbered runs as pickers under "more codes"); a default view of at most
+  eight rows, ideally six, from an allowlist in priority order (lives,
+  health, invincibility, level select, time, ammo, unlock all, one hit kill,
+  debug, movement, money, with synonyms and German descriptions), a
+  blocklist (computer, enemy, player 2 and away-team handicaps, modifiers,
+  button activators, Wi-Fi, anti-piracy and region bypasses, frame-rate and
+  PAL fixes), the first six unblocked entries for the fifth of files that
+  match nothing, and a slur filter; two backends behind one interface, code
+  strings to the core through `retro_cheat_set` (about 1.2 million entries)
+  and RAM edits by an engine the console owns (about 21,600 entries); and a
+  per-core support matrix (RetroArch's cores; PSP through PPSSPP's own cheat
+  file).
+- **Phase one as written:** the RAM-edit engine only, proven on Flycast with
+  one Dreamcast cheat from the database: RetroArch's RAM view from the core's
+  memory descriptors, falling back to `retro_get_memory_data`; each active
+  cheat applied every frame at `memory_search_size` 3, 4 or 5 (8, 16, 32
+  bits) honouring `big_endian` and `address_bit_position`; `cheat_type` 1
+  built, types 4 to 6 and the `repeat_*` fields recognised and left as TODO;
+  one interface taking a normalised cheat with a handler (0 the core, 1 the
+  RAM engine), the code path stubbed; a report on whether Flycast's mapping
+  carries to Stella, FBNeo and the MSX cores. A couple of hundred lines plus
+  tests, no dependencies.
+
+#### Decided in the discussion (if it goes ahead)
+
+1. **The name stays Genie Mode.** "Cheats" was put to him as plainer, the
+   usual word, and free of the Game Genie trademark; he kept Genie Mode:
+   "most everyone knows that a genie grants you three wishes and they're
+   usually obnoxious ones". The screen never says "Game Genie" (the brief's
+   rule 2 wording).
+2. **Per person, a hard requirement** ("if it goes ahead at all"), as
+   RetroAchievements is.
+3. **Cheats are chosen before launch only, never changed mid-game.** His
+   reason: that is how it worked on the systems; codes went in before the
+   game, and changing them meant switching off and going back to the code
+   screen. This replaces the brief's rule 2 (an entry in the in-game menu,
+   the launch flow unchanged) and removes rule 3: codes are in from the
+   first frame, so codes that act at the start of a game and cores that read
+   codes only at load both work, and there is no "does not take" to detect
+   or restart for. Nothing goes in the pause menu.
+4. **The chosen cheats are remembered per person and per game**, so Play,
+   Home's Resume and Recent all start the game with the same cheats; they
+   change only where they are chosen. Fresh each time was the alternative:
+   Resume and Recent skip the game page and would have dropped the cheats a
+   state was played with.
+5. **Rule 4 reworded:** the cheat list is never stored in a save or state;
+   what a cheat changed in the game can be. A RAM cheat writes memory every
+   frame, so a state taken with 99 lives keeps 99 with Genie Mode off, and a
+   game that saves its money while a money cheat is on keeps the money in its
+   save, which goes to RomM for that person. His words: "if that's a by
+   product of the feature we'd have to live with it." Per person keeps it
+   within that person's saves.
+6. **Achievements, his rules (2026-10-21):** a play started with any cheat
+   on checks no achievements; with Genie Mode on but no cheat on for that
+   game, achievements are as normal; Genie Mode never changes the
+   RetroAchievements setting itself, so turning it off restores nothing.
+   The cup on the game page shows when achievements are off for a game; how
+   it looks is open (below).
+7. **The cheat files' licence is no obstacle.** libretro-database is CC
+   BY-SA 4.0 (GitHub's reading of its licence file): a database compiled
+   from it ships with credit, a note that it was changed, and the same
+   licence, as one entry in docs/LICENCES.md.
+
+#### Open when he raises it
+
+- **Where a person chooses the cheats.** A third row on the game page under
+  Play and Download was proposed and rejected: the page's layout was worked
+  on at length, and the cup was chosen over a third row on 2026-10-06
+  because the row pushed Continue from to the foot of the screen
+  (`detailscreen.h`, the `Achievements` struct). A mark beside the heart and
+  the cup was then proposed (a lamp, lit while a cheat is on, absent for a
+  game with no codes as the cup is); he would rather not keep adding icons
+  to the title's corner. Unanswered. The one other place named was Play
+  opening a code screen before every game, like the cartridge at power-on,
+  set against for the extra press on every game and because Resume and
+  Recent skip it.
+- **Turning it on.** Proposed, not confirmed: a row in Settings in the
+  person's own section beside RetroAchievements (`settingsflow.cpp`), named
+  Genie Mode with "Cheats for your games" in grey under it, off by default;
+  the one trace of the feature while it is off, as RetroAchievements' row
+  is. Turned off, the person's choices are kept for when it is turned on
+  again (an assumption, not discussed).
+- **The cup's look while achievements are off.** He asked for the cup to
+  show it and questioned whether grey is the best look. The cup already has
+  three looks, outlined with none earned, filled with some, gold with all,
+  and is dimmer at rest than focused (`detailscreen.cpp`), so a grey cup
+  would read as either. Proposed: a diagonal line through it, the usual
+  "off" sign, over whichever look it has. Hiding it would read as "this game
+  has no achievements". To judge on the TV.
+- **States made with cheats on (his question: how would the console know?).**
+  Proposed: the console writes every state itself, and already wraps one in
+  RetroArch's block layout when it has achievement progress (`statefile.h`:
+  "MEM " for the core, "ACHV" for the progress); one more block marks a
+  state made with any cheat on. Loading a marked state, from the pause menu,
+  a Continue from card or Home's Resume, turns achievements off for the rest
+  of that play. To check before relying on it: that RetroArch's loader skips
+  a block it does not know, so these states still load there. A game's own
+  saves (battery saves, memory cards) are not tracked: the save is rewritten
+  each time, so a mark would block achievements on it for good. Asked, not
+  answered.
+- **The phase order.** He leans toward the code path first: it carries
+  about 1.2 million of the entries and the Game Genie's own systems (NES,
+  SNES, Genesis, Game Boy), and proving it is small (below); the RAM engine
+  second. Not settled.
+- **Not yet discussed:** which systems get cheats (the brief's matrix is
+  RetroArch's cores; the console ships one core per system, its catalog has
+  Flycast, Stella, FBNeo, MAME 2003-Plus and PPSSPP and no MSX core was
+  found, and the separate emulators get nothing from either backend, except
+  perhaps those that read cheat files when a game starts, PPSSPP as the
+  brief says and possibly PCSX2, unchecked); cheat kinds the brief leaves
+  out (1, 2 and 4 bit sizes, and types 2, 3 and 7, from memory of
+  RetroArch's format, unchecked against the survey); "three wishes", up to
+  three cheats on per game, an idea only.
+
+#### Research, 2026-10-20 and 2026-10-21
+
+**Proving one NES Game Genie code.** The NES core is fceumm (`catalog.cpp`),
+pinned at `236ccdf` (`cores/build-core.sh`). Read at that commit
+(`src/drivers/libretro/libretro.c`, `src/cheat.c`):
+
+- `retro_cheat_set` takes Game Genie codes (6 or 8 letters), Pro Action
+  Replay (8 characters), and raw `xxxx:xx` and `xxxx?cc:vv`, several in one
+  string split on `+ , ; . _` and space. It returns nothing; a bad code is
+  logged at debug level only. It ignores its `enabled` argument, so a code
+  passed as disabled is still added: the only way to turn one off is
+  `retro_cheat_reset`, which clears every cheat, then sending the ones still
+  on (RetroArch rebuilds its list the same way, from memory).
+- A Game Genie code, and a raw code at 0x0100 and above, is a read hook: the
+  CPU's read of that address returns the new value, from the next read, with
+  no reset. A raw code below 0x0100 is a RAM write made at the start of every
+  frame. Cheats are not in the state data, survive a state load and a reset,
+  and are capped at 256.
+- A fault: one entry mixing a raw zero-page code before a Game Genie code
+  turns the Game Genie part into a RAM write (the type is not reset between
+  parts).
+- `retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)` is the 2 KB of work RAM,
+  and the core sends a memory map.
+
+So the proof is about 40 lines: load `retro_cheat_reset` and
+`retro_cheat_set` with the other calls (`core.cpp`; `libretro.h` declares
+them, nothing loads them yet), one method that clears and sends the codes
+that are on, after the game loads (`Core::loadGame`), a test flag on the
+`--core <core> <rom>` path as `--core-option` is, and a log line. The real
+proof is on the TV: "Infinite Lives", `SXIOPO` (libretro-database's
+`Super Mario Bros. (World) (Game Genie).cht`), lives held after a death. A
+headless run can only check a raw code read back from RAM, such as
+`075A:08`, since a Game Genie code changes cartridge reads, not memory, and
+with no controller the game never leaves its title screen; like
+`--state-test` it needs a core and a game, so it runs on the A9 and not in
+CI.
+
+**Matching a game to its cheat file**, his RomM read with the Mac's token
+against libretro-database at `12c21cf` (No-Intro lists for the cartridges,
+Redump's for the Dreamcast):
+
+| | Games | By hash | Hash, then a cheat file by exact name | By name alone | Name matches more than one file |
+|---|---|---|---|---|---|
+| NES | 97 | 94 | 81 | 97 | 88 |
+| SNES | 96 | 92 | 77 | 95 | 92 |
+| Genesis | 49 | 45 | 35 | 43 | 42 |
+| Dreamcast | 29 | 0 | 0 | 19 | 3 |
+
+- RomM's hash of a `.zip` or `.7z` is the ROM inside it, and for NES the
+  whole file with its 16-byte header, which No-Intro's list also carries. So
+  a hash finds the exact release: `Super Mario Bros.zip` is "Super Mario
+  Bros. (World)".
+- From hash to file the gap is names: cheat files write "&" as "_", and some
+  lack tags such as "(Rev 1)" or "(En)"; a build step that normalises both
+  sides the same way closes most of it.
+- A name alone rarely picks one file: other regions, and separate
+  "(Game Genie)", "(Action Replay)" and "(Rumbles)" files. Super Mario Bros.
+  matches five by name; its main file holds 725 entries, mostly raw codes,
+  and its Game Genie file 7 hand-picked ones, a possible default list for a
+  feature named after the Game Genie.
+- The Dreamcast games are CHDs, and Redump lists track hashes, so they match
+  by name only: 19 of 29, and 10 (Ikaruga and Bangai-O among them) not at
+  all.
+- Proposed if it goes ahead: hash first, then name, as the Vectrex sheets
+  are matched (RomM's md5, then the longest name token, `vectrexsheets.cpp`).
+
+**Already in the console, for a RAM engine:** the core's memory map is kept
+for achievements (`core_memory.cpp`, `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`),
+though RetroArch's cheat addresses count from the start of the core's system
+RAM blocks laid end to end (from memory), not as rcheevos' addresses do; and
+the per-frame hook, `Core::setAfterFrame`, holds one function, which
+achievements use (`pace.cpp`), so an engine would have to share it.
