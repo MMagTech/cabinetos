@@ -59,16 +59,23 @@ and **A** steps through it.
 
 The Home (Guide) button is never passed to a game.
 
-## On three systems
+## On four systems
 
 | System | Button | Does |
 |---|---|---|
 | Nintendo DS | Right stick, **R3** | The right stick moves a pointer on the touch screen; **R3** (press the stick) touches |
 | Nintendo 3DS | Right stick, **R3**, **L3** | The right stick moves a pointer on the touch screen, and is the C-stick too; **R3** touches; hold **L3** to swap the two screens |
 | PlayStation (PS1) | **L1 + R1 + Select** | The DualShock's ANALOG button, for the few games that need it pressed |
+| PlayStation Vita | Hold **L3**, the sticks, **L2**, **R2** | Hold L3 for half a second to show two dots on the touch screen, and again to hide them. With them showing, the left stick moves the white dot and **L2** touches with it (hold to drag); the right stick brings a red dot that **R2** touches with. A quick click of L3 is still the game's |
 
 PS1 games get a DualShock: sticks and rumble work in the games made
 for it, and games made for the original pad play as they always did.
+
+Vita games play as on a PlayStation TV: the face buttons by position (the
+bottom one is Cross), **L1** and **R1** the Vita's L and R, and each
+controller its own player. **L2**, **R2**, **L3** and **R3** reach only games
+made for the PS TV. While the dots show, the sticks, L2 and R2 work them and
+every other button still goes to the game.
 
 ## In-game shortcuts
 
@@ -89,7 +96,7 @@ use them, and L3+R3 is the pause menu.
 | Hold it + **X** (left face button) | Screenshot, also with the pause menu open |
 
 State, rewind, fast forward and screenshot shortcuts work in the built-in
-emulators (3DS: no rewind). In Switch, PS3, Xbox, Xbox 360 and Wii U games only the tap works;
+emulators (3DS: no rewind). In Switch, PS3, Xbox, Xbox 360, Wii U and PS Vita games only the tap works;
 use the pause menu for the rest.
 
 ## The on-screen keyboard
