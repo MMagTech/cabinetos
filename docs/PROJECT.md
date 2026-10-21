@@ -19717,7 +19717,8 @@ with those. Build the damn thing already." So every condition is met:
   in its own folders), and a toggled swap is not one. L3 stays held to swap
   (`citra_swap_screen_mode` "Hold").
 
-Next: the testing image, judged on the TV, then the merge on his go.
+Next: the testing image 2026.10.21, built from a702faa with the save-folder
+patch, judged on the TV, then the merge on his go.
 
 ### 51. Vectrex screen overlays: where the sheets come from, and their rights, issue #224
 

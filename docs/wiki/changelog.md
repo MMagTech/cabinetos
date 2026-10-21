@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## 2026.10.20.5 {#v2026-10-20-5}
+## 2026.10.21 {#v2026-10-21}
 
 *20 October 2026*
 
