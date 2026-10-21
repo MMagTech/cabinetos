@@ -6,6 +6,7 @@
 
 #include "core.h"
 #include "core_state.h"
+#include "vkhost.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -68,19 +69,24 @@ std::optional<bool> environmentMemory(unsigned cmd, void* data) {
 
 using namespace corestate;
 
+// IN THE CORE'S OWN CONTEXT, the size as well as the state: Azahar makes the
+// whole state inside retro_serialize_size, its emulation loop and all, so on
+// OpenGL that call needs the core's context current as retro_serialize does.
 size_t Core::stateSize() const {
-    return (gameLoaded_ && g.serialize_size) ? g.serialize_size() : 0;
+    if (!gameLoaded_ || !g.serialize_size) return 0;
+    CoreContext in;
+    return g.serialize_size();
 }
 
 bool Core::saveState(std::vector<uint8_t>& out) {
     if (!gameLoaded_ || !g.serialize_size || !g.serialize) return false;
-    const size_t n = g.serialize_size();
-    if (n == 0) return false;  // some cores genuinely cannot; that is not an error
-    out.resize(n);
     const uint64_t soundBefore = gAudioFrames;
     bool saved;
     {
         CoreContext in;
+        const size_t n = g.serialize_size();
+        if (n == 0) return false;  // some cores genuinely cannot; that is not an error
+        out.resize(n);
         saved = g.serialize(out.data(), n);
     }
     // A SAVE THAT MADE SOUND RAN THE GAME (#254). Mupen64Plus-Next runs the
@@ -135,8 +141,20 @@ bool Core::writeSaveRam(const std::vector<uint8_t>& data) {
 
 bool Core::loadState(const std::vector<uint8_t>& data) {
     if (!gameLoaded_ || !g.unserialize || data.empty()) return false;
-    CoreContext in;
-    return g.unserialize(data.data(), data.size());
+    bool loaded;
+    {
+        CoreContext in;
+        loaded = g.unserialize(data.data(), data.size());
+    }
+    // A VULKAN CORE MAY REBUILD ITS RENDERER TO LOAD A STATE, and Azahar does:
+    // the image it last handed over is destroyed, and the next present()
+    // blitted from it and crashed the console 2 ms after the load (A9,
+    // 2026-10-20, radv in vkCmdBlitImage). The frame loop presents while the
+    // game is held on "Press (A) to continue", before the core runs again. So
+    // the image is forgotten here: the picture on screen stays until the core
+    // hands over its next one, which every Vulkan core here does each frame.
+    if (gHWVulkan) vk::forgetCoreImage();
+    return loaded;
 }
 
 bool Core::saveRAM(std::vector<uint8_t>& out) const {

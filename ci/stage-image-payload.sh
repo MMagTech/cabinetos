@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Assemble everything the image has to carry that is not in this repository:
-# the frontend and the Wii bridge, the 22 libretro cores and PCSX2, the system
+# the frontend and the Wii bridge, the 23 libretro cores and PCSX2, the system
 # files that ship with emulators rather than coming off RomM, Cemu and
 # Sunshine.
 #
@@ -40,7 +40,7 @@
 #
 #   bin/cabinetos-frontend
 #   bin/cabinetos-wii-bridge      the Wii Remotes' bridge (#200, wiibridge/)
-#   cores/<core>_libretro.so      x22
+#   cores/<core>_libretro.so      x23
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
 #   system/dolphin-emu/Sys/...    Dolphin's game settings and Wii files
 #   cemu/{bin,share/Cemu}/...     Wii U's emulator, its game profiles and resources
@@ -86,10 +86,11 @@ mapfile -t CORE_NAMES < <(grep -oE '^[a-z0-9_]+\)' "$ROOT/cores/build-core.sh" |
 # Cross-check on the line above, not a second copy of the list. If somebody
 # reshapes that case statement, this says so instead of quietly shipping an
 # image with nineteen emulators in it.
-# 22 since 2026-09-21, when GameCube was pinned. This number is not decoration:
+# 23 since the 3DS was pinned (docs/PROJECT.md question 50); 22 from
+# 2026-09-21, when GameCube was. This number is not decoration:
 # it catches a core silently vanishing from build-core.sh's case arms, which is
 # where the list is READ from rather than repeated.
-EXPECTED=22
+EXPECTED=23
 if [ "${#CORE_NAMES[@]}" -ne "$EXPECTED" ]; then
     echo "expected $EXPECTED cores in cores/build-core.sh, found ${#CORE_NAMES[@]}" >&2
     printf '  %s\n' "${CORE_NAMES[@]}" >&2
@@ -131,7 +132,7 @@ done
 # the frontend looks the file
 # up by this name, and when it does not find one it reports the platform as
 # "the core for this system is not built on this console yet". A wrong name
-# here is twenty-two working emulators the console says it does not have.
+# here is twenty-three working emulators the console says it does not have.
 missing=()
 for core in "${CORE_NAMES[@]}"; do
     so="${core%_libretro}_libretro.so"
@@ -158,7 +159,7 @@ for sets in fbneo_libretro.sets mame2003_plus_libretro.sets; do
     install -m 0644 "$CORES/$sets" "$OUT/cores/$sets"
 done
 
-# Anything in the source directory that is NOT one of the twenty-two. Not an
+# Anything in the source directory that is NOT one of the twenty-three. Not an
 # error — a stale .so from a rename would be — but it does not go in the image,
 # and saying so beats it vanishing silently.
 for f in "$CORES"/*.so; do

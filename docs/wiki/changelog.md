@@ -4,6 +4,24 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.21.2 {#v2026-10-21-2}
+
+*20 October 2026*
+
+- **New:** the Nintendo 3DS. Decrypted cartridge dumps play, the two
+  screens side by side on the TV; the right stick moves a pointer on the
+  touch screen, R3 taps, and holding L3 swaps the screens. Encrypted dumps
+  do not play, and say so on the game's page; `.cia` files do not show on
+  the console. Updates and DLC do not play yet. Games get no internet. Saves
+  sync with your server; save states and fast forward work, rewind does not,
+  and a 3DS state may not load after an update changes the emulator.
+- **Fixed:** pressing both sticks for the pause menu no longer sends a stray
+  stick click to the game.
+- **Fixed:** in the Library, moving up from the third or fourth system to
+  Systems and Collections showed no focus, and opening a system or
+  collection after moving up from the fourth closed the console's screen and
+  started it again. Focus lands on Collections now, and the grid opens.
+
 ## 2026.10.20.4 {#v2026-10-20-4}
 
 *20 October 2026*

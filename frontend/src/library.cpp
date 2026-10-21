@@ -308,12 +308,27 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
         // THE COUNT COMES OFF THE PLATFORM, which is the finding that made all
         // of this cheap: it was there the whole time, and boot was fetching
         // sixteen hundred games to draw a number the server had already sent.
+        //
+        // EXCEPT WHERE SOME OF A PLATFORM'S GAMES ARE HIDDEN (the 3DS's CIAs,
+        // catalog::hidesSomeGames), which RomM's count includes: that
+        // platform's list is fetched and what shows is counted, so a server
+        // whose 3DS games are all CIAs gets "0 games", as a platform with
+        // none does. One request, only for such a platform.
+        int shown = p.romCount;
+        if (catalog::hidesSomeGames(p) && shown > 0) {
+            std::vector<romm::Game> games;
+            std::string gerr;
+            if (client.fetchGames(p.id, &games, &gerr)) {
+                shown = 0;
+                for (const auto& g : games)
+                    if (catalog::coverageFor(g).support != catalog::Support::Hidden) ++shown;
+            }
+        }
         char count[48];
-        std::snprintf(count, sizeof count, "%d game%s", p.romCount,
-                      p.romCount == 1 ? "" : "s");
+        std::snprintf(count, sizeof count, "%d game%s", shown, shown == 1 ? "" : "s");
         tile.detail = qualifier.empty() ? std::string(count)
                                         : qualifier + "  \xC2\xB7  " + count;
-        lib.tileCache[p.id] = covercache::Tile{"", p.updatedAt, p.romCount};
+        lib.tileCache[p.id] = covercache::Tile{"", p.updatedAt, shown};
         // `tile.cover` is deliberately left empty. It used to be the first
         // cover among the platform's games, which cost a fetch per platform —
         // 1.55 s of a 1.8 s boot, measured against the reference server. The

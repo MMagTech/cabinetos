@@ -136,4 +136,11 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
 // Whether `fileName`'s extension is one the core lists ("bin|cue|chd").
 bool accepts(const std::string& validExtensions, const std::string& fileName);
 
+// Zstandard frames, decompressed through libarchive's raw reader (the console
+// already links libarchive, built with zstd, for game archives), up to about
+// `limit` bytes of output. What came out before an error is kept, so the
+// start of a stream cut short still reads. A Wii U archive's blocks
+// (wiiu.cpp) and a compressed 3DS game's first frame (ncch.cpp).
+std::vector<uint8_t> unzstd(const std::vector<uint8_t>& in, size_t limit = SIZE_MAX);
+
 }  // namespace romfile

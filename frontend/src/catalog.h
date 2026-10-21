@@ -84,6 +84,12 @@ enum class Support {
     // MAME 2003-Plus's set list has (#310). Also about one game, so also
     // shown greyed.
     UnsupportedGame,
+    // The console runs this system, and THIS GAME is one it lists nowhere: a
+    // 3DS game that is a CIA, by its name in RomM (ncch::namesCia; MMagTech,
+    // 2026-10-20: hidden, not greyed). Not playable and not shown greyed, so
+    // every list the console makes leaves it out after counting it, as the
+    // grids' paging needs (#471).
+    Hidden,
 };
 
 // Whether a platform's grid shows this game greyed, saying why, rather than
@@ -186,5 +192,9 @@ inline bool playable(const romm::Platform& p) {
 inline bool playable(const romm::Game& g) {
     return coverageFor(g).support == Support::Playable;
 }
+
+// Whether some of this platform's games may be Hidden (the 3DS's CIAs). RomM's
+// own count includes them, so such a platform's tile is counted from its list.
+bool hidesSomeGames(const romm::Platform& p);
 
 }  // namespace catalog

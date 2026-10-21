@@ -411,8 +411,15 @@ minute and guessing at it for twenty.
 
 ## Testing emulators headless
 
-- **`--core-option k=v` only reaches the `--core <so> --rom <file>` path.**
-  A `--launch <id>` run ignores it and uses `catalog::optionOverrides` only.
+- **`--core-option k=v` wins over everything the console sets**, on every
+  route: `--core <so> --rom <file>`, `--launch <id>` and Play on the
+  television (`Core::setCommandLineOption`). Until 2026-10-20 it reached
+  `--core` only, and a `--launch` run ignored it in silence. So a picture
+  level's own key (`citra_resolution_factor`, `dolphin_efb_scale`) passed
+  this way pins that value at every level; to try the levels, set the game's
+  level instead (`config/picture-quality.json` under the storage root, or
+  the pause menu's Picture row, from the next start). Each launch logs
+  `[core] option from the command line: k = v`.
 
 - **`--core-options-detail` sees only options declared at load.** FCEUmm
   and FBNeo declare theirs with a game loaded and show "0 options"; read a

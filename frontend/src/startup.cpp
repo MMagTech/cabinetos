@@ -678,14 +678,9 @@ std::optional<int> App::startDeveloperLaunch() {
         storage::makeDirs(saveDir);
         core.setDirectories(storage::biosDir(), saveDir);
         // The same overrides the library path applies, so --core plays the
-        // core the same way the product does. See beginLaunch.
-        std::map<std::string, std::string> overrides = catalog::optionOverrides(corePath);
-        for (const auto& [key, value] : cliOptionOverrides) {
-            std::fprintf(stderr, "[core] option from the command line: %s = %s\n",
-                         key.c_str(), value.c_str());
-            overrides[key] = value;
-        }
-        core.setOptionOverrides(overrides);
+        // core the same way the product does. See beginLaunch. --core-option
+        // goes on top inside the call (Core::setCommandLineOption).
+        core.setOptionOverrides(catalog::optionOverrides(corePath));
         if (!core.load(corePath)) {
             std::fprintf(stderr, "[frontend] core: %s\n", core.error().c_str());
             return 1;

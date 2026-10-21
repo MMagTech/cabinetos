@@ -26,6 +26,12 @@ namespace catalog {
 // the server and mean nothing on the other end — the reference implementation
 // says exactly that and it is right.
 //
+// NINTENDO 3DS THE SAME WAY (docs/PROJECT.md question 50): Azahar keeps a
+// whole 3DS under `Azahar/` in the save directory, and every game's save and
+// extra data are under its SD card's `Nintendo 3DS/`, rooted there. The save
+// directory holds one game, so the whole folder is that game's. Not the rest
+// of `Azahar/`: its NAND, system data and shader cache stay here.
+//
 // WII TOO, from 2026-09-30, rooted at `User/Wii/title` in Dolphin's user
 // directory, which is under this person's save directory for this game, so
 // it is a NAND of its own. A game saves to `<kind>/<code in hex>/data/`
@@ -350,7 +356,15 @@ const char* saveTag(const char* manifestCoreName);
 // they could not travel to Cabinet (GameCube: a different Dolphin on the Mac) or
 // break when the emulator updates (PS2: embedded PCSX2, not libretro). PSP and
 // DS are later consoles and keep theirs, because theirs are proven portable. A
-// new emulator is checked against that rule the day it lands.
+// new emulator is checked against that rule the day it lands. The 3DS is the
+// exception, by MMagTech's decision of 2026-10-20: a handheld, it has states,
+// though an Azahar update can strand them (savetable.cpp, emulatorTag).
 bool snapshotsAllowed(const char* manifestCoreName);
+
+// Whether a game on this core may rewind: never where snapshotsAllowed is
+// false, nor where making a state takes longer than a frame, since rewind
+// makes one every half second (Azahar, savetable.cpp). The pause shortcut then
+// says "No rewind for this system" (play.cpp).
+bool rewindAllowed(const char* manifestCoreName);
 
 }  // namespace catalog
