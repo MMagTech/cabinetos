@@ -18848,9 +18848,15 @@ device lost, twice on the TV. Reproduced headless with scripted presses and
 the same fault every time at 34 s: as Vita3K ships with none of the
 console's settings, at 1x and 4x, with anisotropic filtering on and off,
 with its memory mapping off, on OpenGL as well as Vulkan, and on build 4206
-as on 4210. Nobody has reported it; the one report for this release (build
-3816, Windows, AMD) says it plays. One rule for every game: it waits for
-Vita3K, and a report goes to Vita3K only on his go.
+as on 4210. A survey of the reports (2026-10-21): it has never been reported
+playing on Linux. The one Linux AMD report (RX 6600, build 4056, 2026-06-18)
+reached the autosave screen, no level; every report of play is Windows or
+Android (Vita3K/compatibility#3743, #35). Vita3K/Vita3K#3099, open since
+2023, collects Vulkan crashes and hangs on Steam Deck and AMD Linux in other
+games, one with the same `ErrorDeviceLost` on RADV (Persona 4 Dancing All
+Night). So it fits a known Vita3K fault on AMD Linux, not the console. One
+rule for every game: it waits for Vita3K, and a comment on #3099 goes only on
+his go.
 
 **Not checked yet:** a game's own exit; Killzone: Mercenary and Skullgirls
 2nd Encore; two controllers; the first-run stutter test.
