@@ -1,14 +1,18 @@
 # CabinetOS
 
-> **Read this file first.**
-> This is the living specification for CabinetOS. Every session working on this
-> repository should read it before touching anything else, and should update it
-> when decisions are made, phases change status, or new uncertainty appears.
+> **The record of what was decided, and why: look things up here, do not
+> read it through.** It holds every decision since the project began
+> (2026-09-13) with the research behind it, and is far too long to read
+> whole. A contributor needs CONTRIBUTING.md, docs/ARCHITECTURE.md and
+> docs/lessons/; their rules point to the section here that explains each
+> one. A session searches it for the question in hand (the Index below lists
+> them), and updates it when a decision is made, a phase changes status, or
+> new uncertainty appears.
 >
-> **Starting a session?** `docs/NEXT-SESSION.md` is the short version — what
+> **Starting a session?** `docs/NEXT-SESSION.md` is the short version: what
 > state things are in, what to pick up, and the things that waste a day if
-> nobody says them. This file is the specification and is authoritative; that
-> one is the handover. Rewrite it at the end of a session.
+> nobody says them. This file is the record; that one is the handover.
+> Rewrite it at the end of a session.
 >
 > **Cabinet, the Apple TV, iPhone and Mac app CabinetOS was ported from, is
 > retired.** Until 2026-10-19 this note called it shipping and its source
