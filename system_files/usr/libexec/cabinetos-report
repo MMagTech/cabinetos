@@ -832,15 +832,17 @@ def keyboards():
 
 
 def sound_outputs():
-    # #547: a built-in speaker senses nothing ("unknown"), so it outranked the
-    # TV, and the report could only show that it had won, not why. Each
-    # card's outputs from PipeWire, the one in use marked.
+    # #547: a built-in speaker read "unknown" (nothing senses it), so it
+    # outranked the TV, and the report could only show that it had won, not
+    # why. Each card's outputs from PipeWire, the one in use marked. Since
+    # build_files/built-in-speaker.sh a standard built-in speaker reads "no";
+    # one still "unknown" is wired some other way.
     raw = run(["pw-dump"])
     try:
         objects = json.loads(raw)
     except ValueError:
         return raw
-    senses = {"yes": "something plugged in", "no": "nothing plugged in", "unknown": "nothing senses it"}
+    senses = {"yes": "connected", "no": "not connected", "unknown": "unknown, nothing senses it"}
     out = ""
     for o in objects:
         info = o.get("info") or {}

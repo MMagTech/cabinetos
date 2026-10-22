@@ -94,16 +94,18 @@ RomM: keep test launches under a minute, or have his go.
 9. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
 10. **PR #550, "Sound: a built-in speaker never takes the sound from the
-    TV"** (#547, a Beelink SER9 playing through its case speaker). Built and
-    tested 2026-10-21 (PROJECT.md decision 46, "Built-in speakers"). Waits
-    for his words to push it to `testing` (the push was refused without
-    them), then his install on the A9; then from the A9: the script is in
-    `/usr/share/wireplumber/scripts/`, the `ci/base-watch.txt` Sound check
-    passes, and with `wpctl set-log-level` raised for
-    `s-cabinetos-sound-output` a rescan logs "N outputs, 0 left out". He
-    needs no TV check (headphones taking over was tested in October). The
-    changelog's `## Next` becomes the testing version; merge on his word;
-    close #547 asking the reporter to update and reopen if still wrong.
+    TV"** (#547, a Beelink SER9 playing through its case speaker). Built as
+    one PipeWire file edit at image build (`build_files/built-in-speaker.sh`;
+    PROJECT.md decision 46, "Built-in speakers"), dry-run on the A9
+    2026-10-22. Waits for #549 to merge: then update from main (one
+    changelog conflict) and push to `testing` on his words only (a push
+    without them was refused). After his install: the A9's
+    `analog-output-speaker.conf` has both phantom jacks at `no`, and the TV
+    still plays. He needs no TV check (headphones taking over was tested in
+    October). Still to settle with him: whether the changelog warns
+    handheld-PC and laptop players. The changelog's `## Next` becomes the
+    testing version; merge on his word; close #547 asking the reporter to
+    update and reopen if still wrong.
 
 ## Waiting, not for the next session unless MMagTech raises them
 

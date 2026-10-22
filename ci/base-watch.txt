@@ -292,7 +292,6 @@ systemd-libs
 area: Sound
 log: PipeWire and WirePlumber are running :: systemctl --user is-active -q pipewire wireplumber
 log: The sound devices are there :: wpctl status | sed -n '/^Audio/,/^Video/p' | grep -q '\[alsa\]'
-log: WirePlumber ran the built-in speaker rule (#547) without a complaint :: out=$(journalctl -b -t wireplumber -o cat | grep -E 'cabinetos-sound-output|#547'); [ -z "$out" ] || { echo "$out"; exit 1; }
 tv: Sound: Home's sounds play from the TV
 tv: Remote Play: a stream to a phone shows the picture and plays the sound
 pipewire*
