@@ -580,11 +580,12 @@ here, not reworded; follow the link for the full text.
 - **A patch to an emulator's source is proposed and agreed first (MMagTech,
   2026-10-20),** and tracked on an issue linked to its upstream report until
   upstream fixes it (docs/WORKING.md, "Patches to an emulator's code").
-- **The TV console comes first; a handheld never does (MMagTech,
-  2026-10-21).** A fix that favours a handheld (a Steam Deck) at any risk to
-  the experience of a console on a TV is not made. A simple allowance for
-  handhelds is welcome only where the console's path is left exactly as it
-  was. Laptops are not supported.
+- **Made for a PC attached to a TV (MMagTech, 2026-10-21).** CabinetOS is
+  built for a computer connected to a television: a mini PC, or a larger
+  desktop PC. A fix never risks that experience for another kind of
+  machine. Handhelds (a Steam Deck) and laptops are not targets: something
+  for them is done only when it is simple and leaves the TV console's
+  behaviour exactly as it was.
 
 ### Duties that come with some changes
 
