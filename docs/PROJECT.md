@@ -273,7 +273,8 @@ down. "Look now at" is where the code or a later decision moved on.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
   2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07; Nintendo's
-  own Remotes counted twice, fixed 2026-10-21 (#548). Open: #203
+  own Remotes counted twice, fixed 2026-10-21 (#548); supporting them
+  waits on a MotionPlus test on the TechKens (2026-10-22). Open: #203
   ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
   `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
 - **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
@@ -16690,6 +16691,50 @@ Remote itself, without BlueZ's input plugin.
 ids) losing the kernel driver's controller does not matter; a Wii U game
 plays on an ordinary pad. What must not break: the TechKens, and ordinary
 pads in Wii U and Wii games.
+
+#### Supporting Nintendo's own Remotes: waiting on MotionPlus, 2026-10-22
+
+**MMagTech, 2026-10-22:** Nintendo's own Remotes (the original and the Wii
+Remote Plus) supported alongside the TechKens, as long as the TechKens never
+break and the change can be undone in one step. Before anything was built,
+the driver's source was read (`hid-wiimote-core.c`, kernel 7.2.9) and a fake
+Wii Remote Plus was run on the A9 with no game running: a uhid device on the
+Bluetooth bus, 057E:0330, answering as a Remote Plus with nothing plugged in,
+named so the bridge leaves it alone. Besides the 4-second check, the driver:
+
+- **resets the report mode after every status report** the Remote sends,
+  one a game asked for included (`handler_status_K`): 0x12 00 30, buttons
+  only, not continuous. Measured: a status report, then "report mode 0030".
+  A game's pointer, tilt and Nunchuk data stop until it sets its mode again.
+- **switches rumble off** with every command it sends: each carries the
+  driver's own rumble bit, which is off.
+- **switches MotionPlus off as soon as a game switches it on.** Switched on,
+  MotionPlus answers at 0xA4 and the Remote reports an extension; the driver
+  reads 0xA400FA, finds MotionPlus's id, writes 0x55 to 0xA400F0 (which turns
+  it off) and detects everything again. Measured: on, then off within the
+  same millisecond, on a Remote Plus; the same code runs for a MotionPlus
+  plugged into an original Remote.
+- at connect, still opens for about 10 ms with #549's rule in place: report
+  modes 0x31 and 0x37, the camera, MotionPlus mapped, then all off again.
+  Something on the console opens the driver's input devices; not traced.
+
+**What the bridge could do**, only for a Remote the driver drives (the
+TechKens never are, so none of it would run for them): pass the game only
+the answers it asked for, hold the game's commands while the driver is in
+the middle of its own so the two never mix, then put back the game's report
+mode and rumble. **What it cannot do:** keep MotionPlus on, since the driver
+sees every report first and switches it off again. So on Nintendo's Remotes
+the games that need MotionPlus would not work: on MMagTech's RomM, Wii Sports
+Resort and Red Steel 2, 2 of its 52 Wii games.
+
+**Waiting:** MMagTech tests MotionPlus on the TechKens before deciding
+anything more (2026-10-22). It has never been tried: Mario Kart's steering
+is the tilt sensor every Remote has, and Geometry Wars is the Nunchuk and
+the pointer. If MotionPlus does not work on the TechKens either, Nintendo's
+Remotes would have the same support as the TechKens. Also open: whether #549
+stays if only the TechKens are supported. The recommendation is to keep it:
+it fixes a Remote counted as two controllers for anyone who pairs one, and
+the TechKens never meet that driver.
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
