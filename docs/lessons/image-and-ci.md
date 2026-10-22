@@ -209,6 +209,17 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
   saved; cached, nothing fetched; one pin moved, only that file fetched and
   the old one dropped. **The cache is per branch**: a new branch reads only
   its own and main's, so test a pin move on the branch that holds the cache.
+- **EACH CORE'S CACHE IS KEYED ON ITS OWN PART OF `cores/build-core.sh`**
+  (`ci/core-cache-key.sh`, since 2026-10-20). Until then the key hashed the
+  whole file, so adding the 3DS's recipe (#524) rebuilt all twenty-three
+  cores, eighteen minutes before the image could start. Now a change inside
+  one core's case arm or its `if [ "$CORE" = <core> ]` patch block rebuilds
+  that core alone, and any other line of the file, a comment or a count of
+  cores included, rebuilds them all. So everything about one core goes
+  inside its arm or block, and the lines outside carry no count or list of
+  cores. Proved with two manual runs of `build-core.yml`: every core built
+  under the new keys, then a comment in gambatte's arm rebuilt gambatte and
+  the other 21 came from the cache.
 - **A core's start-up chatter is not an option.** PCSX ReARMed's stored
   option list held its memory-map lines, which vary with the runner's
   processor, and failed a build that changed no core; the check compares
