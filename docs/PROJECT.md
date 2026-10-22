@@ -16821,11 +16821,17 @@ Tested headless on the A9 through the read-only relay, with a stand-in
 and Geometry Wars plays; the A9's two TechKens, all three play; no Remote,
 "Needs a Wii Remote" as before.
 
-**Known and left (MMagTech chose no bridge work):** on Nintendo's Remotes the
-driver's report-mode reset after a status report and its rumble cuts remain,
-so pointer, tilt and Nunchuk data can stop in a game until it sets its mode
-again. How often a game asks for a status report is not known; nobody here
-has one of Nintendo's Remotes.
+**Still to build in the same PR (MMagTech, 2026-10-22, after the other
+sessions of the day are wrapped up):** on Nintendo's Remotes the driver's
+report-mode reset after a status report and its rumble cuts would let
+pointer, tilt and Nunchuk data stop in a game until it sets its mode again.
+The bridge puts them back: after a status report from a Remote the driver
+drives, a few milliseconds later, the game's last report mode with its
+current rumble bit. Only for those Remotes, so none of it runs for a
+TechKen. Shown first with the fake Remote on the A9 (named so the bridge
+takes it), then a TechKen check at the TV: a Nunchuk game and the Miis. Not
+built: the bridge keeping the driver's own answers from the game (the 4-second
+check's three); left until a Nintendo Remote owner reports trouble.
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
