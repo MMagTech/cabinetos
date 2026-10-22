@@ -70,8 +70,9 @@ code cites them more than a hundred times.
   frame pacing, the emulator settings audit, the emulator queue, PS2's
   BIOS, time played).
 - **Developer mode**: superseded; kept as history.
-- **Staying current with Bazzite**: the base pinned by digest, and moving
-  the pin.
+- **Staying current with Bazzite**: the base pinned by digest, moving the
+  pin, and fixes waiting for a stable base (gamescope's crash when a game's
+  window closes, 2026-10-22).
 - **Measured behaviour**: the first booted image, the A9 Max measured,
   every platform run once, a start with no display answering.
 - **Branding and the boot experience**: the palette.
@@ -2956,6 +2957,65 @@ not trigger other workflows, so the image build will not run on them by itself.
 Either supply a `BASE_UPDATE_TOKEN` secret (a fine-grained PAT with contents and
 pull-request write), which the workflow prefers when present, or close and
 reopen the PR to kick CI off by hand.
+
+#### Waiting for stable: gamescope crashes when a game's window closes (2026-10-22)
+
+**What happened.** On the A9, 2026.10.22.2, 8:36 AM: Shovel Knight (Wii U)
+was quit from the pause menu, Cemu closed cleanly (exit 0), and in the same
+second gamescope crashed (SIGSEGV in its compositor thread,
+`gamescope-xwm`). The session restarted by itself: black for about 3 s, the
+start-up screen, Home about 5 s after the crash. Nothing was lost: the save
+was zipped before the crash, and the new session sent it again (`[save]
+resent, uploaded cemu`).
+
+**The cause, from the core's backtrace** (systemd-coredump's journal entry;
+the core file itself is root's): `wl_resource_post_event` from
+`wlserver_presentation_feedback_discard`, from `commit_t::~commit_t`, from
+`global_focus_t::~global_focus_t`, from `determine_and_apply_focus`. When
+focus moved off the closed game, gamescope dropped its last hold on one of
+the game's frames and sent "that frame was never shown"
+(`wp_presentation_feedback.discarded`) over a connection the game had closed
+50 ms earlier: a use after free. Any Vulkan emulator can meet it. With
+`ENABLE_GAMESCOPE_WSI=1` each one presents on its own Wayland connection to
+gamescope, and the image's gamescope (terra-gamescope 3.16.31^2, the Open
+Gaming Collective fork's 3.16.31-ogc2) keeps bare pointers to those frames'
+notices.
+
+**How often.** The A9's journal from 2026-10-06 holds 76 gamescope crashes.
+75 are at a stop (docs/lessons/testing.md, "gamescope crashes on its way
+out"); this is the only one while the console ran, in 57 standalone emulator
+exits on record.
+
+**Fixed upstream, not in the base.** Valve's a71c7f900 ("steamcompmgr:
+discard feedback for commits that never present", on master 2026-10-10 with
+PR #2395) gives each notice a destroy handler that clears the pointer. Its
+message does not mention a client that quits; reading the code, it covers
+one. It is in no Valve tag yet. The fork has it from 3.16.31-ogc3
+(2026-10-15). Terra publishes 3.16.31^4 for Fedora 44 (in terra44-extras)
+and ^6 for Fedora 45. Bazzite stable is still 44.20261012.1 with ^2;
+Bazzite testing, on Fedora 45, has ^6. Nobody has reported this backtrace,
+and there is nothing left to report.
+
+**Decided (MMagTech, 2026-10-22): wait for the base update that brings it**,
+likely Bazzite's Fedora 45 stable, as exception 1 above says for a fix only
+in testing. **If it happens again before then, take Terra's fixed gamescope
+into the image ahead of the base.** That is 41 changes over ogc2, not one.
+The ones that touch this console: how the frame limiter and VRR pace frames,
+the Vulkan layer every emulator presents through (presentation timing),
+how Xwayland pictures join overlay windows, and an HDR10 colour fix. So it
+needs TV checks: the pause menu over each standalone emulator, a heavy
+game's smoothness, the Steam tile, a Remote Play stream. Set aside: a
+gamescope of our own with only the one fix (the first gamescope the project
+would build, with a patch to track, for a crash that recovers by itself),
+and changing how the console closes games (it cannot be made to happen on
+demand, so a dodge could never be shown to work).
+
+**To know it again:** a kernel line `gamescope-xwm[...]: segfault` while the
+console was running, not at a stop, and `wlserver_presentation_feedback_discard`
+in the core's journal entry (`journalctl -t systemd-coredump`). **When a base
+update moves gamescope past 3.16.31^2**, add a check to it: quit a
+standalone game from the pause menu a few times, and no gamescope crash in
+the log.
 
 ---
 
