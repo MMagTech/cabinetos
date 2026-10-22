@@ -16638,6 +16638,39 @@ The first rumble try did not stick: the HOME Menu writes its settings when it
 closes, and the game was left with the menu still open. Not a fault here; see
 docs/lessons/emulators.md.
 
+#### Nintendo's own Remotes counted twice (#548), 2026-10-21
+
+A player with Nintendo's own Remote (RVL-003, "Nintendo RVL-CNT-01", id
+057E:0306) saw it as two controllers, P2 and W1, and every press twice. Their
+report showed why: the kernel's Wii Remote driver, `hid-wiimote`, takes any
+Bluetooth device with Nintendo's id (0306 and 0330), and makes a controller of
+its own that SDL seated as a player, while the bridge drove the same Remote
+as W1. The TechKens report Samsung's id, so the driver never touched them and
+the A9 never showed it (`hid_wiimote` is not even loaded there).
+
+**The driver cannot simply be blocked.** The kernel keeps those two ids for it
+(`hid_have_special_driver`, hid-quirks.c), so without it the plain driver
+refuses the Remote too: no raw node, and the bridge loses Nintendo's Remotes
+altogether. Nothing outside the kernel can change that for a Bluetooth
+device (HID-BPF may write only a device's name, uniq and phys). So the driver
+stays bound, as on every Linux desktop where Dolphin uses a real Remote, and
+`72-cabinetos-wii-remote.rules` keeps its devices from everyone: no seat
+access, no joystick for SDL, Steam or `cabinetos-pads`, nothing for libinput
+(its D-pad is the arrow keys). Its battery is not read either (battery.cpp):
+a read asks the Remote for a status report.
+
+What the driver still does, from its source (not seen on a TV): after every
+status report it sets the Remote's report mode again (buttons only, which
+the game sets back), and on an original Remote with no MotionPlus inside it
+looks for one every 4 seconds (two register writes, two reads). Every Linux
+Dolphin user plays with that. If a game ever shows it, the next step is the
+bridge talking to the Remote itself, without BlueZ's input plugin.
+
+**MMagTech, 2026-10-21:** a Wii U Pro Controller or a Balance Board (the same
+ids) losing the kernel driver's controller does not matter; a Wii U game
+plays on an ordinary pad. What must not break: the TechKens, and ordinary
+pads in Wii U and Wii games.
+
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
 same day.** No code yet. Most of question 35 carries over; what follows is only
