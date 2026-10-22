@@ -580,6 +580,14 @@ here, not reworded; follow the link for the full text.
 - **A patch to an emulator's source is proposed and agreed first (MMagTech,
   2026-10-20),** and tracked on an issue linked to its upstream report until
   upstream fixes it (docs/WORKING.md, "Patches to an emulator's code").
+- **Made for a PC attached to a TV (MMagTech, 2026-10-21).** CabinetOS is
+  built for a computer connected to a television: a mini PC, or a larger
+  desktop PC. A computer monitor with built-in speakers counts as a TV. A
+  fix never risks that experience for another kind of machine. Handhelds (a
+  Steam Deck) and laptops are not targets. Since 2026-10-22, a fault is not
+  looked at if it shows only on a handheld PC, a laptop, or a computer that
+  is not attached to a TV, and not on a mini PC or desktop attached to a TV.
+  Remote Play with no screen connected (#381) is the one exception.
 
 ### Duties that come with some changes
 

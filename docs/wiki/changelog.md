@@ -4,6 +4,30 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.22.3 {#v2026-10-22-3}
+
+*22 October 2026*
+
+- **Fixed:** on a computer with a speaker built into its case, every sound
+  played from that speaker instead of the TV. The TV plays it now, and
+  headphones still take over while they are plugged in. While the TV is
+  asleep or off, the built-in speaker stays silent.
+  ([#547](https://github.com/MMagTech/cabinetos/issues/547))
+- **Changed, for players on a handheld PC or a laptop:** sorry, the built-in
+  speakers on a handheld PC or a laptop may no longer play. This came with a
+  fix for PCs on a TV that played their sound through a small speaker in the
+  case. CabinetOS is made to be a home console: a PC attached to a TV, so
+  handheld PCs and laptops are not supported.
+
+## 2026.10.22.2 {#v2026-10-22-2}
+
+*21 October 2026*
+
+- **Fixed:** a Wii Remote made by Nintendo, or a copy that reports itself as
+  one, showed as two controllers, a player and a Wii Remote (P2 and W1), and
+  every press counted twice. It is one Wii Remote now.
+  ([#548](https://github.com/MMagTech/cabinetos/issues/548))
+
 ## 2026.10.21.4 {#v2026-10-21-4}
 
 *21 October 2026*

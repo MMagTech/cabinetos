@@ -93,6 +93,12 @@ RomM: keep test launches under a minute, or have his go.
    watch the first pull request after.
 9. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
+10. **PR #550, "Sound: a built-in speaker never takes the sound from the
+    TV"** (#547, a Beelink SER9 playing through its case speaker). On
+    testing as 2026.10.22.3, installed on the A9 2026-10-22, its log checks
+    passed and his smoke check passed. The changelog is final. Waits only
+    for his word "merge"; then close #547 asking the reporter to update and
+    reopen if still wrong, and delete the branch on his go.
 
 ## Waiting, not for the next session unless MMagTech raises them
 

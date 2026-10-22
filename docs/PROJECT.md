@@ -272,7 +272,8 @@ down. "Look now at" is where the code or a later decision moved on.
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
-  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07. Open: #203
+  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07; Nintendo's
+  own Remotes counted twice, fixed 2026-10-21 (#548). Open: #203
   ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
   `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
 - **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
@@ -310,9 +311,12 @@ down. "Look now at" is where the code or a later decision moved on.
 - **45. Smart collections, issue #352** ("RomM Smart Collections don't show
   up (only regular collections do)"). Decided 2026-10-12, built.
 - **46. Where the sound goes, issue #341** ("No audio [Expected on this
-  machine]"). Decided 2026-10-13, built 2026-10-14. Open: #390 ("Headphones
-  don't take over after a Remote Play session (waiting on Sunshine)") and
-  #391.
+  machine]"). Decided 2026-10-13, built 2026-10-14. Built-in speakers, #547
+  ("Sounds plays only from onboard speakers (Beelink ser9)"): decided
+  2026-10-21 and 22, built as one PipeWire file edit at image build, never
+  the speaker, silent when the TV's sound is gone.
+  Open: #390 ("Headphones don't take over after a Remote Play session
+  (waiting on Sunshine)") and #391.
 - **47. Interface sounds everywhere, and a calmer set, issue #389**
   ("Interface sounds on every screen and menu, not only some"). Decided at
   the TV 2026-10-14, built. "No start-up or shut-down sound, ever." The
@@ -16638,6 +16642,58 @@ The first rumble try did not stick: the HOME Menu writes its settings when it
 closes, and the game was left with the menu still open. Not a fault here; see
 docs/lessons/emulators.md.
 
+#### Nintendo's own Remotes counted twice (#548), 2026-10-21
+
+A player with Nintendo's own Remote (RVL-003, "Nintendo RVL-CNT-01", id
+057E:0306) saw it as two controllers, P2 and W1, and every press twice. Their
+report showed why: the kernel's Wii Remote driver, `hid-wiimote`, takes any
+Bluetooth device with Nintendo's id (0306 and 0330), and makes a controller of
+its own that SDL seated as a player, while the bridge drove the same Remote
+as W1. The TechKens report Samsung's id, so the driver never touched them and
+the A9 never showed it (`hid_wiimote` is not even loaded there).
+
+**The driver cannot simply be blocked.** The kernel keeps those two ids for it
+(`hid_have_special_driver`, hid-quirks.c), so without it the plain driver
+refuses the Remote too: no raw node, and the bridge loses Nintendo's Remotes
+altogether. Nothing outside the kernel can change that for a Bluetooth
+device (HID-BPF may write only a device's name, uniq and phys). So the driver
+stays bound, as on every Linux desktop where Dolphin uses a real Remote, and
+`72-cabinetos-wii-remote.rules` keeps its devices from everyone: no seat
+access, no joystick for SDL, Steam or `cabinetos-pads`, nothing for libinput
+(its D-pad is the arrow keys). Its battery is not read either (battery.cpp):
+a read asks the Remote for a status report.
+
+What the driver still does, **measured on the A9, 2026-10-22**, with a fake
+original Remote (a uhid device on the Bluetooth bus, 057E:0306, answering as
+an RVL-003 with nothing plugged in; named so the bridge leaves it alone):
+
+- At connect, in the first half second: a status request, light 1, the
+  extension set up plain (0xA400F0 = 0x55, 0xA400FB = 0x00), a MotionPlus
+  probe, and five status requests, each followed by its own report mode
+  (0x30, buttons only). Something on the console also opened the driver's
+  motion and pointer devices for about 10 ms (report mode 0x31, then the IR
+  camera set up and switched off again); not traced.
+- Then, every 4.03 s for as long as the Remote is connected, games included:
+  a read of 0xA400FA (6 bytes), a write of 0x55 to 0xA600F0, and a read of
+  0xA600FA (6 bytes), looking for a MotionPlus plugged in. Nothing else: no
+  status requests, no battery reads (battery.cpp no longer reads it).
+
+The Remote's answers to those three (two 0x21 read replies and one 0x22
+acknowledgement) go to every reader of its raw node, so the bridge passes
+them to the game, and the bridge counts any 0x21 against the game's oldest
+read (`fromReal`, `r.reads`). Whether a game is disturbed (a Mii read coming
+out damaged, a Nunchuk not set up) is not known: it needs an original Remote
+in a real game. The driver skips the check on a Remote with MotionPlus
+inside (the Wii Remote Plus, "-TR", and the TechKens, which it never binds).
+If it does disturb games, the contained fix is in the bridge: pass the game
+only the replies it asked for. The large one is the bridge talking to the
+Remote itself, without BlueZ's input plugin.
+
+**MMagTech, 2026-10-21:** a Wii U Pro Controller or a Balance Board (the same
+ids) losing the kernel driver's controller does not matter; a Wii U game
+plays on an ordinary pad. What must not break: the TechKens, and ordinary
+pads in Wii U and Wii games.
+
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
 same day.** No code yet. Most of question 35 carries over; what follows is only
@@ -17779,7 +17835,10 @@ rule: WirePlumber switches its card off while nothing is plugged in, so the
 output only exists while headphones are in, and its own rank (1009 on the
 A9) is above HDMI. A small WirePlumber script that ignores any output unable
 to sense a plug was considered and rejected: more than standard settings,
-for hardware the rule says not to account for.
+for hardware the rule says not to account for. **Both held only on a sound
+chip with no built-in speaker, as the A9's has none. Built-in speakers are
+handled since 2026-10-22 by one edit to a PipeWire file, not a script (#547,
+below).**
 
 **Why the memory goes off.** A chosen output beats every priority, and
 WirePlumber kept the choice across restarts. On the A9 the TV was chosen, so
@@ -17804,6 +17863,91 @@ returns the sound to the TV.
 
 **Open:** the volume goes back to full at every start (#351 above), on the
 default output. With headphones in at start, that is the headphones (#391, waiting, not built).
+
+#### Built-in speakers (#547), 2026-10-21 and 22
+
+**The fault.** A Beelink SER9 (#547, "Sounds plays only from onboard
+speakers (Beelink ser9)") played everything through the speaker in its
+case. Its ALC897 drives a built-in speaker (`speaker_outs=1` in the kernel
+log), and a speaker has no plug to sense, so its connector reports
+`unknown`. WirePlumber passes over an output only when its connector says
+`no` (`lutils.haveAvailableRoutes`), so the speaker counted and its analog
+rank beat the TV. The same fault is in the report on #416 ("PCSX2 loads the
+wrong bios for the region of the game"): an HP EliteDesk 705 G4, its CX20632
+with `speaker_outs=1`, the speaker chosen over an Acer CB272U whose EDID
+declares speakers. Nobody there mentioned sound. The A9 never showed it:
+its ALC269VC has only the headphone jack, which says `no` while empty. No
+priority can fix it: the speaker and the headphone jack are one output
+whose connector changes when headphones go in. The three HCAR5000-MI
+reports (#341, #400, #529) already had the TV as the default.
+
+**Decided by MMagTech, 2026-10-21 and 22.** A built-in speaker never takes
+the sound from the TV. When the TV's sound is gone (the screen asleep, the TV
+off or unplugged) the console is silent, never the speaker: a console is
+designed around a TV, every modern TV has speakers, a monitor without them
+has the jack, and Remote Play carries the sound through Sunshine's own
+output. Falling back to the speaker was considered and rejected: the
+screen's sleep removes the TV's output (#228, below), so the sound would move
+to the speaker at every sleep and come back only if SDL noticed the TV's
+return. No sound menu: picking an output would turn the headphone switching
+off, its "Automatic" would still need this fix, and #341 said no setting.
+Handheld PCs and laptops are not targets (CONTRIBUTING.md, "Made for a PC
+attached to a TV", 2026-10-22): what this does to their built-in speakers
+does not decide anything. He asked for the fix that is easiest to maintain,
+and accepts a build that fails on an upstream change so long as it says so.
+
+**Researched 2026-10-22** (three agents; GitLab issue pages were unreadable
+to them). No setting in PipeWire or WirePlumber does this; WirePlumber's
+documentation says routes of unknown availability count as usable "since
+built-in speakers have no jack detection", and its issue #166, "Give HDMI
+outputs a higher priority than internal speakers", exists (its answer was
+not read). Bazzite does it per machine: the Framework Desktop's hardware
+profile raises one HDMI node by name (`51-preferHDMI.conf`). Batocera and
+Kodi give the player a menu. PulseAudio deliberately never switched to HDMI
+by itself (`module-switch-on-connect` ignores "hdmi" by default). ChromeOS
+ranks exactly this rule (headphones, line out, USB and Bluetooth 3, HDMI 2,
+internal speaker 1, in `audio_device.cc`), because its sound daemon keeps
+the speaker and the headphones apart. Ruled out: raising HDMI's priority
+(headphones would never take over); a kernel `patch=` or hint (per codec,
+and a wrong pin silences a machine); a copied profile set (a large file that
+drifts); `api.acp.hidden-ports` (undocumented, and a card with only a
+speaker would still win).
+
+**Built:** `build_files/built-in-speaker.sh`, run by `build.sh`. In PipeWire's
+`/usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf` the
+sections `[Jack Speaker Phantom]` and `[Jack Speaker Front Phantom]` change
+`state.plugged` and `state.unplugged` from `unknown` to `no`. The kernel
+gives a built-in speaker a phantom jack that always reads plugged in (since
+2012, so that sound servers could see fixed speakers), and in PipeWire a
+plugged-in jack that says `no` "should override all other availability
+information" (`calc_port_state`, `spa/plugins/alsa/acp/acp.c`, read at
+1.6.9, the image's version). So a built-in speaker counts as an empty
+headphone jack does: the onboard analog output exists only while headphones
+are in, which is how the A9 already behaves. The script fails the build if
+either section does not read exactly as at 1.6.9, or the file is missing.
+Cards set up by their own UCM profile never read this file: the image ships
+one for the Steam Deck (`ucm2/AMD/acp5x`, Valve's Jupiter and Galileo), so a
+Deck keeps its speakers. Not covered, and left as they were: a jack other
+than a speaker that cannot sense a plug, and a speaker with no phantom jack.
+A machine with no HDMI or DisplayPort sound at all is silent through a
+built-in speaker. The diagnostic report's Sound section lists each card's
+outputs and what each connector reads.
+
+**First built as a WirePlumber script, 2026-10-21, and replaced.** A Lua hook
+before `find-best-default-node` dropped every sound-card output that was not
+HDMI and not sensed "yes". It worked in WirePlumber's own Lua against 14
+stand-in setups and loaded in a real WirePlumber on the VM, but it leaned on
+WirePlumber's hook names and needed care to load safely: listed as optional
+in a profile it never loaded, required it would let a broken script stop all
+sound, and loaded after the event source it missed the start-up choice. The
+file edit has none of that.
+
+**Tested 2026-10-22:** the rule above read in PipeWire 1.6.9's source; the
+build step run on the A9 against a copy of the image's file (exactly the
+four lines change; run again on the edited file, on a reworded section and
+with the file missing, it stops the build); the Steam Deck's UCM profile
+found on the image. **Not tested on a real built-in speaker:** the A9 has
+none, so the reporter's update is the test.
 
 #### Sound dying until a restart (#228): the 2026-10-18 failure, read from the A9's logs
 
