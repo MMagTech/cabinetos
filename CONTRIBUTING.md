@@ -591,7 +591,22 @@ here, not reworded; follow the link for the full text.
   `docs/LICENCES.md`. A stale options list fails the core's build, which a
   pull request to `main` does not run: it fails at the testing push. Then
   check the console's own option tables still fit (`--check-option-tables`),
-  and ask the stability question above.
+  and ask the stability question above. Moving any emulator's or Sunshine's
+  pin, go through its rows in docs/ARCHITECTURE.md, "What leans on other
+  projects", too.
+- **Leaning on another project's internals** (asked for by MMagTech,
+  2026-10-21): anything that works only because another project behaves a
+  way it does not promise (a patch to its source, a settings key or file it
+  does not document, its output or its log read as text, a setting's name, a
+  file laid over one of its own) gets, in the same pull request, a check in
+  the place that is read when that project moves, and a row in
+  docs/ARCHITECTURE.md, "What leans on other projects". For a package of the
+  Bazzite base, that place is its area in `ci/base-watch.txt`: a `log:` line,
+  run on the reference console as `tools/base-checks.sh` runs it and seen to
+  fail when its answer is wrong, or a `tv:` line when only eyes can tell. For
+  something pinned here (a core, an emulator, Sunshine), an assertion in its
+  build or install script that stops the build. Where nothing can check it,
+  the row says so, and what would show it broken.
 - **Changing the controls:** change About, How to, and
   `docs/wiki/navigation.md` together (docs/SETTINGS.md, About).
 - **A new emulator or library in the image:** `docs/LICENCES.md`,
