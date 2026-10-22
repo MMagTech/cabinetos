@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.22.3 {#v2026-10-22-3}
+
+*22 October 2026*
 
 - **Fixed:** on a computer with a speaker built into its case, every sound
   played from that speaker instead of the TV. The TV plays it now, and
