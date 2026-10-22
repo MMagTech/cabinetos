@@ -56,15 +56,11 @@ system. It is on to start with.
 
 ## Wii Remotes
 
-Real Wii Remotes play Wii games, pointer included. Two kinds are supported:
-
-- **Nintendo's own** Wii Remote and Wii Remote Plus, **without MotionPlus**.
-  Linux's own Wii Remote driver turns MotionPlus off on Nintendo's Remotes
-  whenever a game turns it on, so it cannot work on the console.
-- **TechKen's copies** (Wii Remote Plus copies with MotionPlus built in),
-  MotionPlus included.
-
-Other copies may work, but are not tested.
+Real Wii Remotes play Wii games, pointer included. **TechKen's Wii Remote Plus
+copies are the only officially supported Wii Remote**, MotionPlus included.
+Other Wii Remotes, Nintendo's own included, may work, but no fixes or promises
+are made for them. On Nintendo's own Remotes MotionPlus cannot work: Linux
+turns it off whenever a game turns it on.
 
 1. Settings, Controllers, **Wii Remotes**, **Pair a Wii Remote**.
 2. Press the red **sync** button on the Remote (under the battery cover).

@@ -274,8 +274,8 @@ down. "Look now at" is where the code or a later decision moved on.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
   2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07; Nintendo's
-  own Remotes counted twice, fixed 2026-10-21 (#548), then supported
-  without MotionPlus, its games grey until a TechKen (2026-10-22). Open: #203
+  own Remotes counted twice, fixed 2026-10-21 (#548); only the TechKens
+  supported, MotionPlus games grey until one (2026-10-22). Open: #203
   ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
   `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
 - **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
@@ -16755,7 +16755,7 @@ ids) losing the kernel driver's controller does not matter; a Wii U game
 plays on an ordinary pad. What must not break: the TechKens, and ordinary
 pads in Wii U and Wii games.
 
-#### Nintendo's own Remotes: supported without MotionPlus, 2026-10-22
+#### Only the TechKens supported; Nintendo's own get no MotionPlus, 2026-10-22
 
 **MMagTech, 2026-10-22:** Nintendo's own Remotes (the original and the Wii
 Remote Plus) supported alongside the TechKens, as long as the TechKens never
@@ -16795,10 +16795,15 @@ Sports + Wii Sports Resort on one TechKen: "it looks like motion controls
 worked". It had never been tried before: Mario Kart's steering is the tilt
 sensor every Remote has, and Geometry Wars is the Nunchuk and the pointer.
 
-**DECIDED, MMagTech 2026-10-22:** two Remotes are supported, Nintendo's own
-(the original and the Wii Remote Plus) **without MotionPlus**, and the
-TechKens with it. The wiki says so, and never that Nintendo's Remote is
-fully supported. #549 stays. No bridge work. **A Wii game that requires
+**DECIDED, MMagTech 2026-10-22, in the end:** **the TechKens are the only
+officially supported Wii Remote.** Other Remotes, Nintendo's own included,
+may work, but no fixes or promises are made for them, and a later issue with
+one of Nintendo's is a no-go. What was agreed that day ships, once: #549, the
+greying below, and the bridge's report-mode fix (below). The wiki says so in
+his approved words (Controllers, "Wii Remotes"). Earlier the same day he had
+chosen "two Remotes supported, Nintendo's without MotionPlus"; he turned to
+this on learning that a full fix had a second, open-ended part (the answer
+filter below), which he never wants built. **A Wii game that requires
 MotionPlus stays grey, "Needs MotionPlus", until a Remote that is not
 Nintendo's own is paired**; one where MotionPlus is optional plays on any
 Remote. Both from GameTDB, the console's list of Wii controllers already: its
@@ -16829,9 +16834,9 @@ The bridge puts them back: after a status report from a Remote the driver
 drives, a few milliseconds later, the game's last report mode with its
 current rumble bit. Only for those Remotes, so none of it runs for a
 TechKen. Shown first with the fake Remote on the A9 (named so the bridge
-takes it), then a TechKen check at the TV: a Nunchuk game and the Miis. Not
-built: the bridge keeping the driver's own answers from the game (the 4-second
-check's three); left until a Nintendo Remote owner reports trouble.
+takes it), then a TechKen check at the TV: a Nunchuk game and the Miis.
+**Never built** (MMagTech, 2026-10-22): the bridge keeping the driver's own
+answers from the game (the 4-second check's three), even on a report.
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the

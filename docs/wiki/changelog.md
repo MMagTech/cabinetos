@@ -8,9 +8,9 @@ one you install, so you only ever install the newest.
 
 - **Changed:** Wii games that require MotionPlus, such as Wii Sports Resort,
   Red Steel 2 and Skyward Sword, are greyed with *Needs MotionPlus* until a
-  TechKen Wii Remote is paired. Nintendo's own Wii Remotes are supported for
-  everything else: Linux turns their MotionPlus off whenever a game turns it
-  on, so it cannot work on the console. See
+  TechKen Wii Remote is paired: on Nintendo's own Remotes, Linux turns
+  MotionPlus off whenever a game turns it on. TechKen's copies are the only
+  officially supported Wii Remote. See
   [Wii Remotes](controllers.md#wii-remotes).
 - **Fixed:** a Wii U game that needs the GamePad said *Needs a Wii Remote* on
   its tile. It says *Needs a Wii U GamePad* now.
