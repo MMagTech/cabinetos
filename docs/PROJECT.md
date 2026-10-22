@@ -272,7 +272,8 @@ down. "Look now at" is where the code or a later decision moved on.
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
-  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07. Open: #203
+  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07; Nintendo's
+  own Remotes counted twice, fixed 2026-10-21 (#548). Open: #203
   ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
   `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
 - **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
