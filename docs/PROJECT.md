@@ -16660,12 +16660,31 @@ access, no joystick for SDL, Steam or `cabinetos-pads`, nothing for libinput
 (its D-pad is the arrow keys). Its battery is not read either (battery.cpp):
 a read asks the Remote for a status report.
 
-What the driver still does, from its source (not seen on a TV): after every
-status report it sets the Remote's report mode again (buttons only, which
-the game sets back), and on an original Remote with no MotionPlus inside it
-looks for one every 4 seconds (two register writes, two reads). Every Linux
-Dolphin user plays with that. If a game ever shows it, the next step is the
-bridge talking to the Remote itself, without BlueZ's input plugin.
+What the driver still does, **measured on the A9, 2026-10-22**, with a fake
+original Remote (a uhid device on the Bluetooth bus, 057E:0306, answering as
+an RVL-003 with nothing plugged in; named so the bridge leaves it alone):
+
+- At connect, in the first half second: a status request, light 1, the
+  extension set up plain (0xA400F0 = 0x55, 0xA400FB = 0x00), a MotionPlus
+  probe, and five status requests, each followed by its own report mode
+  (0x30, buttons only). Something on the console also opened the driver's
+  motion and pointer devices for about 10 ms (report mode 0x31, then the IR
+  camera set up and switched off again); not traced.
+- Then, every 4.03 s for as long as the Remote is connected, games included:
+  a read of 0xA400FA (6 bytes), a write of 0x55 to 0xA600F0, and a read of
+  0xA600FA (6 bytes), looking for a MotionPlus plugged in. Nothing else: no
+  status requests, no battery reads (battery.cpp no longer reads it).
+
+The Remote's answers to those three (two 0x21 read replies and one 0x22
+acknowledgement) go to every reader of its raw node, so the bridge passes
+them to the game, and the bridge counts any 0x21 against the game's oldest
+read (`fromReal`, `r.reads`). Whether a game is disturbed (a Mii read coming
+out damaged, a Nunchuk not set up) is not known: it needs an original Remote
+in a real game. The driver skips the check on a Remote with MotionPlus
+inside (the Wii Remote Plus, "-TR", and the TechKens, which it never binds).
+If it does disturb games, the contained fix is in the bridge: pass the game
+only the replies it asked for. The large one is the bridge talking to the
+Remote itself, without BlueZ's input plugin.
 
 **MMagTech, 2026-10-21:** a Wii U Pro Controller or a Balance Board (the same
 ids) losing the kernel driver's controller does not matter; a Wii U game
