@@ -93,6 +93,17 @@ RomM: keep test launches under a minute, or have his go.
    watch the first pull request after.
 9. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
+10. **PR #550, "Sound: a built-in speaker never takes the sound from the
+    TV"** (#547, a Beelink SER9 playing through its case speaker). Built and
+    tested 2026-10-21 (PROJECT.md decision 46, "Built-in speakers"). Waits
+    for his words to push it to `testing` (the push was refused without
+    them), then his install on the A9; then from the A9: the script is in
+    `/usr/share/wireplumber/scripts/`, the `ci/base-watch.txt` Sound check
+    passes, and with `wpctl set-log-level` raised for
+    `s-cabinetos-sound-output` a rescan logs "N outputs, 0 left out". He
+    needs no TV check (headphones taking over was tested in October). The
+    changelog's `## Next` becomes the testing version; merge on his word;
+    close #547 asking the reporter to update and reopen if still wrong.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
