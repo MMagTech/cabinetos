@@ -131,7 +131,8 @@ std::optional<int> App::startDisplay() {
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, "0x1209/0xCAB0");
     // A WII REMOTE IS NOT ONE OF SDL'S PADS HERE (#200): wiiremote.h drives
     // them, and the bridge's stand-ins carry Nintendo's id, which SDL's own Wii
-    // driver would otherwise take as a second controller.
+    // driver would otherwise take as a second controller. The kernel's Wii
+    // driver's controllers are kept from SDL by udev (72-cabinetos-wii-remote.rules).
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "0");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) {
         std::fprintf(stderr, "[frontend] SDL_Init failed: %s\n", SDL_GetError());
