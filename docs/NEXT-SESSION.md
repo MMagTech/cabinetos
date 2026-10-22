@@ -94,18 +94,11 @@ RomM: keep test launches under a minute, or have his go.
 9. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
 10. **PR #550, "Sound: a built-in speaker never takes the sound from the
-    TV"** (#547, a Beelink SER9 playing through its case speaker). Built as
-    one PipeWire file edit at image build (`build_files/built-in-speaker.sh`;
-    PROJECT.md decision 46, "Built-in speakers"), dry-run on the A9
-    2026-10-22. Waits for #549 to merge: then update from main (one
-    changelog conflict) and push to `testing` on his words only (a push
-    without them was refused). After his install: the A9's
-    `analog-output-speaker.conf` has both phantom jacks at `no`, and the TV
-    still plays. He needs no TV check (headphones taking over was tested in
-    October). Still to settle with him: whether the changelog warns
-    handheld-PC and laptop players. The changelog's `## Next` becomes the
-    testing version; merge on his word; close #547 asking the reporter to
-    update and reopen if still wrong.
+    TV"** (#547, a Beelink SER9 playing through its case speaker). On
+    testing as 2026.10.22.3, installed on the A9 2026-10-22, its log checks
+    passed and his smoke check passed. The changelog is final. Waits only
+    for his word "merge"; then close #547 asking the reporter to update and
+    reopen if still wrong, and delete the branch on his go.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
