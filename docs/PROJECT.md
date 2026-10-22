@@ -274,8 +274,8 @@ down. "Look now at" is where the code or a later decision moved on.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
   2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07; Nintendo's
-  own Remotes counted twice, fixed 2026-10-21 (#548); supporting them
-  waits on a MotionPlus test on the TechKens (2026-10-22). Open: #203
+  own Remotes counted twice, fixed 2026-10-21 (#548), then supported
+  without MotionPlus, its games grey until a TechKen (2026-10-22). Open: #203
   ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
   `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
 - **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
@@ -16755,7 +16755,7 @@ ids) losing the kernel driver's controller does not matter; a Wii U game
 plays on an ordinary pad. What must not break: the TechKens, and ordinary
 pads in Wii U and Wii games.
 
-#### Supporting Nintendo's own Remotes: waiting on MotionPlus, 2026-10-22
+#### Nintendo's own Remotes: supported without MotionPlus, 2026-10-22
 
 **MMagTech, 2026-10-22:** Nintendo's own Remotes (the original and the Wii
 Remote Plus) supported alongside the TechKens, as long as the TechKens never
@@ -16790,14 +16790,42 @@ sees every report first and switches it off again. So on Nintendo's Remotes
 the games that need MotionPlus would not work: on MMagTech's RomM, Wii Sports
 Resort and Red Steel 2, 2 of its 52 Wii games.
 
-**Waiting:** MMagTech tests MotionPlus on the TechKens before deciding
-anything more (2026-10-22). It has never been tried: Mario Kart's steering
-is the tilt sensor every Remote has, and Geometry Wars is the Nunchuk and
-the pointer. If MotionPlus does not work on the TechKens either, Nintendo's
-Remotes would have the same support as the TechKens. Also open: whether #549
-stays if only the TechKens are supported. The recommendation is to keep it:
-it fixes a Remote counted as two controllers for anyone who pairs one, and
-the TechKens never meet that driver.
+**MotionPlus on the TechKens, MMagTech at the TV, 2026-10-22, 17:37:** Wii
+Sports + Wii Sports Resort on one TechKen: "it looks like motion controls
+worked". It had never been tried before: Mario Kart's steering is the tilt
+sensor every Remote has, and Geometry Wars is the Nunchuk and the pointer.
+
+**DECIDED, MMagTech 2026-10-22:** two Remotes are supported, Nintendo's own
+(the original and the Wii Remote Plus) **without MotionPlus**, and the
+TechKens with it. The wiki says so, and never that Nintendo's Remote is
+fully supported. #549 stays. No bridge work. **A Wii game that requires
+MotionPlus stays grey, "Needs MotionPlus", until a Remote that is not
+Nintendo's own is paired**; one where MotionPlus is optional plays on any
+Remote. Both from GameTDB, the console's list of Wii controllers already: its
+file marks each MotionPlus control `required="true"` or not (48 entries
+required and 220 optional on 2026-10-22, 29 of the required kept after the
+tool leaves out mods and homebrew). Every game by the same rule: GameTDB
+marks the "Wii Sports + Wii Sports Resort" disc as requiring MotionPlus, so
+with only Nintendo's Remotes the whole disc is grey, its Wii Sports too.
+
+**What was built.** `tools/wii-controls.py` writes `M` for a required
+MotionPlus (`m` stays optional); the regenerated list changed only those
+entries. `wiiremote.cpp` reads which paired Remotes are Nintendo's own from
+bluetoothd (`bluetoothctl info`, `Modalias: usb:v057Ep0306` or `0330`, the
+ids hid-wiimote takes; the TechKens say `v04E8p7021`), and `catalog.cpp`
+greys by it after the "Needs a Wii Remote" rule. A Remote bluetoothd cannot
+describe counts as not Nintendo's, so nothing greys that did not before.
+Tested headless on the A9 through the read-only relay, with a stand-in
+`bluetoothctl` for the Nintendo case: one Nintendo Remote paired, Wii Sports
++ Wii Sports Resort and Red Steel 2 read "Needs MotionPlus" (page and grid)
+and Geometry Wars plays; the A9's two TechKens, all three play; no Remote,
+"Needs a Wii Remote" as before.
+
+**Known and left (MMagTech chose no bridge work):** on Nintendo's Remotes the
+driver's report-mode reset after a status report and its rumble cuts remain,
+so pointer, tilt and Nunchuk data can stop in a game until it sets its mode
+again. How often a game asks for a status report is not known; nobody here
+has one of Nintendo's Remotes.
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
