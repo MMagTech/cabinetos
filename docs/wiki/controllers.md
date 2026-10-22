@@ -75,8 +75,9 @@ Wii games that need a Remote are greyed (*Needs a Wii Remote*) until one is
 paired. A game that requires MotionPlus, such as Wii Sports Resort, Red Steel 2
 or Skyward Sword, is greyed (*Needs MotionPlus*) until a TechKen Remote is
 paired; a Nintendo Remote alone does not un-grey it. A game where MotionPlus
-is optional plays on either. In a Wii game, hold the Remote's **HOME** button for a second for the
-console's pause menu; a short press is the game's own HOME menu.
+is optional plays on either. In a Wii game, hold the Remote's **HOME** button
+for a second for the console's pause menu; a short press is the game's own
+HOME menu.
 
 ## In-game shortcuts
 
