@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.22.4 {#v2026-10-22-4}
+
+*22 October 2026*
+
+- **Changed:** Wii games that require MotionPlus, such as Wii Sports Resort,
+  Red Steel 2 and Skyward Sword, are greyed with *Needs MotionPlus* until a
+  TechKen Wii Remote is paired: on Nintendo's own Remotes, Linux turns
+  MotionPlus off whenever a game turns it on. TechKen's copies are the only
+  officially supported Wii Remote. See
+  [Wii Remotes](controllers.md#wii-remotes).
+- **Fixed:** a Wii U game that needs the GamePad said *Needs a Wii Remote* on
+  its tile. It says *Needs a Wii U GamePad* now.
+
 ## 2026.10.22.3 {#v2026-10-22-3}
 
 *22 October 2026*
