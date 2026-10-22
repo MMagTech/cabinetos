@@ -4,6 +4,14 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** on a computer with a speaker built into its case, every sound
+  played from that speaker instead of the TV. The TV plays it now, and
+  headphones still take over while they are plugged in. While the TV is
+  asleep or off, the built-in speaker stays silent.
+  ([#547](https://github.com/MMagTech/cabinetos/issues/547))
+
 ## 2026.10.21.4 {#v2026-10-21-4}
 
 *21 October 2026*

@@ -310,9 +310,11 @@ down. "Look now at" is where the code or a later decision moved on.
 - **45. Smart collections, issue #352** ("RomM Smart Collections don't show
   up (only regular collections do)"). Decided 2026-10-12, built.
 - **46. Where the sound goes, issue #341** ("No audio [Expected on this
-  machine]"). Decided 2026-10-13, built 2026-10-14. Open: #390 ("Headphones
-  don't take over after a Remote Play session (waiting on Sunshine)") and
-  #391.
+  machine]"). Decided 2026-10-13, built 2026-10-14. Built-in speakers, #547
+  ("Sounds plays only from onboard speakers (Beelink ser9)"): decided and
+  built 2026-10-21, never the speaker, silent when the TV's sound is gone.
+  Open: #390 ("Headphones don't take over after a Remote Play session
+  (waiting on Sunshine)") and #391.
 - **47. Interface sounds everywhere, and a calmer set, issue #389**
   ("Interface sounds on every screen and menu, not only some"). Decided at
   the TV 2026-10-14, built. "No start-up or shut-down sound, ever." The
@@ -17779,7 +17781,9 @@ rule: WirePlumber switches its card off while nothing is plugged in, so the
 output only exists while headphones are in, and its own rank (1009 on the
 A9) is above HDMI. A small WirePlumber script that ignores any output unable
 to sense a plug was considered and rejected: more than standard settings,
-for hardware the rule says not to account for.
+for hardware the rule says not to account for. **Both held only on a sound
+chip with no built-in speaker, as the A9's has none; reversed for built-in
+speakers on 2026-10-21 (#547, below).**
 
 **Why the memory goes off.** A chosen output beats every priority, and
 WirePlumber kept the choice across restarts. On the A9 the TV was chosen, so
@@ -17804,6 +17808,67 @@ returns the sound to the TV.
 
 **Open:** the volume goes back to full at every start (#351 above), on the
 default output. With headphones in at start, that is the headphones (#391, waiting, not built).
+
+#### Built-in speakers (#547), 2026-10-21
+
+**The fault.** A Beelink SER9 (#547, "Sounds plays only from onboard
+speakers (Beelink ser9)") played everything through the speaker in its
+case. Its ALC897 drives a built-in speaker (`speaker_outs=1` in the kernel
+log), and a speaker has no plug to sense, so its connector reports
+`unknown`. WirePlumber passes over an output only when its connector says
+`no` (`lutils.haveAvailableRoutes`), so the speaker counted and its analog
+rank beat the TV. The same fault is in the report on #416 ("PCSX2 loads the
+wrong bios for the region of the game"): an HP EliteDesk 705 G4, its CX20632
+with `speaker_outs=1`, the speaker chosen over an Acer CB272U whose EDID
+declares speakers. Nobody there mentioned sound. The A9 never showed it:
+its ALC269VC has only the headphone jack, which says `no` while empty. No
+priority can fix it: the speaker and the headphone jack are one output
+whose connector changes when headphones go in. The three HCAR5000-MI
+reports (#341, #400, #529) already had the TV as the default.
+
+**Decided by MMagTech, 2026-10-21.** The 2026-10-13 rejection of a script is
+reversed, since settings cannot hold the rule on these machines. When the
+TV's sound is gone (the screen asleep, the TV off or unplugged) the console
+is silent, never the built-in speaker: a console is designed around a TV,
+every modern TV has speakers, a monitor without them has the jack, and
+Remote Play carries the sound through Sunshine's own output. Falling back to
+the speaker was considered and rejected: the screen's sleep removes the
+TV's output (#228, below), so the sound would move to the speaker at every
+sleep and come back only if SDL noticed the TV's return.
+
+**Built:** `system_files/usr/share/wireplumber/scripts/cabinetos-sound-output.lua`,
+loaded by the conf above. After WirePlumber's `find-selected-default-node`
+and before its `find-best-default-node`, on a machine with any HDMI or
+DisplayPort sound output, it takes out of the list every sound-card output
+that is not HDMI or DisplayPort and whose connector does not report `yes`.
+A choice somebody made stands; Bluetooth and Sunshine's output are not
+sound-card outputs; a machine with no HDMI or DisplayPort sound is left
+alone. How it loads, each part measured on the VM (WirePlumber 0.5.12):
+listed as `optional` in the profile it was never loaded; `required` would
+let a broken script stop WirePlumber; so the profile requires a virtual
+`custom.cabinetos` that only wants it, and a broken copy logged "optional
+component ... failed to load" while WirePlumber went on choosing outputs.
+It loads before the standard event source, as WirePlumber's own hooks do;
+loaded after, it was registered too late for the choice made at start-up.
+If a WirePlumber update ever runs it after `find-best-default-node`, it logs
+a warning that names #547, and `ci/base-watch.txt` (Sound) reads the log for
+it whenever WirePlumber moves. The diagnostic report's Sound section now
+lists each card's outputs and what their connectors sense.
+
+**Tested 2026-10-21**, by WirePlumber's own Lua (`wpexec`, 0.5.17 on the A9
+and 0.5.12 on the VM), the script against 14 stand-in setups: speaker and
+TV (the TV); headphones in with the TV on (the headphones); the TV asleep
+(silent); the TV asleep with headphones in (the headphones); the A9 with and
+without headphones; the HCAR5000-MI's USB jack (the TV); no HDMI sound at
+all (the speaker); a TV that reports `unknown` (the TV); a UCM card with
+the speaker and HDMI on one card (HDMI); Bluetooth headphones and Sunshine's
+output (unchanged); a choice somebody made (stands); run after
+`find-best-default-node` (a warning, nothing changed). Against the A9's real
+cards it found the TV's sound, kept the TV and changed nothing. In a real
+WirePlumber on the VM it registered before the first choice and ran between
+`find-selected-default-node` and `find-best-default-node`. **Not tested on a
+real built-in speaker:** the A9 has none, so the reporter's update is the
+test.
 
 #### Sound dying until a restart (#228): the 2026-10-18 failure, read from the A9's logs
 
