@@ -281,7 +281,10 @@ down. "Look now at" is where the code or a later decision moved on.
   "No code yet"; built 2026-10-01, judged on the testing image 2026-10-02.
   Graphic packs: none (#207, "Wii U: Cemu's graphic packs (resolution and
   fix), reconsider", closed). Games that need a Wii Remote stay greyed
-  (#231, "Wii U: real Wii Remotes in Cemu", closed 2026-10-04). Look now at:
+  (#231, "Wii U: real Wii Remotes in Cemu", closed 2026-10-04). Player 1 is
+  the GamePad since 2026-10-22 (Shovel Knight); Wii U gets small fixes
+  only, and the GamePad's screen waits (#555, "Wii U: see the GamePad's
+  screen, and touch it, on the TV"). Look now at:
   `frontend/src/standalone_cemu.cpp`.
 - **37. Steam: one entry that hands over to Big Picture, issue #223**
   ("Steam: one entry that hands over to Big Picture (audit first)"). Decided
@@ -16774,6 +16777,30 @@ planned): "Wii Remotes in Wii U games" above is reversed. A Wii U game that
 needs a Wii Remote and takes neither a Pro nor a Classic Controller stays greyed,
 "Needs a Wii Remote", whether or not a Remote is paired (catalog.cpp:367-375;
 `wiiu::needs`, wiiu.h:60).
+
+Since 2026-10-22 (MMagTech): **player 1 is a Wii U GamePad to Cemu**, and
+players 2 and up stay Pro Controllers (`cemuProfile`,
+standalone_cemu.cpp). Shovel Knight (`WKNE`, eShop) ignored every press on
+its first screen, the screen size setup, on the A9 that morning, while
+Hyrule Warriors played on the same pad between its starts. With no GamePad
+set up, Cemu still answers a game's GamePad reads with an empty sample and
+no error (`Cafe/OS/libs/vpad/vpad.cpp`, `VPADRead`: "most games expect the
+Wii U GamePad to be connected"), so a screen that reads only the GamePad
+sees nothing pressed. GameTDB lists the Pro Controller for Shovel Knight and
+marks nothing required, so the catalog could not have caught it. On a Wii U
+the GamePad is always there and always player 1, and Cemu's own guide
+(cemu.cfw.guide, controller configuration), RetroArch's Cemu core ("Port 1
+is always the Wii U GamePad"), Batocera and RetroDECK all make player 1 the
+GamePad; only EmuDeck's script of 2026-07-23 uses Pro Controllers on a TV,
+with no reason written. Cemu puts a GamePad on the first GamePad channel and
+each Pro Controller on the first free Wii controller channel, whatever its
+slot, so player 2 is a game's first Pro Controller, as on a Wii U. Which
+games play is unchanged. What it costs: a game that puts its map or items
+on the GamePad's screen when a GamePad is used shows them there, and nothing
+shows that screen on the TV. MMagTech banked that for another time, with
+Wii U kept to small fixes: #555, "Wii U: see the GamePad's screen, and
+touch it, on the TV", which holds what Cemu can do and the options talked
+through.
 
 #### Carried over from Wii (question 35) unchanged
 

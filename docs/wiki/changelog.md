@@ -4,6 +4,16 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** Shovel Knight on Wii U ignored every button on its first
+  screen, where it asks you to set the screen size. It answers now: in Wii U
+  games, player 1's controller now counts as the Wii U GamePad, as on a real
+  Wii U, and players 2 and up are Pro Controllers as before. A game that
+  shows a map or items on the GamePad's own screen may now put them there,
+  and the console cannot show that screen yet.
+  ([#555](https://github.com/MMagTech/cabinetos/issues/555))
+
 ## 2026.10.22.3 {#v2026-10-22-3}
 
 *22 October 2026*
