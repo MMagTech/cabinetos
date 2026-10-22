@@ -13,6 +13,11 @@ one you install, so you only ever install the newest.
   headphones still take over while they are plugged in. While the TV is
   asleep or off, the built-in speaker stays silent.
   ([#547](https://github.com/MMagTech/cabinetos/issues/547))
+- **Changed, for players on a handheld PC or a laptop:** sorry, the built-in
+  speakers on a handheld PC or a laptop may no longer play. This came with a
+  fix for PCs on a TV that played their sound through a small speaker in the
+  case. CabinetOS is made to be a home console: a PC attached to a TV, so
+  handheld PCs and laptops are not supported.
 
 ## 2026.10.22.2 {#v2026-10-22-2}
 
