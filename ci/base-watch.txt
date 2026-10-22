@@ -82,6 +82,11 @@ log: The console can read every key device, for the volume keys :: out=$(for e i
 # its topology (gpu.cpp, cpus.cpp); the kernel can rename either, and Auto
 # then falls to Performance with one line in the log. AMD's file only.
 log: Picture quality's Auto still reads the GPU's and the processor's speeds :: g=$(cat /sys/class/drm/card*/device/pp_dpm_sclk 2>/dev/null); out=$(grep -qE '^[0-9]+: [0-9]+Mhz' <<<"$g" || echo "no clock lines in /sys/class/drm/card*/device/pp_dpm_sclk: $g"; c=/sys/devices/system/cpu/cpu0; [ -s $c/cpufreq/cpuinfo_max_freq ] || echo "no $c/cpufreq/cpuinfo_max_freq"; [ -s $c/topology/core_cpus_list ] || [ -s $c/topology/thread_siblings_list ] || echo "no core_cpus_list or thread_siblings_list in $c/topology"); [ -z "$out" ] || { echo "$out"; exit 1; }
+# A Wii Remote with Nintendo's own id is taken by the kernel's Wii Remote
+# driver too, hid-wiimote, whose devices 72-cabinetos-wii-remote.rules hides
+# by those two ids (#549). A driver that took another id would make a second
+# player of that Remote again; one that took neither leaves the rule idle.
+log: The kernel's Wii Remote driver still takes only the two ids the console hides :: a=$(modinfo -F alias hid_wiimote 2>&1 | LC_ALL=C sort | tr '\n' ' '); [ "$a" = 'hid:b0005g*v0000057Ep00000306 hid:b0005g*v0000057Ep00000330 ' ] || { echo "hid_wiimote's ids: ${a:-none}"; exit 1; }
 tv: Picture: after the restart Home comes up on the TV, sharp
 tv: Sound: Home's sounds play from the TV
 tv: A Bluetooth pad: turn on a paired pad; it connects and moves around Home
@@ -101,8 +106,9 @@ changelog: Controllers :: ^HID: ((core|input|hidraw|uhid|usbhid|generic|quirks|p
 # The drivers system_files/usr/lib/modules-load.d/cabinetos-controllers.conf
 # loads at boot, and the kernel's list of pads that wait for their own driver
 # (hid-quirks.c, hid_have_special_driver). When that list covers Xbox, Switch
-# and Steam pads, the file is no longer needed (#318).
-series: Controllers :: drivers/hid/hid-microsoft.c drivers/hid/hid-playstation.c drivers/hid/hid-nintendo.c drivers/hid/hid-steam.c drivers/hid/hid-quirks.c
+# and Steam pads, the file is no longer needed (#318). And the kernel's Wii
+# Remote driver, whose devices 72-cabinetos-wii-remote.rules hides (#549).
+series: Controllers :: drivers/hid/hid-microsoft.c drivers/hid/hid-playstation.c drivers/hid/hid-nintendo.c drivers/hid/hid-steam.c drivers/hid/hid-quirks.c drivers/hid/hid-wiimote-core.c
 changelog: Sound :: ^ALSA: (hda|pcm|core|control|timer)\b
 changelog: USB :: ^(usb|USB): (xhci|core|hub)\b|^xhci\b|^usb: storage: uas\b|^thunderbolt:
 changelog: Processor, sleep and power :: ^(platform/x86(/amd|: amd)|cpufreq: amd-pstate|cpufreq/amd-pstate|iommu/amd|x86/(cpu/)?amd)\b
