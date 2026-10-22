@@ -6,8 +6,11 @@
 // "Nintendo RVL-CNT", the test Dolphin and Wii software use. Never the device
 // id: MMagTech's TechKen copies report Samsung's wireless keyboard id
 // (04E8:7021), so the kernel's Wii Remote driver and SDL both pass them by.
-// What the console gets is a raw HID node (/dev/hidrawN) and nothing else,
-// which is also what Dolphin reads, so the console drives the Remote itself.
+// A Remote with Nintendo's id gets the kernel's driver as well, whose own
+// controller devices udev keeps from everyone (72-cabinetos-wii-remote.rules,
+// #548). Either way, what the console gets is a raw HID node (/dev/hidrawN)
+// and nothing else, which is also what Dolphin reads, so the console drives
+// the Remote itself.
 //
 // PAIRING, measured on the A9 2026-10-02:
 //   1. A copy answers only the Wii's own search, the limited inquiry, which

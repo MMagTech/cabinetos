@@ -12,6 +12,15 @@ one you install, so you only ever install the newest.
   asleep or off, the built-in speaker stays silent.
   ([#547](https://github.com/MMagTech/cabinetos/issues/547))
 
+## 2026.10.22.2 {#v2026-10-22-2}
+
+*21 October 2026*
+
+- **Fixed:** a Wii Remote made by Nintendo, or a copy that reports itself as
+  one, showed as two controllers, a player and a Wii Remote (P2 and W1), and
+  every press counted twice. It is one Wii Remote now.
+  ([#548](https://github.com/MMagTech/cabinetos/issues/548))
+
 ## 2026.10.21.4 {#v2026-10-21-4}
 
 *21 October 2026*

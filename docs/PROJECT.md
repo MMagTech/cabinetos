@@ -272,7 +272,8 @@ down. "Look now at" is where the code or a later decision moved on.
   `frontend/src/standalone_xenia.cpp`.
 - **35. Wii (Dolphin), issue #173** ("New systems 4: Wii (Dolphin)"). Opens
   "Research only; no code"; built 2026-09-30; real Remotes decided
-  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07. Open: #203
+  2026-10-02 and built 2026-10-03; Miis and rumble 2026-10-07; Nintendo's
+  own Remotes counted twice, fixed 2026-10-21 (#548). Open: #203
   ("Wii: the HOME menu's "Wii Menu" leaves a black screen"). Look now at:
   `wiibridge/` (#200, "Real Wii Remotes: pair once, like a Wii").
 - **36. Wii U (Cemu), issue #174** ("New systems 5: Wii U (Cemu)"). Opens
@@ -16640,6 +16641,58 @@ change to the Dolphin core.
 The first rumble try did not stick: the HOME Menu writes its settings when it
 closes, and the game was left with the menu still open. Not a fault here; see
 docs/lessons/emulators.md.
+
+#### Nintendo's own Remotes counted twice (#548), 2026-10-21
+
+A player with Nintendo's own Remote (RVL-003, "Nintendo RVL-CNT-01", id
+057E:0306) saw it as two controllers, P2 and W1, and every press twice. Their
+report showed why: the kernel's Wii Remote driver, `hid-wiimote`, takes any
+Bluetooth device with Nintendo's id (0306 and 0330), and makes a controller of
+its own that SDL seated as a player, while the bridge drove the same Remote
+as W1. The TechKens report Samsung's id, so the driver never touched them and
+the A9 never showed it (`hid_wiimote` is not even loaded there).
+
+**The driver cannot simply be blocked.** The kernel keeps those two ids for it
+(`hid_have_special_driver`, hid-quirks.c), so without it the plain driver
+refuses the Remote too: no raw node, and the bridge loses Nintendo's Remotes
+altogether. Nothing outside the kernel can change that for a Bluetooth
+device (HID-BPF may write only a device's name, uniq and phys). So the driver
+stays bound, as on every Linux desktop where Dolphin uses a real Remote, and
+`72-cabinetos-wii-remote.rules` keeps its devices from everyone: no seat
+access, no joystick for SDL, Steam or `cabinetos-pads`, nothing for libinput
+(its D-pad is the arrow keys). Its battery is not read either (battery.cpp):
+a read asks the Remote for a status report.
+
+What the driver still does, **measured on the A9, 2026-10-22**, with a fake
+original Remote (a uhid device on the Bluetooth bus, 057E:0306, answering as
+an RVL-003 with nothing plugged in; named so the bridge leaves it alone):
+
+- At connect, in the first half second: a status request, light 1, the
+  extension set up plain (0xA400F0 = 0x55, 0xA400FB = 0x00), a MotionPlus
+  probe, and five status requests, each followed by its own report mode
+  (0x30, buttons only). Something on the console also opened the driver's
+  motion and pointer devices for about 10 ms (report mode 0x31, then the IR
+  camera set up and switched off again); not traced.
+- Then, every 4.03 s for as long as the Remote is connected, games included:
+  a read of 0xA400FA (6 bytes), a write of 0x55 to 0xA600F0, and a read of
+  0xA600FA (6 bytes), looking for a MotionPlus plugged in. Nothing else: no
+  status requests, no battery reads (battery.cpp no longer reads it).
+
+The Remote's answers to those three (two 0x21 read replies and one 0x22
+acknowledgement) go to every reader of its raw node, so the bridge passes
+them to the game, and the bridge counts any 0x21 against the game's oldest
+read (`fromReal`, `r.reads`). Whether a game is disturbed (a Mii read coming
+out damaged, a Nunchuk not set up) is not known: it needs an original Remote
+in a real game. The driver skips the check on a Remote with MotionPlus
+inside (the Wii Remote Plus, "-TR", and the TechKens, which it never binds).
+If it does disturb games, the contained fix is in the bridge: pass the game
+only the replies it asked for. The large one is the bridge talking to the
+Remote itself, without BlueZ's input plugin.
+
+**MMagTech, 2026-10-21:** a Wii U Pro Controller or a Balance Board (the same
+ids) losing the kernel driver's controller does not matter; a Wii U game
+plays on an ordinary pad. What must not break: the TechKens, and ordinary
+pads in Wii U and Wii games.
 
 ### 36. Wii U (Cemu), issue #174
 **Researched 2026-10-01 (the research is on #174); decided with MMagTech the
