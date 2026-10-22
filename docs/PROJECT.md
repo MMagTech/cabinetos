@@ -16826,15 +16826,19 @@ Tested headless on the A9 through the read-only relay, with a stand-in
 and Geometry Wars plays; the A9's two TechKens, all three play; no Remote,
 "Needs a Wii Remote" as before.
 
-**Still to build in the same PR (MMagTech, 2026-10-22, after the other
-sessions of the day are wrapped up):** on Nintendo's Remotes the driver's
-report-mode reset after a status report and its rumble cuts would let
-pointer, tilt and Nunchuk data stop in a game until it sets its mode again.
-The bridge puts them back: after a status report from a Remote the driver
-drives, a few milliseconds later, the game's last report mode with its
-current rumble bit. Only for those Remotes, so none of it runs for a
-TechKen. Shown first with the fake Remote on the A9 (named so the bridge
-takes it), then a TechKen check at the TV: a Nunchuk game and the Miis.
+**Built in the same PR (MMagTech's go, 2026-10-22, evening):** on Nintendo's
+Remotes the driver's report-mode reset after a status report and its rumble
+cuts would let pointer, tilt and Nunchuk data stop in a game until it sets
+its mode again. The bridge puts them back (`putBack`, `wiibridge/bridge.cpp`):
+10 ms after a status report from a Remote the driver has, the game's last
+report mode with its current rumble bit and no acknowledgement asked; after
+any other answer while the game's rumble is on, the rumble alone. "The driver
+has it" is the kernel's own record, `DRIVER=wiimote` in the Remote's uevent
+(read on the A9 for a Nintendo id; the TechKens are bound to `samsung`), so
+none of it runs for a TechKen. `make test` gained a third case: the mode back
+10.4 ms after the status and the rumble 10.6 ms after an answer, the TechKen
+sent nothing. Shown with the fake Remote on the A9 (named so the bridge takes
+it) right before a TechKen check at the TV: a Nunchuk game and the Miis.
 **Never built** (MMagTech, 2026-10-22): the bridge keeping the driver's own
 answers from the game (the 4-second check's three), even on a report.
 
