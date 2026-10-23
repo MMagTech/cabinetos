@@ -29,6 +29,8 @@ tool, not only Claude.
 
 ## Also
 
+- Procedures for specific jobs are in `.claude/skills/`. They are plain
+  Markdown: read the one that matches your task and follow it.
 - This repository is public: no address, host name, password or home path of
   any machine goes in a file.
 - Never write to a RomM server you do not own. `CONTRIBUTING.md`, "Running

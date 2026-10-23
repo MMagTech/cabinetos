@@ -670,6 +670,11 @@ here, not reworded; follow the link for the full text.
   request; a person reads it, sends it and answers for it, and the pull request
   says which tool helped and which checks were run. The maintainer reads every
   pull request, and CI does not run on one from a fork until he approves it.
+- **Skills:** a procedure for one job lives in
+  `.claude/skills/<job>/SKILL.md`, plain Markdown that any AI tool can read as
+  instructions. Name a skill for the job it does: verb first, plain words, no
+  project jargon (`check-emulator-update`, not `pin-check`). One job per skill,
+  and it points at the docs for the rule instead of repeating it.
 - **One branch, one pull request, aimed at `main`.** Its body says first what
   the change does and why it exists, in plain words, then the detail, and
   "Closes #N" for an issue it finishes (docs/WORKING.md, "The loop").
