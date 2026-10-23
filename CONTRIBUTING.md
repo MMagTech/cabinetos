@@ -557,9 +557,10 @@ here, not reworded; follow the link for the full text.
   saves. docs/CABINET.md says what Cabinet is now; docs/history/CABINET.md
   is worth reading for how a problem was solved before.
 - **Emulators favour stability over the newest version**: a pin moves only
-  for something a player gets, and the question is asked out loud on the
-  issue or pull request (docs/PROJECT.md, "Constraints and principles", 8).
-  This is the rule for moving a core's pin; the older comment in
+  for one of five named reasons, with its evidence, and the question is
+  asked out loud on the issue or pull request
+  (`docs/decisions/2026-10-23-when-an-emulator-pin-moves.md`). This is the
+  rule for moving a core's pin; the older comment in
   `cores/build-core.sh` saying pins follow Cabinet's manifest is out of date
   (docs/ARCHITECTURE.md, section 7).
 - **Fewer settings; no emulator settings page** (docs/SETTINGS.md, "The screen";

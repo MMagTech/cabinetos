@@ -30,6 +30,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `Containerfile` | The image: the Bazzite base pinned by digest, then the build scripts in several layers | |
 | `Justfile`, `cabinetos.env` | The build recipes CI calls, and their parameters | |
 | `base-manifest.txt` | The base image's package list, for the monthly base-update check | |
+| `AGENTS.md`, `CLAUDE.md` | What an AI coding tool reads before it changes anything: `AGENTS.md` for any tool, `CLAUDE.md` for Claude Code, which holds the seven rules for every change that both point to | nowhere |
 
 ### frontend/src
 
@@ -409,8 +410,8 @@ comments, which the faults step fixes. Until then, trust the code:
   `coreoptions.cpp`; `cores/build-core.sh` says core pins follow Cabinet's
   manifest and "are not to be updated here", which predates both Cabinet
   ceasing to be a constraint (2026-10-11) and the stability rule for moving
-  pins (docs/PROJECT.md, "Constraints and principles", 8, 2026-10-14), which
-  is the rule now.
+  pins (`docs/decisions/2026-10-23-when-an-emulator-pin-moves.md`; first set
+  2026-10-14), which is the rule now.
 - **More code comments the docs tidy found:** Developer access placed in
   "Settings, System" (`system_files/etc/ssh/sshd_config.d/30-cabinetos.conf`,
   `cabinetos-developer.service`, `enable-ssh.sh`, `app.h`; it is the last row

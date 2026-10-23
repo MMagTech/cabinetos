@@ -30,6 +30,8 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 
 ### Emulators and cores
 
+- [when-an-emulator-pin-moves](2026-10-23-when-an-emulator-pin-moves.md): a pin moves only for a major feature, a bug or slowness we have seen, more games playing, a patch fixed upstream, or a move we do not choose.
+
 ### Controls
 
 ### Sound and display

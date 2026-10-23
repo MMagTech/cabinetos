@@ -4538,13 +4538,8 @@ Since 2026-10-07 (#134): it is called Developer access, a hidden row in About
    fact that cannot be known until after the merge — the pull request's own
    number, the merge commit — may be corrected straight on `main`, in one
    commit that changes nothing else.
-8. **Emulators favour stability over the newest version** (MMagTech,
-   2026-10-14). An emulator, core or pinned Flatpak is moved only when the
-   move brings something a player gets: a game that now plays, a real
-   gameplay fix, a fix for newer hardware, or a large performance gain.
-   New features that do not change how games play are not a reason. Every
-   proposed update starts with that question asked out loud, and the answer
-   is recorded on its issue or pull request.
+8. **Emulators favour stability over the newest version**: the rule moved to
+   `docs/decisions/2026-10-23-when-an-emulator-pin-moves.md`.
 
 ---
 
