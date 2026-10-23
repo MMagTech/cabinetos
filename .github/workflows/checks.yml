@@ -82,7 +82,7 @@ jobs:
     name: Docs list
     runs-on: ubuntu-24.04
     env:
-      REPORT_ONLY_UNTIL: '2026-10-31'
+      REPORT_ONLY_UNTIL: '2026-01-01'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -94,7 +94,7 @@ jobs:
     name: Decisions
     runs-on: ubuntu-24.04
     env:
-      REPORT_ONLY_UNTIL: '2026-10-31'
+      REPORT_ONLY_UNTIL: '2026-01-01'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
