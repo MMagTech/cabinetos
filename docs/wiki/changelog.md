@@ -4,6 +4,18 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.23.2 {#v2026-10-23-2}
+
+*22 October 2026*
+
+- **Fixed:** a game kept on your server as a *.zip* or *.7z* showed
+  *Unpacking…* at every start, not only the first: for a 3DS game, up to 37
+  seconds every time. Only the first start unpacks now. After this update,
+  each such game unpacks one last time at its next start, then goes
+  straight to the game. A nearly full drive also no longer removes other
+  downloads, or says *Not enough space*, to start a game already unpacked.
+  ([#530](https://github.com/MMagTech/cabinetos/issues/530))
+
 ## 2026.10.23 {#v2026-10-23}
 
 *22 October 2026*

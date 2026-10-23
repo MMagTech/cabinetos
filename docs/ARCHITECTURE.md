@@ -186,6 +186,10 @@ is in the file named for its feature, and
    discs, a game installed before it runs (PS3), a folder of files, one file.
    The bytes go straight to disk: under `cache/` for a game pulled to play,
    under `roms/` for a game kept, on the console's own storage or a drive.
+   An archive the core does not open itself is unpacked beside it
+   (`romfile.cpp`, `prepareFile`), each file stamped with the archive's own
+   time; a later start that finds every file at its size with that time
+   skips the unpacking and its room check (`alreadyUnpacked`, #530).
    With the game on the disk, a 3DS file Azahar cannot play (an encrypted
    dump, a CIA) ends the job with its reason (`ncch.cpp`); otherwise it
    fetches the game's saves from RomM, the rows

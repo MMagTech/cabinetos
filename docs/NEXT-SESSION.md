@@ -79,10 +79,13 @@ RomM: keep test launches under a minute, or have his go.
    over the folder, so deleting it on the A9 alone does not last: Mario
    Kart 7's save on RomM has to be replaced. Restate exactly what goes and
    wait for his yes before anything is deleted.
-5. **#529's leftovers, his word first:** PROJECT.md question 32 still says
-   a controller connected mid-game waits for the next launch, without
-   eden-emulator/Issue-Reports#739; a stale Batocera comment in
-   `frontend/src/standalone_eden.cpp` near line 327.
+5. **#530, "An archived game unpacks again at every start (3DS: up to
+   37 s)":** fixed on `claude/unpack-once-530` with #529's two leftovers
+   (question 32's line, the Eden comment). Checked headless on the A9
+   2026-10-22 (btrfs, exFAT, offline, Mario Kart 7 15.5 s to 0.3 s). On
+   testing as 2026.10.23.2 (PR #558), changelog final. Waits for his pick
+   of the checks, then "merge"; then delete the branch on his go. The
+   power-cut fault it left is #559.
 6. **Words from him, one at a time, no work:** #181 and #215 (he is
    unsure of both).
 7. **The Vectrex stall:** no fix; the next step is his evening journal of

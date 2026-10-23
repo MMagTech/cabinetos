@@ -15811,7 +15811,10 @@ and down, pause, Resume, Screenshot, Exit to Home, a kept game promoted from
 cache without a download and kept as one file.
 
 **Known gaps, left for later:** a controller connected mid-game waits for the
-next launch; motion (gyro) does not come through; updates and DLC (#181);
+next launch, because Eden has no way to add a player once a game runs; asked
+for in eden-emulator/Issue-Reports#739 (from #529, "Switch: Can't use split
+joycons for multiplayer"). Motion (gyro) does not come through; updates and
+DLC (#181);
 Shredder's Revenge (above); a Switch game kept on an external drive is
 untested (the console grants Eden that folder per launch, as on the internal
 drive).
@@ -20122,7 +20125,9 @@ HOME and storage root with no input devices. Nothing ran on the TV.
   at Performance, 2400x1200 at Quality).
 - **Every start unpacks the archive again**, the first and every one after
   ("already downloaded", then "Unpacking…" on the Play row): to the core,
-  about 12 s for Mario Kart 7, 21 s for Kirby, 37 s for Smash. The
+  about 12 s for Mario Kart 7, 21 s for Kirby, 37 s for Smash. Only the
+  first start unpacks since #530, "An archived game unpacks again at every
+  start (3DS: up to 37 s)". The
   download from the write-test RomM over the A9's Wi-Fi took 6 to 13 s.
   One download of six stalled at 190 MB inside the write-test VM (its
   rootless port forwarding stopped taking data from RomM's nginx); the
