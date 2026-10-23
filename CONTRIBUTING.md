@@ -1,9 +1,9 @@
 # Contributing to CabinetOS
 
 This is for people who can program and want to find their way around
-CabinetOS, build it, test it, and change one thing safely without having to
-ask first (a new kind of part is the one thing to raise on an issue
-before building it). It is written from what the code does today. Where an older doc
+CabinetOS, build it, test it, and change one thing safely. A small fix needs
+no asking; anything that decides something new is raised on an issue first
+("Pull requests and issues", below). It is written from what the code does today. Where an older doc
 describes the code differently, the code wins; docs/decisions/, and
 docs/PROJECT.md before it, stay the record of what was decided. The known
 disagreements are listed at the end of
@@ -655,6 +655,21 @@ here, not reworded; follow the link for the full text.
 
 ## Pull requests and issues
 
+- **Ask first for anything that decides something new.** A fix of a few lines
+  that puts back what was already meant to work goes straight to a pull
+  request: a typo on screen, a label cut off, a crash from a missing check. A
+  feature, a setting, a changed default, a new emulator or system, a pin move,
+  a new file or folder, a new download or checksum, a change to the build or
+  CI, or a refactor across files needs an issue the maintainer has agreed to
+  before you write it, linked from the pull request. A fix for one game is
+  never taken. If you are unsure which this is, ask on an issue. A pin moves
+  only for one of the five reasons in
+  `docs/decisions/2026-10-23-when-an-emulator-pin-moves.md`, with its evidence.
+- **AI-assisted pull requests are welcome; CabinetOS is built with AI
+  itself.** AI tools read `AGENTS.md`. An AI may help write an issue or a pull
+  request; a person reads it, sends it and answers for it, and the pull request
+  says which tool helped and which checks were run. The maintainer reads every
+  pull request, and CI does not run on one from a fork until he approves it.
 - **One branch, one pull request, aimed at `main`.** Its body says first what
   the change does and why it exists, in plain words, then the detail, and
   "Closes #N" for an issue it finishes (docs/WORKING.md, "The loop").

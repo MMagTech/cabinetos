@@ -2,8 +2,8 @@
 CONTRIBUTING.md, "Pull requests and issues", has the rules, and "The rules"
 has the project's own. Delete these comments as you fill it in.
 
-A new kind of part (a core, a folder, a program) is raised on an issue
-before the pull request. MMagTech merges after judging the change on the
+Anything beyond a small fix is raised on an issue the maintainer has agreed
+to before the pull request. MMagTech merges after judging the change on the
 television, so a pull request can wait for that. Leave out the addresses,
 host names, passwords and home paths of any machine.
 -->
@@ -14,6 +14,18 @@ host names, passwords and home paths of any machine.
 In plain words, first: what changes for a player or for the project, and
 why it is needed. The detail after that.
 -->
+
+## The agreed issue
+
+<!--
+The issue the maintainer agreed to, by number and title, or the words
+"Small fix" (CONTRIBUTING.md, "Pull requests and issues"). A pin move also
+names its reason, A to E, and the evidence.
+-->
+
+## Written with
+
+<!-- The AI tool that helped, or "None". -->
 
 ## What I checked
 
