@@ -4,7 +4,9 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.23 {#v2026-10-23}
+
+*22 October 2026*
 
 - **Fixed:** Shovel Knight on Wii U ignored every button on its first
   screen, where it asks you to set the screen size. It answers now: in Wii U
