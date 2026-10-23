@@ -21,12 +21,12 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `cores/` | How every emulator the image carries is built: `build-core.sh` (the 23 libretro cores, each pinned by commit in its `case` arm), `build-pcsx2.sh`, `build-cemu.sh`, `build-sunshine.sh` and their builder containers; `options/<core>.txt`, every option each core declares at its pin | `/usr/lib/cabinetos/cores/` and the emulators' folders |
 | `build_files/` | The image build's scripts: `build.sh` and the scripts it calls (remove the desktop and the storefronts, set up the session, the branding), `install-*.sh` (one per piece the image carries), `require-*.sh` (checks that fail the build), `built-in-speaker.sh` (a speaker inside the case never takes the sound, #547) | run once, inside the image build |
 | `system_files/` | Files copied over the image as they are: the session script, systemd units, the root helpers in `usr/libexec/`, polkit rules, udev rules, the diagnostic report, which output plays the sound (`usr/share/wireplumber/`, a WirePlumber setting file), and a few files in `etc/` (the SSH settings, the update signing key) | `/usr` and `/etc` |
-| `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), the key each core's build is cached under (`core-cache-key.sh`, `build-core.yml`), version numbers, promoting the tested image, watching the Bazzite base, the checks every pull request runs (`checks.yml`: `check-romm-paths.sh`, `check-doc-paths.py`, `check-project-index.sh`, `check-long-files.sh`), and the frontend's checks and reports (`build-frontend.yml`: `check-new-warnings.sh`, `run-self-tests.sh`, `report-unused-code.sh`) | GitHub Actions |
+| `ci/` | What the workflows run: collecting the build outputs (`stage-image-payload.sh`), the key each core's build is cached under (`core-cache-key.sh`, `build-core.yml`), version numbers, promoting the tested image, watching the Bazzite base, the checks every pull request runs (`checks.yml`: `check-romm-paths.sh`, `check-doc-paths.py`, `check-project-index.sh`, `check-long-files.sh`, `check-docs-list.sh`, `check-decisions.sh`), and the frontend's checks and reports (`build-frontend.yml`: `check-new-warnings.sh`, `run-self-tests.sh`, `report-unused-code.sh`, which calls `warn-unused-touched.sh`) | GitHub Actions |
 | `.github/` | The workflows, the issue form for players, and the pull request template | GitHub |
 | `tools/` | Test and maintenance tools, run by hand; they take their machines from the environment (CONTRIBUTING.md, "Running and testing"). One also runs in the image build: `fetch-vectrex-overlays.py`, which `build.yml` runs to fetch the Vectrex screen sheets (#224) into the payload | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
 | `licences/` | The full licence texts the image ships, and `SOURCES`, where each comes from | `/usr/share/licenses/` |
-| `docs/` | The specification, the decisions, the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
+| `docs/` | The decisions (`decisions/`, one small file each) and the old record they replace (`PROJECT.md`, frozen on 2026-10-23), the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
 | `Containerfile` | The image: the Bazzite base pinned by digest, then the build scripts in several layers | |
 | `Justfile`, `cabinetos.env` | The build recipes CI calls, and their parameters | |
 | `base-manifest.txt` | The base image's package list, for the monthly base-update check | |
@@ -390,8 +390,8 @@ apart in many places. The docs were brought into line in the docs tidy
 (#398)", 2026-10-17): frontend/README.md cut down to the build; the
 2026-09-20 snapshot, the three history files and the old frontend README in
 `docs/history/`; the stale lines fixed where they stand, and in
-docs/PROJECT.md noted under the stale line with a date, since its rule is
-to record a reversal rather than edit history; an index at the top of
+docs/PROJECT.md noted under the stale line with a date, since its rule then
+was to record a reversal rather than edit history; an index at the top of
 PROJECT.md giving where each question ended. What is left is in code
 comments, which the faults step fixes. Until then, trust the code:
 

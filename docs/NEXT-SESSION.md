@@ -2,9 +2,11 @@
 
 Every session: `docs/lessons/README.md` (ten rules), then the lessons file
 named on the item. New here? `CONTRIBUTING.md`, then `docs/ARCHITECTURE.md`.
-`docs/PROJECT.md` is the record of what was decided and why: look up the
-question in hand (its index, at the top, gives every section and numbered
-question with where it ended), never read it through. Name every issue and pull request by
+`docs/decisions/` is what is decided and why, one small file each, with an
+index; `docs/PROJECT.md` is the older record, frozen on 2026-10-23: look up
+the question in hand (its index, at the top, gives every section and
+numbered question with where it ended), never read it through. Name every
+issue and pull request by
 its title as well as its number, every time. Replies to reporters are in
 MMagTech's voice ("I"), ask them to test, and never claim a fix nobody
 reproduced. RomM's documentation together with RomM's behaviour is the
@@ -59,28 +61,14 @@ RomM: keep test launches under a minute, or have his go.
    damaging what sits beside it. Measure the frame times on Home and a
    large grid on the A9 before and after; if the cost shows, stop and
    say so. One PR, CI green, his word to merge.
-2. **PROJECT.md: rules and checks, a guided session, after the reset.**
-   His plan of 2026-10-22; nothing in it is adopted until he says go.
-   PROJECT.md reached 21,400 lines because its own header told sessions to
-   add and never edit; faults ended up in it with no issue. One question at
-   a time, about six, each with the exact text. Written rules in CLAUDE.md,
-   none renumbered (code cites them): rule 5 gains "a change that makes a
-   line in any doc untrue rewrites or deletes it in the same pull request";
-   a new rule 7, PROJECT.md holds a decision, its date, its reason and the
-   issue numbers, never a fault, and a fault found and not fixed goes in the
-   closing message in issue form for him to file or drop; rule 2 gains "a
-   new file under docs/ is asked about first, its one job in its first
-   line"; rule 6 gains two lines (if PROJECT.md was touched, say what was
-   added and removed and that none of it is a fault; read the unused-code
-   report for the files touched). Checks in `ci/`, each a week of warnings
-   then a failure unless noted: a limit on the lines one pull request may add
-   to PROJECT.md (about 60, to be set from the file's own sizes: its 55
-   numbered questions have a median of 140 lines); a new file under docs/
-   missing from a docs list; fault wording added to PROJECT.md (warns only);
-   the linker's unused-code report narrowed to the files a pull request
-   touches (warns only, with an allow-list for the kept items). The existing
-   checks stay as they are. Pruning PROJECT.md is deferred to save tokens,
-   and a cap on the whole file waits for it.
+2. **The new checks turn strict on 2026-10-31**: Docs list and Decisions
+   (`checks.yml`). Watch the first pull requests after. The 60-line cap on a
+   decision file and the 5-line growth allowance for PROJECT.md are one
+   number each in `ci/check-decisions.sh`. Decisions are one small file each
+   in `docs/decisions/` since 2026-10-23 (CLAUDE.md, rule 7); PROJECT.md is
+   frozen, and an old decision moves out when a session relies on it. Moving
+   all of it at once was priced at about 4 million Sonnet tokens, about 12%
+   of a week, and is left for a later call of his.
 3. **36 faults the PROJECT.md scan found with no issue** (2026-10-22): which
    become issues is his call, one at a time; none is filed until he says.
    The list is in the notes of the session that made it ("Faults recorded in

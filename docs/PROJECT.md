@@ -1,13 +1,12 @@
 # CabinetOS
 
 > **The record of what was decided, and why: look things up here, do not
-> read it through.** It holds every decision since the project began
-> (2026-09-13) with the research behind it, and is far too long to read
-> whole. A contributor needs CONTRIBUTING.md, docs/ARCHITECTURE.md and
-> docs/lessons/; their rules point to the section here that explains each
-> one. A session searches it for the question in hand (the Index below lists
-> them), and updates it when a decision is made, a phase changes status, or
-> new uncertainty appears.
+> read it through.** It holds every decision from the project's start
+> (2026-09-13) to 2026-10-23 with the research behind it, and is far too
+> long to read whole. A contributor needs CONTRIBUTING.md,
+> docs/ARCHITECTURE.md and docs/lessons/; their rules point to the section
+> here that explains each one. A session searches it for the question in
+> hand (the Index below lists them).
 >
 > **Starting a session?** `docs/NEXT-SESSION.md` is the short version: what
 > state things are in, what to pick up, and the things that waste a day if
@@ -21,18 +20,19 @@
 > Where a line below says Cabinet or tvOS does something, it describes the
 > apps as they were.
 >
-> Rules for maintaining this document:
-> - When a phase is finished, change its status and say what actually shipped,
->   not what was planned.
-> - When you are unsure about something, add it to **Open questions**. Do not
->   guess and do not quietly resolve an open question without saying so.
-> - When a decision is reversed, record the reversal rather than editing history.
+> This file is frozen since 2026-10-23: nothing new goes in it. New decisions
+> are one small file each in docs/decisions/ (CLAUDE.md, rule 7;
+> docs/decisions/README.md has the template and the index). When your work
+> relies on a decision here, move it there and leave a one-line pointer in
+> its place. A line that becomes untrue is rewritten or deleted, not
+> annotated (CLAUDE.md, rule 5).
 >
 > **Since 2026-10-17 (#398, "Audit the code and restructure it for
 > contributors (main.cpp is 20,000 lines)"):** this file is the record of what
 > was decided and why; for what the code does today, the code and
 > CONTRIBUTING.md are current. Stale lines below carry a dated note rather
-> than an edit, as the rules above say. Since 2026-10-11 (open question 12b,
+> than an edit, which was this file's rule until 2026-10-23. Since
+> 2026-10-11 (open question 12b,
 > #344, "GameCube: a save restored from RomM never reaches Dolphin (card.raw vs
 > card.USA.raw)"), Cabinet is a reference, not a constraint: read
 > docs/history/CABINET.md for how a problem was solved before; Cabinet's own
