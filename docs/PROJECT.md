@@ -18794,7 +18794,7 @@ Vita lists; this repository at `38cd735`.
   WizzardSK/vita3k-libretro (`48b9307`, 2026-10-17; a fork, made
   2026-10-05, of danprice142/Vita3K-libretro, itself a fork of Vita3K;
   GPL-2.0), given a page in libretro's docs on 2026-10-13 (libretro/docs
-  `15883c8`, `docs/library/vita3k.md`). Touch follows the frontend's
+  `15883c8`, docs/library/vita3k.md). Touch follows the frontend's
   libretro pointer (`RETRO_DEVICE_POINTER`), front, or the rear pad while L2
   is held; and Cross with no touch held also taps the middle of the screen
   (`vita3k/libretro/libretro_input.cpp:164-200`). It has no stick pointer
@@ -19482,7 +19482,7 @@ same scene. Switching is one option, `citra_graphics_api` (`Vulkan`,
 
 | Where | What the touchpad does in games | Default | How it gets there | Source |
 |---|---|---|---|---|
-| Batocera, Knulli | A mouse. For the DS and 3DS libretro cores each player is handed the mouse that shares the pad's device path, its own touchpad, which RetroArch's udev driver also reports as the pointer (as written it passes a device path where RetroArch reads a number; read, not tested) | automatic; the core's touch mode decides (melonDS: the right stick; Azahar: mouse and pointer on) | evdev; Batocera's SDL is built without HIDAPI | batocera.linux `1af1766`: `associated_mouse_mixin.py:33-43`, `cores/azahar.py:33`, `devices/device.py:141-148`, `sdl3.mk:20`; knulli `ab3a680`: `libretroControllers.py:119-125` |
+| Batocera, Knulli | A mouse. For the DS and 3DS libretro cores each player is handed the mouse that shares the pad's device path, its own touchpad, which RetroArch's udev driver also reports as the pointer (as written it passes a device path where RetroArch reads a number; read, not tested) | automatic; the core's touch mode decides (melonDS: the right stick; Azahar: mouse and pointer on) | evdev; Batocera's SDL is built without HIDAPI | batocera.linux `1af1766`: `associated_mouse_mixin.py:33-43`, cores/azahar.py:33, `devices/device.py:141-148`, `sdl3.mk:20`; knulli `ab3a680`: `libretroControllers.py:119-125` |
 | Lakka, ROCKNIX | One more RetroArch mouse (next row); ROCKNIX ships Azahar's touchpad setting off | nothing of their own | evdev | Lakka-v6.1 `4f70542`: `retroarch.cfg:247,287`; ROCKNIX `47b49b6`: `azahar-sa/config/AMD64/qt-config.ini:86-107` |
 | RetroArch, udev input driver | The kernel's touchpad device as an absolute mouse: one finger as pointer, mouse and lightgun over the whole screen, the click as the left button; picked by "Mouse Index", not tied to the pad's port | always, when `/dev/input` is readable | evdev | RetroArch `054ecb4`: `udev_input.c:3580-3583` |
 | RetroArch, SDL2 and SDL3 joypad drivers | The click only, as button 20; the fingers are not read. #16188 (SDL's touchpad as the pointer) closed 2026-10-02: the touchpad waits for an input rewrite, "touch as a per-device capability" | | SDL | `sdl3_joypad.c:67-74,282`; libretro/RetroArch#16188; #19369 (halves as buttons, open) |
@@ -19874,10 +19874,10 @@ state's cost: factor 5 made and loaded one as fast as factor 1.
 **RetroAchievements for the 3DS: no, for three reasons, any one enough.**
 
 1. **RetroAchievements does not support the 3DS.** Its docs list it under
-   "Unsupported Consoles" (`docs/developer-docs/unsupported-emulators-and-cores.md:246`,
+   "Unsupported Consoles" (docs/developer-docs/unsupported-emulators-and-cores.md:246,
    the 3DS at `:367`, the three Citra cores marked unusable: "Only exposes
    64MB of memory", "Does not support save states") and as a rollout still
-   "Pending", with "??" sets (`docs/developer-docs/rollouts.md:81`; the Wii
+   "Pending", with "??" sets (docs/developer-docs/rollouts.md:81; the Wii
    was the last to launch, 2026-03-19, with 183). Its pages for system 62
    answered this session with a bot check, which was not passed, so no game
    count was read there; the API's game list needs a web API key the project
