@@ -9,3 +9,6 @@ namespace cab::standalone::detail {
 XTitles gTitles;
 
 }  // namespace cab::standalone::detail
+
+// THROWAWAY: proves ci/warn-unused-touched.sh, a pull request closed unmerged.
+void throwawayUnusedProbe() {}

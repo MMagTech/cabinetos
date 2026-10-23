@@ -21436,3 +21436,23 @@ restart loses.
 - The shortcut over emulators run as programs.
 - Whether the console's own screenshot copies should go once RomM has them, as
   the proposal wants for clips.
+A throwaway line 1.
+A throwaway line 2.
+A throwaway line 3.
+A throwaway line 4.
+A throwaway line 5.
+A throwaway line 6.
+A throwaway line 7.
+A throwaway line 8.
+A throwaway line 9.
+A throwaway line 10.
+A throwaway line 11.
+A throwaway line 12.
+A throwaway line 13.
+A throwaway line 14.
+A throwaway line 15.
+A throwaway line 16.
+A throwaway line 17.
+A throwaway line 18.
+A throwaway line 19.
+A throwaway line 20.
