@@ -708,10 +708,15 @@ std::optional<int> storageProbe(const StorageProbeOptions& o) {
                                  "nothing deleted\n");
             return 2;
         }
+        const accounts::Login login = accounts::login(who->id);
+        const std::string name = who->name;
         if (!removePersonNow(*who, &err)) {
             std::fprintf(stderr, "[remove] could not: %s\n", err.c_str());
             return 1;
         }
+        // Their token on RomM, as Settings' Remove does (#484).
+        romm::Client c;
+        if (rommAddress && c.setAddress(rommAddress, &err)) accounts::revoke(c, login, name);
         return 0;
     }
 
