@@ -4,8 +4,9 @@ This is for people who can program and want to find their way around
 CabinetOS, build it, test it, and change one thing safely without having to
 ask first (a new kind of part is the one thing to raise on an issue
 before building it). It is written from what the code does today. Where an older doc
-describes the code differently, the code wins; docs/PROJECT.md stays the
-record of what was decided. The known disagreements are listed at the end of
+describes the code differently, the code wins; docs/decisions/, and
+docs/PROJECT.md before it, stay the record of what was decided. The known
+disagreements are listed at the end of
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Read in this order:**
