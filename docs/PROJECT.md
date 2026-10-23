@@ -15808,7 +15808,10 @@ and down, pause, Resume, Screenshot, Exit to Home, a kept game promoted from
 cache without a download and kept as one file.
 
 **Known gaps, left for later:** a controller connected mid-game waits for the
-next launch; motion (gyro) does not come through; updates and DLC (#181);
+next launch, because Eden has no way to add a player once a game runs; asked
+for in eden-emulator/Issue-Reports#739 (from #529, "Switch: Can't use split
+joycons for multiplayer"). Motion (gyro) does not come through; updates and
+DLC (#181);
 Shredder's Revenge (above); a Switch game kept on an external drive is
 untested (the console grants Eden that folder per launch, as on the internal
 drive).
