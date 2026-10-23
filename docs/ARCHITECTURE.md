@@ -31,6 +31,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `Justfile`, `cabinetos.env` | The build recipes CI calls, and their parameters | |
 | `base-manifest.txt` | The base image's package list, for the monthly base-update check | |
 | `AGENTS.md`, `CLAUDE.md` | What an AI coding tool reads before it changes anything: `AGENTS.md` for any tool, `CLAUDE.md` for Claude Code, which holds the seven rules for every change that both point to | nowhere |
+| `.claude/skills/` | One folder per skill, named for the job it does, each a `SKILL.md` of plain Markdown that any AI tool can read as instructions; the first is `check-emulator-update` | nowhere |
 
 ### frontend/src
 
