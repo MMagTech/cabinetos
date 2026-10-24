@@ -30,9 +30,8 @@ game is unpacked once, not at every start (3DS: 37 s to under a second)"
 (it closed #530, "An archived game unpacks again at every start (3DS: up to
 37 s)"); and #560, "Changelog: no game-led Wii U entry, and no date lines".
 The newest image in the changelog is 2026.10.24: #571, "A Wii Remote
-starts only Wii games, and holding HOME leaves any game", on testing,
-judged on the TV through the loop on 2026-10-24 and waiting for his go to
-merge. What the A9
+starts only Wii games, and holding HOME leaves any game", merged and
+promoted on 2026-10-24. What the A9
 runs now is not written here: read it from the console before a test. The
 Azahar patches each have a tracking issue linked to a request upstream: #534,
 "Azahar patch: each game sets its own folders (until Azahar fixes
