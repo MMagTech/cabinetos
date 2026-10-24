@@ -69,15 +69,16 @@ turns it off whenever a game turns it on.
 
 In the menus a Wii Remote held upright works like a pad: the d-pad moves, **A**
 selects, **B** (the trigger) goes back, **+** is Start. It switches itself off
-after five minutes untouched outside a game.
+after five minutes untouched outside a Wii game.
 
 Wii games that need a Remote are greyed (*Needs a Wii Remote*) until one is
 paired. A game that requires MotionPlus, such as Wii Sports Resort, Red Steel 2
 or Skyward Sword, is greyed (*Needs MotionPlus*) until a TechKen Remote is
 paired; a Nintendo Remote alone does not un-grey it. A game where MotionPlus
-is optional plays on either. In a Wii game, hold the Remote's **HOME** button
-for a second for the console's pause menu; a short press is the game's own
-HOME menu.
+is optional plays on either. In any game, hold the Remote's **HOME** button for
+a second for the console's pause menu. In a Wii game a short press is the
+game's own HOME menu. Other games do not play on a Wii Remote, but it can
+always open the pause menu and leave.
 
 ## In-game shortcuts
 
