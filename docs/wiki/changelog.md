@@ -4,6 +4,16 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.24 {#v2026-10-24}
+
+- **Fixed:** with only a Wii Remote on, you could start a game it can't play
+  and be stuck in it until you turned the console off. A Wii Remote now
+  starts only Wii games: on any other game, Play says *This Remote only plays
+  Wii games*. And holding **HOME** on a Remote for a second opens the pause
+  menu in every game, not only Wii games. See
+  [Wii Remotes](controllers.md#wii-remotes).
+  ([#571](https://github.com/MMagTech/cabinetos/pull/571))
+
 ## 2026.10.23.2 {#v2026-10-23-2}
 
 - **Fixed:** a game kept on your server as a *.zip* or *.7z* showed

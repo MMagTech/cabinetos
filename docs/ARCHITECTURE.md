@@ -177,8 +177,10 @@ is in the file named for its feature, and
 
 ### Pressing Play on a game
 
-1. The game's page returns an Action; `App::apply` (`actions.cpp`) calls
-   `launchById`, which calls `beginLaunch` (`launch.cpp`). On the frame
+1. The game's page returns an Action; `App::apply` (`actions.cpp`) asks
+   `refuseRemoteStart` (`launch.cpp`), which stops a Wii Remote's press on a
+   game that isn't a Wii game, then calls `launchById`, which calls
+   `beginLaunch` (`launch.cpp`). On the frame
    thread and with no curtain, `beginLaunch` sets the core's options and
    loads the core (not for an emulator run as a program), records the keep
    for a Download, decides where the game goes, and starts the launch

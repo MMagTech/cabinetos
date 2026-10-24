@@ -54,7 +54,7 @@ and **A** steps through it.
 |---|---|
 | **L3 + R3** (both sticks pressed) | The [pause menu](pause-menu.md), in every game |
 | Power button | The Power menu, with **Resume** first |
-| Hold **HOME** (Wii Remote, Wii games) | The pause menu |
+| Hold **HOME** (Wii Remote) | The pause menu, in every game |
 | Hold **Select** (Remote Play device) | The pause menu |
 
 The Home (Guide) button is never passed to a game.
