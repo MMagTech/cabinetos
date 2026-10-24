@@ -209,12 +209,19 @@ void App::watchPs2Start() {
 }
 
 // REAL WII REMOTES (#200): while a Wii game runs Dolphin drives them,
-// and HOME held on one is the console's own menu; a press of HOME is
-// the game's HOME menu, as on a Wii. Out of the game each Remote gets
-// its own light again.
+// and a press of HOME is the game's HOME menu, as on a Wii. Out of the
+// game each Remote gets its own light again. HOME HELD ON ONE IS THE
+// CONSOLE'S OWN MENU IN EVERY GAME, an emulator of its own included, as
+// both stick clicks are on a pad: in any other game the Remote plays
+// nothing, and a Remote that started one with no pad on was stuck in it.
+// The frame loop calls this, and watchStandalone does while an emulator
+// of its own has the screen, since the loop then stops before its call.
 void App::followRemotesInGame() {
     wiiremote::setGameRunning(playing && session.platformSlug == "wii");
-    if (wiiremote::takeHomeHold() && (playing || overlayOpen)) toggleOverlay();
+    wiiremote::setInGame(playing || standaloneRun.active());
+    if (!wiiremote::takeHomeHold()) return;
+    if (standaloneRun.active() && !standalonePaused) openStandaloneMenu();
+    else if (playing || overlayOpen) toggleOverlay();
 }
 
 // Buttons first, then run: a core samples input inside retro_run,
