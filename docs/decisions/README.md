@@ -34,7 +34,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 
 ### Controls
 
-- [wii-remote-home-hold-every-game](2026-10-24-wii-remote-home-hold-every-game.md): holding HOME on a Wii Remote opens the pause menu in every game; nothing greys out or refuses to start.
+- [wii-remote-outside-wii-games](2026-10-24-wii-remote-outside-wii-games.md): a Wii Remote starts only Wii games, and holding HOME on one opens the pause menu in every game.
 
 ### Sound and display
 

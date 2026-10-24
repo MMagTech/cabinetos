@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -86,6 +87,11 @@ void setInGame(bool inGame);
 // the pause menu and out: a Remote that started a game with no pad on was
 // stuck in it (a Discord report, 2026-10-23).
 bool takeHomeHold();
+
+// True for a press made by a Wii Remote: its buttons reach the menus as
+// presses from a pad id no real pad has (start). A Remote starts only Wii
+// games (App::refuseRemoteStart, launch.cpp).
+bool isRemote(uint32_t padId);
 
 // EACH REMOTE THAT IS ON, out of a Wii game, for the battery row on Home
 // (#293): its light (W1-W4), its battery byte (-1 until it has answered; the

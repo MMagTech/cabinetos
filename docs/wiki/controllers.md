@@ -77,8 +77,8 @@ or Skyward Sword, is greyed (*Needs MotionPlus*) until a TechKen Remote is
 paired; a Nintendo Remote alone does not un-grey it. A game where MotionPlus
 is optional plays on either. In any game, hold the Remote's **HOME** button for
 a second for the console's pause menu. In a Wii game a short press is the
-game's own HOME menu. Other games do not play on a Wii Remote, but it can
-always open the pause menu and leave.
+game's own HOME menu. A Wii Remote starts only Wii games: Play on any other
+game says *This Remote only plays Wii games*.
 
 ## In-game shortcuts
 

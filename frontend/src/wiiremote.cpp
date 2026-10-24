@@ -482,6 +482,8 @@ void setInGame(bool inGame) {
 
 bool takeHomeHold() { return gHomeHold.exchange(false); }
 
+bool isRemote(uint32_t padId) { return padId == kRemoteId; }
+
 std::vector<Battery> batteries() {
     std::vector<Battery> out;
     if (gGame) return out;

@@ -790,6 +790,10 @@ struct App {
     uint64_t previous = 0;
     int frame = 0;
     bool pressing = false;
+    // Whether the last press came from a Wii Remote (wiiremote::isRemote),
+    // for a press that starts a game (refuseRemoteStart). Any other
+    // controller's press, a key or a click clears it.
+    bool lastPressFromRemote = false;
 
 
     // Starting a game from the UI. Everything it needs was decided elsewhere:
@@ -1927,6 +1931,7 @@ struct App {
     void pumpArrive();
     void refuseLaunch(const std::string& why);
     void showWhyUnplayable(int romId);
+    bool refuseRemoteStart(int romId);
     void startStandalone(const cab::standalone::Emulator& emu);
     static void dropPressesFromClosing();
     void finishStandalone();
