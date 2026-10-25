@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.25 {#v2026-10-25}
 
 - **New:** the 8BitDo Arcade Stick plays arcade games with a fight-stick
   layout. Pair it over Bluetooth in **X mode**: the game's buttons follow the
