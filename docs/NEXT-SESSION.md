@@ -30,8 +30,8 @@ game is unpacked once, not at every start (3DS: 37 s to under a second)"
 (it closed #530, "An archived game unpacks again at every start (3DS: up to
 37 s)"); and #560, "Changelog: no game-led Wii U entry, and no date lines".
 The newest image in the changelog is 2026.10.25.4: #582, "Controls: move
-an arcade game's buttons from its pause menu", on testing, waiting for his
-install, his check and his go to merge. Before it, 2026.10.25.2: #580,
+an arcade game's buttons from its pause menu", merged and promoted on
+2026-10-25, judged on the TV through the loop. Before it, 2026.10.25.2: #580,
 "Hold Start in an arcade game to open its own settings (#577)", merged and
 promoted on 2026-10-25, judged on the TV and checked on the testing image.
 Before it,
@@ -55,19 +55,14 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **Controls for arcade games: built, judged on the TV.** PR #582,
-   "Controls: move an arcade game's buttons from its pause menu", branch
-   `claude/arcade-controls-remap`. A pause-menu row in FBNeo and MAME
-   2003-Plus games that moves the game's buttons, per game, kind of
-   controller and person (`docs/decisions/2026-10-25-arcade-controls.md`,
-   which replaces the 2026-09-26 no-remapping decision for arcade games; he
-   reads its text before anything merges). On 2026-10-25 he remapped
-   Gun.Smoke and it worked; at the TV the switch from the pause menu was
-   reworked twice (the panel flashed, then a list of its own read as off)
-   and Controls is now drawn as the pause menu's own rows, which he judged
-   right. On testing as 2026.10.25.4, with the rework: next, his install,
-   his check, his go to merge. After it, the pause menu's "Options" row as a
-   visual test for him (his idea of 2026-10-25, not a decision).
+1. **The pause menu's "Options" row, as a visual test for him** (his idea of
+   2026-10-25, not a decision): the top level the six actions (Resume, Save
+   state, Load latest state, Screenshot, Options, Exit to Home; Change disc
+   stays at the top), and Options holding Look, Picture, Widescreen,
+   Overlays, Screen, Colors and Controls. A level of the pause menu is drawn
+   as the menu's own rows in its panel (`ChoiceScreen::setOverPauseMenu`,
+   #582); the list panel holds one stepper row today, so it must learn
+   several. He may not keep it.
 2. **Stop at an out-of-range array write, at the line that does it.**
    **Not before his weekly limit resets (Saturday 2026-10-24, about 9 PM
    Eastern; MMagTech, 2026-10-21).** Estimated 300k to 500k Opus tokens
