@@ -158,9 +158,14 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
 // each name the one card focus is on there, and they name it the same way.
 // The name, then RomM's tags dimmer when `tags` (the caller's hasTwin, #383),
 // then the system after a middle dot when `system`, then a greyed game's
-// reason dimmer when `reason`. The system is at the name's brightness: it is
-// part of the answer to "which game is this", where the tags and the reason
-// are notes on it.
+// reason, dimmer. The system is at the name's brightness: it is part of the
+// answer to "which game is this", where the tags and the reason are notes on
+// it.
+//
+// A GREYED GAME SAYS WHY WHEREVER IT SHOWS. Home's shelves and Search leave
+// such games out when they are built, but a card is shared: opening a grid
+// asks again (gridOrder), so a Wii game on Recent greys there once a stream
+// starts or the last Remote goes, and its line said nothing until this.
 //
 // `system` is for a list that mixes systems under a heading that names none
 // (Home's shelves, a collection, Search, #579). A platform's own grid leaves
@@ -169,14 +174,14 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
 // THE NAME IS WHAT GETS SHORTENED. Everything after it always shows, so a long
 // title cannot push the system or the reason off the end of the line.
 void drawFocusedLine(ui::Renderer& r, ui::TextRenderer& text, float sc, const Card& card,
-                     bool tags, bool system, bool reason, float x, float baseline, float room,
+                     bool tags, bool system, float x, float baseline, float room,
                      float nameAlpha) {
     const ui::TextStyle st = ui::TextStyle::Callout;
     const float gap = 24.0f;
     const std::string sys =
         (system && !card.platform.empty()) ? "   \xC2\xB7   " + card.platform : "";
     const bool showTags = tags && !card.tagLabel.empty();
-    const bool showReason = reason && !card.unavailable.empty();
+    const bool showReason = !card.unavailable.empty();
     const float tagsW = showTags ? gap + text.measure(card.tagLabel, st, sc) : 0.0f;
     const float sysW = sys.empty() ? 0.0f : text.measure(sys, st, sc);
     const float reasonW = showReason ? gap + text.measure(card.unavailable, st, sc) : 0.0f;

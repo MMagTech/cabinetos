@@ -52,8 +52,9 @@ struct Card {
     bool kept = false;
     // WHY THIS GAME CANNOT BE PLAYED HERE, when its platform can: a Wii game
     // that needs a Wii Remote nobody has paired. Empty for every playable
-    // game. A grid shows such a card greyed, and its name says why; it opens
-    // onto the game's screen, which says it again and offers no Play.
+    // game. Such a card shows greyed, and the line that names it says why
+    // (screens::drawFocusedLine); it opens onto the game's screen, which says
+    // it again and offers no Play.
     std::string unavailable;
     // RomM's platform id, and RomM's tags joined for the heading
     // (romm_types.h, `tagLabel`); empty for a game RomM read no tags for.
