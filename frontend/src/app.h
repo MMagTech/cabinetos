@@ -2062,7 +2062,7 @@ struct App {
     bool interceptControls(const SDL_Event& e);
     void followControls();
     // The pause menu's panel height for its rows now, which a level opened
-    // from it is drawn at (choice.h, setFixedPanel).
+    // from it is drawn at (choice.h, setOverPauseMenu).
     float pauseMenuHeight();
     void overlayActivate();
     // `opener` is the pad whose press opened it, when one did (menuOpener).

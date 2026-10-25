@@ -34,6 +34,8 @@ void ChoiceScreen::open(std::string title, std::string detail,
     busy_ = false;
     fixedW_ = 0.0f;
     panelW_ = panelH_ = 0.0f;
+    overMenu_ = false;
+    withMenu_ = false;
     fit_ = 0;
     grows_ = false;
     placeholder_.clear();
@@ -57,6 +59,28 @@ void ChoiceScreen::open(std::string title, std::string detail,
 }
 
 int ChoiceScreen::fit() const { return fit_ > 0 ? fit_ : kMaxVisible; }
+
+// THE ROWS GOING OUT GO AT ONCE, THE ROWS COMING IN FADE IN: the level
+// and the menu's rows never show together, and the panel under them never
+// goes. As the level closes `appear_` runs back down, and the menu's rows
+// fade in by it.
+float ChoiceScreen::menuRows() const {
+    if (!overMenu_) return 1.0f;
+    return open_ || withMenu_ ? 0.0f : 1.0f - appear_.value();
+}
+
+void ChoiceScreen::close() {
+    open_ = false;
+    withMenu_ = false;
+    if (overMenu_) appear_.retarget(0.0f, kAppear);
+}
+
+void ChoiceScreen::forget() {
+    open_ = false;
+    overMenu_ = false;
+    withMenu_ = false;
+    appear_.settle(0.0f);
+}
 
 void ChoiceScreen::replace(std::vector<std::string> options, std::vector<std::string> values,
                            std::string detail) {
@@ -152,9 +176,11 @@ void ChoiceScreen::tick(float dt) {
 }
 
 void ChoiceScreen::draw(Ctx& c) {
-    if (!open_) return;
+    if (!visible()) return;
     using ui::TextStyle;
-    const float a = appear_.value();
+    // A level of the pause menu fades in over the menu's panel, and fades
+    // with the menu itself.
+    const float a = appear_.value() * (overMenu_ ? menuFade_ : 1.0f);
     const float W = ui::kCanvasWidth, H = ui::kCanvasHeight, sc = c.sc;
 
     // The detail may be more than one line, split at '\n' (Sign out's two).
@@ -216,13 +242,17 @@ void ChoiceScreen::draw(Ctx& c) {
         panelH_ > 0.0f ? panelH_ : kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
-    c.r.setContentAlpha(1.0f);
-    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.55f * a)});
-    c.r.setContentAlpha(a);
     // THE PAUSE MENU'S PANEL (design::menuPanel). The keyboard's black glass
     // was tried first (*"forgotten about"*), then the account panel's frosted
-    // glass (*"too frosted or washed out"*). MMagTech, 2026-09-24.
-    c.r.draw(design::menuPanel(px, py, panelW, panelH, 1.0f));
+    // glass (*"too frosted or washed out"*). MMagTech, 2026-09-24. A level of
+    // the pause menu has the menu's own scrim and panel under it.
+    if (!overMenu_) {
+        c.r.setContentAlpha(1.0f);
+        c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.55f * a)});
+        c.r.setContentAlpha(a);
+        c.r.draw(design::menuPanel(px, py, panelW, panelH, 1.0f));
+    }
+    c.r.setContentAlpha(a);
 
     auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
         const std::string t = c.text.truncate(s, st, sc, textMax);

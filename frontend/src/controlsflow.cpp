@@ -97,8 +97,9 @@ void App::showControls(bool fresh) {
         askChoice("Controls", "", labels, two ? 1 : 0, [&](int answer) { pickControlsRow(answer); });
         choiceScreen.setValues(values);
         choiceScreen.setStaysOpen(true);
-        // THE PAUSE MENU'S OWN SIZE, whatever the rows (MMagTech, 2026-10-25).
-        choiceScreen.setFixedPanel(kOverlayPanelWidth, pauseMenuHeight());
+        // IN THE PAUSE MENU'S OWN PANEL, at its size whatever the rows, its
+        // rows giving way to these (MMagTech, 2026-10-25).
+        choiceScreen.setOverPauseMenu(kOverlayPanelWidth, pauseMenuHeight());
         // B on the list goes back to the pause menu, which shows again.
         choiceBack = [&]() { controlsPanel = ControlsPanel{}; };
         choiceStep = [&](int dir) { stepControlsKind(dir, false); };
