@@ -61,9 +61,11 @@ system. It is on to start with.
 ## Fight sticks
 
 The **8BitDo Arcade Stick**, paired over Bluetooth in **X mode**, plays arcade
-games with the cabinet's layout: the game's buttons in its own order along the
-top row, then the bottom, so a fighting game has its punches on top and its
-kicks below. A game with four buttons, such as a Neo Geo game, uses the
+games with a fight-stick layout: the game's buttons in the game's own order
+along the top row, then the bottom. A Street Fighter-style game, which numbers
+its punches first, gets its punches on top and its kicks below; other games
+follow their own numbering, so Mortal Kombat II's top row is Low Punch, Low
+Kick, High Punch. A game with four buttons, such as a Neo Geo game, uses the
 bottom row, as the cabinet's one row did; one with one to three uses the
 bottom row too. Moves that need two buttons at once take two buttons, as on
 the cabinet: the combination buttons a pad gets in these games are not on the
