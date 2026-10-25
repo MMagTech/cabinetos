@@ -15,12 +15,12 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-10-25.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.10.25.4: #582, "Controls: move an arcade game's buttons
-from its pause menu", merged and promoted on 2026-10-25, judged on the TV
-through the loop. In flight: PR #584, "A collection and Search name the
-focused game's system, as Home does (#579)", is on the testing image
-2026.10.25.5 and waits for his judgement on the TV and his go to merge. What
-the A9 runs now is not written here: read it from the console before a test.
+to consoles is 2026.10.25.5: #584, "A collection and Search name the focused
+game's system, as Home does (#579)", merged and promoted on 2026-10-25,
+judged on the TV and checked on the testing image. Before it, 2026.10.25.4:
+#582, "Controls: move an arcade game's buttons from its pause menu". Nothing
+else is in flight. What the A9 runs now is not written here: read it from
+the console before a test.
 The machines' addresses are in his local notes. His standing rule: every
 check and every comment is written out in full each time it is asked for,
 never referred to.
@@ -65,15 +65,16 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-4. **Merged branches to delete, on his go naming them.** Eleven in the main
+4. **Merged branches to delete, on his go naming them.** Twelve in the main
    checkout, all merged: `claude/3ds-azahar-core-9a119a`,
    `claude/3ds-hand-test-2414d9`, `claude/3ds-parity-research-f666db`,
    `claude/3ds-save-fix-57a0b1`, `claude/3ds-shader-cache-3c0de8`,
    `claude/3ds-site-count-5d7227`, `claude/3ds-switch-crash-d2c41b`,
    `claude/nintendo-remotes-5af3d9`, `claude/touchpad-survey-afccf9`,
-   `claude/arcade-stick-layout-9148b6` and `claude/next-session-2026-10-23`.
-   On GitHub, two: `claude/next-session-2026-10-23` and
-   `claude/next-session-582-merged`. Checked 2026-10-25; check again first.
+   `claude/arcade-stick-layout-9148b6`, `claude/next-session-2026-10-23` and
+   `claude/collection-grid-system`. On GitHub, three:
+   `claude/next-session-2026-10-23`, `claude/next-session-582-merged` and
+   `claude/collection-grid-system`. Checked 2026-10-25; check again first.
 5. **Words from him, one at a time, no work:** #181, "Updates and DLC as
    separate files in RomM (Switch, PS3, Xbox 360)", and #215, "Proposal, not
    decided: opt-in "Help improve CabinetOS" report sharing" (he is unsure of
