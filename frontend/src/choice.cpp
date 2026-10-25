@@ -20,6 +20,8 @@ constexpr float kButtonGap = 12.0f;
 constexpr float kButtonRadius = 16.0f;
 constexpr float kFocusScale = 1.04f;
 constexpr float kAppear = 0.280f;
+// Back from a level of the pause menu: its rows out, then the menu's in.
+constexpr float kBackFade = 0.400f;
 // MORE THAN THIS SCROLLS, for a Wi-Fi list in a crowded building.
 constexpr int kMaxVisible = 6;
 // How long a growing list takes to make room for a new row.
@@ -52,6 +54,7 @@ void ChoiceScreen::open(std::string title, std::string detail,
     stepDir_ = 0;
     slot_ = options_.empty() ? 0 : std::clamp(focus, 0, static_cast<int>(options_.size()) - 1);
     top_ = std::max(0, slot_ - (kMaxVisible - 1));
+    appear_.smooth = false;
     appear_.from = appear_.to = 0.0f;
     appear_.elapsed = 0.0f;
     appear_.retarget(1.0f, kAppear);
@@ -60,18 +63,29 @@ void ChoiceScreen::open(std::string title, std::string detail,
 
 int ChoiceScreen::fit() const { return fit_ > 0 ? fit_ : kMaxVisible; }
 
-// GOING IN, THE MENU'S ROWS GO AT ONCE AS THE LEVEL'S FADE IN; COMING
-// BACK, THE LEVEL'S FADE OUT AS THE MENU'S FADE IN, both by `appear_`
-// running back down. The panel under them never goes.
+// GOING IN, THE MENU'S ROWS GO AT ONCE AS THE LEVEL'S FADE IN. COMING
+// BACK, ONE AFTER THE OTHER: the level's rows fade out over the first half
+// of `appear_` running back down, then the menu's fade in over the second,
+// eased in and out so each half takes as long. The panel under them never
+// goes. (A fade across, both at once, did not look right: MMagTech at the
+// TV, 2026-10-25.)
 float ChoiceScreen::menuRows() const {
     if (!overMenu_) return 1.0f;
-    return open_ || withMenu_ ? 0.0f : 1.0f - appear_.value();
+    return open_ || withMenu_ ? 0.0f : std::clamp(1.0f - 2.0f * appear_.value(), 0.0f, 1.0f);
+}
+
+float ChoiceScreen::levelShown() const {
+    return open_ || withMenu_ ? appear_.value()
+                              : std::clamp(2.0f * appear_.value() - 1.0f, 0.0f, 1.0f);
 }
 
 void ChoiceScreen::close() {
     open_ = false;
     withMenu_ = false;
-    if (overMenu_) appear_.retarget(0.0f, kAppear);
+    if (overMenu_) {
+        appear_.smooth = true;
+        appear_.retarget(0.0f, kBackFade);
+    }
 }
 
 void ChoiceScreen::forget() {
@@ -107,7 +121,7 @@ void ChoiceScreen::setDisabled(std::vector<bool> disabled) {
             break;
         }
     }
-    top_ = std::max(0, slot_ - (fit() - 1));
+    top_ = std::max(0, slot_ - (kMaxVisible - 1));
 }
 
 ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
@@ -174,12 +188,66 @@ void ChoiceScreen::tick(float dt) {
     if (busy_) spin_ += dt;
 }
 
+// A LEVEL OF THE PAUSE MENU IS DRAWN AS THE MENU DRAWS ITS OWN ROWS
+// (pausemenu.cpp, drawPauseMenu): the same buttons, sizes, spacing and
+// place in the panel, centred, a row with a value written "Name: value",
+// a stepper's arrows at the button's ends. So opening it changes the rows'
+// words and nothing else. As a list of its own (names left, values right,
+// a title), the whole panel rearranged at the switch, and MMagTech at the
+// TV found "something off" (2026-10-25).
+void ChoiceScreen::drawMenuRows(Ctx& c, float a) {
+    using ui::TextStyle;
+    const float W = ui::kCanvasWidth, H = ui::kCanvasHeight, sc = c.sc;
+    const float px = (W - panelW_) * 0.5f, py = (H - panelH_) * 0.5f;
+    const float rowH = design::kOverlayButtonHeight, gap = design::kOverlayButtonGap;
+    const int n = static_cast<int>(options_.size());
+    // As many rows as the menu's panel holds (its 32 above and below), focus
+    // kept in view among them.
+    fit_ = std::max(1, static_cast<int>((panelH_ - 64.0f + gap) / (rowH + gap)));
+    top_ = std::clamp(top_, 0, std::max(0, n - fit_));
+    if (slot_ < top_) top_ = slot_;
+    if (slot_ >= top_ + fit_) top_ = slot_ - fit_ + 1;
+    const TextStyle st = TextStyle::Title3;
+    const float f = focus_.value();
+    c.r.setContentAlpha(a);
+    for (int i = top_; i < std::min(n, top_ + fit_); ++i) {
+        const bool on = i == slot_;
+        const float fi = on ? f : 0.0f;
+        const float s = 1.0f + fi * (design::kOverlayFocusScale - 1.0f);
+        const float bw = (panelW_ - 64.0f) * s, bh = rowH * s;
+        const float bx = px + (panelW_ - bw) * 0.5f;
+        const float by = py + 32.0f + static_cast<float>(i - top_) * (rowH + gap) - (bh - rowH) * 0.5f;
+        c.r.draw(design::menuButton(bx, by, bw, bh, design::kOverlayButtonRadius, fi, 1.0f));
+        const std::string value =
+            i < static_cast<int>(values_.size()) ? values_[i] : std::string();
+        const std::string line = value.empty() ? options_[i] : options_[i] + ": " + value;
+        const float base = by + (bh - c.text.lineHeight(st, sc)) * 0.5f + c.text.ascent(st, sc);
+        const std::string t = c.text.truncate(line, st, sc, bw - 112.0f);
+        const float lw = c.text.measure(t, st, sc);
+        c.text.draw(c.r, t, bx + (bw - lw) * 0.5f, base, st,
+                    design::menuLabel(fi, isDisabled(i) ? 0.35f : 1.0f), sc);
+        if (i == stepper_ && on) {
+            const char* back = "\xE2\x80\xB9";
+            const char* fwd = "\xE2\x80\xBA";
+            const float aw = c.text.measure(fwd, st, sc);
+            c.text.draw(c.r, back, bx + 28.0f, base, st,
+                        ui::Color::white((canLeft_ ? 0.70f : 0.18f) * fi), sc);
+            c.text.draw(c.r, fwd, bx + bw - 28.0f - aw, base, st,
+                        ui::Color::white((canRight_ ? 0.70f : 0.18f) * fi), sc);
+        }
+    }
+    c.r.setContentAlpha(1.0f);
+}
+
 void ChoiceScreen::draw(Ctx& c) {
     if (!visible()) return;
     using ui::TextStyle;
-    // A level of the pause menu fades in over the menu's panel, and fades
-    // with the menu itself.
-    const float a = appear_.value() * (overMenu_ ? menuFade_ : 1.0f);
+    if (overMenu_) {
+        // It fades in over the menu's panel, and fades with the menu itself.
+        drawMenuRows(c, levelShown() * menuFade_);
+        return;
+    }
+    const float a = appear_.value();
     const float W = ui::kCanvasWidth, H = ui::kCanvasHeight, sc = c.sc;
 
     // The detail may be more than one line, split at '\n' (Sign out's two).
@@ -209,23 +277,13 @@ void ChoiceScreen::draw(Ctx& c) {
     for (const std::string& l : lines)
         innerW = std::max(innerW, c.text.measure(l, TextStyle::Callout, sc));
     if (fixedW_ > 0.0f) rowW = innerW = std::min(fixedW_, kPanelMaxW - kPanelPad * 2);
-    if (panelW_ > 0.0f) rowW = innerW = panelW_ - kPanelPad * 2;
-    const float panelW = panelW_ > 0.0f ? panelW_ : std::min(kPanelMaxW, innerW + kPanelPad * 2);
+    const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
     const float textMax = panelW - kPanelPad * 2;
     const float titleH = c.text.lineHeight(TextStyle::Title2, sc);
     const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
     const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
-    // A FIXED PANEL HOLDS AS MANY ROWS AS ITS HEIGHT HAS ROOM FOR, focus
-    // kept in view among them.
-    if (panelH_ > 0.0f) {
-        const float room = panelH_ - kPanelPad * 2 - titleH - detailH - 36.0f;
-        fit_ = std::max(1, static_cast<int>((room + kButtonGap) / (kButtonH + kButtonGap)));
-        top_ = std::clamp(top_, 0, std::max(0, n - fit_));
-        if (slot_ < top_) top_ = slot_;
-        if (slot_ >= top_ + fit_) top_ = slot_ - fit_ + 1;
-    }
-    const int shown = grows_ ? std::max(1, std::min(n, fit())) : std::min(n, fit());
+    const int shown = grows_ ? std::max(1, std::min(n, kMaxVisible)) : std::min(n, kMaxVisible);
     const bool prompt = n == 0 && !promptButton_.empty();
     float listH = prompt || busy_ ? kButtonH : shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     if (grows_) {
@@ -237,21 +295,16 @@ void ChoiceScreen::draw(Ctx& c) {
         }
         listH = listH_.value();
     }
-    const float panelH =
-        panelH_ > 0.0f ? panelH_ : kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
+    const float panelH = kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
+    c.r.setContentAlpha(1.0f);
+    c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.55f * a)});
+    c.r.setContentAlpha(a);
     // THE PAUSE MENU'S PANEL (design::menuPanel). The keyboard's black glass
     // was tried first (*"forgotten about"*), then the account panel's frosted
-    // glass (*"too frosted or washed out"*). MMagTech, 2026-09-24. A level of
-    // the pause menu has the menu's own scrim and panel under it.
-    if (!overMenu_) {
-        c.r.setContentAlpha(1.0f);
-        c.r.draw(ui::Rect{0, 0, W, H, 0, ui::Color::black(0.55f * a)});
-        c.r.setContentAlpha(a);
-        c.r.draw(design::menuPanel(px, py, panelW, panelH, 1.0f));
-    }
-    c.r.setContentAlpha(a);
+    // glass (*"too frosted or washed out"*). MMagTech, 2026-09-24.
+    c.r.draw(design::menuPanel(px, py, panelW, panelH, 1.0f));
 
     auto centred = [&](const std::string& s, float base, TextStyle st, float alpha) {
         const std::string t = c.text.truncate(s, st, sc, textMax);
@@ -334,24 +387,24 @@ void ChoiceScreen::draw(Ctx& c) {
         const float lx = list ? dx + 24.0f : dx + (dw - lw) * 0.5f;
         const float la = isDisabled(i) ? 0.35f : 1.0f;
         c.text.draw(c.r, label, lx, base, TextStyle::Title3, design::menuLabel(bf, la), sc);
-        float vx = dx + dw - 24.0f - vw;
-        // THE STEPPER'S ARROWS, as a Settings choice row draws them: only
-        // under focus, dim at an end (settings.cpp). Either side of its value,
-        // or at the row's end when it has none (Controls' "Player 2").
-        if (i == stepper_ && on) {
-            const char* back = "\xE2\x80\xB9";
-            const char* fwd = "\xE2\x80\xBA";
-            const float aw = c.text.measure(fwd, TextStyle::Callout, sc);
-            vx -= aw + 14.0f;
-            c.text.draw(c.r, fwd, dx + dw - 24.0f - aw, base, TextStyle::Callout,
-                        ui::Color::white((canRight_ ? 0.70f : 0.18f) * f), sc);
-            const float bw = c.text.measure(back, TextStyle::Callout, sc);
-            c.text.draw(c.r, back, vx - 14.0f - bw, base, TextStyle::Callout,
-                        ui::Color::white((canLeft_ ? 0.70f : 0.18f) * f), sc);
-        }
-        if (!value.empty())
+        if (!value.empty()) {
+            float vx = dx + dw - 24.0f - vw;
+            // THE STEPPER'S ARROWS, as a Settings choice row draws them: only
+            // under focus, dim at an end (settings.cpp).
+            if (i == stepper_ && on) {
+                const char* back = "\xE2\x80\xB9";
+                const char* fwd = "\xE2\x80\xBA";
+                const float aw = c.text.measure(fwd, TextStyle::Callout, sc);
+                vx -= aw + 14.0f;
+                c.text.draw(c.r, fwd, dx + dw - 24.0f - aw, base, TextStyle::Callout,
+                            ui::Color::white((canRight_ ? 0.70f : 0.18f) * f), sc);
+                const float bw = c.text.measure(back, TextStyle::Callout, sc);
+                c.text.draw(c.r, back, vx - 14.0f - bw, base, TextStyle::Callout,
+                            ui::Color::white((canLeft_ ? 0.70f : 0.18f) * f), sc);
+            }
             c.text.draw(c.r, value, vx, base, TextStyle::Callout,
                         ui::Color::white(0.60f * la), sc);
+        }
         y += kButtonH + kButtonGap;
     }
     if (grows_) c.r.clearScissor();

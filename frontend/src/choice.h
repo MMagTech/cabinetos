@@ -49,13 +49,14 @@ public:
     // menu's panel, whose size it keeps for as long as it is open, rows
     // beyond what fits scrolling inside it (MMagTech, 2026-10-25: going more
     // than one menu deep, the pause menu's height and width must never
-    // change). It draws no scrim and no panel of its own: the pause menu's
-    // stays where it is, and only what is in it changes: the menu's rows go
-    // at once as these fade in, and when it closes these fade out as the
-    // menu's fade back in. MMagTech at the TV, the same day: the panel
-    // flashed, gone for a moment and fading back in as the level's own; with
-    // it kept, he asked for this fade between the two on the way out. The
-    // pause menu reads menuRows(). open() clears it.
+    // change). It draws no scrim, no panel and no title of its own: the
+    // pause menu's panel stays where it is, and its answers are drawn as the
+    // menu's own rows ("Button 1: A"), so only the words change: the menu's
+    // rows go at once as these fade in, and when it closes these fade out,
+    // then the menu's fade back in. MMagTech at the TV, the same day: the
+    // panel flashed, gone for a moment and fading back in as the level's
+    // own; with it kept, he asked for a fade on the way out. The pause menu
+    // reads menuRows(). open() clears it.
     void setOverPauseMenu(float w, float h) {
         panelW_ = w;
         panelH_ = h;
@@ -113,7 +114,7 @@ public:
     void setTitle(std::string title) { title_ = std::move(title); }
     // The detail line alone, keeping the answers and focus.
     void setDetail(std::string detail) { detail_ = std::move(detail); }
-    // A level of the pause menu fades out as the menu's rows fade back in.
+    // A level of the pause menu fades out, then the menu's rows fade back in.
     void close();
     // The pause menu is closing with a level of it up: the level fades with
     // the menu's panel instead, and the menu's rows stay hidden.
@@ -146,8 +147,10 @@ private:
     bool overMenu_ = false;
     bool withMenu_ = false;    // closed with the pause menu: fading with it
     float menuFade_ = 1.0f;
-    int fit_ = 0;              // rows a fixed panel has room for, 0 when not fixed
+    int fit_ = 0;              // rows a level of the pause menu has room for, 0 otherwise
     int fit() const;
+    float levelShown() const;  // how much of a level of the pause menu shows
+    void drawMenuRows(Ctx& c, float a);
     bool grows_ = false;
     std::string placeholder_;
     design::Animated listH_;
