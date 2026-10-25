@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "controls.h"
 #include "core.h"
 #include "ps2.h"
 #include "quality.h"
@@ -137,6 +138,7 @@ void App::overlayActivate() {
             if (session.discInserting) menuNotice.say("Not while the disc is changing", Tone::Info);
             else openDiscPanel();
             break;
+        case OvControls: openControlsPanel(); break;
         case OvExit:
             // An emulator of its own is asked to close (thawed first) and
             // the menu goes; finishStandalone takes the rest of the way
@@ -153,7 +155,7 @@ void App::overlayActivate() {
     }
 }
 
-void App::toggleOverlay() {
+void App::toggleOverlay(SDL_JoystickID opener) {
     if (!playing && !standalonePaused) return;
     if (overlayOpen && remoteOnlyHere() && !powerMenu) {
         sound::play(sound::Cue::Edge);
@@ -166,6 +168,7 @@ void App::toggleOverlay() {
     // still fading out.
     if (overlayOpen) {
         powerMenu = false;
+        menuOpener = opener;
         pauseItems.clear();
         if (!remoteOnlyHere()) pauseItems.push_back(OvResume);
         // NOT WHILE A STATE PICKED ON THE GAME'S PAGE IS ON ITS WAY (#484,
@@ -276,6 +279,12 @@ void App::toggleOverlay() {
             }
         }
         for (size_t i = 0; i < pauseChoices.size(); ++i) pauseItems.push_back(OvChoice);
+        // CONTROLS (controls.h), directly above Exit to Home: only in the two
+        // arcade cores, only for a game whose buttons give it a row, and only
+        // with a controller on to change them on. Not over an emulator of its
+        // own, which an arcade game played before it may have left offered.
+        if (playing && controls::offered() && !players::connected().empty())
+            pauseItems.push_back(OvControls);
         pauseItems.push_back(OvExit);
     }
     overlaySlot = 0;
@@ -314,6 +323,16 @@ void App::remotePlayHandover() {
     }
 }
 
+// The 64 is the padding above and below the buttons. There used to be 44
+// more, reserved for the line the menu answered with; that answer is the
+// notification pill now, so the panel is just its buttons and has no empty
+// band at the foot.
+float App::pauseMenuHeight() {
+    const int n = ovCount();
+    return static_cast<float>(n) * kOverlayButtonHeight +
+           static_cast<float>(n - 1) * kOverlayButtonGap + 64.0f;
+}
+
 void App::tickPauseMenu(float dt) {
     overlayFade.tick(dt);
     overlayFocus.tick(dt);
@@ -346,13 +365,8 @@ void App::drawPauseMenu(float sc) {
     // NOT UNDER A QUESTION ASKED FROM IT (Change disc, #162): the panel
     // takes its place, and the menu's words showed through the glass.
     if (ovl > 0.001f && !(playing && choiceScreen.isOpen())) {
-        // The 64 is the padding above and below the buttons. There used to
-        // be 44 more, reserved for the line the menu answered with; that
-        // answer is the notification pill now, so the panel is just its
-        // buttons and has no empty band at the foot.
         const int ovN = ovCount();
-        const float panelH = static_cast<float>(ovN) * kOverlayButtonHeight +
-                             static_cast<float>(ovN - 1) * kOverlayButtonGap + 64.0f;
+        const float panelH = pauseMenuHeight();
         const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;
         // Rises slightly as it arrives rather than only fading: a panel that
         // just materialises reads as a glitch.

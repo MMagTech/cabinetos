@@ -45,6 +45,15 @@ public:
     // pairing failed, and MMagTech did not like it (2026-09-26). open()
     // clears it.
     void setFixedWidth(float w) { fixedW_ = w; }
+    // ONE SIZE FOR AS LONG AS IT IS OPEN, the whole panel's width and height
+    // in canvas points, for a level opened from the pause menu: it is drawn
+    // at the pause menu's exact size, and rows beyond what fits scroll inside
+    // it. MMagTech, 2026-10-25: going more than one menu deep, the pause
+    // menu's height and width must never change. open() clears it.
+    void setFixedPanel(float w, float h) {
+        panelW_ = w;
+        panelH_ = h;
+    }
     // A LIST THAT FILLS WHILE IT IS OPEN GROWS SMOOTHLY. It opens one row
     // tall with `placeholder` said in it, and glides taller as rows arrive.
     // Add a controller first jumped from a small panel to a big one, which
@@ -108,6 +117,9 @@ private:
     bool busy_ = false;
     float spin_ = 0.0f;
     float fixedW_ = 0.0f;
+    float panelW_ = 0.0f, panelH_ = 0.0f;
+    int fit_ = 0;              // rows a fixed panel has room for, 0 when not fixed
+    int fit() const;
     bool grows_ = false;
     std::string placeholder_;
     design::Animated listH_;

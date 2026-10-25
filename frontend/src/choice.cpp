@@ -33,6 +33,8 @@ void ChoiceScreen::open(std::string title, std::string detail,
     staysOpen_ = false;
     busy_ = false;
     fixedW_ = 0.0f;
+    panelW_ = panelH_ = 0.0f;
+    fit_ = 0;
     grows_ = false;
     placeholder_.clear();
     listHSet_ = false;
@@ -54,6 +56,8 @@ void ChoiceScreen::open(std::string title, std::string detail,
     focus_.settle(1.0f);
 }
 
+int ChoiceScreen::fit() const { return fit_ > 0 ? fit_ : kMaxVisible; }
+
 void ChoiceScreen::replace(std::vector<std::string> options, std::vector<std::string> values,
                            std::string detail) {
     const std::string was = (slot_ >= 0 && slot_ < static_cast<int>(options_.size()))
@@ -64,9 +68,9 @@ void ChoiceScreen::replace(std::vector<std::string> options, std::vector<std::st
     slot_ = 0;
     for (int i = 0; i < static_cast<int>(options_.size()); ++i)
         if (options_[i] == was) slot_ = i;
-    top_ = std::clamp(top_, 0, std::max(0, static_cast<int>(options_.size()) - kMaxVisible));
+    top_ = std::clamp(top_, 0, std::max(0, static_cast<int>(options_.size()) - fit()));
     if (slot_ < top_) top_ = slot_;
-    if (slot_ >= top_ + kMaxVisible) top_ = slot_ - kMaxVisible + 1;
+    if (slot_ >= top_ + fit()) top_ = slot_ - fit() + 1;
 }
 
 void ChoiceScreen::setDisabled(std::vector<bool> disabled) {
@@ -80,7 +84,7 @@ void ChoiceScreen::setDisabled(std::vector<bool> disabled) {
             break;
         }
     }
-    top_ = std::max(0, slot_ - (kMaxVisible - 1));
+    top_ = std::max(0, slot_ - (fit() - 1));
 }
 
 ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
@@ -98,7 +102,7 @@ ChoiceScreen::Outcome ChoiceScreen::key(Nav n) {
             }
             slot_ = next;
             if (slot_ < top_) top_ = slot_;
-            if (slot_ >= top_ + kMaxVisible) top_ = slot_ - kMaxVisible + 1;
+            if (slot_ >= top_ + fit()) top_ = slot_ - fit() + 1;
             focus_.retarget(0.0f, 0.0f);
             focus_.elapsed = 0.0f;
             focus_.retarget(1.0f, design::kFocusDuration);
@@ -180,13 +184,23 @@ void ChoiceScreen::draw(Ctx& c) {
     for (const std::string& l : lines)
         innerW = std::max(innerW, c.text.measure(l, TextStyle::Callout, sc));
     if (fixedW_ > 0.0f) rowW = innerW = std::min(fixedW_, kPanelMaxW - kPanelPad * 2);
-    const float panelW = std::min(kPanelMaxW, innerW + kPanelPad * 2);
+    if (panelW_ > 0.0f) rowW = innerW = panelW_ - kPanelPad * 2;
+    const float panelW = panelW_ > 0.0f ? panelW_ : std::min(kPanelMaxW, innerW + kPanelPad * 2);
     const float textMax = panelW - kPanelPad * 2;
     const float titleH = c.text.lineHeight(TextStyle::Title2, sc);
     const float lineH = c.text.lineHeight(TextStyle::Callout, sc);
     const float detailH = lines.empty() ? 0.0f : 8.0f + lineH * lines.size();
     const int n = static_cast<int>(options_.size());
-    const int shown = grows_ ? std::max(1, std::min(n, kMaxVisible)) : std::min(n, kMaxVisible);
+    // A FIXED PANEL HOLDS AS MANY ROWS AS ITS HEIGHT HAS ROOM FOR, focus
+    // kept in view among them.
+    if (panelH_ > 0.0f) {
+        const float room = panelH_ - kPanelPad * 2 - titleH - detailH - 36.0f;
+        fit_ = std::max(1, static_cast<int>((room + kButtonGap) / (kButtonH + kButtonGap)));
+        top_ = std::clamp(top_, 0, std::max(0, n - fit_));
+        if (slot_ < top_) top_ = slot_;
+        if (slot_ >= top_ + fit_) top_ = slot_ - fit_ + 1;
+    }
+    const int shown = grows_ ? std::max(1, std::min(n, fit())) : std::min(n, fit());
     const bool prompt = n == 0 && !promptButton_.empty();
     float listH = prompt || busy_ ? kButtonH : shown * kButtonH + std::max(0, shown - 1) * kButtonGap;
     if (grows_) {
@@ -198,7 +212,8 @@ void ChoiceScreen::draw(Ctx& c) {
         }
         listH = listH_.value();
     }
-    const float panelH = kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
+    const float panelH =
+        panelH_ > 0.0f ? panelH_ : kPanelPad + titleH + detailH + 36.0f + listH + kPanelPad;
     const float px = (W - panelW) * 0.5f, py = (H - panelH) * 0.5f;
 
     c.r.setContentAlpha(1.0f);
@@ -271,7 +286,7 @@ void ChoiceScreen::draw(Ctx& c) {
     const float bx = (W - rowW) * 0.5f;
     // A row still arriving shows only as far as the panel has grown.
     if (grows_) c.r.setScissor(0, y - 8.0f, W, listH + 16.0f);
-    for (int i = top_; i < std::min(n, top_ + kMaxVisible); ++i) {
+    for (int i = top_; i < std::min(n, top_ + fit()); ++i) {
         const bool on = (i == slot_);
         const float s = on ? 1.0f + (kFocusScale - 1.0f) * f : 1.0f;
         const float dw = rowW * s, dh = kButtonH * s;
@@ -290,24 +305,24 @@ void ChoiceScreen::draw(Ctx& c) {
         const float lx = list ? dx + 24.0f : dx + (dw - lw) * 0.5f;
         const float la = isDisabled(i) ? 0.35f : 1.0f;
         c.text.draw(c.r, label, lx, base, TextStyle::Title3, design::menuLabel(bf, la), sc);
-        if (!value.empty()) {
-            float vx = dx + dw - 24.0f - vw;
-            // THE STEPPER'S ARROWS, as a Settings choice row draws them: only
-            // under focus, dim at an end (settings.cpp).
-            if (i == stepper_ && on) {
-                const char* back = "\xE2\x80\xB9";
-                const char* fwd = "\xE2\x80\xBA";
-                const float aw = c.text.measure(fwd, TextStyle::Callout, sc);
-                vx -= aw + 14.0f;
-                c.text.draw(c.r, fwd, dx + dw - 24.0f - aw, base, TextStyle::Callout,
-                            ui::Color::white((canRight_ ? 0.70f : 0.18f) * f), sc);
-                const float bw = c.text.measure(back, TextStyle::Callout, sc);
-                c.text.draw(c.r, back, vx - 14.0f - bw, base, TextStyle::Callout,
-                            ui::Color::white((canLeft_ ? 0.70f : 0.18f) * f), sc);
-            }
+        float vx = dx + dw - 24.0f - vw;
+        // THE STEPPER'S ARROWS, as a Settings choice row draws them: only
+        // under focus, dim at an end (settings.cpp). Either side of its value,
+        // or at the row's end when it has none (Controls' "Player 2").
+        if (i == stepper_ && on) {
+            const char* back = "\xE2\x80\xB9";
+            const char* fwd = "\xE2\x80\xBA";
+            const float aw = c.text.measure(fwd, TextStyle::Callout, sc);
+            vx -= aw + 14.0f;
+            c.text.draw(c.r, fwd, dx + dw - 24.0f - aw, base, TextStyle::Callout,
+                        ui::Color::white((canRight_ ? 0.70f : 0.18f) * f), sc);
+            const float bw = c.text.measure(back, TextStyle::Callout, sc);
+            c.text.draw(c.r, back, vx - 14.0f - bw, base, TextStyle::Callout,
+                        ui::Color::white((canLeft_ ? 0.70f : 0.18f) * f), sc);
+        }
+        if (!value.empty())
             c.text.draw(c.r, value, vx, base, TextStyle::Callout,
                         ui::Color::white(0.60f * la), sc);
-        }
         y += kButtonH + kButtonGap;
     }
     if (grows_) c.r.clearScissor();
