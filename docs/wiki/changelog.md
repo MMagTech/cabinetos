@@ -14,6 +14,7 @@ one you install, so you only ever install the newest.
   puts them all back. It is kept for
   that game, for you and for that kind of controller, and works as soon as
   you go back to the game. See [Controls](pause-menu.md#controls).
+  ([#582](https://github.com/MMagTech/cabinetos/pull/582))
 
 ## 2026.10.25.2 {#v2026-10-25-2}
 
