@@ -28,6 +28,7 @@ void App::openHowTo() {
                      line("Pause menu, Remote Play", "Hold Select"),
                      line("Leave a game", "Pause menu, Exit to Home"),
                      line("Power menu", "The PC's power button"),
+                     line("Arcade game settings", "Hold Start"),
                      line("DS touch screen", "Right stick moves, R3 touches"),
                      line("PS1 analog button", "L1 + R1 + Select")}});
     {

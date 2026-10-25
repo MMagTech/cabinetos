@@ -325,6 +325,11 @@ public:
     const std::vector<int16_t>& drainAudio();
 
     void setPad(int port, const PadState& pad);
+    // A key of the core's keyboard, as libretro numbers it (RETROK_*), held
+    // or let go, for port 0. No real keyboard is passed to a core; the one
+    // key pressed is MAME 2003-Plus's menu key (arcadesettings.h). Every key
+    // is let go when a game loads.
+    void setKey(unsigned retrok, bool down);
     // How many players there are, so the core is told a controller is in
     // each of their ports. Before loadGame it sets what the game starts with;
     // during a game a higher number plugs the new ports in. Never unplugs: a

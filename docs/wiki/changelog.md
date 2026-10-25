@@ -4,6 +4,18 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** hold **Start** for a second in an arcade game to open the game's
+  own settings: in a MAME 2003-Plus game, MAME's menu, whose **Dip Switches**
+  set the difficulty, the lives and the rest; in a FinalBurn Neo game, the
+  board's own test menu, where the board has one. Hold Start again to close
+  MAME's menu. See [Arcade](systems.md#arcade).
+  ([#577](https://github.com/MMagTech/cabinetos/issues/577))
+- **Fixed:** leaving a MAME 2003-Plus game with both stick clicks could
+  open MAME's DIP switch menu. It no longer does.
+  ([#577](https://github.com/MMagTech/cabinetos/issues/577))
+
 ## 2026.10.25 {#v2026-10-25}
 
 - **New:** the 8BitDo Arcade Stick plays arcade games with a fight-stick

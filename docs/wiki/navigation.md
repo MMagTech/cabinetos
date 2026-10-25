@@ -57,6 +57,7 @@ and **A** steps through it.
 | Hold **HOME** (Wii Remote) | The pause menu, in every game |
 | Hold **Select** (Remote Play device) | The pause menu |
 | Tap **Home** ([8BitDo Arcade Stick](controllers.md#fight-sticks)) | The pause menu, in every game |
+| Hold **Start** for a second (arcade games) | The game's own settings, see [Arcade](systems.md#arcade) |
 
 The Home (Guide) button is never passed to a game.
 

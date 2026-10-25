@@ -200,6 +200,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--accounts-test` | the rules for the people on a console and switching between them |
 | `--players-test` | the rules for which controller is which player |
 | `--fightstick-test` | which fight sticks are known, and where a game's buttons go on one: every count of buttons in both arcade cores' orders, and no layout for any other pad |
+| `--arcade-settings-test` | holding Start in an arcade game: a hold of about a second presses MAME 2003-Plus's menu key once, a tap or a shorter hold presses nothing, a second hold closes it, player 1's left stick click never reaches MAME, and nothing changes on FinalBurn Neo or any other core |
 | `--battery-test` | how a controller's battery reading becomes the row in the top bar |
 | `--volume-test` | the volume keys' rules |
 | `--playtime-test` | time played: the clock and what is reported to RomM |
