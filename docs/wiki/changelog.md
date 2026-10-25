@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.25.5 {#v2026-10-25-5}
 
 - **Changed:** in a collection and in Search, the line beside the heading
   names the focused game's system after its name, as Home does: "Altered
