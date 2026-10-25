@@ -15,6 +15,9 @@ one you install, so you only ever install the newest.
 - **Fixed:** leaving a MAME 2003-Plus game with both stick clicks could
   open MAME's DIP switch menu. It no longer does.
   ([#580](https://github.com/MMagTech/cabinetos/pull/580))
+- **Changed:** MAME 2003-Plus games start without MAME's copyright notice
+  over their first seconds.
+  ([#580](https://github.com/MMagTech/cabinetos/pull/580))
 
 ## 2026.10.25 {#v2026-10-25}
 
