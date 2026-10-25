@@ -29,9 +29,12 @@ the GamePad, so Shovel Knight's first screen answers"; #558, "An archived
 game is unpacked once, not at every start (3DS: 37 s to under a second)"
 (it closed #530, "An archived game unpacks again at every start (3DS: up to
 37 s)"); and #560, "Changelog: no game-led Wii U entry, and no date lines".
-The newest image in the changelog is 2026.10.25.2: #580, "Hold Start in
-an arcade game to open its own settings (#577)", merged and promoted on
-2026-10-25, judged on the TV and checked on the testing image. Before it,
+The newest image in the changelog is 2026.10.25.4: #582, "Controls: move
+an arcade game's buttons from its pause menu", on testing, waiting for his
+install, his check and his go to merge. Before it, 2026.10.25.2: #580,
+"Hold Start in an arcade game to open its own settings (#577)", merged and
+promoted on 2026-10-25, judged on the TV and checked on the testing image.
+Before it,
 2026.10.25: #576, "The 8BitDo Arcade Stick plays arcade games with a
 fight-stick layout", merged and promoted. What the A9
 runs now is not written here: read it from the console before a test. The
@@ -52,7 +55,20 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **Stop at an out-of-range array write, at the line that does it.**
+1. **Controls for arcade games: built, judged on the TV.** PR #582,
+   "Controls: move an arcade game's buttons from its pause menu", branch
+   `claude/arcade-controls-remap`. A pause-menu row in FBNeo and MAME
+   2003-Plus games that moves the game's buttons, per game, kind of
+   controller and person (`docs/decisions/2026-10-25-arcade-controls.md`,
+   which replaces the 2026-09-26 no-remapping decision for arcade games; he
+   reads its text before anything merges). On 2026-10-25 he remapped
+   Gun.Smoke and it worked; at the TV the switch from the pause menu was
+   reworked twice (the panel flashed, then a list of its own read as off)
+   and Controls is now drawn as the pause menu's own rows, which he judged
+   right. On testing as 2026.10.25.4, with the rework: next, his install,
+   his check, his go to merge. After it, the pause menu's "Options" row as a
+   visual test for him (his idea of 2026-10-25, not a decision).
+2. **Stop at an out-of-range array write, at the line that does it.**
    **Not before his weekly limit resets (Saturday 2026-10-24, about 9 PM
    Eastern; MMagTech, 2026-10-21).** Estimated 300k to 500k Opus tokens
    (1.2 to 2 weekly points) if no check fires; more if one does.
@@ -65,7 +81,7 @@ RomM: keep test launches under a minute, or have his go.
    damaging what sits beside it. Measure the frame times on Home and a
    large grid on the A9 before and after; if the cost shows, stop and
    say so. One PR, CI green, his word to merge.
-2. **The new checks turn strict on 2026-10-31**: Docs list and Decisions
+3. **The new checks turn strict on 2026-10-31**: Docs list and Decisions
    (`checks.yml`). Watch the first pull requests after. The 60-line cap on a
    decision file and the 5-line growth allowance for PROJECT.md are one
    number each in `ci/check-decisions.sh`. Decisions are one small file each
@@ -73,34 +89,34 @@ RomM: keep test launches under a minute, or have his go.
    frozen, and an old decision moves out when a session relies on it. Moving
    all of it at once was priced at about 4 million Sonnet tokens, about 12%
    of a week, and is left for a later call of his.
-3. **36 faults the PROJECT.md scan found with no issue** (2026-10-22): which
+4. **36 faults the PROJECT.md scan found with no issue** (2026-10-22): which
    become issues is his call, one at a time; none is filed until he says.
    The list is in the notes of the session that made it ("Faults recorded in
    PROJECT.md with no GitHub issue"). Ten were checked in the code and still
    hold; five wait on an emulator or library.
-4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+5. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder, so Mario Kart
    7's save on his RomM still carries Kirby's first save (4 files). He
    wants it gone (2026-10-20). Each Mario Kart 7 start unpacks RomM's copy
    over the folder, so deleting it on the A9 alone does not last: Mario
    Kart 7's save on RomM has to be replaced. Restate exactly what goes and
    wait for his yes before anything is deleted.
-5. **Words from him, one at a time, no work:** #181, "Updates and DLC as
+6. **Words from him, one at a time, no work:** #181, "Updates and DLC as
    separate files in RomM (Switch, PS3, Xbox 360)", and #215, "Proposal, not
    decided: opt-in "Help improve CabinetOS" report sharing" (he is unsure of
    both).
-6. **The Vectrex stall:** no fix; the next step is his evening journal of
+7. **The Vectrex stall:** no fix; the next step is his evening journal of
    2026-10-19 read for what ran just before each stall (PROJECT.md, the
    Vectrex record under "The 4K misses measured again"). Only if it comes
    back.
-7. **The automatic checks turn strict on 2026-10-26**: Doc paths, RomM paths,
+8. **The automatic checks turn strict on 2026-10-26**: Doc paths, RomM paths,
    new warnings in touched files, the self-tests, and the Wii bridge pacing
    test. The last two run in the frontend job the image build waits on, so a
    failure there also stops an image. Nothing to do but watch the first pull
    request after.
-8. **The monthly health check.** With the next real core change: #490's
+9. **The monthly health check.** With the next real core change: #490's
    comments in the core and PCSX2 build files.
-9. **Merged branches to delete, on his go naming them:** nine in the main
+10. **Merged branches to delete, on his go naming them:** nine in the main
    checkout, `claude/3ds-azahar-core-9a119a`, `claude/3ds-hand-test-2414d9`,
    `claude/3ds-parity-research-f666db`, `claude/3ds-save-fix-57a0b1`,
    `claude/3ds-shader-cache-3c0de8`, `claude/3ds-site-count-5d7227`,
@@ -119,9 +135,11 @@ RomM: keep test launches under a minute, or have his go.
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
   #203 closed until libretro/dolphin#508 moves.
 - **Filed, not scheduled:** #557, "No emulator reaches the internet: one
-  block for all of them (Wii's slow Mario Kart exit, 3DS)", and #559, "A
+  block for all of them (Wii's slow Mario Kart exit, 3DS)"; #559, "A
   power cut right after a download or an unpack can leave a damaged game
-  that the console keeps (exFAT and NTFS drives)".
+  that the console keeps (exFAT and NTFS drives)"; and #583, "During a PS2
+  game the console's own loop runs at about 250 frames a second instead of
+  60".
 - **An idea of his, 2026-10-19, not scheduled:** a channel-change animation
   when a game starts and when it exits, on the console's own layers only,
   silent, no setting; pause stays instant.
