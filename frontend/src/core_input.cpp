@@ -1,7 +1,7 @@
 // The pads as the core sees them: the players and their ports, the answer to
-// inputState, the rumble interface, the port count and the button names a
-// core declares, kept per port (environmentInput), and the Core calls that
-// set and read them. Moved
+// inputState, the keys held on the core's keyboard, the rumble interface, the
+// port count and the button names a core declares, kept per port
+// (environmentInput), and the Core calls that set and read them. Moved
 // out of core.cpp in the restructure (#398). Telling the core what is plugged
 // in stays in Core::loadGame (core.cpp), after retro_load_game, because that
 // is when the core has said how many ports it has.
@@ -10,6 +10,7 @@
 #include "core_state.h"
 
 #include <algorithm>
+#include <bitset>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -49,6 +50,14 @@ bool gInputDescriptorsLogged = false;
 // plugged in), which leaves the version where it was.
 std::vector<InputDescriptor> gDescriptors[kMaxPorts];
 unsigned gDescriptorsVersion = 0;
+
+// THE KEYS HELD ON THE CORE'S KEYBOARD (Core::setKey), port 0 only. No real
+// keyboard reaches a core: the console's keyboard is player 1's pad
+// (play.cpp), and the one key ever pressed here is MAME 2003-Plus's menu key
+// (arcadesettings.h).
+std::bitset<RETROK_LAST> gKeys;
+
+void releaseKeys() { gKeys.reset(); }
 
 void keepDescriptors(const retro_input_descriptor* d) {
     std::vector<InputDescriptor> now[kMaxPorts];
@@ -140,6 +149,8 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
                             : (id == RETRO_DEVICE_ID_ANALOG_X ? pad.rightX : pad.rightY);
         return static_cast<int16_t>(std::clamp(v, -1.0f, 1.0f) * 32767.0f);
     }
+    if (device == RETRO_DEVICE_KEYBOARD)
+        return port == 0 && id < gKeys.size() && gKeys[id] ? 1 : 0;
     return 0;
 }
 
@@ -268,6 +279,10 @@ const std::vector<InputDescriptor>& Core::inputDescriptors(int port) const {
 }
 
 unsigned Core::inputDescriptorsVersion() const { return gDescriptorsVersion; }
+
+void Core::setKey(unsigned retrok, bool down) {
+    if (retrok < gKeys.size()) gKeys[retrok] = down;
+}
 
 void Core::setPad(int port, const PadState& pad) {
     if (port < 0 || port >= kMaxPorts) return;

@@ -975,6 +975,31 @@ if [ "$CORE" = mame2003_plus ]; then
         exit 1
     fi
     echo "checked: the Classic button table matches fightstick.cpp"
+
+    # AND A SECOND CHECK (#577). Holding Start opens MAME 2003-Plus's own
+    # menu: the console presses Tab for it, and keeps player 1's left stick
+    # click from it, since that click is the menu's other key
+    # (frontend/src/arcadesettings.h). That leans on three things here: the
+    # menu's keys, Tab or player 1's ninth button; the left stick click being
+    # the ninth button in all four layouts; and the keyboard being read beside
+    # the pad by default. A pin where any reads otherwise stops here, so the
+    # hold is put right in the same change instead of opening nothing.
+    INPTPORT_C="$SRC/src/inptport.c"
+    grep -Eq 'IPT_UI_CONFIGURE, +"Config Menu", +SEQ_DEF_3\(KEYCODE_TAB, +CODE_OR, JOYCODE_1_BUTTON9\)' "$INPTPORT_C" || {
+        echo "mame2003_plus: its menu no longer opens on Tab or player 1's ninth button; check arcadesettings.h" >&2
+        exit 1
+    }
+    L3_NINTH=$(grep -c 'OSD_JOYPAD_L3, *JOYCODE_##DISPLAY_IDX##_BUTTON9}' "$MAME_C")
+    if [ "$L3_NINTH" != 4 ]; then
+        echo "mame2003_plus: the left stick click is the ninth button in $L3_NINTH of its 4 layouts, not all; check arcadesettings.h" >&2
+        exit 1
+    fi
+    sed -n '/option_def_input_interface = {/,/^};/p' "$SRC/src/mame2003/core_options.c" |
+        grep -q '^ *"simultaneous"$' || {
+        echo "mame2003_plus: it no longer reads the keyboard beside the pad by default; check arcadesettings.h" >&2
+        exit 1
+    }
+    echo "checked: MAME's menu opens on Tab, and the left stick click is its other key"
 fi
 
 if [ "$CORE" = fbneo_libretro ]; then

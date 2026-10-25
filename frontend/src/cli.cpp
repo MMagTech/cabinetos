@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 
+#include "arcadesettings.h"
 #include "core.h"
 #include "disc.h"
 #include "discs.h"
@@ -280,6 +281,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             playersTestMode = true;
         } else if (SDL_strcmp(argv[i], "--fightstick-test") == 0) {
             return fightstick::test();
+        } else if (SDL_strcmp(argv[i], "--arcade-settings-test") == 0) {
+            return arcadesettings::test();
         } else if (SDL_strcmp(argv[i], "--battery-test") == 0) {
             batteryTestMode = true;
         } else if (SDL_strcmp(argv[i], "--volume-test") == 0) {

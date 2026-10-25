@@ -909,7 +909,9 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   Settings' own shape, a section per row on the left and its lines as rows
   on the right, nothing to press. In a game (pause menu by both sticks, a
   Wii Remote's HOME, Remote Play's Select; leaving; the Power menu),
-  Shortcuts (always shown; off, the first line says where to turn them on
+  Systems (what works in one kind of game only: an arcade game's own
+  settings, the DS touch screen, the PS1 analog button; split out of In a
+  game on 2026-10-25, #577), Shortcuts (always shown; off, the first line says where to turn them on
   and the rest are greyed; the button named is the one set for the pad in
   hand), Menus, Steam (Switch to Steam; back by Steam's Switch to Desktop),
   Controllers (Add a controller; a Wii Remote's red sync button), Drives

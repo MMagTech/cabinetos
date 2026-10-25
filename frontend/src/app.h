@@ -43,6 +43,7 @@
 
 #include "accountpanel.h"
 #include "accounts.h"
+#include "arcadesettings.h"
 #include "achievements.h"
 #include "achlist.h"
 #include "battery.h"
@@ -1002,6 +1003,10 @@ struct App {
         SDL_JoystickID pad = 0;   // as ShortcutHold: another pad in the seat drops it
     };
     StickPair stickPair[players::kMax];
+    // HOLDING START IN AN ARCADE GAME (#577, arcadesettings.h): player 1's
+    // hold, which opens MAME 2003-Plus's own menu. FinalBurn Neo counts its
+    // own.
+    arcadesettings::Hold arcadeHold;
     // FAST FORWARD (#77): the shortcut button and ZR, held. Fast while held,
     // normal on release, the sound discarded meanwhile. About 4x, a fixed top
     // speed rather than a setting. ONLY WHERE STATES ARE (MMagTech,
