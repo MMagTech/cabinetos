@@ -26,7 +26,7 @@ a new file, a moved job, a renamed part, or a change to who calls whom.
 | `tools/` | Test and maintenance tools, run by hand; they take their machines from the environment (CONTRIBUTING.md, "Running and testing"). One also runs in the image build: `fetch-vectrex-overlays.py`, which `build.yml` runs to fetch the Vectrex screen sheets (#224) into the payload | nowhere |
 | `disk_config/` | The installer and test-disk layouts | the installer ISO |
 | `licences/` | The full licence texts the image ships, and `SOURCES`, where each comes from | `/usr/share/licenses/` |
-| `docs/` | The decisions (`decisions/`, one small file each) and the old record they replace (`PROJECT.md`, frozen on 2026-10-23), the lessons, the website (`index.html` and `wiki/`, served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
+| `docs/` | The decisions (`decisions/`, one small file each) and the old record they replace (`PROJECT.md`, frozen on 2026-10-23), the lessons, the website (`index.html`, `wiki/`, and `assets/` with its styles and the wiki's search, `search.js`; served by GitHub Pages), and `history/`: docs that describe the project as it was, each saying what replaced it | only `docs/LICENCES.md` |
 | `Containerfile` | The image: the Bazzite base pinned by digest, then the build scripts in several layers | |
 | `Justfile`, `cabinetos.env` | The build recipes CI calls, and their parameters | |
 | `base-manifest.txt` | The base image's package list, for the monthly base-update check | |
