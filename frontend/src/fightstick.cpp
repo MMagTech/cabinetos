@@ -85,6 +85,15 @@ int labelNumber(const std::string& s) {
     return std::atoi(s.substr(from, to - from).c_str());
 }
 
+// FBNEO'S OWN COMBINATION BUTTONS, which press two or three of the game's
+// buttons at once: "Buttons AB", "Buttons 3x Punch" and the rest, named
+// "P1 Buttons ..." in its src/burner/libretro/retro_input.cpp, where no
+// game's own button is called that (its drivers, at the pin; the core's build
+// stops when either changes, cores/build-core.sh). No cabinet had them,
+// and on a stick two buttons are pressed together as on the cabinet, so
+// they get no button (MMagTech at the TV, 2026-10-24).
+bool fbneoCombination(const std::string& label) { return label.rfind("Buttons ", 0) == 0; }
+
 // ---- The layout the game in play gives each port --------------------------------
 
 struct Kept {
@@ -147,7 +156,8 @@ std::optional<Layout> make(const Stick* stick, const std::string& core,
     if (!order) return std::nullopt;
     std::vector<const cab::InputDescriptor*> f;
     for (const cab::InputDescriptor& d : port.empty() ? port0 : port)
-        if (classicNumber(d.id)) f.push_back(&d);
+        if (classicNumber(d.id) && !(*order == Order::Declared && fbneoCombination(d.label)))
+            f.push_back(&d);
     if (f.empty()) return std::nullopt;
     if (*order == Order::Classic)
         std::stable_sort(f.begin(), f.end(), [](const auto* a, const auto* b) {
@@ -156,7 +166,7 @@ std::optional<Layout> make(const Stick* stick, const std::string& core,
 
     // Slots counted from 0: top row 0 to 3, bottom row 4 to 7.
     static constexpr int kMany[] = {0, 1, 2, 4, 5, 6, 3, 7};
-    static constexpr int kFour[] = {0, 1, 4, 5};
+    static constexpr int kFour[] = {4, 5, 6, 7};
     static constexpr int kFew[] = {4, 5, 7};
     Layout l;
     l.count = static_cast<int>(f.size());
@@ -193,7 +203,10 @@ const Layout* forPort(int port, SDL_Gamepad* gp, const std::string& core) {
     if (!k.made || k.pad != pad || k.version != c.inputDescriptorsVersion() || k.core != core) {
         k = {true, pad, c.inputDescriptorsVersion(), core,
              make(stick, core, c.inputDescriptors(port), c.inputDescriptors(0))};
-        say(port, gp, k.layout);
+        // Nothing to say before the core has declared anything: FBNeo does
+        // at its first frame, not at the load.
+        if (k.layout || !c.inputDescriptors(port).empty() || !c.inputDescriptors(0).empty())
+            say(port, gp, k.layout);
     }
     return k.layout ? &*k.layout : nullptr;
 }
@@ -280,13 +293,30 @@ int test() {
           "three buttons on MAME 2003-Plus, sent B Y A: the same three places");
     const D neo = {{cab::B, "Button A"}, {cab::A, "Button B"}, {cab::Y, "Button C"},
                    {cab::X, "Button D"}};
-    check(slots(make(stick, fbneo, neo, none)) == ids({cab::B, cab::A, no, no, cab::Y, cab::X, no, no}),
-          "four buttons (Neo Geo): the left square, in reading order");
+    check(slots(make(stick, fbneo, neo, none)) == ids({no, no, no, no, cab::B, cab::A, cab::Y, cab::X}),
+          "four buttons (Neo Geo): the bottom row, as on the cabinet's one row");
     const D mame4 = {{cab::B, "Button 1"}, {cab::Y, "Button 3"}, {cab::A, "Button 2"},
                      {cab::X, "Button 4"}};
     check(slots(make(stick, mame, mame4, none)) ==
-              ids({cab::B, cab::A, no, no, cab::Y, cab::X, no, no}),
-          "four on MAME 2003-Plus: the left square, in the table's order");
+              ids({no, no, no, no, cab::B, cab::A, cab::Y, cab::X}),
+          "four on MAME 2003-Plus: the bottom row, in the table's order");
+    // Metal Slug on FBNeo, as the A9 logged it: A to D and FBNeo's four
+    // combination buttons on the shoulders and triggers.
+    const D mslug = {{cab::B, "Button A"},     {cab::A, "Button B"},   {cab::Y, "Button C"},
+                     {cab::X, "Button D"},     {cab::R, "Buttons AB"}, {cab::L, "Buttons CD"},
+                     {cab::R2, "Buttons ABC"}, {cab::L2, "Buttons BCD"}};
+    const std::optional<Layout> ms = make(stick, fbneo, mslug, none);
+    check(ms && ms->count == 4 && ms->left.empty() &&
+              slots(ms) == ids({no, no, no, no, cab::B, cab::A, cab::Y, cab::X}),
+          "FBNeo's combination buttons are not the game's: Metal Slug is four, on the bottom row");
+    D sf2x = sf2;
+    sf2x.push_back({cab::L2, "Buttons 3x Punch"});
+    sf2x.push_back({cab::R2, "Buttons 3x Kick"});
+    check(slots(make(stick, fbneo, sf2x, none)) == slots(six),
+          "nor are 3x Punch and 3x Kick: six buttons stay six");
+    check(slots(make(stick, mame, {{cab::B, "Buttons AB"}}, none)) ==
+              ids({no, no, no, no, cab::B, no, no, no}),
+          "a MAME 2003-Plus label is never read that way");
     const D five = {{cab::Y, "1"}, {cab::X, "2"}, {cab::L, "3"}, {cab::B, "4"}, {cab::A, "5"}};
     check(slots(make(stick, fbneo, five, none)) ==
               ids({cab::Y, cab::X, cab::L, no, cab::B, cab::A, no, no}),

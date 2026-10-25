@@ -59,8 +59,11 @@ system. It is on to start with.
 The **8BitDo Arcade Stick**, paired over Bluetooth in **X mode**, plays arcade
 games with the cabinet's layout: the game's buttons in its own order along the
 top row, then the bottom, so a fighting game has its punches on top and its
-kicks below. A game with four buttons uses the left four; one with one to
-three uses the bottom row. Tap **Home** for the pause menu in any game. Other
+kicks below. A game with four buttons, such as a Neo Geo game, uses the
+bottom row, as the cabinet's one row did; one with one to three uses the
+bottom row too. Moves that need two buttons at once take two buttons, as on
+the cabinet: the combination buttons a pad gets in these games are not on the
+stick. Tap **Home** for the pause menu in any game. Other
 games play it as an Xbox pad. Wired, or on its 2.4G receiver, it is treated as
 an ordinary pad everywhere.
 

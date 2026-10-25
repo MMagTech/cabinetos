@@ -9,8 +9,9 @@ one you install, so you only ever install the newest.
 - **New:** the 8BitDo Arcade Stick plays arcade games with the cabinet's
   layout. Pair it over Bluetooth in **X mode**: the game's buttons follow its
   own order along the top row, then the bottom, so a fighting game has its
-  punches on top and its kicks below; a four-button game uses the left four,
-  and a game with one to three uses the bottom row. Tap **Home** on the stick
+  punches on top and its kicks below; a four-button game, such as a Neo Geo
+  game, uses the bottom row, as does a game with one to three. Press two
+  buttons together for moves that need them, as on the cabinet. Tap **Home** on the stick
   for the pause menu in any game. Wired, or on its 2.4G receiver, it is
   treated as an ordinary pad, as before, and nothing changes for any other
   controller. See

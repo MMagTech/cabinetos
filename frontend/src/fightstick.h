@@ -20,7 +20,7 @@
 // its order:
 //   5 or more  1 2 3 on top and 4 5 6 below it (punches above kicks, light
 //              to heavy left to right), the 7th top right, the 8th bottom right
-//   4          the left square: 1 2 on top, 3 4 below
+//   4          the bottom row, as a Neo Geo cabinet's one row
 //   1 to 3     the bottom row from the left, the third after a gap (5 6 8)
 // A ninth and beyond gets no button and is logged. The lever, Select, Start
 // and Home are never moved.
@@ -28,10 +28,13 @@
 // WHICH BUTTONS, IN WHICH ORDER. The game's buttons are the descriptors the
 // core declared for the port (core.h, inputDescriptors) whose id is B, Y, A,
 // X, L, R, L2 or R2; one on L3 or R3 is not counted, since the stick has no
-// clicks. FBNeo declares them in the game's own order. MAME 2003-Plus
+// clicks. FBNeo declares them in the game's own order, with combination
+// buttons of its own that press two or three at once ("Buttons AB",
+// "Buttons 3x Punch"); no cabinet had those, so they are not counted and get
+// no button, the one place a label decides anything. MAME 2003-Plus
 // declares them in RetroPad id order, so they are put in its Classic table's
-// order (fightstick.cpp). Labels are the core's words, shown as they are and
-// never read for meaning. A port the core said nothing about takes port 0's.
+// order (fightstick.cpp). Otherwise labels are the core's words, shown as
+// they are. A port the core said nothing about takes port 0's.
 //
 // THE CORE IS TOLD NOTHING DIFFERENT: it hears RetroPad ids, as from any pad,
 // sent from other buttons.

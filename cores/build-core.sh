@@ -977,6 +977,33 @@ if [ "$CORE" = mame2003_plus ]; then
     echo "checked: the Classic button table matches fightstick.cpp"
 fi
 
+if [ "$CORE" = fbneo_libretro ]; then
+    # NOT A PATCH, A CHECK (#576). A fight stick leaves FBNeo's own
+    # combination buttons off (frontend/src/fightstick.cpp,
+    # fbneoCombination), and knows them only by their names: FBNeo makes
+    # each "P1 Buttons AB" and the like, takes the "P1 " off, and the
+    # console reads "Buttons ...". A pin where a combination button is named
+    # otherwise, the "P1 " stays on, or a game's own button is named
+    # "Buttons ..." stops here, so the stick's rule is put right in the same
+    # change instead of a combination button taking one of a game's places.
+    RETRO_INPUT="$SRC/src/burner/libretro/retro_input.cpp"
+    ALL=$(grep -c 'sprintf(pgi->Macro.szName,' "$RETRO_INPUT")
+    NAMED=$(grep -c 'sprintf(pgi->Macro.szName, "P%i Buttons ' "$RETRO_INPUT")
+    if [ "$ALL" -eq 0 ] || [ "$ALL" != "$NAMED" ]; then
+        echo "fbneo_libretro: $NAMED of its $ALL combination buttons are named \"P%i Buttons ...\"; check fightstick.cpp's fbneoCombination" >&2
+        exit 1
+    fi
+    grep -qF "if (strlen(szn) > 3 && szn[0] == 'P' && szn[2] == ' ')" "$RETRO_INPUT" || {
+        echo "fbneo_libretro: it no longer takes \"P1 \" off a button's name the way it did; check fightstick.cpp's fbneoCombination" >&2
+        exit 1
+    }
+    if grep -rqE '\{ *"(P[0-9] )?Buttons ' "$SRC/src/burn/drv"; then
+        echo "fbneo_libretro: a game's own button is named \"Buttons ...\"; check fightstick.cpp's fbneoCombination" >&2
+        exit 1
+    fi
+    echo "checked: FBNeo's combination buttons are the only \"Buttons ...\""
+fi
+
 # platform=unix is the core's own Linux case, and on every Makefile-based core
 # in the set it is also the default when uname says Linux. It is the
 # best-tested path these cores have; the ios-arm64 case Cabinet uses is the
