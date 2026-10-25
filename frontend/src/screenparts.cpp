@@ -154,6 +154,8 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
     }
 }
 
+static const std::string kNeedsController = "Needs a controller";
+
 // THE FOCUSED GAME'S LINE beside a heading: Home's shelves, a grid and Search
 // each name the one card focus is on there, and they name it the same way.
 // The name, then RomM's tags dimmer when `tags` (the caller's hasTwin, #383),
@@ -167,6 +169,12 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
 // asks again (gridOrder), so a Wii game on Recent greys there once a stream
 // starts or the last Remote goes, and its line said nothing until this.
 //
+// "NEEDS A CONTROLLER" IN THE REASON'S PLACE while only Wii Remotes are on
+// (`onlyRemotes`, App::onlyRemotesOn), on a game that is not a Wii game: a
+// Remote starts only Wii games (App::refuseRemoteStart), and this says so
+// before Play does. Never beside a reason of its own: a greyed game is not
+// made playable by turning a controller on.
+//
 // `system` is for a list that mixes systems under a heading that names none
 // (Home's shelves, a collection, Search, #579). A platform's own grid leaves
 // it out: its heading already says it.
@@ -174,17 +182,19 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
 // THE NAME IS WHAT GETS SHORTENED. Everything after it always shows, so a long
 // title cannot push the system or the reason off the end of the line.
 void drawFocusedLine(ui::Renderer& r, ui::TextRenderer& text, float sc, const Card& card,
-                     bool tags, bool system, float x, float baseline, float room,
-                     float nameAlpha) {
+                     bool tags, bool system, bool onlyRemotes, float x, float baseline,
+                     float room, float nameAlpha) {
     const ui::TextStyle st = ui::TextStyle::Callout;
     const float gap = 24.0f;
     const std::string sys =
         (system && !card.platform.empty()) ? "   \xC2\xB7   " + card.platform : "";
     const bool showTags = tags && !card.tagLabel.empty();
-    const bool showReason = !card.unavailable.empty();
+    const std::string& reason =
+        (card.unavailable.empty() && onlyRemotes && !card.wii) ? kNeedsController : card.unavailable;
+    const bool showReason = !reason.empty();
     const float tagsW = showTags ? gap + text.measure(card.tagLabel, st, sc) : 0.0f;
     const float sysW = sys.empty() ? 0.0f : text.measure(sys, st, sc);
-    const float reasonW = showReason ? gap + text.measure(card.unavailable, st, sc) : 0.0f;
+    const float reasonW = showReason ? gap + text.measure(reason, st, sc) : 0.0f;
     const std::string name =
         text.truncate(card.title, st, sc, std::max(0.0f, room - tagsW - sysW - reasonW));
     text.draw(r, name, x, baseline, st, ui::Color::white(nameAlpha), sc);
@@ -198,7 +208,7 @@ void drawFocusedLine(ui::Renderer& r, ui::TextRenderer& text, float sc, const Ca
         x += sysW;
     }
     if (showReason)
-        text.draw(r, card.unavailable, x + gap, baseline, st, ui::Color::white(0.45f), sc);
+        text.draw(r, reason, x + gap, baseline, st, ui::Color::white(0.45f), sc);
 }
 
 }  // namespace screens

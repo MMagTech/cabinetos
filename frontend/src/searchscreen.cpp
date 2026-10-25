@@ -172,7 +172,7 @@ void SearchScreen::draw(Ctx& c) {
         const float y = top + c.text.ascent(ui::TextStyle::Title3, c.sc);
         drawFocusedLine(c.r, c.text, c.sc, (*c.cards)[fi],
                         /*tags=*/design::hasTwin(*c.cards, results_, fi),
-                        /*system=*/true, x, y, roomW, 0.60f);
+                        /*system=*/true, c.onlyRemotes, x, y, roomW, 0.60f);
     }
 
     if (results_.empty()) return;

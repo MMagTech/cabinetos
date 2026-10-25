@@ -50,6 +50,8 @@ struct Ctx {
     ui::ImageCache& images;
     float sc = 1.0f;                       // device pixels per design point
     std::vector<design::Card>* cards = nullptr;
+    // Only Wii Remotes are on, no other controller (App::onlyRemotesOn).
+    bool onlyRemotes = false;
 };
 
 // One keypress, already translated out of SDL so a screen never sees an event.

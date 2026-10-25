@@ -56,6 +56,10 @@ struct Card {
     // (screens::drawFocusedLine); it opens onto the game's screen, which says
     // it again and offers no Play.
     std::string unavailable;
+    // A WII GAME: the one kind a Wii Remote starts (App::refuseRemoteStart).
+    // Every other game's line says "Needs a controller" while only Remotes
+    // are on (screens::drawFocusedLine).
+    bool wii = false;
     // RomM's platform id, and RomM's tags joined for the heading
     // (romm_types.h, `tagLabel`); empty for a game RomM read no tags for.
     int platformId = 0;

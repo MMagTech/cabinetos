@@ -65,6 +65,7 @@ int appendGame(Library& lib, const romm::Game& g) {
     c.coverLarge = g.coverLargePath;
     c.platform = g.platformName;
     c.platformId = g.platformId;
+    c.wii = g.platformSlug == "wii";
     c.tagLabel = g.tagLabel;
     c.art = colorForTitle(c.title);
     c.unavailable = greyedReason(g);

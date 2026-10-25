@@ -1965,6 +1965,7 @@ struct App {
     void refuseLaunch(const std::string& why);
     void showWhyUnplayable(int romId);
     bool refuseRemoteStart(int romId);
+    bool onlyRemotesOn() const;
     void startStandalone(const cab::standalone::Emulator& emu);
     static void dropPressesFromClosing();
     void finishStandalone();

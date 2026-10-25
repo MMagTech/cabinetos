@@ -100,7 +100,9 @@ paired; a Nintendo Remote alone does not un-grey it. A game where MotionPlus
 is optional plays on either. In any game, hold the Remote's **HOME** button for
 a second for the console's pause menu. In a Wii game a short press is the
 game's own HOME menu. A Wii Remote starts only Wii games: Play on any other
-game says *This Remote only plays Wii games*.
+game says *This Remote only plays Wii games*. While only Wii Remotes are on,
+any other game says *Needs a controller* after its name, until another
+controller is on.
 
 ## In-game shortcuts
 

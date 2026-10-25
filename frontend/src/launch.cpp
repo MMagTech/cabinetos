@@ -400,6 +400,16 @@ bool App::refuseRemoteStart(int romId) {
     return false;
 }
 
+// ONLY WII REMOTES ARE ON: the top bar's battery row shows W's and no P's
+// (settleBatteryRow reads the same two lists). Then every game that is not a
+// Wii game says "Needs a controller" on its line (screens::drawFocusedLine),
+// before Play refuses it above, and the note goes as another controller
+// comes on (MMagTech, 2026-10-25). During a stream the stream's pads are the
+// controllers, as in the battery row.
+bool App::onlyRemotesOn() const {
+    return !players::streaming() && players::held().empty() && !wiiremote::batteries().empty();
+}
+
 // A LAUNCH THAT DOES NOT START A GAME TAKES WHAT ITS PRESS ASKED FOR WITH
 // IT: the state picked on the game's page, Home's Resume and the disc Start
 // over asked for belong to this launch, and left set they were loaded into
