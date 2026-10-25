@@ -55,18 +55,20 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **Controls for arcade games: built, tried once on the TV.** PR #582,
+1. **Controls for arcade games: built, judged on the TV.** PR #582,
    "Controls: move an arcade game's buttons from its pause menu", branch
    `claude/arcade-controls-remap`. A pause-menu row in FBNeo and MAME
    2003-Plus games that moves the game's buttons, per game, kind of
    controller and person (`docs/decisions/2026-10-25-arcade-controls.md`,
    which replaces the 2026-09-26 no-remapping decision for arcade games; he
-   reads its text before anything merges). He remapped Gun.Smoke through the
-   loop on 2026-10-25 and it worked; two smoother switches between the pause
-   menu and Controls were tried and dropped, it switches as before. On
-   testing as 2026.10.25.3; next: his install, his check, his go to merge.
-   After it, the pause menu's "Options" row as a visual test for him (his
-   idea of 2026-10-25, not a decision).
+   reads its text before anything merges). On 2026-10-25 he remapped
+   Gun.Smoke and it worked; at the TV the switch from the pause menu was
+   reworked twice (the panel flashed, then a list of its own read as off)
+   and Controls is now drawn as the pause menu's own rows, which he judged
+   right. Testing image 2026.10.25.3 predates that rework: next, a testing
+   push on his go, his check of that image, his go to merge. After it, the
+   pause menu's "Options" row as a visual test for him (his idea of
+   2026-10-25, not a decision).
 2. **Stop at an out-of-range array write, at the line that does it.**
    **Not before his weekly limit resets (Saturday 2026-10-24, about 9 PM
    Eastern; MMagTech, 2026-10-21).** Estimated 300k to 500k Opus tokens

@@ -54,10 +54,10 @@ Rows appear only where they apply:
 ## Controls
 
 In an arcade game, **Controls** lists the game's buttons by the game's own
-names (*Fire Left*, *Jab Punch*), each with the button on your controller
-that presses it.
+names, each with the button on your controller that presses it, such as
+*Button 1: A* or *Jab Punch: X*.
 
-1. Highlight one and press **A**. It reads *Press a button…*.
+1. Highlight one and press **A**. It reads *Button 1: Press a button…*.
 2. Press the button you want it on: a face button, a shoulder or a trigger.
    If another of the game's buttons was there, the two swap.
 
