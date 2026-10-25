@@ -11,6 +11,7 @@
 
 #include "core.h"
 #include "discs.h"
+#include "fightstick.h"
 #include "ps2.h"
 #include "saves.h"
 #include "savetable.h"
@@ -363,10 +364,12 @@ bool App::readGameInput(cab::Core& core) {
         // back_button_timeout), so it is the one way to pause from any
         // app (MMagTech, 2026-10-08). The shortcuts themselves stay
         // the switch's. The pads seated during a stream are only the
-        // stream's, so nothing changes at the TV.
+        // stream's, so nothing changes at the TV. A FIGHT STICK'S HOME
+        // OPENS IT THE SAME WAY, in every game: the stick has no stick
+        // clicks for the pair (fightstick.h).
         const bool combos = shortcuts::enabled();
         if (SDL_Gamepad* gp = players::gamepad(p);
-            gp && (combos || players::streaming())) {
+            gp && (combos || players::streaming() || players::stick(SDL_GetGamepadID(gp)))) {
             ShortcutHold& h = shortcutHold[p];
             const SDL_JoystickID who = SDL_GetGamepadID(gp);
             if (h.down && h.pad != who) h = {};
@@ -439,6 +442,13 @@ bool App::readGameInput(cab::Core& core) {
         st.buttons &= ~heldThroughMenu[p];
         if (heldThroughMenu[p] & bit(cab::L2)) st.leftTrigger = 0;
         if (heldThroughMenu[p] & bit(cab::R2)) st.rightTrigger = 0;
+        // A FIGHT STICK IN AN ARCADE GAME (fightstick.h): its eight
+        // buttons, read above as any pad's and kept from the game above
+        // the same way, are moved last to where the game's layout puts
+        // them. No other pad, and no other game, has a layout.
+        if (SDL_Gamepad* gp = players::gamepad(p))
+            if (const fightstick::Layout* layout = fightstick::forPort(p, gp, session.core))
+                fightstick::apply(*layout, st);
         core.setPad(p, st);
     }
 

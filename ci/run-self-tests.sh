@@ -38,6 +38,7 @@ TESTS=(
     --first-run-writes
     --accounts-test
     --players-test
+    --fightstick-test
     --battery-test
     --volume-test
     --playtime-test
