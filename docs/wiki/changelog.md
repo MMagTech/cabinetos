@@ -6,6 +6,10 @@ one you install, so you only ever install the newest.
 
 ## Next
 
+- **New:** while only Wii Remotes are on, every game that isn't a Wii game
+  says *Needs a controller* after its name, on Home, in your games and in
+  Search. Turn on any other controller and it goes.
+  ([#589](https://github.com/MMagTech/cabinetos/pull/589))
 - **Fixed:** a game greyed out on Home or in Search, such as a Wii game that
   needs a Wii Remote while a Remote Play stream is on, now says why after its
   name and system, as it already did in a system's games.
