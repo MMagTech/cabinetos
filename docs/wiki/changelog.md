@@ -4,6 +4,13 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** a game greyed out on Home or in Search, such as a Wii game that
+  needs a Wii Remote while a Remote Play stream is on, now says why after its
+  name and system, as it already did in a system's games.
+  ([#588](https://github.com/MMagTech/cabinetos/pull/588))
+
 ## 2026.10.25.5 {#v2026-10-25-5}
 
 - **Changed:** in a collection and in Search, the line beside the heading
