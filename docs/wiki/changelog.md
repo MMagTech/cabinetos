@@ -15,6 +15,7 @@ one you install, so you only ever install the newest.
   treated as an ordinary pad, as before, and nothing changes for any other
   controller. See
   [Fight sticks](controllers.md#fight-sticks).
+  ([#576](https://github.com/MMagTech/cabinetos/pull/576))
 
 ## 2026.10.24 {#v2026-10-24}
 
