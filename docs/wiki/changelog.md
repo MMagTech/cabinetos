@@ -4,6 +4,18 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** the 8BitDo Arcade Stick plays arcade games with the cabinet's
+  layout. Pair it over Bluetooth in **X mode**: the game's buttons follow its
+  own order along the top row, then the bottom, so a fighting game has its
+  punches on top and its kicks below; a four-button game uses the left four,
+  and a game with one to three uses the bottom row. Tap **Home** on the stick
+  for the pause menu in any game. Wired, or on its 2.4G receiver, it is
+  treated as an ordinary pad, as before, and nothing changes for any other
+  controller. See
+  [Fight sticks](controllers.md#fight-sticks).
+
 ## 2026.10.24 {#v2026-10-24}
 
 - **Fixed:** with only a Wii Remote on, you could start a game it can't play

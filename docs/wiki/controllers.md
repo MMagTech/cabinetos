@@ -54,6 +54,16 @@ bolt while charging. A notice says when one runs low.
 Settings, Controllers, **Rumble**: on or off for every controller and every
 system. It is on to start with.
 
+## Fight sticks
+
+The **8BitDo Arcade Stick**, paired over Bluetooth in **X mode**, plays arcade
+games with the cabinet's layout: the game's buttons in its own order along the
+top row, then the bottom, so a fighting game has its punches on top and its
+kicks below. A game with four buttons uses the left four; one with one to
+three uses the bottom row. Tap **Home** for the pause menu in any game. Other
+games play it as an Xbox pad. Wired, or on its 2.4G receiver, it is treated as
+an ordinary pad everywhere.
+
 ## Wii Remotes
 
 Real Wii Remotes play Wii games, pointer included. **TechKen's Wii Remote Plus
