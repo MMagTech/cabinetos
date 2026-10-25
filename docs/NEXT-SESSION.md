@@ -29,7 +29,7 @@ the GamePad, so Shovel Knight's first screen answers"; #558, "An archived
 game is unpacked once, not at every start (3DS: 37 s to under a second)"
 (it closed #530, "An archived game unpacks again at every start (3DS: up to
 37 s)"); and #560, "Changelog: no game-led Wii U entry, and no date lines".
-The newest image in the changelog is 2026.10.25.3: #582, "Controls: move
+The newest image in the changelog is 2026.10.25.4: #582, "Controls: move
 an arcade game's buttons from its pause menu", on testing, waiting for his
 install, his check and his go to merge. Before it, 2026.10.25.2: #580,
 "Hold Start in an arcade game to open its own settings (#577)", merged and
@@ -65,10 +65,9 @@ RomM: keep test launches under a minute, or have his go.
    Gun.Smoke and it worked; at the TV the switch from the pause menu was
    reworked twice (the panel flashed, then a list of its own read as off)
    and Controls is now drawn as the pause menu's own rows, which he judged
-   right. Testing image 2026.10.25.3 predates that rework: next, a testing
-   push on his go, his check of that image, his go to merge. After it, the
-   pause menu's "Options" row as a visual test for him (his idea of
-   2026-10-25, not a decision).
+   right. On testing as 2026.10.25.4, with the rework: next, his install,
+   his check, his go to merge. After it, the pause menu's "Options" row as a
+   visual test for him (his idea of 2026-10-25, not a decision).
 2. **Stop at an out-of-range array write, at the line that does it.**
    **Not before his weekly limit resets (Saturday 2026-10-24, about 9 PM
    Eastern; MMagTech, 2026-10-21).** Estimated 300k to 500k Opus tokens

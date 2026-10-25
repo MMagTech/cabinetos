@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## 2026.10.25.3 {#v2026-10-25-3}
+## 2026.10.25.4 {#v2026-10-25-4}
 
 - **New:** in an arcade game (FinalBurn Neo or MAME 2003-Plus), the pause
   menu has **Controls**: the game's buttons by their own names, each with the
