@@ -30,9 +30,9 @@ game is unpacked once, not at every start (3DS: 37 s to under a second)"
 (it closed #530, "An archived game unpacks again at every start (3DS: up to
 37 s)"); and #560, "Changelog: no game-led Wii U entry, and no date lines".
 The newest image in the changelog is 2026.10.25.5: #584, "A collection and
-Search name the focused game's system, as Home does (#579)", judged right on
-the TV through the loop, on testing, waiting for his install, his check and
-his go to merge. Before it, 2026.10.25.4: #582, "Controls: move
+Search name the focused game's system, as Home does (#579)", merged and
+promoted on 2026-10-25, judged on the TV and checked on the testing image.
+Before it, 2026.10.25.4: #582, "Controls: move
 an arcade game's buttons from its pause menu", merged and promoted on
 2026-10-25, judged on the TV through the loop. Before it, 2026.10.25.2: #580,
 "Hold Start in an arcade game to open its own settings (#577)", merged and
