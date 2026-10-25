@@ -50,12 +50,12 @@ public:
     // beyond what fits scrolling inside it (MMagTech, 2026-10-25: going more
     // than one menu deep, the pause menu's height and width must never
     // change). It draws no scrim and no panel of its own: the pause menu's
-    // stays where it is, and only what is in it changes, the menu's rows
-    // going at once as these fade in, and these going at once as the menu's
-    // fade back when it closes. MMagTech at the TV, the same day: the panel
-    // flashed, gone for a moment and fading back in as the level's own; and
-    // words fading out over words fading in showed both. The pause menu
-    // reads menuRows(). open() clears it.
+    // stays where it is, and only what is in it changes: the menu's rows go
+    // at once as these fade in, and when it closes these fade out as the
+    // menu's fade back in. MMagTech at the TV, the same day: the panel
+    // flashed, gone for a moment and fading back in as the level's own; with
+    // it kept, he asked for this fade between the two on the way out. The
+    // pause menu reads menuRows(). open() clears it.
     void setOverPauseMenu(float w, float h) {
         panelW_ = w;
         panelH_ = h;
@@ -113,7 +113,7 @@ public:
     void setTitle(std::string title) { title_ = std::move(title); }
     // The detail line alone, keeping the answers and focus.
     void setDetail(std::string detail) { detail_ = std::move(detail); }
-    // A level of the pause menu goes at once, and the menu's rows fade back.
+    // A level of the pause menu fades out as the menu's rows fade back in.
     void close();
     // The pause menu is closing with a level of it up: the level fades with
     // the menu's panel instead, and the menu's rows stay hidden.
@@ -124,8 +124,8 @@ public:
     // Nothing left of it, at once (the pause menu opening again).
     void forget();
     bool isOpen() const { return open_; }
-    // Open, or a level of the pause menu fading with the menu.
-    bool visible() const { return open_ || (overMenu_ && withMenu_ && appear_.value() > 0.001f); }
+    // Open, or a level of the pause menu still fading out.
+    bool visible() const { return open_ || (overMenu_ && appear_.value() > 0.001f); }
     const std::string& title() const { return title_; }
     // The answer, after Chosen.
     int chosen() const { return slot_; }

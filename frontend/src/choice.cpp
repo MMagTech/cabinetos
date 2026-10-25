@@ -60,10 +60,9 @@ void ChoiceScreen::open(std::string title, std::string detail,
 
 int ChoiceScreen::fit() const { return fit_ > 0 ? fit_ : kMaxVisible; }
 
-// THE ROWS GOING OUT GO AT ONCE, THE ROWS COMING IN FADE IN: the level
-// and the menu's rows never show together, and the panel under them never
-// goes. As the level closes `appear_` runs back down, and the menu's rows
-// fade in by it.
+// GOING IN, THE MENU'S ROWS GO AT ONCE AS THE LEVEL'S FADE IN; COMING
+// BACK, THE LEVEL'S FADE OUT AS THE MENU'S FADE IN, both by `appear_`
+// running back down. The panel under them never goes.
 float ChoiceScreen::menuRows() const {
     if (!overMenu_) return 1.0f;
     return open_ || withMenu_ ? 0.0f : 1.0f - appear_.value();
