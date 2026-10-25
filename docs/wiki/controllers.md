@@ -48,9 +48,9 @@ Every controller plays as the person signed in. See
 
 The top bar on Home, the Library, Search and Settings shows the battery of
 each controller that reports one (**P1** to **P4**, Wii Remotes **W1** to
-**W4**), with a bolt while charging. A notice says when one runs low. A
-controller that does not report its battery, as some do not, even in the same
-model's other mode, shows its player number alone, so you still see it is
+**W4**), with a bolt while charging. A notice says when one runs low. Some
+controllers do not report their battery, such as an 8BitDo pad in one of its
+modes; those show their player number alone, so you still see they are
 connected.
 
 ## Rumble
