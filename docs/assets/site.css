@@ -214,7 +214,8 @@ footer.foot a { color: var(--text-dim); }
 
 /* ---------- Wiki search (assets/search.js, on the wiki's front page) ---------- */
 
-.search { margin: 22px 0 28px; scroll-margin-top: 76px; }
+/* The results lie over the page in a panel under the box; nothing moves. */
+.search { position: relative; z-index: 5; margin: 22px 0 28px; scroll-margin-top: 76px; }
 .search label {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
@@ -229,9 +230,21 @@ footer.foot a { color: var(--text-dim); }
 }
 .search input::placeholder { color: var(--text-faint); }
 .search input:focus { outline: 2px solid var(--cyan); outline-offset: 2px; border-color: transparent; }
-.search-status { margin: 10px 6px 0; font-size: 14px; color: var(--text-faint); min-height: 1.4em; }
+.search-panel {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px);
+  max-height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px 16px 8px; border-radius: 18px;
+  background: var(--surface); border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+.search-panel[hidden] { display: none; }
+.search-status { margin: 10px 4px 0; font-size: 14px; color: var(--text-faint); }
+@media (max-width: 640px) {
+  .search-panel { max-height: 62vh; max-height: 62dvh; }
+}
 .doc .search-results { list-style: none; margin: 6px 0 0; padding: 0; }
-.doc .search-results li { margin: 0; padding: 12px 6px; border-bottom: 1px solid var(--line); }
+.doc .search-results li { margin: 0; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.doc .search-results li:last-child { border-bottom: 0; }
 .search-results a { font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
 .search-results .search-page { color: var(--text); }
 .doc .search-results p { margin: 4px 0 0; font-size: 15px; color: var(--text-dim); overflow-wrap: anywhere; }

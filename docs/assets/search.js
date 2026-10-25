@@ -10,6 +10,10 @@
 // NOTHING LEAVES THE READER'S DEVICE: the pages come from this site, the
 // search runs here, and nothing is counted or sent.
 //
+// THE RESULTS LIE OVER THE PAGE, in a panel under the box, so nothing on the
+// page moves (MMagTech, 2026-10-25). Tapping outside it, Escape, or emptying
+// the box closes it; it scrolls by itself when the results are long.
+//
 // The box is made here, so a browser without scripts shows no box that
 // cannot work. The layout loads this on the wiki's front page only
 // (docs/_layouts/wiki.html); the top bar's Search link goes to #search.
@@ -29,15 +33,33 @@
   form.innerHTML =
     '<label for="search-box">Search the wiki</label>' +
     '<input id="search-box" type="search" placeholder="Search the wiki" ' +
-    'autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">' +
+    'autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" ' +
+    'aria-controls="search-panel" aria-expanded="false">' +
+    '<div class="search-panel" id="search-panel" hidden>' +
     '<p class="search-status" aria-live="polite"></p>' +
-    '<ol class="search-results"></ol>';
+    '<ol class="search-results"></ol></div>';
   var after = title.nextElementSibling;
   main.insertBefore(form, after && after.tagName === "P" ? after.nextSibling : title.nextSibling);
 
   var box = form.querySelector("input");
+  var panel = form.querySelector(".search-panel");
   var status = form.querySelector(".search-status");
   var list = form.querySelector(".search-results");
+
+  function open() {
+    if (!panel.hidden) return;
+    panel.hidden = false;
+    box.setAttribute("aria-expanded", "true");
+    // On a phone the box goes to the top first, so the panel has the screen
+    // below it, keyboard or not.
+    if (window.matchMedia("(max-width: 640px)").matches &&
+        form.getBoundingClientRect().top > 90)
+      form.scrollIntoView({ block: "start" });
+  }
+  function close() {
+    panel.hidden = true;
+    box.setAttribute("aria-expanded", "false");
+  }
 
   // ---- Reading the pages --------------------------------------------------
 
@@ -301,8 +323,10 @@
     if (!ws.length || q.length < 2) {
       list.textContent = "";
       status.textContent = "";
+      close();
       return;
     }
+    open();
     if (!loading) status.textContent = "Reading the wiki…";
     load().then(
       function (all) {
@@ -325,6 +349,22 @@
   box.addEventListener("focus", function () {
     load().catch(function () {});
   }, { once: true });
+  // Back in the box with results there, they show again, whether the box
+  // had lost the cursor or not.
+  function reopen() {
+    if (list.childElementCount || status.textContent) open();
+  }
+  box.addEventListener("focus", reopen);
+  box.addEventListener("click", reopen);
+  document.addEventListener("pointerdown", function (e) {
+    if (!panel.hidden && !form.contains(e.target)) close();
+  });
+  form.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !panel.hidden) {
+      e.preventDefault();
+      close();
+    }
+  });
   // Enter keeps the results and puts the phone's keyboard away.
   form.addEventListener("submit", function (e) {
     e.preventDefault();
