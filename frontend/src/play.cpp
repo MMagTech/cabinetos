@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include "arcadesettings.h"
 #include "core.h"
 #include "discs.h"
 #include "fightstick.h"
@@ -449,6 +450,13 @@ bool App::readGameInput(cab::Core& core) {
         if (SDL_Gamepad* gp = players::gamepad(p))
             if (const fightstick::Layout* layout = fightstick::forPort(p, gp, session.core))
                 fightstick::apply(*layout, st);
+        // HOLDING START IN AN ARCADE GAME (#577, arcadesettings.h): player
+        // 1's buttons as the game is about to hear them, so a hold kept from
+        // the game above does not count.
+        if (p == 0)
+            core.setKey(arcadesettings::kMenuKey,
+                        arcadesettings::step(arcadeHold, session.core, st.buttons,
+                                             core.framesRun()));
         core.setPad(p, st);
     }
 

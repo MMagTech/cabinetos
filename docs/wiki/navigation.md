@@ -60,10 +60,11 @@ and **A** steps through it.
 
 The Home (Guide) button is never passed to a game.
 
-## On four systems
+## On some systems
 
 | System | Button | Does |
 |---|---|---|
+| Arcade | Hold **Start** for a second | The game's own settings, see [Arcade](systems.md#arcade) |
 | Nintendo DS | Right stick, **R3** | The right stick moves a pointer on the touch screen; **R3** (press the stick) touches |
 | Nintendo 3DS | Right stick, **R3**, **L3** | The right stick moves a pointer on the touch screen, and is the C-stick too; **R3** touches; hold **L3** to swap the two screens |
 | PlayStation (PS1) | **L1 + R1 + Select** | The DualShock's ANALOG button, for the few games that need it pressed |
