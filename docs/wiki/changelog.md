@@ -11,10 +11,10 @@ one you install, so you only ever install the newest.
   set the difficulty, the lives and the rest; in a FinalBurn Neo game, the
   board's own test menu, where the board has one. Hold Start again to close
   MAME's menu. See [Arcade](systems.md#arcade).
-  ([#577](https://github.com/MMagTech/cabinetos/issues/577))
+  ([#580](https://github.com/MMagTech/cabinetos/pull/580))
 - **Fixed:** leaving a MAME 2003-Plus game with both stick clicks could
   open MAME's DIP switch menu. It no longer does.
-  ([#577](https://github.com/MMagTech/cabinetos/issues/577))
+  ([#580](https://github.com/MMagTech/cabinetos/pull/580))
 
 ## 2026.10.25 {#v2026-10-25}
 

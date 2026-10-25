@@ -19,5 +19,6 @@
   the other arcade files for save channels, as decided on #353.
 - **Numbers:** #577, "Hold Start in an arcade game to open its own settings
   (DIP switches), on both cores"; #353, "Three kinds of save never reach
-  RomM: Saturn cartridge, arcade high scores, cartridge clocks".
+  RomM: Saturn cartridge, arcade high scores, cartridge clocks"; PR #580,
+  "Hold Start in an arcade game to open its own settings (#577)".
 - **Replaces:** none.
