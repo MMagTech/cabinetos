@@ -43,8 +43,10 @@ constexpr cab::Button kSlot[kSlots] = {cab::Y, cab::X, cab::R,  cab::L,
 // plugs in). EMIT_RETROPAD_CLASSIC in src/mame2003/mame2003.c at the pinned
 // commit 21256d24120b04916c5197d95b757635ca880fd9 (cores/build-core.sh): B is
 // button 1, A 2, Y 3, X 4, L 5, R 6, L2 7, R2 8. Its L3 and R3, buttons 9 and
-// 10, are not counted. The eight are also the ids a game's button may be on,
-// whichever core.
+// 10, are not counted. The core's build stops when a pin's table reads
+// otherwise (cores/build-core.sh, the mame2003_plus block), so this is put
+// right in the same change. The eight are also the ids a game's button may
+// be on, whichever core.
 constexpr cab::Button kClassic[] = {cab::B, cab::A, cab::Y,  cab::X,
                                     cab::L, cab::R, cab::L2, cab::R2};
 

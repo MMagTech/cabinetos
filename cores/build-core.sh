@@ -955,6 +955,28 @@ if [ "$CORE" = azahar ]; then
     echo "patched: each game sets its own folders (SetUserPath drops the last game's)"
 fi
 
+if [ "$CORE" = mame2003_plus ]; then
+    # NOT A PATCH, A CHECK (#576). A fight stick's layout in a MAME 2003-Plus
+    # game (frontend/src/fightstick.cpp, kClassic) puts the game's buttons in
+    # order by the core's Classic table, copied from this file at the pin:
+    # which joypad id is which of the game's buttons, for the plain joypad the
+    # console plugs into every port. A pin where either reads otherwise stops
+    # here, so the copy is put right in the same change instead of a stick's
+    # buttons landing in the wrong places with no error.
+    MAME_C="$SRC/src/mame2003/mame2003.c"
+    grep -Eq '^#define PAD_CLASSIC +RETRO_DEVICE_JOYPAD$' "$MAME_C" || {
+        echo "mame2003_plus: PAD_CLASSIC is no longer the plain joypad; check fightstick.cpp's kClassic" >&2
+        exit 1
+    }
+    CLASSIC=$(sed -n '/^#define EMIT_RETROPAD_CLASSIC(/,/EMIT_COMMON_CODES/ s/.*OSD_JOYPAD_\([A-Z0-9]*\), *JOYCODE_##DISPLAY_IDX##_BUTTON\([0-9]*\)}.*/\1:\2/p' "$MAME_C" |
+        grep -Ev '^(L3|R3):' | tr '\n' ' ')
+    if [ "$CLASSIC" != "B:1 A:2 Y:3 X:4 L:5 R:6 L2:7 R2:8 " ]; then
+        echo "mame2003_plus: its Classic table reads '$CLASSIC', not B 1, A 2, Y 3, X 4, L 5, R 6, L2 7, R2 8; put fightstick.cpp's kClassic right" >&2
+        exit 1
+    fi
+    echo "checked: the Classic button table matches fightstick.cpp"
+fi
+
 # platform=unix is the core's own Linux case, and on every Makefile-based core
 # in the set it is also the default when uname says Linux. It is the
 # best-tested path these cores have; the ios-arm64 case Cabinet uses is the
