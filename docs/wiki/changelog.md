@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.25.2 {#v2026-10-25-2}
 
 - **New:** hold **Start** for a second in an arcade game to open the game's
   own settings: in a MAME 2003-Plus game, MAME's menu, whose **Dip Switches**
