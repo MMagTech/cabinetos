@@ -192,7 +192,8 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   controllers than SDL knows alone), refreshed by a weekly pull request, and
   a pad reported missing is added to it. **Personal remapping is parked**:
   every system already plays with RetroArch's default layout by button
-  position, and a remap has no clean owner with four players.
+  position, arcade games on a fight stick the console knows with a fixed
+  fight-stick layout, and a remap has no clean owner with four players.
 - **Each pad's battery, on the top bar** (#293, decided with MMagTech
   2026-10-08; why in PROJECT.md question 40). Not a setting, nothing to turn
   on. Left of the account name on every screen with the top bar (Home,

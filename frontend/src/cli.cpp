@@ -15,6 +15,7 @@
 #include "core.h"
 #include "disc.h"
 #include "discs.h"
+#include "fightstick.h"
 #include "files.h"
 #include "firstrun.h"
 #include "idle.h"
@@ -277,6 +278,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             accountsTestMode = true;
         } else if (SDL_strcmp(argv[i], "--players-test") == 0) {
             playersTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--fightstick-test") == 0) {
+            return fightstick::test();
         } else if (SDL_strcmp(argv[i], "--battery-test") == 0) {
             batteryTestMode = true;
         } else if (SDL_strcmp(argv[i], "--volume-test") == 0) {
