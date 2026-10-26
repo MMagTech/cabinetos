@@ -21,11 +21,10 @@ judged on the TV and checked on the testing image. Before it, 2026.10.25.4:
 #582, "Controls: move an arcade game's buttons from its pause menu". In
 flight: #589, "Say which controller a game needs: Needs a controller, Needs
 a Wii Remote", with #588, "A greyed game says why on its line on Home and in
-Search too", in its branch. Testing image 2026.10.26 carries #589's first
-half, checked by him on it; the whole of #589 was judged right on the TV
-through the loop on 2026-10-26, and waits for a testing push, his check and
-his go to merge #589 alone (it carries #588; merging #588 first would build
-an untested image). What the A9 runs now is not written here: read it from
+Search too", in its branch: judged right on the TV through the loop on
+2026-10-26, on testing as 2026.10.26.2, waiting for his install, his check
+and his go to merge #589 alone (it carries #588; merging #588 first would
+build an untested image). What the A9 runs now is not written here: read it from
 the console before a test.
 The machines' addresses are in his local notes. His standing rule: every
 check and every comment is written out in full each time it is asked for,
