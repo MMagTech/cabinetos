@@ -18,8 +18,13 @@ source of truth for anything on RomM's data.
 to consoles is 2026.10.25.5: #584, "A collection and Search name the focused
 game's system, as Home does (#579)", merged and promoted on 2026-10-25,
 judged on the TV and checked on the testing image. Before it, 2026.10.25.4:
-#582, "Controls: move an arcade game's buttons from its pause menu". Nothing
-else is in flight. What the A9 runs now is not written here: read it from
+#582, "Controls: move an arcade game's buttons from its pause menu". In
+flight: #589, "Say which controller a game needs: Needs a controller, Needs
+a Wii Remote", with #588, "A greyed game says why on its line on Home and in
+Search too", in its branch: judged right on the TV through the loop on
+2026-10-26, on testing as 2026.10.26.2, waiting for his install, his check
+and his go to merge #589 alone (it carries #588; merging #588 first would
+build an untested image). What the A9 runs now is not written here: read it from
 the console before a test.
 The machines' addresses are in his local notes. His standing rule: every
 check and every comment is written out in full each time it is asked for,
