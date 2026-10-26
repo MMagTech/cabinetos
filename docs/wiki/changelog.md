@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.26 {#v2026-10-26}
 
 - **New:** while only Wii Remotes are on, every game that isn't a Wii game
   says *Needs a controller* after its name, on Home, in your games and in
