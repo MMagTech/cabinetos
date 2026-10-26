@@ -397,7 +397,7 @@ bool App::refuseStartWithoutController(int romId) {
         const bool wiiGame = g.platformSlug == "wii";
         const char* why = nullptr;
         if (lastPressFromRemote && !wiiGame)
-            why = "This Remote only plays Wii games";
+            why = "This game needs a controller";
         else if (wiiGame && !controllersOn().remote && catalog::playable(g) &&
                  wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0)
             why = "This game needs a Wii Remote";
