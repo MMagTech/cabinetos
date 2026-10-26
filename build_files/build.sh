@@ -362,6 +362,15 @@ done
 /ctx/built-in-speaker.sh
 
 # ---------------------------------------------------------------------------
+# A backup sound output while the TV's is gone (#228).
+# ---------------------------------------------------------------------------
+#
+# Starts pipewire-pulse at every login of the console's user, so PipeWire's
+# Dummy Output catches the console's sound while the TV sleeps, and fails the
+# build if a PipeWire update moved the unit or that output's default.
+/ctx/sound-backup-output.sh
+
+# ---------------------------------------------------------------------------
 # The console itself is NOT installed here, as of 2026-09-23.
 # ---------------------------------------------------------------------------
 #
