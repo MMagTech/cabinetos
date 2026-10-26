@@ -155,6 +155,7 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
 }
 
 static const std::string kNeedsController = "Needs a controller";
+static const std::string kNeedsRemote = "Needs a Wii Remote";
 
 // THE FOCUSED GAME'S LINE beside a heading: Home's shelves, a grid and Search
 // each name the one card focus is on there, and they name it the same way.
@@ -169,11 +170,13 @@ static const std::string kNeedsController = "Needs a controller";
 // asks again (gridOrder), so a Wii game on Recent greys there once a stream
 // starts or the last Remote goes, and its line said nothing until this.
 //
-// "NEEDS A CONTROLLER" IN THE REASON'S PLACE while only Wii Remotes are on
-// (`onlyRemotes`, App::onlyRemotesOn), on a game that is not a Wii game: a
-// Remote starts only Wii games (App::refuseRemoteStart), and this says so
-// before Play does. Never beside a reason of its own: a greyed game is not
-// made playable by turning a controller on.
+// A NOTE IN THE REASON'S PLACE for the controller a game needs and nobody has
+// on (`on`, App::controllersOn): "Needs a controller" on a game that is not a
+// Wii game while only Wii Remotes are on (a Remote starts only Wii games,
+// App::refuseStartWithoutController), and "Needs a Wii Remote" on a Wii game that needs
+// one while no Remote is on (it would start with nothing to play it, and a
+// Remote turned on mid-game is not seen, #590). Never beside a reason of its
+// own: a greyed game is not made playable by turning a controller on.
 //
 // `system` is for a list that mixes systems under a heading that names none
 // (Home's shelves, a collection, Search, #579). A platform's own grid leaves
@@ -182,15 +185,17 @@ static const std::string kNeedsController = "Needs a controller";
 // THE NAME IS WHAT GETS SHORTENED. Everything after it always shows, so a long
 // title cannot push the system or the reason off the end of the line.
 void drawFocusedLine(ui::Renderer& r, ui::TextRenderer& text, float sc, const Card& card,
-                     bool tags, bool system, bool onlyRemotes, float x, float baseline,
+                     bool tags, bool system, ControllersOn on, float x, float baseline,
                      float room, float nameAlpha) {
     const ui::TextStyle st = ui::TextStyle::Callout;
     const float gap = 24.0f;
     const std::string sys =
         (system && !card.platform.empty()) ? "   \xC2\xB7   " + card.platform : "";
     const bool showTags = tags && !card.tagLabel.empty();
-    const std::string& reason =
-        (card.unavailable.empty() && onlyRemotes && !card.wii) ? kNeedsController : card.unavailable;
+    const std::string& reason = !card.unavailable.empty()                    ? card.unavailable
+                                : (on.remote && !on.other && !card.wii) ? kNeedsController
+                                : (!on.remote && card.needsRemote)      ? kNeedsRemote
+                                                                        : card.unavailable;
     const bool showReason = !reason.empty();
     const float tagsW = showTags ? gap + text.measure(card.tagLabel, st, sc) : 0.0f;
     const float sysW = sys.empty() ? 0.0f : text.measure(sys, st, sc);

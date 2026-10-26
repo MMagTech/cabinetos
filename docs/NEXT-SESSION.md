@@ -29,12 +29,13 @@ the GamePad, so Shovel Knight's first screen answers"; #558, "An archived
 game is unpacked once, not at every start (3DS: 37 s to under a second)"
 (it closed #530, "An archived game unpacks again at every start (3DS: up to
 37 s)"); and #560, "Changelog: no game-led Wii U entry, and no date lines".
-The newest image in the changelog is 2026.10.26: #589, "While only Wii
-Remotes are on, other games say \"Needs a controller\"", with #588, "A
-greyed game says why on its line on Home and in Search too", in its branch;
-both judged right on the TV through the loop, on testing, waiting for his
-install, his check and his go to merge #589 (which carries #588; merging
-#588 alone first would build an untested image). Before it, 2026.10.25.5:
+The newest image in the changelog is 2026.10.26: #589, "Say which controller a game needs: Needs a controller, Needs a Wii Remote",
+with #588, "A greyed game says why on its line on Home and in Search too",
+in its branch. 2026.10.26 carries #589's first half, checked by him on that
+image; the second half (Needs a Wii Remote, and its toast on Play) came
+after it on 2026-10-25 and waits for a TV check, a testing push, his check
+and his go to merge #589 (which carries #588; merging #588 alone first would
+build an untested image). Before it, 2026.10.25.5:
 #584, "A collection and Search name the focused game's system, as Home does
 (#579)", merged and promoted on 2026-10-25, judged on the TV and checked on
 the testing image. Before it, 2026.10.25.4: #582, "Controls: move

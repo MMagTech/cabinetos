@@ -373,7 +373,7 @@ void GridScreen::drawGlass(Ctx& c) {
         const float room = ui::kCanvasWidth - design::kLibraryInset - x - design::kLetterIndexWidth;
         drawFocusedLine(c.r, c.text, c.sc, (*c.cards)[idx],
                         /*tags=*/design::hasTwin(*c.cards, cards_, idx),
-                        /*system=*/namesSystem_, c.onlyRemotes, x, baseline, room, 0.95f);
+                        /*system=*/namesSystem_, c.on, x, baseline, room, 0.95f);
     }
 }
 
