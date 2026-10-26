@@ -26,11 +26,13 @@
 # (docs/lessons/image-and-ci.md, "Everything the image installs goes in /usr").
 # `systemctl --user is-enabled` says "disabled" for a link in /usr, as it does
 # for the base's own unity-gtk-module.service beside it, which starts at every
-# login all the same: `is-active` is the check on a console. Measured on the A9 (testing image 2026.10.26, the screen's own sleep and
-# wake): as shipped, silent on the 2nd wake; with pipewire-pulse running,
-# 20 of 20 wakes had sound, the stream moving to Dummy Output within 2 s of
-# each sleep. Remote Play is not changed by it: pipewire-pulse already runs
-# during every stream. Nothing needs undoing when SDL is fixed.
+# login all the same: `is-active` is the check on a console.
+#
+# MEASURED on the A9 (testing image 2026.10.26, the screen's own sleep and
+# wake): as shipped, silent on the 2nd wake; with pipewire-pulse running, 20 of
+# 20 wakes had sound, the stream moving to Dummy Output within 2 s of each
+# sleep. Remote Play is not changed by it: pipewire-pulse already runs during
+# every stream. Nothing needs undoing when SDL is fixed.
 #
 # IF THE BUILD FAILS HERE, a PipeWire update moved what this leans on: the
 # unit's name or place, or pipewire-pulse.conf no longer loading
