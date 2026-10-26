@@ -34,7 +34,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 
 ### Controls
 
-- [wii-remote-outside-wii-games](2026-10-24-wii-remote-outside-wii-games.md): a Wii Remote starts only Wii games, and holding HOME on one opens the pause menu in every game.
+- [wii-remote-outside-wii-games](2026-10-24-wii-remote-outside-wii-games.md): a Wii Remote starts only Wii games, holding HOME on one opens the pause menu in every game, and a game's line says *Needs a controller* or *Needs a Wii Remote* when the controller it needs is off.
 - [fight-stick-layout](2026-10-24-fight-stick-layout.md): the 8BitDo Arcade Stick over Bluetooth plays arcade games with a fixed fight-stick layout, and every other pad as before.
 - [hold-start-opens-arcade-settings](2026-10-25-hold-start-opens-arcade-settings.md): holding Start in an arcade game opens the emulator's own menu, never one of the console's.
 - [no-remapping](2026-09-26-no-remapping.md): no button remapping on any system but arcade games, which have Controls.

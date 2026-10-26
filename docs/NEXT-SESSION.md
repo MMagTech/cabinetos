@@ -14,12 +14,16 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-25.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.10.25.5: #584, "A collection and Search name the focused
-game's system, as Home does (#579)", merged and promoted on 2026-10-25,
-judged on the TV and checked on the testing image. Before it, 2026.10.25.4:
-#582, "Controls: move an arcade game's buttons from its pause menu". Nothing
-else is in flight. What the A9 runs now is not written here: read it from
+**2026-10-26.** The newest release is 2026.10.10. The newest image promoted
+to consoles is 2026.10.26.2: #589, "Say which controller a game needs: Needs
+a controller, Needs a Wii Remote", which carried #588, "A greyed game says
+why on its line on Home and in Search too", merged and promoted on
+2026-10-26, judged on the TV and checked on the testing image. Before it,
+2026.10.25.5: #584, "A collection and Search name the focused game's system,
+as Home does (#579)". Nothing else is in flight. #590, "A Wii Remote turned
+on after a Wii game starts is ignored by the game", waits in Later; fix it
+only in the console's own code, never by patching Dolphin (MMagTech,
+2026-10-25). What the A9 runs now is not written here: read it from
 the console before a test.
 The machines' addresses are in his local notes. His standing rule: every
 check and every comment is written out in full each time it is asked for,
