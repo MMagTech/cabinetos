@@ -154,9 +154,6 @@ void drawCover(Ctx& c, const Card& card, float x, float y, float w, float h,
     }
 }
 
-static const std::string kNeedsController = "Needs a controller";
-static const std::string kNeedsRemote = "Needs a Wii Remote";
-
 // THE FOCUSED GAME'S LINE beside a heading: Home's shelves, a grid and Search
 // each name the one card focus is on there, and they name it the same way.
 // The name, then RomM's tags dimmer when `tags` (the caller's hasTwin, #383),

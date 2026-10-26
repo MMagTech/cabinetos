@@ -51,6 +51,10 @@ struct ControllersOn {
     bool remote = false;
     bool other = false;
 };
+// The two notes, and the toasts a press on Play gets in their place
+// (App::refuseStartWithoutController): the same words in both places.
+inline const std::string kNeedsController = "Needs a controller";
+inline const std::string kNeedsRemote = "Needs a Wii Remote";
 
 // Everything a screen needs to draw itself. References, because the app owns
 // all of it and a screen outlives none of it.

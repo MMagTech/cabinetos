@@ -395,15 +395,16 @@ bool App::refuseStartWithoutController(int romId) {
     for (const auto& g : games) {
         if (g.id != romId) continue;
         const bool wiiGame = g.platformSlug == "wii";
-        const char* why = nullptr;
+        const std::string* why = nullptr;
         if (lastPressFromRemote && !wiiGame)
-            why = "This game needs a controller";
+            why = &screens::kNeedsController;
         else if (wiiGame && !controllersOn().remote && catalog::playable(g) &&
                  wii::padDevice(wii::codeFromTitleId(g.titleId)) == 0)
-            why = "This game needs a Wii Remote";
+            why = &screens::kNeedsRemote;
         if (!why) return false;
-        std::fprintf(stderr, "[launch] %s (%s): %s\n", g.name.c_str(), g.platformName.c_str(), why);
-        menuNotice.say(why, Tone::Info);
+        std::fprintf(stderr, "[launch] %s (%s): %s\n", g.name.c_str(), g.platformName.c_str(),
+                     why->c_str());
+        menuNotice.say(*why, Tone::Info);
         sound::play(sound::Cue::Edge);
         return true;
     }
