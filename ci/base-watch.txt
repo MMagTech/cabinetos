@@ -434,6 +434,11 @@ poppler-data
 area: Sound
 log: PipeWire and WirePlumber are running :: systemctl --user is-active -q pipewire wireplumber
 log: The sound devices are there :: wpctl status | sed -n '/^Audio/,/^Video/p' | grep -q '\[alsa\]'
+# The backup output (#228, build_files/sound-backup-output.sh): pipewire-pulse
+# starts at login, so its Dummy Output catches the console's sound while the
+# TV's output is gone. `is-enabled` says "disabled" for the image's link, so
+# this reads is-active.
+log: pipewire-pulse runs from login, so a backup output can catch the console's sound :: s=$(systemctl --user is-active pipewire-pulse.service); [ "$s" = active ] || { echo "pipewire-pulse.service is $s"; exit 1; }
 # The volume keys (volume.cpp) read `wpctl get-volume`'s "Volume: 0.50"
 # (" [MUTED]" after it when muted) and set it the same way. With the TV
 # asleep there is no output to ask, so this fails then: wake the TV first.

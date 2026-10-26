@@ -42,6 +42,8 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 
 ### Sound and display
 
+- [sound-backup-output](2026-10-26-sound-backup-output.md): the image starts pipewire-pulse at login, so a backup output catches the console's sound while the TV's is gone.
+
 ### RomM and the library
 
 ### Screens and settings

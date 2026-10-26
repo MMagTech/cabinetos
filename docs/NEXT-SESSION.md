@@ -87,8 +87,7 @@ RomM: keep test launches under a minute, or have his go.
 
 - **Needs the TV or a device:** #473 (a press while an emulator of its own
   has the screen), #411 (Moonlight), #290 (the
-  C1, before a release), #228 (the measurement in PROJECT.md section
-  46 when the sound dies again), and #575, "Sinden light guns: plug in and
+  C1, before a release), and #575, "Sinden light guns: plug in and
   play gun games (waiting on the guns)".
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
   (RomM's save channels; revisit mid-January 2027), #545 and PR #528 (the
