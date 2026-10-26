@@ -100,11 +100,9 @@ RomM: keep test launches under a minute, or have his go.
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
   #203 closed until libretro/dolphin#508 moves.
 - **Filed, not scheduled:** #557, "No emulator reaches the internet: one
-  block for all of them (Wii's slow Mario Kart exit, 3DS)"; #559, "A
+  block for all of them (Wii's slow Mario Kart exit, 3DS)"; and #559, "A
   power cut right after a download or an unpack can leave a damaged game
-  that the console keeps (exFAT and NTFS drives)"; and #583, "During a PS2
-  game the console's own loop runs at about 250 frames a second instead of
-  60".
+  that the console keeps (exFAT and NTFS drives)".
 - **With the next real core change:** the comments #490, "Code comments
   that say what the code no longer does, and machine details left in
   comments", left in the core and PCSX2 build files and `core*.cpp`, kept
