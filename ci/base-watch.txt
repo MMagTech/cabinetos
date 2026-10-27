@@ -136,6 +136,10 @@ kmod
 kmod-libs
 rpm-ostree
 dracut*
+# Emulators run as programs start under bwrap with no network and
+# systemd-resolved's folder hidden (frontend/src/standalone.cpp, #557): a
+# systemd that answers lookups from anywhere else lets one look names up.
+log: A program started as an emulator cannot look a name up :: out=$(bwrap --dev-bind / / --unshare-net --tmpfs /run/systemd/resolve -- getent hosts github.com 2>&1) && { echo "it resolved: $out"; exit 1; }; exit 0
 systemd
 systemd-*
 grub2-*
@@ -387,6 +391,11 @@ area: Downloads from RomM
 log: Home started :: journalctl -b -t cabinetos-session -o cat | grep -q 'Home is up'
 log: Nothing crashed this boot :: out=$(coredumpctl list --since "$(uptime -s)" --no-legend 2>/dev/null); [ -z "$out" ] || { echo "$out"; exit 1; }
 tv: A download: a game not on the console yet downloads from RomM and starts
+# No emulator reaches the network (#557): the console refuses an emulator's
+# lookups by who asked, and curl inside an emulator's call looks names up on a
+# thread of its own, which only that thread's mark refuses (netblock.cpp). A
+# libcurl that stopped starting that thread, or shared one, would let it out.
+log: No emulator reaches the network (the console's self-test) :: out=$(/usr/bin/cabinetos-frontend --netblock-test 2>&1) || { grep -v '^  ok' <<<"$out"; exit 1; }
 libcurl
 libcurl-minimal
 libarchive
@@ -511,6 +520,7 @@ tailscale
 area: Original Xbox and Switch games
 log: xemu and Eden are installed at their pinned revisions :: grep -E '^(app|runtime) ' /usr/share/cabinetos/flatpaks.list | while read -r _ ref br c; do [ "$(flatpak info --system --show-commit "$ref" "$br" 2>&1)" = "$c" ] || { echo "$ref is not at $c"; exit 1; }; done
 tv: An Original Xbox or Switch game starts and plays, with sound
+log: A program started as an emulator cannot look a name up :: out=$(bwrap --dev-bind / / --unshare-net --tmpfs /run/systemd/resolve -- getent hosts github.com 2>&1) && { echo "it resolved: $out"; exit 1; }; exit 0
 flatpak
 flatpak-*
 bubblewrap

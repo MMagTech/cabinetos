@@ -58,7 +58,8 @@ struct Emulator {
     const char* flatpak;
     const char* binary;
     // The program itself, by process name, which is the process that takes
-    // signals: inside the sandbox for a Flatpak.
+    // signals: inside the sandbox for a Flatpak, where it is found by this
+    // name (a program in the image is bwrap's one child, Run::findProgram).
     const char* program;
     // Its own log, and the two phrases it writes there when a game will not
     // load. That case is an error box on the television that nobody can
@@ -269,6 +270,7 @@ public:
 
 private:
     void kill9();
+    int findProgram() const;
 
     const Emulator* emu_ = nullptr;
     int root_ = -1;          // what we started: its sandbox (flatpak run, or bwrap)
