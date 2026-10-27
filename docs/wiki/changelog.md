@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.27 {#v2026-10-27}
 
 - **Fixed:** leaving a Wii game such as Mario Kart Wii could freeze the
   picture for up to a minute while the emulator waited on Nintendo's old
