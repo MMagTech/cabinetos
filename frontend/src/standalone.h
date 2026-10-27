@@ -271,7 +271,7 @@ private:
     void kill9();
 
     const Emulator* emu_ = nullptr;
-    int root_ = -1;          // what we started: the sandbox, or the program
+    int root_ = -1;          // what we started: its sandbox (flatpak run, or bwrap)
     int program_ = -1;       // the emulator itself, once it is found
     int64_t startMs_ = 0;
     int64_t stopAtMs_ = 0;

@@ -518,6 +518,16 @@ done
 
 check_present "emulator flatpak manifest" /usr/share/cabinetos/flatpaks.list || failed=1
 
+# NO EMULATOR REACHES THE NETWORK (#557): every emulator in the image is
+# started under bwrap with no network (frontend/src/standalone.cpp). Without
+# it no PS3, Xbox 360, Wii U or Vita game starts.
+if command -v bwrap >/dev/null 2>&1; then
+    log "  ok: bwrap ($(command -v bwrap))"
+else
+    log "  MISSING: bwrap, which every emulator in the image is started under"
+    failed=1
+fi
+
 # SYSTEM UPDATE, docs/SETTINGS.md, System. The root half is a script that runs
 # these; every one is in the base today and none is something we install, so
 # a strip pass or a base bump that took one away would ship a console whose
