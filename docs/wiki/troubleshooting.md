@@ -61,7 +61,7 @@ graphics under Linux:
 
 - **The TV is black.** The console turned the screen off after the time in
   Settings, Display and Sound. Press any button; that first press only wakes
-  it.
+  it, and buttons do nothing for 3 seconds while the picture comes back.
 
 ## Remote Play
 

@@ -100,7 +100,7 @@ RomM: keep test launches under a minute, or have his go.
 ## Waiting, not for the next session unless MMagTech raises them
 
 - **Needs the TV or a device:** #473 (a press while an emulator of its own
-  has the screen), #411 (Moonlight), #290 (the
+  has the screen), #290 (the
   C1, before a release), and #575, "Sinden light guns: plug in and
   play gun games (waiting on the guns)".
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362

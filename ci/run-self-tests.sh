@@ -43,6 +43,7 @@ TESTS=(
     --screen-view-test
     --controls-test
     --netblock-test
+    --idle-test
     --battery-test
     --volume-test
     --playtime-test
