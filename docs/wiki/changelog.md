@@ -4,6 +4,15 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.27 {#v2026-10-27}
+
+- **Fixed:** leaving a Wii game such as Mario Kart Wii could freeze the
+  picture for up to a minute while the emulator waited on Nintendo's old
+  servers. No emulator reaches the internet any more, so leaving is
+  immediate, and no game contacts a server of its own. A 3DS game now sees
+  its Wi-Fi as on, and its online modes still do not connect.
+  ([#557](https://github.com/MMagTech/cabinetos/issues/557))
+
 ## 2026.10.26.3 {#v2026-10-26-3}
 
 - **Fixed:** after the screen had gone to sleep or the TV had been off, the

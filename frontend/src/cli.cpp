@@ -22,6 +22,7 @@
 #include "firstrun.h"
 #include "idle.h"
 #include "launch.h"
+#include "netblock.h"
 #include "samenames.h"
 #include "storage.h"
 #include "update.h"
@@ -286,6 +287,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             return arcadesettings::test();
         } else if (SDL_strcmp(argv[i], "--controls-test") == 0) {
             return controls::test();
+        } else if (SDL_strcmp(argv[i], "--netblock-test") == 0) {
+            return netblock::test();
         } else if (SDL_strcmp(argv[i], "--battery-test") == 0) {
             batteryTestMode = true;
         } else if (SDL_strcmp(argv[i], "--volume-test") == 0) {

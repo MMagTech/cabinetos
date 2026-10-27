@@ -15,12 +15,12 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-10-26.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.10.26.2: #589, "Say which controller a game needs: Needs
-a controller, Needs a Wii Remote", which carried #588, "A greyed game says
-why on its line on Home and in Search too", merged and promoted on
-2026-10-26, judged on the TV and checked on the testing image. Before it,
-2026.10.25.5: #584, "A collection and Search name the focused game's system,
-as Home does (#579)". Nothing else is in flight. #590, "A Wii Remote turned
+to consoles is 2026.10.27: #595, "No emulator reaches the internet: one
+block for all of them (#557)", merged on 2026-10-26 after his TV checks
+(Mario Kart Wii's download refused and its exit at once, Shovel Knight's
+pause and exit). Before it, 2026.10.26.3: #591, "Sound comes back after the
+TV sleeps: a backup output while the TV's is gone". Nothing else is in
+flight. #590, "A Wii Remote turned
 on after a Wii game starts is ignored by the game", waits in Later; fix it
 only in the console's own code, never by patching Dolphin (MMagTech,
 2026-10-25). What the A9 runs now is not written here: read it from
@@ -39,7 +39,17 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **Stop at an out-of-range array write, at the line that does it.**
+1. **Mario Kart Wii on the TV, with no stream (his check, asked for
+   2026-10-26).** Over a Moonlight stream on 2026.10.27 its races skipped
+   104 game frames per 10 s on average (worst 293) and he heard the sound
+   crackle; on the TV alone before, 1 to 2 (worst 13). Mario Kart DS and
+   Mario Kart 7 were fine over the same stream. His steps: play a race of
+   Mario Kart Wii on the TV, with Moonlight not connected, for a few
+   minutes. Success: smooth sound. Then read the `[pace]` lines of that run
+   (game frames skipped near the old 1 to 2). Smooth means the stream is
+   the cause, and nothing is opened unless he asks; crackling means it is
+   Wii at 5x on the A9, also his call.
+2. **Stop at an out-of-range array write, at the line that does it.**
    Estimated 300k to 500k Opus tokens (1.2 to 2 weekly points) if no check
    fires; more if one does.
    The crash of 2026-10-20 was a write past a two-entry array that landed
@@ -51,7 +61,7 @@ RomM: keep test launches under a minute, or have his go.
    damaging what sits beside it. Measure the frame times on Home and a
    large grid on the A9 before and after; if the cost shows, stop and
    say so. One PR, CI green, his word to merge.
-2. **The report-only checks turn strict.** From 2026-10-25, 8 PM Eastern
+3. **The report-only checks turn strict.** From 2026-10-25, 8 PM Eastern
    (2026-10-26 UTC): Doc paths, RomM paths and the other checks in
    `checks.yml`, and in the Compile job new warnings in touched files, the
    self-tests and the Wii bridge pacing test. The last two run in the
@@ -61,7 +71,7 @@ RomM: keep test launches under a minute, or have his go.
    a decision file and the 5-line growth allowance for PROJECT.md are one
    number each in `ci/check-decisions.sh`. Nothing to do but watch the first
    pull requests after each.
-3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -69,7 +79,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-4. **Merged branches to delete, on his go naming them.** Eleven in the main
+5. **Merged branches to delete, on his go naming them.** Eleven in the main
    checkout, all merged: `claude/3ds-azahar-core-9a119a`,
    `claude/3ds-hand-test-2414d9`, `claude/3ds-parity-research-f666db`,
    `claude/3ds-save-fix-57a0b1`, `claude/3ds-shader-cache-3c0de8`,
@@ -78,7 +88,7 @@ RomM: keep test launches under a minute, or have his go.
    `claude/arcade-stick-layout-9148b6` and `claude/next-session-2026-10-23`.
    On GitHub, one: `claude/next-session-2026-10-23`. Checked 2026-10-25;
    check again first.
-5. **Words from him, one at a time, no work:** #181, "Updates and DLC as
+6. **Words from him, one at a time, no work:** #181, "Updates and DLC as
    separate files in RomM (Switch, PS3, Xbox 360)", and #215, "Proposal, not
    decided: opt-in "Help improve CabinetOS" report sharing" (he is unsure of
    both); and which of the 36 faults the PROJECT.md scan found with no issue
@@ -95,14 +105,13 @@ RomM: keep test launches under a minute, or have his go.
   play gun games (waiting on the guns)".
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
   (RomM's save channels; revisit mid-January 2027), #545 and PR #528 (the
-  RomM token revoke, rommapp/romm#5274), #534 and #537 (the Azahar patches,
-  azahar-emu/azahar#2694 and azahar-emu/azahar#2695),
+  RomM token revoke, rommapp/romm#5274), #534 (the Azahar patch,
+  azahar-emu/azahar#2694),
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
   #203 closed until libretro/dolphin#508 moves.
-- **Filed, not scheduled:** #557, "No emulator reaches the internet: one
-  block for all of them (Wii's slow Mario Kart exit, 3DS)"; and #559, "A
-  power cut right after a download or an unpack can leave a damaged game
-  that the console keeps (exFAT and NTFS drives)".
+- **Filed, not scheduled:** #559, "A power cut right after a download or an
+  unpack can leave a damaged game that the console keeps (exFAT and NTFS
+  drives)".
 - **With the next real core change:** the comments #490, "Code comments
   that say what the code no longer does, and machine details left in
   comments", left in the core and PCSX2 build files and `core*.cpp`, kept
