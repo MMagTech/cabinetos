@@ -4,6 +4,16 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** connecting to the console with Moonlight could start the game
+  Home had focused, with nobody pressing anything, and a press just after
+  the screen came back on could start a game before the TV showed the
+  picture. After the screen was off, after Sleep, and after a device
+  connects to stream, buttons now do nothing in the menus for 3 seconds. The
+  first press on a dimmed screen still only wakes it.
+  ([#411](https://github.com/MMagTech/cabinetos/issues/411))
+
 ## 2026.10.27 {#v2026-10-27}
 
 - **Fixed:** leaving a Wii game such as Mario Kart Wii could freeze the

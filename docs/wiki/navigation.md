@@ -19,7 +19,9 @@ Buttons are named by position, Xbox style: **A** is the bottom face button
 | **Start** | The Power menu (Sleep, Restart, Power off, Switch to Steam) |
 | Up from the top row | The top bar |
 
-When the screen has dimmed or turned off, the first press only wakes it.
+When the screen has dimmed or turned off, the first press only wakes it. After
+it was off, after Sleep, and after a Remote Play device connects, buttons do
+nothing in the menus for 3 seconds.
 
 ## Screen by screen
 
