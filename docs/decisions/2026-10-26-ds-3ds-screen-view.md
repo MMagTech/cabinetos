@@ -21,6 +21,7 @@
   console never does. A pause-menu row was the other option: easier to find,
   slower in play; the button won. Stray clicks were weighed and set aside by
   MMagTech: his pad's stick needs a firm press to click.
-- **Numbers:** none, decided in a session and at the TV.
+- **Numbers:** PR #596, "L3 shows a DS or 3DS game's top screen, bottom
+  screen, or both". No issue; decided in a session and at the TV.
 - **Replaces:** the 3DS's L3 swapping the screens while held
   (`citra_swap_screen_mode` "Hold", docs/PROJECT.md question 50).
