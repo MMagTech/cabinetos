@@ -20,7 +20,9 @@ a controller, Needs a Wii Remote", which carried #588, "A greyed game says
 why on its line on Home and in Search too", merged and promoted on
 2026-10-26, judged on the TV and checked on the testing image. Before it,
 2026.10.25.5: #584, "A collection and Search name the focused game's system,
-as Home does (#579)". Nothing else is in flight. #590, "A Wii Remote turned
+as Home does (#579)". In flight: #595, "No emulator reaches the internet:
+one block for all of them (#557)", on testing, waiting for his TV checks
+and his word to merge. #590, "A Wii Remote turned
 on after a Wii game starts is ignored by the game", waits in Later; fix it
 only in the console's own code, never by patching Dolphin (MMagTech,
 2026-10-25). What the A9 runs now is not written here: read it from
@@ -95,14 +97,13 @@ RomM: keep test launches under a minute, or have his go.
   play gun games (waiting on the guns)".
 - **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
   (RomM's save channels; revisit mid-January 2027), #545 and PR #528 (the
-  RomM token revoke, rommapp/romm#5274), #534 and #537 (the Azahar patches,
-  azahar-emu/azahar#2694 and azahar-emu/azahar#2695),
+  RomM token revoke, rommapp/romm#5274), #534 (the Azahar patch,
+  azahar-emu/azahar#2694),
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
   #203 closed until libretro/dolphin#508 moves.
-- **Filed, not scheduled:** #557, "No emulator reaches the internet: one
-  block for all of them (Wii's slow Mario Kart exit, 3DS)"; and #559, "A
-  power cut right after a download or an unpack can leave a damaged game
-  that the console keeps (exFAT and NTFS drives)".
+- **Filed, not scheduled:** #559, "A power cut right after a download or an
+  unpack can leave a damaged game that the console keeps (exFAT and NTFS
+  drives)".
 - **With the next real core change:** the comments #490, "Code comments
   that say what the code no longer does, and machine details left in
   comments", left in the core and PCSX2 build files and `core*.cpp`, kept
