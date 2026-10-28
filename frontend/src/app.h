@@ -2257,6 +2257,7 @@ struct App {
     // launch.cpp
     void forgetLaunchAsks();
     bool takeFinishedJob();
+    bool loadPickedCore();
     void prepareSaveDirAndDiscs(LaunchContext& c);
     void restoreBeforeLoad(LaunchContext& c);
     bool loadLaunchedGame(LaunchContext& c);

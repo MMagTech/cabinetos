@@ -54,7 +54,7 @@ downloads anything new into the console's shared BIOS folder.
 | System | RomM slug | Emulator | Formats | BIOS, firmware or keys |
 |---|---|---|---|---|
 | 3DO | `3do` | Opera | iso, bin, chd, cue | **Required:** `panafz10.bin` (1 MB, any name) |
-| Arcade | `arcade` | FinalBurn Neo or MAME 2003-Plus | zip (also 7z for FinalBurn Neo) | None. See [Arcade](#arcade) |
+| Arcade | `arcade`, `mame`, `fbneo`, `cps1`, `cps2`, `cps3`, `neogeomvs`, `naomi`, `naomi2`, `naomigd`, `atomiswave`, `stv`, `model2`, `model3` | FinalBurn Neo, MAME 2003-Plus, Flycast | zip, 7z | Naomi and Atomiswave: their BIOS zips. See [Arcade](#arcade) |
 | Atari 2600 | `atari2600` | Stella 2014 | a26, bin | None |
 | Atari 7800 | `atari7800` | ProSystem | a78, bin | None |
 | Dreamcast | `dc` | Flycast | chd, cdi, gdi, cue, m3u | Optional: `dc_boot.bin` (2 MB, any name). Without it Flycast uses its own. |
@@ -91,33 +91,24 @@ downloads anything new into the console's shared BIOS folder.
 
 ## Arcade
 
-- **One arcade folder just works.** Name it `arcade`, or anything else RomM
-  maps to its arcade platform (`mame`, `fbneo`, `cps`). Each game runs in
-  FinalBurn Neo if FinalBurn Neo has its set, otherwise in MAME 2003-Plus if
-  that has it. A game neither has shows greyed: *Not supported on this
-  console*.
-- **Two folders let you choose the emulator yourself.** A folder named after
-  an emulator runs every game in it with that emulator: `FBNEO`, `fbneo`,
-  `fba` or `FinalBurn Neo` for FinalBurn Neo; `MAME2003`, `mame2003plus` or
-  `MAME 2003-Plus` for MAME 2003-Plus. Capitals, spaces, dashes, underscores,
-  dots and `+` do not matter. Map the folder to RomM's arcade platform if RomM
-  does not do it by itself. Each folder is its own tile.
-- **FinalBurn Neo:** non-merged sets for FinalBurn Neo 1.0.0.03, with any BIOS
-  inside each game's zip.
-- **MAME 2003-Plus:** MAME 0.78 sets.
-- The zip must keep its set name, for example `sf2.zip`. The set name is
-  what picks the emulator in an `arcade` folder.
-- Saves belong to the emulator the game ran in.
-- **Hold Start for a second for the game's own settings.** In a MAME
-  2003-Plus game this opens MAME's menu, where **Dip Switches** has the
-  difficulty, the lives and the rest. Up and down move, left and right
-  change a setting; on a pad the right face button chooses and the bottom
-  one goes back. Hold Start again, or choose **Return to Game**, to play on.
-  In a FinalBurn Neo game it opens the board's own test menu, where the
-  board has one (CPS2 and Neo Geo games and Cave shooters among them).
-  Some FinalBurn Neo games have none, Final Fight among them: holding Start
-  does nothing there, and the game plays as the board was set at the
-  factory. What you change is kept on this console, for you.
+- **One folder for each system**, named the way RomM knows it. Each is a tile, named after its folder.
+
+  | Folder | Games |
+  |---|---|
+  | `cps1`, `cps2`, `cps3` | Capcom CPS1, CPS2 and CPS3 |
+  | `neogeomvs` | Neo Geo |
+  | `naomi`, `naomi2`, `naomigd`, `atomiswave` | Sega Naomi, Naomi 2 and Naomi GD-ROM, and Sammy Atomiswave |
+  | `stv` | Sega ST-V |
+  | `model2`, `model3` | Sega Model 2 and Model 3 |
+  | `fbneo` | FinalBurn Neo sets |
+  | `arcade` or `mame` | everything else |
+
+- **Sets:** non-merged, for MAME 0.289 or MAME 2003-Plus (0.78), as zip or 7z. MAME 0.289 sets also play in FinalBurn Neo and Flycast. MAME 2003-Plus plays only zip.
+- **Keep each set's own name**, for example `sf2.zip`. The name and the files inside it pick the emulator.
+- **A game with a disc is one folder** with the zip and its CHD side by side, for example `cps3/sfiii3/sfiii3.zip` and `cps3/sfiii3/cap-33s-2.chd`. Use the CHD that MAME 0.289 lists. A CHD in a subfolder is not found.
+- **BIOS:** Naomi, Naomi 2, Naomi GD-ROM and Atomiswave need their BIOS zips as RomM firmware for that folder: `naomi.zip`, `naomi2.zip`, `naomigd.zip` and `awbios.zip`. Other arcade games carry theirs inside each zip.
+- **Greyed:** a game no emulator here plays, or one its emulator marks as not working, shows *Not supported on this console*. Light-gun games show *Needs a light gun*, touchscreen games *Needs a touchscreen*. A zip whose files do not match its set says so when you press Play.
+- **Hold Start for a second for the game's own settings.** In a MAME game this opens MAME's menu, where **Dip Switches** has the difficulty, the lives and the rest. Up and down move, left and right change a setting; on a pad the right face button chooses and the bottom one goes back. Hold Start again, or choose **Return to Game**, to play on. In a FinalBurn Neo, Naomi or Atomiswave game it opens the board's own test menu, where the board has one. Some games have none, Final Fight among them: holding Start does nothing there. What you change is kept on this console, for you.
 
 ## Wii and Wii U
 

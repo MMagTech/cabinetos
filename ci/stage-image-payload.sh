@@ -149,14 +149,15 @@ if [ "${#missing[@]}" -ne 0 ]; then
     exit 1
 fi
 
-# The two arcade cores' set lists (#310), which pick the core for each game in
-# a generic arcade folder. Without one, every game in such a folder greys out.
-for sets in fbneo_libretro.sets mame2003_plus_libretro.sets; do
-    [ -s "$CORES/$sets" ] || {
-        echo "$sets is not in $CORES; cores/arcade-sets.sh makes it" >&2
+# The arcade emulators' catalogues, from which each arcade game's emulator is
+# picked by its zip (frontend/src/arcadematch.h). Without one, that emulator
+# plays nothing.
+for cat in flycast_libretro.catalogue fbneo_libretro.catalogue mame2003_plus_libretro.catalogue; do
+    [ -s "$CORES/$cat" ] || {
+        echo "$cat is not in $CORES; cores/arcade-sets.sh makes it" >&2
         exit 1
     }
-    install -m 0644 "$CORES/$sets" "$OUT/cores/$sets"
+    install -m 0644 "$CORES/$cat" "$OUT/cores/$cat"
 done
 
 # Anything in the source directory that is NOT one of the twenty-three. Not an

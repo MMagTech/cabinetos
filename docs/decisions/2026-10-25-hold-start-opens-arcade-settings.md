@@ -2,8 +2,9 @@
 
 - **Decided:** In an arcade game, player 1 holding Start for about a second
   (60 frames, FinalBurn Neo's own default) opens the emulator's own menu:
-  MAME 2003-Plus's menu, the DIP switches among the rest, and on FinalBurn
-  Neo the board's test menu where the board has one. The console draws no
+  MAME's menu in MAME 2003-Plus, the DIP switches among the rest, and the
+  board's test menu in FinalBurn Neo, Naomi and Atomiswave games where the
+  board has one. The console draws no
   settings screen of its own and adds no pause-menu row, and a game with no
   menu of its own gets nothing. MAME's menu no longer opens on player 1's
   left stick click. A changed setting stays on the console where it was set,

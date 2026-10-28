@@ -63,3 +63,11 @@ std::vector<int> gridOrder(Library& lib, const screens::Tile& tile);
 Library loadLibrary(romm::Client& client, std::string* platformsErr = nullptr);
 Library offlineLibrary();
 std::string gameRecordJson(const romm::Game& g);
+
+// What an arcade game's archive holds, kept in the game's record
+// (romm_types.h, Game::members), and read back for the same archive, by its
+// name and size; empty when the record has none for it.
+void rememberArchive(int romId, const std::string& file, int64_t size,
+                     const std::vector<romm::ArchiveMember>& members);
+std::vector<romm::ArchiveMember> rememberedArchive(int romId, const std::string& file,
+                                                   int64_t size);
