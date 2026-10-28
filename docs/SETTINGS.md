@@ -406,7 +406,9 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
     Bluetooth link kept), back when it ends. **Merged (#298).**
   - **The screen during a stream (#294).** A stream started while the TV is
     dark lights it, and counts as somebody arriving: the dim lifts and the
-    timer starts again. Nothing else changes while a device streams: the
+    timer starts again, and for 3 seconds its presses do nothing in a menu
+    (#411, docs/decisions/2026-10-27-a-wake-is-not-a-choice.md). Nothing
+    else changes while a device streams: the
     screen dims at 5 minutes without a press (on the device too) and goes
     off at "Turn off screen after". **When it goes off, the stream ends
     first**, as Quit in Moonlight would end it, whether a device is still

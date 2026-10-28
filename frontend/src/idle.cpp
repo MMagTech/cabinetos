@@ -49,9 +49,18 @@ const char* name(Level l) {
 bool Watch::input(double now) {
     last_ = now;
     started_ = true;
-    if (level_ == Level::Awake) return false;
+    if (level_ == Level::Awake) return now < settleUntil_;
+    // Back from off, the television takes a moment to show the picture, and
+    // a press until it does is a press nobody could aim. A dim needs no
+    // wait: the picture was there under it all along.
+    if (level_ == Level::Blank) settleUntil_ = now + kWakeSettleSeconds;
     level_ = Level::Awake;
     return true;
+}
+
+void Watch::woke(double now) {
+    input(now);
+    settleUntil_ = now + kWakeSettleSeconds;
 }
 
 Level Watch::update(double now, bool playing) {
@@ -104,6 +113,59 @@ void setDisplayAsleep(bool asleep, bool wait, std::function<void()> first) {
     });
     if (wait) worker.join();
     else worker.detach();
+}
+
+int test() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+    const double dim = kMenuDimAfter, off = kMenuBlankAfter, settle = kWakeSettleSeconds;
+    {
+        Watch w;
+        w.update(0.0, false);
+        check(!w.input(10.0), "an awake screen takes every press");
+        check(w.update(10.0 + dim, false) == Level::Dim, "a menu dims after 5 minutes");
+        check(w.input(10.0 + dim), "the press that lights a dim screen does nothing");
+        check(!w.input(10.2 + dim), "and the next one acts: the picture was there");
+    }
+    {
+        Watch w;
+        w.update(0.0, false);
+        check(w.update(off, false) == Level::Blank, "a menu goes off at the setting");
+        check(w.input(off + 1.0), "the press that lights a dark screen does nothing");
+        check(w.input(off + 1.8), "nor one 0.8 s later, before the picture is back (#411)");
+        check(w.input(off + 0.9 + settle), "nor one just inside the wait");
+        check(!w.input(off + 1.1 + settle), "after the wait a press acts");
+        check(w.update(off + 1.1 + settle, false) == Level::Awake,
+              "and a press in the wait kept the screen awake");
+    }
+    {
+        Watch w;
+        w.update(0.0, false);
+        w.update(off, false);
+        w.woke(off + 1.0);
+        check(w.update(off + 1.0, false) == Level::Awake, "a stream starting lights a dark screen");
+        check(w.input(off + 2.0), "and its presses do nothing for the wait");
+        check(!w.input(off + 1.1 + settle), "then act");
+    }
+    {
+        Watch w;
+        w.update(0.0, false);
+        w.woke(100.0);
+        check(w.input(100.5), "a stream starting on a lit screen waits too");
+        check(w.update(100.0 + dim - 1.0, false) == Level::Awake,
+              "and counts as somebody there for the timer");
+    }
+    {
+        Watch w;
+        w.update(0.0, true);
+        check(w.update(kGameDimAfter, true) == Level::Dim, "a game in play dims at 20 minutes");
+        check(w.update(kGameDimAfter + off, true) == Level::Dim, "and never goes off");
+    }
+    std::printf("%s\n", failures ? "FAILED" : "all passed");
+    return failures ? 1 : 0;
 }
 
 }  // namespace idle

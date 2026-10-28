@@ -14,6 +14,13 @@ one you install, so you only ever install the newest.
   games that ask for it. L3 used to close it, which put the game to sleep
   with a white screen. R2 no longer swaps the screens, and on the 3DS
   holding L3 no longer swaps them either: L3 shows one screen instead.
+- **Fixed:** connecting to the console with Moonlight could start the game
+  Home had focused, with nobody pressing anything, and a press just after
+  the screen came back on could start a game before the TV showed the
+  picture. After the screen was off, after Sleep, and after a device
+  connects to stream, buttons now do nothing in the menus for 3 seconds. The
+  first press on a dimmed screen still only wakes it.
+  ([#411](https://github.com/MMagTech/cabinetos/issues/411))
 
 ## 2026.10.27 {#v2026-10-27}
 

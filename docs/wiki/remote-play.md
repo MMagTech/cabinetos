@@ -30,6 +30,7 @@ not open while a game is being played on the TV.
 ## While a device is streaming
 
 - The device takes over the players, and a game being played on the TV pauses.
+- For 3 seconds after a device connects, its buttons do nothing in the menus.
 - **Hold Select** on the device's controller for the console's
   [pause menu](pause-menu.md), in every game.
 - The Remote Play section in Settings is greyed, marked *In use*.
