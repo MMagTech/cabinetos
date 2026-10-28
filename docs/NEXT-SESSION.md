@@ -39,7 +39,7 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **The arcade expansion, piece 1, on the TV** (PR #PRNUM, "Arcade:
+1. **The arcade expansion, piece 1, on the TV** (PR #601, "Arcade:
    pick each game's emulator from its zip; Naomi, Atomiswave and the CPS
    and Neo Geo tiles"). Built and run headless on the A9; it waits for his
    TV checks, then the testing push and his go to merge. Pieces 2 (MAME
