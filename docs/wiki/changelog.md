@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.29.7 {#v2026-10-29-7}
 
 - **New:** Sega Model 2 games now play, in sm2-emu: Daytona USA, Sega Rally,
   Virtua Fighter 2 and more. See [Arcade](arcade.md) for how to set out
@@ -13,6 +13,11 @@ one you install, so you only ever install the newest.
   Kids, Rail Chase 2, Gunblade NY and Zero Gunner. Their high scores and
   settings from MAME do not carry over, and their save states can no longer
   be loaded, since sm2-emu has none.
+  ([#613](https://github.com/MMagTech/cabinetos/pull/613))
+- **Fixed:** in a Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita or Model 2
+  game, a button pressed just as the pause menu faded away after Resume
+  could start the game a second time behind the one being played, and what
+  was played in the first was never saved. Presses now go to the game.
 
 ## 2026.10.29.6 {#v2026-10-29-6}
 
