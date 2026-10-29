@@ -46,7 +46,17 @@ RomM: keep test launches under a minute, or have his go.
    0.289), 3 (sm2-emu, Model 2) and 4 (Supermodel, Model 3, after its gate
    run) follow, each in a fresh session, from the approved arcade build plan
    of 2026-10-28 in his research notes.
-2. **Mario Kart Wii on the TV, with no stream (his check, asked for
+2. **The left stick in Naomi and Atomiswave lever games (his note,
+   2026-10-28, at the TV).** Flycast feeds the analog stick only to a
+   board's analog controls, so a game with a plain lever (Trigger Heart
+   Exelica) moves only on the d-pad. The fix agreed in principle, as its own
+   small pull request after piece 1 merges: when Flycast declares no analog
+   control for a Naomi or Atomiswave game (its input descriptors), the left
+   stick past half travel also presses the lever's directions, in
+   `play.cpp`'s reader; games with analog controls (Crazy Taxi, whose gears
+   are up and down on its lever) unchanged. TV check: Trigger Heart Exelica
+   moves on the stick, Crazy Taxi steers and shifts as before.
+3. **Mario Kart Wii on the TV, with no stream (his check, asked for
    2026-10-26).** Over a Moonlight stream on 2026.10.27 its races skipped
    104 game frames per 10 s on average (worst 293) and he heard the sound
    crackle; on the TV alone before, 1 to 2 (worst 13). Mario Kart DS and
@@ -56,7 +66,7 @@ RomM: keep test launches under a minute, or have his go.
    (game frames skipped near the old 1 to 2). Smooth means the stream is
    the cause, and nothing is opened unless he asks; crackling means it is
    Wii at 5x on the A9, also his call.
-3. **Stop at an out-of-range array write, at the line that does it.**
+4. **Stop at an out-of-range array write, at the line that does it.**
    Estimated 300k to 500k Opus tokens (1.2 to 2 weekly points) if no check
    fires; more if one does.
    The crash of 2026-10-20 was a write past a two-entry array that landed
@@ -68,7 +78,7 @@ RomM: keep test launches under a minute, or have his go.
    damaging what sits beside it. Measure the frame times on Home and a
    large grid on the A9 before and after; if the cost shows, stop and
    say so. One PR, CI green, his word to merge.
-4. **The report-only checks turn strict.** From 2026-10-25, 8 PM Eastern
+5. **The report-only checks turn strict.** From 2026-10-25, 8 PM Eastern
    (2026-10-26 UTC): Doc paths, RomM paths and the other checks in
    `checks.yml`, and in the Compile job new warnings in touched files, the
    self-tests and the Wii bridge pacing test. The last two run in the
@@ -78,7 +88,7 @@ RomM: keep test launches under a minute, or have his go.
    a decision file and the 5-line growth allowance for PROJECT.md are one
    number each in `ci/check-decisions.sh`. Nothing to do but watch the first
    pull requests after each.
-5. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+6. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -86,7 +96,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-6. **Merged branches to delete, on his go naming them.** Eleven in the main
+7. **Merged branches to delete, on his go naming them.** Eleven in the main
    checkout, all merged: `claude/3ds-azahar-core-9a119a`,
    `claude/3ds-hand-test-2414d9`, `claude/3ds-parity-research-f666db`,
    `claude/3ds-save-fix-57a0b1`, `claude/3ds-shader-cache-3c0de8`,
@@ -95,7 +105,7 @@ RomM: keep test launches under a minute, or have his go.
    `claude/arcade-stick-layout-9148b6` and `claude/next-session-2026-10-23`.
    On GitHub, one: `claude/next-session-2026-10-23`. Checked 2026-10-25;
    check again first.
-7. **Words from him, one at a time, no work:** #181, "Updates and DLC as
+8. **Words from him, one at a time, no work:** #181, "Updates and DLC as
    separate files in RomM (Switch, PS3, Xbox 360)", and #215, "Proposal, not
    decided: opt-in "Help improve CabinetOS" report sharing" (he is unsure of
    both); and which of the 36 faults the PROJECT.md scan found with no issue
