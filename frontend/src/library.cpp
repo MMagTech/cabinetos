@@ -277,13 +277,7 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
         screens::Tile tile;
         tile.id = p.id;
         tile.query = "platform_ids=" + std::to_string(p.id);
-        // THE NAME AND THE QUALIFIER ARE TWO FACTS ON A TILE, not one string.
-        // Joined, "Arcade (FinalBurn Neo)" and "Arcade (MAME 2003-Plus)" both
-        // came out as "Arcade" over "(FinalBurn ..." and "(MAME 200..." at this
-        // width — so the qualifier that exists SOLELY to tell the two tiles
-        // apart was the part being cut off. See catalog::displayQualifier.
-        tile.title = p.name.empty() ? p.slug : p.name;
-        const std::string qualifier = catalog::displayQualifier(p);
+        tile.title = catalog::displayName(p);
         tile.enterable = (cov.support == catalog::Support::Playable);
 
         if (!tile.enterable) {
@@ -329,8 +323,7 @@ Library loadLibrary(romm::Client& client, std::string* platformsErr) {
         }
         char count[48];
         std::snprintf(count, sizeof count, "%d game%s", shown, shown == 1 ? "" : "s");
-        tile.detail = qualifier.empty() ? std::string(count)
-                                        : qualifier + "  \xC2\xB7  " + count;
+        tile.detail = count;
         lib.tileCache[p.id] = covercache::Tile{"", p.updatedAt, shown};
         // `tile.cover` is deliberately left empty. It used to be the first
         // cover among the platform's games, which cost a fetch per platform —
@@ -580,12 +573,10 @@ Library offlineLibrary() {
         tile.id = pid;
         tile.query = "platform_ids=" + std::to_string(pid);
         tile.title = platformTitle[pid];
-        std::string qualifier;
         if (auto k = known.find(pid); k != known.end()) {
-            // The same name and qualifier the online tile has (loadLibrary).
-            if (!k->second.name.empty()) tile.title = k->second.name;
-            qualifier = catalog::displayQualifier(k->second);
-            lib.platformNames[pid] = catalog::displayName(k->second);
+            // The same name the online tile has (loadLibrary).
+            tile.title = catalog::displayName(k->second);
+            lib.platformNames[pid] = tile.title;
         }
         tile.enterable = true;
         // RomM's order, by its sort key where the record has one, so the
@@ -610,8 +601,7 @@ Library offlineLibrary() {
             }
         char count[48];
         std::snprintf(count, sizeof count, "%zu game%s", idxs.size(), idxs.size() == 1 ? "" : "s");
-        tile.detail = qualifier.empty() ? std::string(count)
-                                        : qualifier + "  \xC2\xB7  " + count;
+        tile.detail = count;
         lib.platformTiles.push_back(std::move(tile));
     }
     std::stable_sort(lib.platformTiles.begin(), lib.platformTiles.end(),
@@ -669,9 +659,54 @@ std::string gameRecordJson(const romm::Game& g) {
     strings("languages", g.languages);
     json_object_object_add(o, "revision", json_object_new_string(g.revision.c_str()));
     strings("tags", g.tags);
+    // What an arcade game's archive holds (romm_types.h), in RomM's own
+    // field names, for its emulator to be picked offline. A game from
+    // RomM's lists carries none, so the record keeps what a launch learned
+    // (rememberArchive) rather than lose it at every press.
+    romm::Game kept;
+    const romm::Game& from =
+        !g.members.empty() || !romm::gameFromJson(cache::gameRecord(g.id), &kept) ? g : kept;
+    if (!from.members.empty()) {
+        json_object* a = json_object_new_object();
+        json_object_object_add(a, "file", json_object_new_string(from.membersFile.c_str()));
+        json_object_object_add(a, "size", json_object_new_int64(from.membersSize));
+        json_object* list = json_object_new_array();
+        for (const romm::ArchiveMember& m : from.members) {
+            json_object* e = json_object_new_object();
+            char crc[9];
+            std::snprintf(crc, sizeof crc, "%08x", m.crc);
+            json_object_object_add(e, "name", json_object_new_string(m.name.c_str()));
+            json_object_object_add(e, "size", json_object_new_int64(m.size));
+            json_object_object_add(e, "crc_hash", json_object_new_string(crc));
+            json_object_array_add(list, e);
+        }
+        json_object_object_add(a, "members", list);
+        json_object_object_add(o, "archive_members", a);
+    }
     const std::string out = json_object_to_json_string_ext(o, JSON_C_TO_STRING_PRETTY);
     json_object_put(o);
     return out;
+}
+
+void rememberArchive(int romId, const std::string& file, int64_t size,
+                     const std::vector<romm::ArchiveMember>& members) {
+    romm::Game g;
+    if (!romm::gameFromJson(cache::gameRecord(romId), &g)) return;
+    if (g.membersFile == file && g.membersSize == size && g.members.size() == members.size())
+        return;
+    g.membersFile = file;
+    g.membersSize = size;
+    g.members = members;
+    cache::rememberGame(romId, gameRecordJson(g));
+}
+
+std::vector<romm::ArchiveMember> rememberedArchive(int romId, const std::string& file,
+                                                   int64_t size) {
+    romm::Game g;
+    if (!romm::gameFromJson(cache::gameRecord(romId), &g) || g.membersFile != file ||
+        g.membersSize != size)
+        return {};
+    return g.members;
 }
 
 // ---- The kept badges on the store's cards (#398) --------------------------

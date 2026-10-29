@@ -456,7 +456,7 @@ bool App::readGameInput(cab::Core& core) {
         // this kind of pad, the same place, over the layout or the plain
         // table, in its stead.
         if (SDL_Gamepad* gp = players::gamepad(p)) {
-            const fightstick::Layout* layout = fightstick::forPort(p, gp, session.core);
+            const fightstick::Layout* layout = fightstick::forPort(p, gp, session.arcadeCore());
             if (const controls::Map* moved = controls::forPort(p, gp, layout))
                 controls::apply(*moved, st);
             else if (layout)
@@ -475,8 +475,10 @@ bool App::readGameInput(cab::Core& core) {
         // the game above does not count.
         if (p == 0)
             core.setKey(arcadesettings::kMenuKey,
-                        arcadesettings::step(arcadeHold, session.core, st.buttons,
+                        arcadesettings::step(arcadeHold, session.arcadeCore(), st.buttons,
                                              core.framesRun()));
+        else
+            arcadesettings::keepClicks(session.arcadeCore(), st.buttons);
         core.setPad(p, st);
     }
 

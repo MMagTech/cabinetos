@@ -48,8 +48,7 @@ Rows appear only where they apply:
 - **Change disc**: only on a game with several discs. Not on GameCube, which
   changes discs by itself; 3DO has Insert and restart only. On Saturn Insert
   goes through the console's CD player screen: press Start there.
-- **Controls**: only in arcade games (FBNeo and MAME 2003-Plus) that name
-  their buttons.
+- **Controls**: only in arcade games that name their buttons.
 
 ## Controls
 

@@ -64,6 +64,85 @@ void setPs2Anisotropy(int anisotropy) { gPs2Anisotropy = anisotropy; }
 // A game already on the disk is left exactly where it is — including when
 // somebody else keeps it, which is the case that makes "one kept game, two
 // people" true on disk rather than only in a comment.
+// THE CORE A LAUNCH PLAYS ON, LOADED: this person's save directory for the
+// game handed to it, and every option the console sets, both before load()
+// because retro_init is inside it and a core may read them there and never
+// ask again. On the frame thread: at the press (beginLaunch), and again behind
+// the curtain for an arcade game whose files named another emulator
+// (pumpLaunch). `fsName` is the server's file name, which the Vectrex sheets
+// read.
+static bool loadCore(const LaunchJob& job, const std::string& fsName) {
+    cab::Core& core = cab::Core::shared();
+    // Before load(), because retro_init is inside it and a core may read the
+    // directories there and never ask again. See Core::setDirectories.
+    //
+    // THE SAVE DIRECTORY IS THIS PERSON'S AND THIS GAME'S. Every core on the
+    // machine used to share one, which is why attributing a PSP save folder to
+    // the game that wrote it needed a timestamp comparison rather than a path.
+    const std::string saveDir = storage::savesDir(storage::currentUser(), job.platformFsSlug,
+                                                  job.romId, job.coreName);
+    storage::makeDirs(saveDir);
+    core.setDirectories(storage::biosDir(), saveDir);
+    // Also before load(), and for the same reason. This was reaching only the
+    // --core-options audit until PPSSPP needed the first real override, which
+    // meant the override table was being PRINTED rather than applied: every
+    // core played on its declared defaults and the audit agreed with itself.
+    // Invisible while the table was empty, wrong the moment it was not.
+    //
+    // PICTURE QUALITY ON TOP (#63): the level this game runs at decides
+    // its resolution and shader building; quality.h is the one place that
+    // knows what each level means.
+    {
+        const quality::Level level = quality::forGame(job.romId);
+        std::map<std::string, std::string> opts = catalog::optionOverrides(job.coreName);
+        for (const auto& kv : quality::coreOptions(job.coreName, job.platformSlug, level))
+            opts[kv.first] = kv.second;
+        // And the system's own pause menu rows (#73).
+        for (const auto& kv : sysopts::overrides(job.platformSlug))
+            opts[kv.first] = kv.second;
+        // The Wii's rumble switch as the last Wii game's HOME Menu left
+        // it (#274, wii.h).
+        for (const auto& kv : wii::coreOptions(job.coreName, job.platformSlug))
+            opts[kv.first] = kv.second;
+        // A Vectrex game under its sheet, fitted inside the sheet's
+        // window (#224, vectrexsheets.h).
+        for (const auto& kv : vectrexsheets::coreOptions(job.coreName, job.platformSlug,
+                                                         job.md5, job.title, fsName))
+            opts[kv.first] = kv.second;
+        core.setOptionOverrides(opts);
+        quality::logApplied(job.coreName, job.romId, level);
+    }
+
+    // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
+    // is the one that matters most.
+    //
+    // PCSX2 refuses to start without its own resources folder — its game
+    // database, fonts and GS shaders — rather than degrading, so it ships with
+    // the emulator the way PPSSPP's system files already do.
+    //
+    // The memory card is NOT named here. Core::loadGame names it from the rom
+    // by the same rule catalog::saveFiles uses, so the existing save machinery
+    // (restore before launch, capture after, refuse an unformatted card, file
+    // it on the server under the name Cabinet's Mac used) works on it
+    // unchanged.
+    if (job.coreName == "pcsx2") {
+        // The level's values, unless a --ps2-upscale or --ps2-anisotropy
+        // given for a measurement says otherwise.
+        const quality::Ps2 q = quality::ps2(quality::forGame(job.romId));
+        core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
+                    gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
+                    gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy,
+                    ps2::widescreenOn(job.romId), job.titleId);
+    }
+
+    if (!core.load(job.corePath)) {
+        std::fprintf(stderr, "[launch] core %s: %s\n", job.coreName.c_str(),
+                     core.error().c_str());
+        return false;
+    }
+    return true;
+}
+
 bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                  const std::string& coreDir, std::string* err,
                  bool playWhenReady, bool keepWhenReady) {
@@ -103,6 +182,9 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
     // playable. Every FBNeo game on this console failed at the moment somebody
     // pressed Play. See catalog::coreFileName.
     job.corePath = coreDir + "/" + catalog::coreFileName(cov.core);
+    job.arcade = cov.arcade;
+    job.arcadePicked = false;
+    job.coreChanged = false;
     job.romPath.clear();
     job.discs.clear();
     job.message.clear();
@@ -133,76 +215,12 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
         // it is cheap, it is the thing that decides whether the archive gets
         // opened, and a core that will not load should fail now rather than after
         // three gigabytes have been fetched.
-        cab::Core& core = cab::Core::shared();
-        // Before load(), because retro_init is inside it and a core may read the
-        // directories there and never ask again. See Core::setDirectories.
-        //
-        // THE SAVE DIRECTORY IS THIS PERSON'S AND THIS GAME'S. Every core on the
-        // machine used to share one, which is why attributing a PSP save folder to
-        // the game that wrote it needed a timestamp comparison rather than a path.
-        const std::string saveDir =
-            storage::savesDir(user, game.platformFsSlug, game.id, cov.core);
-        storage::makeDirs(saveDir);
-        core.setDirectories(storage::biosDir(), saveDir);
-        // Also before load(), and for the same reason. This was reaching only the
-        // --core-options audit until PPSSPP needed the first real override, which
-        // meant the override table was being PRINTED rather than applied: every
-        // core played on its declared defaults and the audit agreed with itself.
-        // Invisible while the table was empty, wrong the moment it was not.
-        //
-        // PICTURE QUALITY ON TOP (#63): the level this game runs at decides
-        // its resolution and shader building; quality.h is the one place that
-        // knows what each level means.
-        {
-            const quality::Level level = quality::forGame(game.id);
-            std::map<std::string, std::string> opts = catalog::optionOverrides(job.coreName);
-            for (const auto& kv : quality::coreOptions(job.coreName, game.platformSlug, level))
-                opts[kv.first] = kv.second;
-            // And the system's own pause menu rows (#73).
-            for (const auto& kv : sysopts::overrides(game.platformSlug))
-                opts[kv.first] = kv.second;
-            // The Wii's rumble switch as the last Wii game's HOME Menu left
-            // it (#274, wii.h).
-            for (const auto& kv : wii::coreOptions(job.coreName, game.platformSlug))
-                opts[kv.first] = kv.second;
-            // A Vectrex game under its sheet, fitted inside the sheet's
-            // window (#224, vectrexsheets.h).
-            for (const auto& kv : vectrexsheets::coreOptions(job.coreName, game.platformSlug,
-                                                             game.md5, job.title, game.fsName))
-                opts[kv.first] = kv.second;
-            core.setOptionOverrides(opts);
-            quality::logApplied(job.coreName, game.id, level);
-        }
-
-        // PLAYSTATION 2 NEEDS THREE THINGS NO LIBRETRO CORE DOES, and the second
-        // is the one that matters most.
-        //
-        // PCSX2 refuses to start without its own resources folder — its game
-        // database, fonts and GS shaders — rather than degrading, so it ships with
-        // the emulator the way PPSSPP's system files already do.
-        //
-        // The memory card is NOT named here. Core::loadGame names it from the rom
-        // by the same rule catalog::saveFiles uses, so the existing save machinery
-        // (restore before launch, capture after, refuse an unformatted card, file
-        // it on the server under the name Cabinet's Mac used) works on it
-        // unchanged.
-        if (cov.core && std::string(cov.core) == "pcsx2") {
-            // The level's values, unless a --ps2-upscale or --ps2-anisotropy
-            // given for a measurement says otherwise.
-            const quality::Ps2 q = quality::ps2(quality::forGame(game.id));
-            core.setPs2(storage::imageAssetsDir() + "/pcsx2/resources",
-                        gPs2Upscale > 0.0f ? gPs2Upscale : q.upscale,
-                        gPs2Anisotropy >= 0 ? gPs2Anisotropy : q.anisotropy,
-                        ps2::widescreenOn(game.id), game.titleId);
-        }
-
-        if (!core.load(job.corePath)) {
-            std::fprintf(stderr, "[launch] core %s: %s\n", job.coreName.c_str(),
-                         core.error().c_str());
+        if (!loadCore(job, game.fsName)) {
             *err = "Couldn't start this game";
             job.stage = LaunchJob::Stage::Idle;
             return false;
         }
+        const cab::Core& core = cab::Core::shared();
         validExts = core.validExtensions();
         blockExtract = core.blockExtract();
     }
@@ -475,6 +493,7 @@ struct LaunchContext {
 // here waits on the network.
 void App::pumpLaunch() {
     if (!takeFinishedJob()) return;
+    if (!loadPickedCore()) return;
     LaunchContext c{.core = cab::Core::shared(), .user = storage::currentUser()};
     prepareSaveDirAndDiscs(c);
     restoreBeforeLoad(c);
@@ -627,6 +646,20 @@ bool App::takeFinishedJob() {
     return true;
 }
 
+// Stage 3b: AN ARCADE GAME WHOSE FILES NAMED ANOTHER EMULATOR than its
+// name did at the press (launch_routes.cpp, arcadematch.h) plays on that one:
+// loaded here, behind the curtain, as beginLaunch loaded the first. True when
+// the game goes on, on whichever core.
+bool App::loadPickedCore() {
+    if (!launchJob.coreChanged) return true;
+    std::fprintf(stderr, "[launch] %s plays on %s, by its files\n", launchJob.title.c_str(),
+                 launchJob.coreName.c_str());
+    if (loadCore(launchJob, launchJob.fsStem)) return true;
+    forgetLaunchAsks();
+    refuseLaunch("Couldn't start this game");
+    return false;
+}
+
 // Stage 4: this person's save directory for this game, its directory save
 // restored before the load, and the disc it starts on.
 void App::prepareSaveDirAndDiscs(LaunchContext& c) {
@@ -732,13 +765,11 @@ void App::prepareSaveDirAndDiscs(LaunchContext& c) {
 void App::restoreBeforeLoad(LaunchContext& c) {
     std::vector<catalog::SaveFile> saveSpecs;
     {
-        std::string stem = launchJob.romPath;
-        if (const size_t slash = stem.find_last_of('/'); slash != std::string::npos)
-            stem.erase(0, slash + 1);
-        if (const size_t dot = stem.find_last_of('.'); dot != std::string::npos)
-            stem.erase(dot);
-        saveSpecs = catalog::saveFiles(launchJob.platformSlug,
-                                       launchJob.coreName, stem);
+        std::string file = launchJob.romPath;
+        if (const size_t slash = file.find_last_of('/'); slash != std::string::npos)
+            file.erase(0, slash + 1);
+        saveSpecs = catalog::saveFiles(launchJob.platformSlug, launchJob.coreName, file,
+                                       launchJob.arcade);
     }
     // Before the core loads: it reads Dolphin.ini on startup.
     if (launchJob.platformSlug == "ngc") writeDolphinConfig(c.saveDir);
@@ -837,6 +868,7 @@ void App::setUpLoadedGame(LaunchContext& c) {
     session.raHash = launchJob.raHash;
     session.core = launchJob.coreName;
     session.platformSlug = launchJob.platformSlug;
+    session.arcade = launchJob.arcade;
     session.title = launchJob.title;
     session.saveDir = c.saveDir;
     session.fsStem = launchJob.fsStem;
@@ -1043,10 +1075,13 @@ void App::startPlaying(cab::Core& core) {
                  core.isPs2() ? "PCSX2" : core.coreName().c_str());
     playing = true;
     // An arcade game's buttons as this person moved them (controls.h).
-    controls::beginGame(session.core, session.romId, session.title);
+    controls::beginGame(session.arcadeCore(), session.romId, session.title);
     // RetroAchievements, when this person signed in (achievements.h):
-    // after the battery save and before the first frame it checks.
-    ra::beginGame(session.raHash, session.platformSlug, core.isPs2());
+    // after the battery save and before the first frame it checks. Not for
+    // an arcade game in any emulator but FinalBurn Neo, whose memory
+    // RetroAchievements' arcade sets are written for.
+    if (ra::coreReadable(session.core, session.arcade))
+        ra::beginGame(session.raHash, session.platformSlug, core.isPs2());
     if (session.romId > 0) {
         playClock.begin(session.romId, playtime::wallMs());
         playCheckpointClock = 0.0f;

@@ -372,7 +372,7 @@ FirmwareAliases firmwareAliases(const std::string& slug, const std::string& fsSl
 }
 
 std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core,
-                                const std::string& stem) {
+                                const std::string& fileName, bool arcade) {
     // Straight out of the audit's per-platform table, and each row was read
     // off the core that writes it rather than guessed. docs/PROJECT.md, *The
     // save audit*, has the evidence for every line.
@@ -380,6 +380,61 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
     // Nothing here is keyed on the core, because a core is not a platform:
     // genesis_plus_gx appears once, for Sega CD, and the same core running a
     // Master System cartridge has a real battery this console already syncs.
+    // Arcade is the exception, below.
+    const size_t dot = fileName.find_last_of('.');
+    const std::string stem = dot == std::string::npos ? fileName : fileName.substr(0, dot);
+
+    // Arcade. The emulators disagree about both the folder and the
+    // extension and their contents are not interchangeable, which is exactly
+    // why this keeps them apart instead of treating "the arcade save" as one
+    // thing. The stem is the set name — `lethalen`, `smashtv` — because that
+    // is what the core was handed; see the note in launch_routes.cpp about why an
+    // arcade entry keeps the server's own file name.
+    //
+    // BY THE EMULATOR THE GAME'S ZIP PICKED (arcadematch.h), not by its
+    // folder, which says nothing about which file a game writes. First, so a
+    // Naomi zip in Dreamcast's folder is a board's save, not a VMU.
+    if (arcade) {
+        SaveFile f;
+        f.untouched = Untouched::Uniform;
+        if (core == "mame2003_plus") {
+            f.coreRowName = "mame2003Plus";
+            // ONE DIRECTORY DEEPER THAN THE REFERENCE IMPLEMENTATION SAYS, and
+            // this was measured rather than carried across. Cabinet wrote
+            // `nvram/<stem>.nv` straight under the save directory; MAME
+            // 2003-Plus as this console builds and drives it puts its whole
+            // working tree under a `mame2003-plus/` folder first, so the file
+            // is `mame2003-plus/nvram/lethalen.nv`. Confirmed twice on the
+            // test VM, 2026-09-19: by running Lethal Enforcers and reading the
+            // directory afterwards, and by the orphaned NVRAM the old flat
+            // save pile left behind, which sits at exactly that path.
+            //
+            // Placing it at the reference's path is not a harmless miss. The
+            // core does not find it, bootstraps a fresh image instead, and
+            // writes that — so the restore silently does nothing and a
+            // capture aimed at the same wrong path finds nothing either. That
+            // is what the first run of this did.
+            f.path = "mame2003-plus/nvram/" + stem + ".nv";
+            return {f};
+        }
+        if (core == "fbneo_libretro") {
+            f.coreRowName = "fbneo";
+            f.path = "fbneo/" + stem + ".fs";
+            return {f};
+        }
+        // FLYCAST'S BOARD MEMORY, `reicast/<the zip's own name>.nvmem`, named
+        // after the whole file it was handed (hostfs::getArcadeFlashPath at
+        // our pin; cores/build-core.sh stops when it moves). The one file of
+        // a game's that reaches RomM, as FinalBurn Neo and 2003-Plus send one:
+        // a board's `.eeprom` and Atomiswave's `.nvmem2` stay on the console
+        // with the other arcade extras until RomM's save channels (#353).
+        if (core == "flycast") {
+            f.coreRowName = "flycast";
+            f.path = "reicast/" + fileName + ".nvmem";
+            return {f};
+        }
+        return {};
+    }
 
     // Dreamcast. The one row that is not under the save directory: Flycast
     // never answers RETRO_MEMORY_SAVE_RAM — confirmed against its own
@@ -442,48 +497,6 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
         f.path = "opera/shared/nvram.0.srm";
         f.untouched = Untouched::ThreeDONvram;
         return {f};
-    }
-
-    // Arcade. The two emulators disagree about both the folder and the
-    // extension and their contents are not interchangeable, which is exactly
-    // why this keeps them apart instead of treating "the arcade save" as one
-    // thing. The stem is the set name — `lethalen`, `smashtv` — because that
-    // is what the core was handed; see the note in launch_routes.cpp about why an
-    // arcade entry keeps the server's own file name.
-    //
-    // BY THE CORE THE GAME RUNS IN, not by the folder (#310): a generic
-    // arcade folder holds games for both, so its name says nothing about
-    // which file a game writes. A folder named for one emulator runs every
-    // game in it, so for those this is the same answer the folder gave.
-    if (slug == "arcade") {
-        SaveFile f;
-        f.untouched = Untouched::Uniform;
-        if (core == "mame2003_plus") {
-            f.coreRowName = "mame2003Plus";
-            // ONE DIRECTORY DEEPER THAN THE REFERENCE IMPLEMENTATION SAYS, and
-            // this was measured rather than carried across. Cabinet wrote
-            // `nvram/<stem>.nv` straight under the save directory; MAME
-            // 2003-Plus as this console builds and drives it puts its whole
-            // working tree under a `mame2003-plus/` folder first, so the file
-            // is `mame2003-plus/nvram/lethalen.nv`. Confirmed twice on the
-            // test VM, 2026-09-19: by running Lethal Enforcers and reading the
-            // directory afterwards, and by the orphaned NVRAM the old flat
-            // save pile left behind, which sits at exactly that path.
-            //
-            // Placing it at the reference's path is not a harmless miss. The
-            // core does not find it, bootstraps a fresh image instead, and
-            // writes that — so the restore silently does nothing and a
-            // capture aimed at the same wrong path finds nothing either. That
-            // is what the first run of this did.
-            f.path = "mame2003-plus/nvram/" + stem + ".nv";
-            return {f};
-        }
-        if (core == "fbneo_libretro") {
-            f.coreRowName = "fbneo";
-            f.path = "fbneo/" + stem + ".fs";
-            return {f};
-        }
-        return {};
     }
 
     // PlayStation 2. The console's PCSX2 host is handed one card, `<stem>.ps2`

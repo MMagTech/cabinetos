@@ -53,9 +53,14 @@ constexpr cab::Button kClassic[] = {cab::B, cab::A, cab::Y,  cab::X,
 enum class Order { Declared, Classic };
 
 // The order a core's buttons are counted in, or none for a core that is not
-// an arcade core (which plays the stick as a pad).
+// an arcade core (which plays the stick as a pad). FLYCAST DECLARES A BOARD'S
+// BUTTONS IN THE BOARD'S ORDER, button 1 to 8 on B, A, Y, X, R, L, R2, L2 for
+// Naomi and 1 to 5 on B, A, Y, X, R for Atomiswave (set_input_descriptors and
+// its nao_joymap and aw_joymap in shell/libretro/libretro.cpp at the pin; the
+// core's build stops when the maps move, cores/build-core.sh). Its name comes
+// here only for a Naomi or Atomiswave game: a Dreamcast game passes none.
 std::optional<Order> orderFor(const std::string& core) {
-    if (core == "fbneo_libretro") return Order::Declared;
+    if (core == "fbneo_libretro" || core == "flycast") return Order::Declared;
     if (core == "mame2003_plus") return Order::Classic;
     return std::nullopt;
 }
@@ -158,7 +163,7 @@ std::optional<Layout> make(const Stick* stick, const std::string& core,
     if (!order) return std::nullopt;
     std::vector<const cab::InputDescriptor*> f;
     for (const cab::InputDescriptor& d : port.empty() ? port0 : port)
-        if (classicNumber(d.id) && !(*order == Order::Declared && fbneoCombination(d.label)))
+        if (classicNumber(d.id) && !(core == "fbneo_libretro" && fbneoCombination(d.label)))
             f.push_back(&d);
     if (f.empty()) return std::nullopt;
     if (*order == Order::Classic)
@@ -268,6 +273,19 @@ int test() {
     check(six && six->label[0] == "Weak Punch" && six->label[6] == "Strong Kick" &&
               six->count == 6 && six->left.empty(),
           "and each keeps the core's own label");
+
+    // Marvel vs. Capcom 2 on a Naomi board in Flycast, as Flycast declares it:
+    // buttons 1 to 6 on B, A, Y, X, R, L, then Coin, Start, Test and Service.
+    const D mvc2 = {{cab::B, "LIGHT PUNCH"},  {cab::A, "STRONG PUNCH"}, {cab::Y, "ASSIST A"},
+                    {cab::X, "LIGHT KICK"},   {cab::R, "STRONG KICK"},  {cab::L, "ASSIST B"},
+                    {cab::Start, "Start"},    {cab::Select, "Coin"},    {cab::L3, "Test"},
+                    {cab::R3, "Service"}};
+    check(slots(make(stick, "flycast", mvc2, mvc2)) ==
+              ids({cab::B, cab::A, cab::Y, no, cab::X, cab::R, cab::L, no}),
+          "a Naomi board in Flycast, six buttons in the board's order: 1 2 3 on top, 4 5 6 "
+          "below, Test and Service not counted");
+    check(!make(stick, "", mvc2, mvc2),
+          "and a Dreamcast game in Flycast, which passes no arcade core, has no layout");
 
     // MAME 2003-Plus sends them in RetroPad id order; its Classic table
     // puts them back in the game's.

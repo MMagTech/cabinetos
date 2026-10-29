@@ -5,9 +5,9 @@
 // ONLY A STICK ON THE TABLE, AND ONLY IN AN ARCADE GAME. A pad that is not
 // on the table (fightstick.cpp) is a pad, and nothing here touches it: no
 // setting, no screen, no change in how it is read. A stick that is on it
-// plays an arcade game (FBNeo, MAME 2003-Plus) through a layout made from
-// the buttons the game says it uses, and every other game as the pad it says
-// it is. Its Home opens the pause menu in every game, switch or not, since it
+// plays an arcade game (FBNeo, MAME 2003-Plus, a Naomi or Atomiswave board in
+// Flycast) through a layout made from the buttons the game says it uses, and
+// every other game as the pad it says it is. Its Home opens the pause menu in every game, switch or not, since it
 // has no stick clicks for the pair that opens it on a pad (play.cpp).
 //
 // THE TABLE IS MEASURED, NEVER GUESSED. A row is a stick somebody connected
@@ -28,7 +28,8 @@
 // WHICH BUTTONS, IN WHICH ORDER. The game's buttons are the descriptors the
 // core declared for the port (core.h, inputDescriptors) whose id is B, Y, A,
 // X, L, R, L2 or R2; one on L3 or R3 is not counted, since the stick has no
-// clicks. FBNeo declares them in the game's own order, with combination
+// clicks. Flycast declares a board's in the board's order. FBNeo declares
+// them in the game's own order, with combination
 // buttons of its own that press two or three at once ("Buttons AB",
 // "Buttons 3x Punch"); no cabinet had those, so they are not counted and get
 // no button, the one place a label decides anything. MAME 2003-Plus
@@ -70,8 +71,10 @@ const Stick* match(uint16_t vendor, uint16_t product, const std::string& device)
 // shortcuts.cpp keeps its button under, which keeps its own in this pass).
 std::string kind(SDL_Gamepad* gp);
 
-// Whether a core is one of the two arcade cores, FBNeo and MAME 2003-Plus:
-// the games a stick gets a layout in and Controls is offered in (controls.h).
+// Whether a core is an arcade core, FBNeo, MAME 2003-Plus or Flycast: the
+// games a stick gets a layout in and Controls is offered in (controls.h).
+// Callers pass the session's arcadeCore (gamesession.h), which is empty for a
+// game that is not an arcade game, Flycast's Dreamcast discs among them.
 bool isArcadeCore(const std::string& core);
 
 // The button number a joypad id is in MAME 2003-Plus's Classic table, 1 to 8

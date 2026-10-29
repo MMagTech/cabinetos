@@ -260,6 +260,13 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // sends those as a message to the frontend (RETRO_ENVIRONMENT_SET_MESSAGE),
     // which this console does not show.
     if (coreName == "mame2003_plus") return {{"mame2003-plus_skip_disclaimer", "enabled"}};
+    // A NEO GEO GAME IS THE ARCADE BOARD, MVS, with the English BIOS, which
+    // is uncensored (docs/decisions/2026-10-28-arcade-emulator-from-the-zip.md):
+    // it comes from an arcade folder. The declared default, "DIPSWITCH",
+    // leaves it to a BIOS DIP switch. FinalBurn Neo declares this option only
+    // with a Neo Geo game loaded; a set carries its own BIOS (measured on the
+    // A9, 2026-10-28).
+    if (coreName == "fbneo_libretro") return {{"fbneo-neogeo-mode", "MVS_EUR"}};
     if (coreName == "mgba") return {{"mgba_interframe_blending", "mix_smart"}};
     if (coreName == "stella2014") return {{"stella2014_mix_frames", "ghost_75"}};
 
