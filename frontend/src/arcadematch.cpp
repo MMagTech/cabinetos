@@ -149,15 +149,17 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
 
 Answer notSupported() { return {Verdict::NotSupported, nullptr, "Not supported on this console"}; }
 
-// A GAME NOT MADE FOR A CONTROLLER, by any list that has it, is not supported:
-// what a game was made for does not change with the emulator. A light-gun
-// game by the list of the first emulator that would play it.
-bool noController(const std::vector<Candidate>& c) {
+// A GAME NOT MADE FOR A CONTROLLER, by any list that has it, is not
+// supported, and a light-gun game, by any list, needs a light gun: what a game
+// was made for does not change with the emulator, and an older list can call
+// a gun a trackball (MAME 2003-Plus's Born to Fight).
+bool marked(const std::vector<Candidate>& c, char flag) {
     for (const Candidate& k : c)
-        if (k.entry->flag == 'x') return true;
+        if (k.entry->flag == flag) return true;
     return false;
 }
-bool needsGun(const std::vector<Candidate>& c) { return c.front().entry->flag == 'g'; }
+bool noController(const std::vector<Candidate>& c) { return marked(c, 'x'); }
+bool needsGun(const std::vector<Candidate>& c) { return marked(c, 'g'); }
 Answer gunAnswer(const Candidate& c) { return {Verdict::NeedsGun, c.core, "Needs a light gun"}; }
 
 Answer byNameIn(const Catalogue* cats, const std::string& fileName, bool dreamcast) {
@@ -424,7 +426,8 @@ int test() {
               "gollygho n - 00000009:10\n"
               "opwolf w g 0000000a:10\n"
               "kinst w - 00000020:10\n"
-              "vliner w x 00000040:10\n"),
+              "vliner w x 00000040:10\n"
+              "zombraid w - 00000060:10\n"),
         parse("# mame2003_plus\n"
               "sf2 w - 00000001:100 00000003:300\n"
               "gollygho w - 00000009:10\n"
@@ -432,7 +435,8 @@ int test() {
               "saturn w -\n"
               "blockgal n - 00000030:10\n"
               "vliner w - 00000040:10\n"
-              "mjhaihai w x 00000050:10\n"),
+              "mjhaihai w x 00000050:10\n"
+              "zombraid w g 00000060:10\n"),
     };
     auto name = [&](const char* f, bool dc = false) { return byNameIn(cats, f, dc); };
     auto files = [&](const char* f, std::vector<Member> m, std::vector<Disc> d = {},
@@ -461,6 +465,8 @@ int test() {
           "nor is a mahjong panel's game");
     check(name("vliner.zip").verdict == Verdict::NotSupported,
           "one list marking a game no controller's is enough, though another plays it");
+    check(name("zombraid.zip").verdict == Verdict::NeedsGun,
+          "and one list marking a light-gun game is enough, though the first plays it");
     check(core(name("gollygho.7z")).empty(),
           "a 7z is never MAME 2003-Plus's, which cannot open one");
     check(core(name("azumanga.zip", true)) == "flycast",
