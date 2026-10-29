@@ -163,8 +163,9 @@ const char* shortReason(const Coverage& c);
 //
 // AND FOR AN ARCADE GAME IT NAMES THE EMULATOR its zip's name finds first in
 // the catalogues (arcadematch.h, byName), with `arcade` set; Play asks again of
-// the zip's files. A light-gun or touchscreen game is NeedsController, saying
-// which, and a set no emulator here has working is UnsupportedGame.
+// the zip's files. A light-gun game is NeedsController, and a set no emulator
+// here has working, or one made for anything but a controller, is
+// UnsupportedGame.
 Coverage coverageFor(const romm::Game& g);
 
 inline bool playable(const romm::Platform& p) {

@@ -14,8 +14,10 @@
 //
 // TWO QUESTIONS, ASKED AT DIFFERENT TIMES. A grid asks by the name alone
 // (byName), since a list carries no file's contents: a set no emulator here
-// has, or every one that has it marks not working, is greyed, and so are the
-// light-gun and touchscreen games. Play asks by the files (byFiles), from
+// has, or every one that has it marks not working, is greyed, and so is one
+// any list marks as made for anything but a controller (a touchscreen, a
+// mahjong panel, a gambling machine...), and a light-gun game until light
+// guns are supported. Play asks by the files (byFiles), from
 // RomM's list of what a loose zip holds, or from the archive itself for one
 // inside a folder game; a set whose files do not fit says so then.
 //
@@ -60,9 +62,8 @@ struct Disc {
 
 enum class Verdict {
     Plays,          // `core` plays it
-    NotSupported,   // no emulator here has it working
+    NotSupported,   // no emulator here has it working, or it is no controller's game
     NeedsGun,       // a light-gun game (until #575)
-    NeedsTouch,     // a touchscreen game
     FilesDiffer,    // the zip does not hold the files of the set it is named for
     DiscMissing,    // its set has a disc and no CHD of that name is beside it
     DiscDiffers,    // the CHD is there and is not the one the set lists

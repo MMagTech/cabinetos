@@ -9,18 +9,25 @@
 # pinned emulator, never typed in.
 #
 # THE SOURCES, one per emulator:
-#   fbneo_libretro  its "Arcade only" DAT, and its drivers' input lists for
-#                   the light-gun games (the DAT names no controls)
-#   mame2003_plus   its metadata/mame2003-plus.xml
+#   fbneo_libretro  its "Arcade only" DAT, and its drivers (the DAT names no
+#                   controls): their input lists for the light-gun games
+#                   ("P1 Gun X") and the mahjong panels ("P1 Kan", "P1 Pon",
+#                   "P1 Chi"), and their casino genre (GBF_CASINO)
+#   mame2003_plus   its metadata/mame2003-plus.xml, and its catver.ini for the
+#                   games made for anything but a controller
 #   flycast         core/hw/naomi/naomi_roms.cpp and naomi_roms_input.h, the
 #                   sets its libretro build plays (NAOMI_MULTIBOARD is not
 #                   defined there, core/build.h)
 #
 # THE FILE, <core file stem>.catalogue, one set a line:
-#   <set> <w|n> <-|g|t> <crc>:<size> ... @<disc>:<sha1> ...
+#   <set> <w|n> <-|g|x> <crc>:<size> ... @<disc>:<sha1> ...
 # w works and n does not, by the emulator's own word (FBNeo "preliminary",
-# 2003-Plus "preliminary" or "protection"); g a light-gun game, t a
-# touchscreen game; each file the zip must hold as its CRC32 and size (size 0
+# 2003-Plus "preliminary" or "protection"); g a light-gun game; x a game made
+# for anything but a controller or a light gun (docs/decisions/
+# 2026-10-28-arcade-emulator-from-the-zip.md): a touchscreen, a mahjong or
+# hanafuda panel, a gambling, medal or electromechanical machine, a photo
+# booth, a test tape. Only what each list marks plainly: an awkward set it
+# does not mark plays. Each file the zip must hold as its CRC32 and size (size 0
 # where the list gives none, Flycast's); each disc by the CHD's name and the
 # SHA1 the list gives (none for Flycast). Left out of the files: the BIOS
 # options (what the set takes from the BIOS at the end of its romof chain),
@@ -52,7 +59,7 @@ fbneo_libretro)
     LEAST=8000
     ;;
 mame2003_plus)
-    FILES=("metadata/mame2003-plus.xml")
+    FILES=("metadata/mame2003-plus.xml" "metadata/catver.ini")
     LEAST=5000
     ;;
 flycast)
@@ -124,7 +131,7 @@ def line(name, works, flag, files, discs):
     print(" ".join(parts))
 
 
-def from_xml(path, is_bios, not_working, guns):
+def from_xml(path, is_bios, not_working, flag_of):
     games = {g.get("name"): g for g in ET.parse(path).getroot().iter("game")}
 
     def bios_crcs(g):
@@ -159,14 +166,15 @@ def from_xml(path, is_bios, not_working, guns):
             discs.append((re.sub(r"\.chd$", "", d.get("name")), (d.get("sha1") or "").lower()))
         driver = g.find("driver")
         works = driver is None or driver.get("status") not in not_working
-        flag = "g" if guns(g) else "-"
-        line(name, works, flag, files, discs)
+        line(name, works, flag_of(g), files, discs)
 
 
-def fbneo_guns(drv):
+def fbneo_flags(drv):
     # A driver whose input list has a gun, by the lists' own names ("P1 Gun
-    # X"); the driver names the list through its <Name>InputInfo.
-    lists, spec, drivers = set(), {}, []
+    # X"), is a light-gun game; one with a mahjong panel's keys, or in the
+    # casino genre, is not a controller's. The driver names its list through
+    # its <Name>InputInfo.
+    lists, panels, spec, drivers = set(), set(), {}, []
     for root, _, names in os.walk(drv):
         for n in names:
             if not n.endswith(".cpp"):
@@ -176,23 +184,54 @@ def fbneo_guns(drv):
                                  text, re.S):
                 if re.search(r'"P\d Gun X"', m.group(2)):
                     lists.add(m.group(1))
+                if re.search(r'"P1 (Kan|Pon|Chi)"', m.group(2)):
+                    panels.add(m.group(1))
             for m in re.finditer(r"STDINPUTINFOSPEC\(\s*(\w+)\s*,\s*(\w+?)InputList\s*\)", text):
                 spec[m.group(1)] = m.group(2)
             for m in re.finditer(r"struct\s+BurnDriver\w*\s+BurnDrv\w+\s*=\s*\{(.*?)\};", text, re.S):
                 name = re.search(r'"([^"]+)"', m.group(1))
                 info = re.search(r"\b(\w+?)InputInfo\b", m.group(1))
-                if name and info:
-                    drivers.append((name.group(1).lower(), info.group(1)))
-    return {n for n, i in drivers if i in lists or spec.get(i) in lists}
+                if name:
+                    drivers.append((name.group(1).lower(), info.group(1) if info else "",
+                                    "GBF_CASINO" in m.group(1)))
+    flags = {}
+    for n, i, casino in drivers:
+        if casino or i in panels or spec.get(i) in panels:
+            flags[n] = "x"
+        elif i in lists or spec.get(i) in lists:
+            flags[n] = "g"
+    return flags
+
+
+def catver_flags(path):
+    # MAME 2003-Plus's own catver.ini: the categories of games made for
+    # anything but a controller.
+    flags, section = {}, None
+    for l in open(path, encoding="latin-1"):
+        l = l.strip()
+        if l.startswith("["):
+            section = l
+        elif section == "[Category]" and "=" in l:
+            name, cat = l.split("=", 1)
+            if re.match(r"(Tabletop / (Mahjong|Hanafuda)|Casino /|Slot Machine /|"
+                        r"Electromechanical /|Medal Game /|Misc\. / Print Club|Utilities /)", cat):
+                flags[name.lower()] = "x"
+    if len(flags) < 200:
+        sys.exit("mame2003_plus: catver.ini gave only %d games not made for a controller" % len(flags))
+    return flags
 
 
 if core == "fbneo_libretro":
-    guns = fbneo_guns(paths[1])
+    flags = fbneo_flags(paths[1])
+    if sum(f == "x" for f in flags.values()) < 100:
+        sys.exit("fbneo_libretro: its drivers gave too few games not made for a controller")
     from_xml(paths[0], lambda g: g.get("isbios") == "yes", {"preliminary"},
-             lambda g: g.get("name").lower() in guns)
+             lambda g: flags.get(g.get("name").lower(), "-"))
 elif core == "mame2003_plus":
+    flags = catver_flags(paths[1])
     from_xml(paths[0], lambda g: g.get("runnable") == "no", {"preliminary", "protection"},
-             lambda g: any(i.get("control") == "lightgun" for i in g.iter("input")))
+             lambda g: flags.get(g.get("name").lower()) or
+             ("g" if any(i.get("control") == "lightgun" for i in g.iter("input")) else "-"))
 elif core == "flycast":
     src = open(paths[0], encoding="latin-1").read()
     inputs = open(paths[1], encoding="latin-1").read()
@@ -203,7 +242,8 @@ elif core == "flycast":
     if "#if" in src:
         sys.exit("flycast: a preprocessor block naomi_roms.cpp did not have at the last pin")
     # A gun game's inputs carry a reload or Atomiswave's trigger; a game with
-    # no player buttons at all (service_btns_inputs) is played on its screen.
+    # no player buttons at all (service_btns_inputs) is played on its screen,
+    # not a controller.
     guns, touch = set(), set()
     for m in re.finditer(r"static\s+InputDescriptors\s+(\w+)\s*=\s*\{(.*?)\n\};", inputs, re.S):
         if "NAOMI_RELOAD_KEY" in m.group(2) or "AWAVE_TRIGGER_KEY" in m.group(2):
@@ -258,7 +298,7 @@ elif core == "flycast":
         rest = [t.strip() for t in e[j + 1:].split(",") if t.strip()]
         discs = [(rest[0].strip('"'), "")] if rest and rest[0].startswith('"') else []
         uses = rest[1].lstrip("&") if len(rest) > 1 else ""
-        flag = "g" if uses in guns else "t" if uses in touch else "-"
+        flag = "g" if uses in guns else "x" if uses in touch else "-"
         line(name.group(1), True, flag, files, discs)
 PY
 } > "${file}"
@@ -269,7 +309,7 @@ count=$(grep -vc '^[#!]' "${file}")
 (( count >= LEAST )) ||
     { echo "${CORE}: only ${count} sets read, fewer than ${LEAST}" >&2; exit 1; }
 bad=$(grep -v '^[#!]' "${file}" |
-    grep -vcE '^[a-z0-9_]+ [wn] [-gt]( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*$' || true)
+    grep -vcE '^[a-z0-9_]+ [wn] [-gx]( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*$' || true)
 (( bad == 0 )) || { echo "${CORE}: ${bad} lines are not in the catalogue's form" >&2; exit 1; }
-empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gt]$' || true)
+empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gx]$' || true)
 echo "${CORE}: ${count} sets (${empty} with nothing to check) at ${COMMIT} -> ${file}"

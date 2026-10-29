@@ -26,7 +26,7 @@ namespace {
 // One set in one emulator's catalogue (cores/arcade-sets.sh's line).
 struct Entry {
     bool works = true;
-    char flag = '-';    // g a light gun, t a touchscreen
+    char flag = '-';    // g a light gun, x made for anything but a controller
     std::vector<std::pair<uint32_t, int64_t>> files;   // CRC32 and size; size 0 = any
     std::vector<Disc> discs;                           // sha1 empty = by name only
 };
@@ -147,17 +147,23 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
     return out;
 }
 
-Answer controllerAnswer(const Candidate& c) {
-    if (c.entry->flag == 'g') return {Verdict::NeedsGun, c.core, "Needs a light gun"};
-    return {Verdict::NeedsTouch, c.core, "Needs a touchscreen"};
-}
-
 Answer notSupported() { return {Verdict::NotSupported, nullptr, "Not supported on this console"}; }
+
+// A GAME NOT MADE FOR A CONTROLLER, by any list that has it, is not supported:
+// what a game was made for does not change with the emulator. A light-gun
+// game by the list of the first emulator that would play it.
+bool noController(const std::vector<Candidate>& c) {
+    for (const Candidate& k : c)
+        if (k.entry->flag == 'x') return true;
+    return false;
+}
+bool needsGun(const std::vector<Candidate>& c) { return c.front().entry->flag == 'g'; }
+Answer gunAnswer(const Candidate& c) { return {Verdict::NeedsGun, c.core, "Needs a light gun"}; }
 
 Answer byNameIn(const Catalogue* cats, const std::string& fileName, bool dreamcast) {
     const std::vector<Candidate> c = candidates(cats, fileName, dreamcast);
-    if (c.empty()) return notSupported();
-    if (c.front().entry->flag != '-') return controllerAnswer(c.front());
+    if (c.empty() || noController(c)) return notSupported();
+    if (needsGun(c)) return gunAnswer(c.front());
     return {Verdict::Plays, c.front().core, {}};
 }
 
@@ -165,8 +171,8 @@ Answer byFilesIn(const Catalogue* cats, const std::string& fileName,
                  const std::vector<Member>& members, const std::vector<Disc>& discs,
                  bool dreamcast) {
     const std::vector<Candidate> c = candidates(cats, fileName, dreamcast);
-    if (c.empty()) return notSupported();
-    if (c.front().entry->flag != '-') return controllerAnswer(c.front());
+    if (c.empty() || noController(c)) return notSupported();
+    if (needsGun(c)) return gunAnswer(c.front());
     std::set<std::pair<uint32_t, int64_t>> have;
     std::set<uint32_t> crcs;
     for (const Member& m : members) {
@@ -412,18 +418,21 @@ int test() {
         parse("# flycast\n!bios naomi awbios\n"
               "azumanga w - b71ede16:0 @gdl-0018:\n"
               "hotd2 w g b23d1a0c:0\n"
-              "tduno2 w t 1b58f24a:0\n"),
+              "tduno2 w x 1b58f24a:0\n"),
         parse("# fbneo\n"
               "sf2 w - 00000001:100 00000002:200\n"
               "gollygho n - 00000009:10\n"
               "opwolf w g 0000000a:10\n"
-              "kinst w - 00000020:10\n"),
+              "kinst w - 00000020:10\n"
+              "vliner w x 00000040:10\n"),
         parse("# mame2003_plus\n"
               "sf2 w - 00000001:100 00000003:300\n"
               "gollygho w - 00000009:10\n"
               "kinst w - 00000020:10 @kinst:aaaa\n"
               "saturn w -\n"
-              "blockgal n - 00000030:10\n"),
+              "blockgal n - 00000030:10\n"
+              "vliner w - 00000040:10\n"
+              "mjhaihai w x 00000050:10\n"),
     };
     auto name = [&](const char* f, bool dc = false) { return byNameIn(cats, f, dc); };
     auto files = [&](const char* f, std::vector<Member> m, std::vector<Disc> d = {},
@@ -445,9 +454,13 @@ int test() {
     check(name("opwolf.zip").verdict == Verdict::NeedsGun &&
               name("opwolf.zip").why == "Needs a light gun",
           "a light-gun game needs a light gun");
-    check(name("tduno2.zip").verdict == Verdict::NeedsTouch &&
-              name("tduno2.zip").why == "Needs a touchscreen",
-          "a touchscreen game needs a touchscreen");
+    check(name("tduno2.zip").verdict == Verdict::NotSupported &&
+              name("tduno2.zip").why == "Not supported on this console",
+          "a game played on its screen is not supported: no controller plays it");
+    check(name("mjhaihai.zip").verdict == Verdict::NotSupported,
+          "nor is a mahjong panel's game");
+    check(name("vliner.zip").verdict == Verdict::NotSupported,
+          "one list marking a game no controller's is enough, though another plays it");
     check(core(name("gollygho.7z")).empty(),
           "a 7z is never MAME 2003-Plus's, which cannot open one");
     check(core(name("azumanga.zip", true)) == "flycast",
@@ -488,6 +501,8 @@ int test() {
     }
     check(files("hotd2.zip", {{"r", 0xb23d1a0c, 1}}).verdict == Verdict::NeedsGun,
           "by files too, a light-gun game needs a light gun");
+    check(files("vliner.zip", {{"v", 0x40, 10}}).verdict == Verdict::NotSupported,
+          "and a game no controller plays is not supported, whatever its files");
     check(cats[0].bios.count("naomi") && cats[0].bios.count("awbios"),
           "Flycast's BIOS zips are read from its !bios line");
 

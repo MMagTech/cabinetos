@@ -252,8 +252,9 @@ Coverage answer(const Entry* e) {
 }
 
 // AN ARCADE GAME, by its zip's name (arcadematch.h): the emulator the
-// first catalogue that has the set working names, a light-gun or touchscreen
-// game for the controller it needs, or not supported here. Which emulator
+// first catalogue that has the set working names, a light-gun game for the
+// light gun it needs, or not supported here, which is also a game made for
+// anything but a controller. Which emulator
 // really plays it is asked again of its files at Play (launch_routes.cpp).
 //
 // A GAME WHOSE RECORD KNOWS WHAT ITS ZIP HOLDS (Game::members, a loose zip a
@@ -274,8 +275,6 @@ Coverage arcadeGame(const romm::Game& g, bool dreamcast) {
         }
         case arcadematch::Verdict::NeedsGun:
             return {Support::NeedsController, nullptr, "Needs a light gun"};
-        case arcadematch::Verdict::NeedsTouch:
-            return {Support::NeedsController, nullptr, "Needs a touchscreen"};
         default:
             return {Support::UnsupportedGame, nullptr, "Not supported on this console"};
     }
