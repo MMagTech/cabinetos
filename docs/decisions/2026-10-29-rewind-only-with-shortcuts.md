@@ -14,7 +14,8 @@
   its own was weighed and not built: it asks a player to manage a cost they
   cannot see, and it is one more setting for a few. It is looked at again
   if players ask for the other shortcuts without rewind.
-- **Numbers:** none yet.
+- **Numbers:** PR #609, "Rewind keeps nothing while in-game shortcuts are
+  off".
 - **Replaces:** none. docs/PROJECT.md, "Rewind is for getting back, not for
   scrubbing" (2026-09-27), still decides what rewind keeps and how it
   steps back.
