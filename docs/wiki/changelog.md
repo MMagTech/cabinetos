@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.29 {#v2026-10-29}
 
 - **New:** Sega Naomi, Naomi 2 and Atomiswave games now play, and CPS1, CPS2
   and Neo Geo folders get tiles of their own. Each arcade game now picks its
