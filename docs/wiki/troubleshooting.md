@@ -35,8 +35,7 @@ graphics under Linux:
 ## The Library
 
 - **A system is missing.** Its RomM platform slug must match the
-  [list](systems.md#every-system). Arcade folders must be named `FBNEO` or
-  `MAME2003` exactly.
+  [list](systems.md#every-system).
 - **A tile says *Emulator not installed*.** Switch and Xbox emulators install
   from Flathub on the first boot with internet (RomM alone is not enough), and
   try again every six hours.

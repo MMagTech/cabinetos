@@ -10,18 +10,19 @@
 
 namespace arcadesettings {
 
-static_assert(kMenuKey == RETROK_TAB, "MAME 2003-Plus opens its menu on Tab");
+static_assert(kMenuKey == RETROK_TAB, "both MAMEs open their menu on Tab");
 
 void keepClicks(const std::string& core, uint32_t& buttons) {
     if (core == "flycast") buttons &= ~(cab::bit(cab::L3) | cab::bit(cab::R3));
 }
 
 bool step(Hold& h, const std::string& core, uint32_t& buttons, uint64_t frame) {
-    const bool mame = core == "mame2003_plus", board = core == "flycast";
+    const bool old = core == "mame2003_plus", mame = old || core == "mame_libretro",
+               board = core == "flycast";
     if (!mame && !board) return false;
     // A new game counts its frames from zero.
     if (frame < h.since || frame + kPressFrames < h.pressUntil) h = {};
-    buttons &= ~cab::bit(cab::L3);
+    if (old) buttons &= ~cab::bit(cab::L3);
     keepClicks(core, buttons);
     const bool start = buttons & cab::bit(cab::Start);
     if (!start) {
@@ -34,7 +35,9 @@ bool step(Hold& h, const std::string& core, uint32_t& buttons, uint64_t frame) {
         h.counted = true;
         h.pressUntil = frame + kPressFrames;
         std::fprintf(stderr, "[arcade] Start held: %s\n",
-                     mame ? "MAME 2003-Plus's menu" : "the board's Test button");
+                     old    ? "MAME 2003-Plus's menu"
+                     : mame ? "MAME's menu"
+                            : "the board's Test button");
     }
     const bool pressing = frame < h.pressUntil;
     if (board) {
@@ -111,6 +114,17 @@ int test() {
         step(h, mame, b, 1);
         check(!(b & l3) && (b & bit(cab::R3)) && (b & bit(cab::B)),
               "MAME: player 1's left stick click never reaches it; the rest do");
+    }
+    {
+        Hold h;
+        const std::string m289 = "mame_libretro";
+        const Run r = hold(h, m289, 100, 90, l3);
+        check(r.tabFrames == static_cast<int>(kPressFrames) && r.firstTab == 100 + kHoldFrames,
+              "MAME 0.289: Start held 90 frames presses Tab once, 60 frames in, for 4 frames");
+        check((r.heard & start) && (r.heard & l3),
+              "and its left stick click, its button 7, reaches it, as Start does");
+        check(hold(h, m289, 300, 90).tabFrames == static_cast<int>(kPressFrames),
+              "a second hold presses Tab again, which closes its menu");
     }
     {
         Hold h;
