@@ -1025,7 +1025,8 @@ struct App {
     // every half second of play, the last 15 seconds kept in memory; held,
     // it steps back one every kRewindStep and plays on from there on release.
     // On every system with states and nowhere else (fast forward and rewind
-    // go with states). Dropped when a state loads or the game ends.
+    // go with states), and only with In-game shortcuts on (play.cpp).
+    // Dropped when a state loads or the game ends.
     cab::Rewind rewindKeep;
     int rewindAvailable = -1;          // -1 not yet decided for this game
     uint64_t rewindLastFrame = 0;      // framesRun at the last snapshot

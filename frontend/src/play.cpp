@@ -532,13 +532,22 @@ bool App::readGameInput(cab::Core& core) {
     // Whether this game can rewind, decided once it is running.
     // A core with no rewind is not asked its state's size: for Azahar that
     // question makes a whole state, up to 0.9 s, in the game's first frames.
+    // NOTHING IS KEPT WITH THE SHORTCUTS OFF (MMagTech, 2026-10-29): the
+    // shortcut is the only way to rewind, so the snapshots would hold the
+    // game's frame twice a second for nothing. The switch is in Settings,
+    // which a game never shows, so asking once per game is enough.
     if (rewindAvailable < 0 && core.running() && core.framesRun() > 0) {
-        const bool allowed = session.snapshots && catalog::rewindAllowed(session.core.c_str());
+        const bool shortcutsOn = shortcuts::enabled();
+        const bool allowed = shortcutsOn && session.snapshots &&
+                             catalog::rewindAllowed(session.core.c_str());
         const size_t sz = allowed ? core.stateSize() : 0;
         rewindAvailable = allowed && sz > 0 ? 1 : 0;
         rewindLastFrame = core.framesRun();
-        std::fprintf(stderr, "[rewind] %s (state %zu KB)\n",
-                     rewindAvailable ? "available" : "not offered", sz / 1024);
+        if (!shortcutsOn)
+            std::fprintf(stderr, "[rewind] off: in-game shortcuts are off\n");
+        else
+            std::fprintf(stderr, "[rewind] %s (state %zu KB)\n",
+                         rewindAvailable ? "available" : "not offered", sz / 1024);
     }
     // WHAT REWIND IS HOLDING, in the log each time it starts: the
     // numbers the memory budget was argued from, measured.

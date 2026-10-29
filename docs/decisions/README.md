@@ -44,6 +44,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [hold-start-opens-arcade-settings](2026-10-25-hold-start-opens-arcade-settings.md): holding Start in an arcade game opens the emulator's own menu, never one of the console's.
 - [no-remapping](2026-09-26-no-remapping.md): no button remapping on any system but arcade games, which have Controls.
 - [arcade-controls](2026-10-25-arcade-controls.md): an arcade game's pause menu has a Controls row that moves its buttons, per game, kind of controller and person.
+- [rewind-only-with-shortcuts](2026-10-29-rewind-only-with-shortcuts.md): a game keeps a rewind history only while In-game shortcuts are on, and rewind has no switch of its own.
 - [ds-3ds-screen-view](2026-10-26-ds-3ds-screen-view.md): L3 shows a DS or 3DS game's top screen alone, the bottom alone, then both, and the DS's lid moves to R2.
 - [controls-guide-is-a-pdf](2026-10-27-controls-guide-is-a-pdf.md): the printable one-page controls guide is a PDF on the wiki, made from an HTML file beside it.
 - [a-wake-is-not-a-choice](2026-10-27-a-wake-is-not-a-choice.md): the presses that come with a wake do nothing in a menu: the first on a dimmed screen, and every press for 3 seconds after the screen was off, after Sleep and after a device starts streaming.
