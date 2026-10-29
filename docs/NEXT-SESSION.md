@@ -39,17 +39,15 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **The arcade expansion, piece 2, on the TV.** Piece 1, #601, "Arcade:
+1. **The arcade expansion, pieces 3 and 4.** Piece 1, #601, "Arcade:
    pick each game's emulator from its zip; Naomi, Atomiswave and the CPS and
-   Neo Geo tiles", is merged (2026.10.29). Piece 2 is PR #605, "Arcade: MAME
-   0.289 for the games nothing older plays, with high scores", built and run
-   headless on the A9. Before its testing push MMagTech publishes the
-   release `prebuilt-mame-0.289` (a draft now; marked a pre-release, not the
-   latest), which the image build downloads; then its TV checks, then his
-   go to merge. Pieces 3 (sm2-emu, Model 2) and 4
-   (Supermodel, Model 3, after its gate run) follow, each in a fresh
-   session, from the approved arcade build plan of 2026-10-28 in his
-   research notes.
+   Neo Geo tiles", shipped as 2026.10.29; piece 2, #605, "Arcade: MAME 0.289
+   for the games nothing older plays, with high scores", as 2026.10.29.3,
+   with Arcade's own wiki page, `docs/wiki/arcade.md`. Pieces 3 (sm2-emu,
+   Model 2) and 4 (Supermodel, Model 3, after its gate run) follow, each in
+   a fresh session, from the approved arcade build plan of 2026-10-28 in his
+   research notes. Waiting in Later: #608, "FinalBurn Neo games keep no high
+   scores", planned with him before anything is built.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
    2026-10-28, at the TV).** Flycast feeds the analog stick only to a
    board's analog controls, so a game with a plain lever (Trigger Heart
