@@ -12,7 +12,7 @@ one you install, so you only ever install the newest.
   *Metal Slug · NeoGeoMVS*. Everywhere else (Search, collections, Home and a
   game's page) an arcade game's system is *Arcade*. Your folders in RomM stay
   as they are; for one board on its own, make a RomM collection. See
-  [Arcade](arcade.md). ([#611](https://github.com/MMagTech/cabinetos/issues/611))
+  [Arcade](arcade.md). ([#615](https://github.com/MMagTech/cabinetos/pull/615))
 - **Changed:** the console says *the server*, not *your server*, since it may
   be someone else's: *No Sega Saturn BIOS on the server*, *Waiting for the
   server*. A missing arcade BIOS names its folder: *No Naomi BIOS on the
