@@ -46,7 +46,7 @@ RomM: keep test launches under a minute, or have his go.
    0.289), 3 (sm2-emu, Model 2) and 4 (Supermodel, Model 3, after its gate
    run) follow, each in a fresh session, from the approved arcade build plan
    of 2026-10-28 in his research notes. Piece 2 also gives Arcade a wiki page
-   of its own, `docs/wiki/arcade.md` (his go, 2026-10-28): the Arcade section
+   of its own, arcade.md in the wiki's folder (his go, 2026-10-28): the Arcade section
    of `docs/wiki/systems.md` moved there and grown with piece 2's text, the
    systems table's Arcade row linking to it.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
