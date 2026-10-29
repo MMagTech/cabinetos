@@ -147,7 +147,7 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
     return out;
 }
 
-Answer notSupported() { return {Verdict::NotSupported, nullptr, "Not supported on this console"}; }
+Answer notSupported() { return {Verdict::NotSupported, nullptr, "Not supported"}; }
 
 // A GAME NOT MADE FOR A CONTROLLER, by any list that has it, is not
 // supported, and a light-gun game, by any list, needs a light gun: what a game
@@ -447,7 +447,7 @@ int test() {
           "by name: sf2 is FinalBurn Neo's, the first in the order that has it");
     check(name("SF2.ZIP").verdict == Verdict::Plays, "the name is read in any case");
     check(name("nothere.zip").verdict == Verdict::NotSupported &&
-              name("nothere.zip").why == "Not supported on this console",
+              name("nothere.zip").why == "Not supported",
           "a set no emulator has is not supported");
     check(core(name("gollygho.zip")) == "mame2003_plus",
           "an emulator that marks the set not working is skipped");
@@ -459,7 +459,7 @@ int test() {
               name("opwolf.zip").why == "Needs a light gun",
           "a light-gun game needs a light gun");
     check(name("tduno2.zip").verdict == Verdict::NotSupported &&
-              name("tduno2.zip").why == "Not supported on this console",
+              name("tduno2.zip").why == "Not supported",
           "a game played on its screen is not supported: no controller plays it");
     check(name("mjhaihai.zip").verdict == Verdict::NotSupported,
           "nor is a mahjong panel's game");

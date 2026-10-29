@@ -276,7 +276,7 @@ Coverage arcadeGame(const romm::Game& g, bool dreamcast) {
         case arcadematch::Verdict::NeedsGun:
             return {Support::NeedsController, nullptr, "Needs a light gun"};
         default:
-            return {Support::UnsupportedGame, nullptr, "Not supported on this console"};
+            return {Support::UnsupportedGame, nullptr, "Not supported"};
     }
 }
 }  // namespace
@@ -374,7 +374,7 @@ const char* shortReason(Support s) {
         case Support::Excluded: return "Not shipped here";
         case Support::NotInstalled: return "Core not built yet";
         case Support::NeedsController: return "Needs a Wii Remote";
-        case Support::UnsupportedGame: return "Not supported here";
+        case Support::UnsupportedGame: return "Not supported";
         case Support::Hidden: return "Not shown here";
     }
     return "Not playable here";
