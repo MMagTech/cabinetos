@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace cab::standalone::detail {
@@ -116,10 +115,18 @@ std::vector<std::string> buttonsOf(int player, int players, int gameButtons) {
     return out;
 }
 
-// The picture's size for a level: its lines, at most the screen's, in the
-// screen's shape (Supermodel draws at the size it is given, and fullscreen
-// asks the screen for that mode).
-std::pair<int, int> pictureSize(quality::Level level) {
+// THE PICTURE FOR A LEVEL: its lines, at most the screen's, in the screen's
+// shape. Supermodel draws at the size it is given. At the screen's own size
+// it is fullscreen; smaller, it is a window of that size, which gamescope
+// scales to the screen. Not fullscreen at a smaller size: gamescope's
+// Xwayland gives a fullscreen window the screen's size whatever mode is
+// asked for, and Supermodel then draws its 3D at the size it asked for and
+// its 2D layer elsewhere (seen on the A9, 2026-10-29).
+struct Picture {
+    int w, h;
+    bool fullscreen;
+};
+Picture pictureFor(quality::Level level) {
     int w = 3840, h = 2160;
     if (const SDL_DisplayMode* dm = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay());
         dm && dm->w > 0 && dm->h > 0) {
@@ -127,7 +134,7 @@ std::pair<int, int> pictureSize(quality::Level level) {
         h = dm->h;
     }
     const int lines = std::min(h, quality::supermodelLines(level));
-    return {(lines * w / h) & ~1, lines};
+    return {lines == h ? w : (lines * w / h) & ~1, lines, lines == h};
 }
 
 struct Setting {
@@ -147,7 +154,7 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
         *err = "could not link Supermodel's NVRAM and Assets in " + dir;
         return false;
     }
-    const auto [w, h] = pictureSize(level);
+    const Picture pic = pictureFor(level);
     const int buttons = arcadematch::buttons("supermodel", arcadeSet(romPath) + ".zip");
     const std::vector<std::string> p1 = buttonsOf(0, players, buttons);
     const std::vector<std::string> p2 = buttonsOf(1, players, buttons);
@@ -162,13 +169,13 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
         {"QuadRendering", "true"},
         {"MultiThreaded", "true"},
         {"GPUMultiThreaded", "true"},
-        // THE PICTURE: fullscreen at the level's size (quality.h), the board's
-        // own shape, nothing stretched or widened; Supermodel's own 2D
-        // upscaling and colour as they ship.
-        {"FullScreen", "true"},
-        {"BorderlessWindow", "false"},
-        {"XResolution", std::to_string(w)},
-        {"YResolution", std::to_string(h)},
+        // THE PICTURE at the level's size (quality.h, pictureFor), the
+        // board's own shape, nothing stretched or widened; Supermodel's own
+        // 2D upscaling and colour as they ship.
+        {"FullScreen", pic.fullscreen ? "true" : "false"},
+        {"BorderlessWindow", "true"},
+        {"XResolution", std::to_string(pic.w)},
+        {"YResolution", std::to_string(pic.h)},
         {"WideScreen", "false"},
         {"WideBackground", "false"},
         {"Stretch", "false"},
@@ -417,8 +424,8 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
         *err = "could not write Supermodel's settings in " + dir + "/Config";
         return false;
     }
-    std::fprintf(stderr, "[standalone] Supermodel at %dx%d, %d buttons for %s\n", w, h, buttons,
-                 arcadeSet(romPath).c_str());
+    std::fprintf(stderr, "[standalone] Supermodel at %dx%d%s, %d buttons for %s\n", pic.w, pic.h,
+                 pic.fullscreen ? "" : " in a window", buttons, arcadeSet(romPath).c_str());
     return true;
 }
 
