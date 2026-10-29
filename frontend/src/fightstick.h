@@ -5,8 +5,9 @@
 // ONLY A STICK ON THE TABLE, AND ONLY IN AN ARCADE GAME. A pad that is not
 // on the table (fightstick.cpp) is a pad, and nothing here touches it: no
 // setting, no screen, no change in how it is read. A stick that is on it
-// plays an arcade game (FBNeo, MAME 2003-Plus, a Naomi or Atomiswave board in
-// Flycast) through a layout made from the buttons the game says it uses, and
+// plays an arcade game (FBNeo, MAME 2003-Plus, MAME 0.289, a Naomi or
+// Atomiswave board in Flycast) through a layout made from the buttons the
+// game says it uses, and
 // every other game as the pad it says it is. Its Home opens the pause menu in every game, switch or not, since it
 // has no stick clicks for the pair that opens it on a pad (play.cpp).
 //
@@ -28,14 +29,16 @@
 // WHICH BUTTONS, IN WHICH ORDER. The game's buttons are the descriptors the
 // core declared for the port (core.h, inputDescriptors) whose id is B, Y, A,
 // X, L, R, L2 or R2; one on L3 or R3 is not counted, since the stick has no
-// clicks. Flycast declares a board's in the board's order. FBNeo declares
+// clicks, except MAME 0.289's 7th and 8th (below). Flycast declares a board's in the board's order. FBNeo declares
 // them in the game's own order, with combination
 // buttons of its own that press two or three at once ("Buttons AB",
 // "Buttons 3x Punch"); no cabinet had those, so they are not counted and get
 // no button, the one place a label decides anything. MAME 2003-Plus
 // declares them in RetroPad id order, so they are put in its Classic table's
-// order (fightstick.cpp). Otherwise labels are the core's words, shown as
-// they are. A port the core said nothing about takes port 0's.
+// order (fightstick.cpp). MAME 0.289 names no game's buttons, so the console
+// declares them for it (mameButtons), in its order, with its 7th and 8th on
+// L3 and R3. Otherwise labels are the core's words, shown as they are. A
+// port the core said nothing about takes port 0's.
 //
 // THE CORE IS TOLD NOTHING DIFFERENT: it hears RetroPad ids, as from any pad,
 // sent from other buttons.
@@ -71,8 +74,9 @@ const Stick* match(uint16_t vendor, uint16_t product, const std::string& device)
 // shortcuts.cpp keeps its button under, which keeps its own in this pass).
 std::string kind(SDL_Gamepad* gp);
 
-// Whether a core is an arcade core, FBNeo, MAME 2003-Plus or Flycast: the
-// games a stick gets a layout in and Controls is offered in (controls.h).
+// Whether a core is an arcade core, FBNeo, MAME 2003-Plus, MAME 0.289 or
+// Flycast: the games a stick gets a layout in and Controls is offered in
+// (controls.h).
 // Callers pass the session's arcadeCore (gamesession.h), which is empty for a
 // game that is not an arcade game, Flycast's Dreamcast discs among them.
 bool isArcadeCore(const std::string& core);
@@ -83,6 +87,12 @@ bool isArcadeCore(const std::string& core);
 // read in that table's order (MAME 2003-Plus) rather than as declared.
 int classicNumber(unsigned id);
 bool readsClassic(const std::string& core);
+
+// A MAME 0.289 game's buttons, which it declares to nobody: `count` of them
+// (its catalogue's, arcadematch::buttons), named "Button 1" on, on the ids
+// its joypad gives them, B, A, Y, X, L, R, then L3 and R3 for the 7th and
+// 8th (its per-game profiles off). Core::declareButtons hands them on.
+std::vector<cab::InputDescriptor> mameButtons(int count);
 
 constexpr int kSlots = 8;
 constexpr int kNone = -1;

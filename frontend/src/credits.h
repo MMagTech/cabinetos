@@ -25,6 +25,7 @@ constexpr Credit kCredits[] = {
     {"Vectrex system ROM", "Inside vecx \xC2\xB7 Non-commercial"},
     {"Vectrex screen sheets", "THK and Gigapig \xC2\xB7 MIT, art non-commercial"},
     {"Flycast", "Dreamcast, Naomi \xC2\xB7 GPL v2"},
+    {"MAME 0.289", "Arcade \xC2\xB7 GPL v2"},
     {"PPSSPP", "PSP \xC2\xB7 GPL v2+"},
     {"PCSX2", "PlayStation 2 \xC2\xB7 GPL v3+"},
     {"Dolphin", "GameCube \xC2\xB7 GPL v2+"},

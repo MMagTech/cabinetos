@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "app.h"
+#include "arcadematch.h"
 #include "cache.h"
 #include "catalog.h"
 #include "controls.h"
@@ -14,8 +15,10 @@
 #include "disc.h"
 #include "discs.h"
 #include "dolphinprep.h"
+#include "fightstick.h"
 #include "filesave.h"
 #include "library.h"
+#include "mamehome.h"
 #include "ps2.h"
 #include "quality.h"
 #include "romm.h"
@@ -780,6 +783,12 @@ void App::restoreBeforeLoad(LaunchContext& c) {
         copyMiisInto(launchJob.miiSaves, launchJob.platformFsSlug, launchJob.coreName,
                      c.saveDir);
     if (launchJob.coreName == "dolphin") shareDolphinCache(c.saveDir);
+    // MAME 0.289's plugins, the ini that starts its high scores, and this
+    // person's scores for the game (mamehome.h).
+    if (launchJob.coreName == "mame_libretro")
+        mamehome::prepare(c.saveDir,
+                          launchJob.corePath.substr(0, launchJob.corePath.find_last_of('/')),
+                          storage::biosDir());
     // What each player's port holds. A joypad, but on two systems. Wii: a
     // Classic Controller, or a GameCube pad for a game that takes only
     // that, in the pads' ports; and, while a Wii Remote is paired, a real
@@ -869,6 +878,14 @@ void App::setUpLoadedGame(LaunchContext& c) {
     session.core = launchJob.coreName;
     session.platformSlug = launchJob.platformSlug;
     session.arcade = launchJob.arcade;
+    // MAME 0.289 NAMES NONE OF A GAME'S BUTTONS, so the console declares
+    // them, from its catalogue's count: what a fight stick's layout and
+    // Controls are made from (fightstick::mameButtons).
+    if (launchJob.arcade && launchJob.coreName == "mame_libretro") {
+        const std::string file = launchJob.romPath.substr(launchJob.romPath.find_last_of('/') + 1);
+        c.core.declareButtons(
+            fightstick::mameButtons(arcadematch::buttons("mame_libretro", file)));
+    }
     session.title = launchJob.title;
     session.saveDir = c.saveDir;
     session.fsStem = launchJob.fsStem;

@@ -5,8 +5,9 @@
 // emulator finds a game by the zip's name, so the name finds the set in each
 // emulator's catalogue, and the files (each by CRC32 and size) say whether the
 // zip is that emulator's version of it. Emulators are tried in a fixed order,
-// Flycast, FinalBurn Neo, MAME 2003-Plus, and the first whose catalogue has
-// the set, marks it working, and whose files the zip holds plays it. A set
+// Flycast, FinalBurn Neo, MAME 2003-Plus, MAME 0.289, and the first whose
+// catalogue has the set, marks it working, and whose files the zip holds
+// plays it: MAME 0.289 gets only what nothing older plays. A set
 // with a disc needs its CHD too, at the top of the game's folder
 // (docs/decisions/2026-10-28-arcade-discs-one-folder.md), with the SHA1 the
 // catalogue gives where it gives one. MAME 2003-Plus cannot open a 7z and is
@@ -55,6 +56,10 @@ using Member = romm::ArchiveMember;
 
 // A CHD at the top of the game's folder: its name without `.chd`, and the
 // SHA1 its header gives (chdSha1).
+//
+// THE SHA1 TELLS WHICH MAME A CHD WAS MADE FOR: MAME 2003-Plus and MAME
+// 0.289 list different ones for the same disc, so a disc game that both have
+// goes to the one whose disc it is.
 struct Disc {
     std::string name;
     std::string sha1;
@@ -98,8 +103,24 @@ std::string chdSha1(const std::string& path);
 // `bios/dc/` (its `!bios` line): `naomi.zip`, `awbios.zip` and the rest.
 bool flycastBios(const std::string& fileName);
 
+// How many buttons a set's player 1 has, by an emulator's catalogue, or 0
+// when it does not say. Only MAME 0.289's says: it names no game's buttons
+// to the console itself (fightstick::mameButtons).
+int buttons(const char* core, const std::string& fileName);
+
 // --arcade-match-test: the rule, every case, on catalogues written in the
 // test. 0 when all pass.
 int test();
+
+// --arcade-changes <old dir> <new dir>: every set whose emulator, by its
+// name, differs between two folders of catalogues; every set whose name gives
+// the same one but whose files are tried on other emulators at Play, so a zip
+// or a disc that does not fit the first may land elsewhere; and every set
+// whose files changed in the emulator that plays it, so a zip that fitted may
+// not now.
+// CI runs it when a catalogue changes (ci/list-arcade-changes.sh): a game
+// that changes emulator loses its saves and states (docs/decisions/
+// 2026-10-28-emulator-updates-and-saves.md). Prints, and returns 0.
+int changes(const std::string& oldDir, const std::string& newDir);
 
 }  // namespace arcadematch

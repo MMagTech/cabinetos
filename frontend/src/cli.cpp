@@ -289,6 +289,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             return arcadesettings::test();
         } else if (SDL_strcmp(argv[i], "--arcade-match-test") == 0) {
             return arcadematch::test();
+        } else if (SDL_strcmp(argv[i], "--arcade-changes") == 0 && i + 2 < argc) {
+            return arcadematch::changes(argv[i + 1], argv[i + 2]);
         } else if (SDL_strcmp(argv[i], "--screen-view-test") == 0) {
             return screenview::test();
         } else if (SDL_strcmp(argv[i], "--controls-test") == 0) {

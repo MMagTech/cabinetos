@@ -100,7 +100,9 @@ Agreement and are never part of this image.
 
 Each is built from upstream at the commit below by `cores/build-core.sh`, which
 checks out that exact revision and asserts it, then reads the revision back out
-of the finished `.so` and fails the build if it does not match.
+of the finished `.so` and fails the build if it does not match. MAME 0.289 is
+the one exception: libretro's own build of the commit below, checked by its
+SHA256 and by the revision it reports (`cores/fetch-mame.sh`).
 
 | Core | Systems | Licence | Upstream | Commit |
 |---|---|---|---|---|
@@ -111,6 +113,7 @@ of the finished `.so` and fails the build if it does not match.
 | PicoDrive | Sega 32X | **Non-commercial** | [libretro/picodrive](https://github.com/libretro/picodrive) | `733c711a477a` |
 | Opera | 3DO | **Modified LGPL, non-commercial** (FreeDO terms; the LGPL's version is not stated, and the terms are only in the source headers) | [libretro/opera-libretro](https://github.com/libretro/opera-libretro) | `a501a278d057` |
 | Flycast | Dreamcast, Naomi | GPL v2 | [flyinghead/flycast](https://github.com/flyinghead/flycast) | `a172e0001351` |
+| MAME 0.289 | Arcade | GPL v2 (`COPYING`; some files under less restrictive terms, as their headers say). Its plugins beside it: `boot.lua` BSD 3-clause, the high-score plugin CC0, its JSON library MIT | [libretro/mame](https://github.com/libretro/mame) | `5f5a07748ce5` (libretro's own build, not built here) |
 | PPSSPP | PSP | GPL v2 or later | [hrydgard/ppsspp](https://github.com/hrydgard/ppsspp) | `c989c2553e10` |
 | Dolphin | GameCube (and Wii, from the same core) | GPL v2 or later | [libretro/dolphin](https://github.com/libretro/dolphin) | `1a0f97270b70` |
 | mupen64plus-libretro-nx (bundles GLideN64) | Nintendo 64 | GPL v2 | [libretro/mupen64plus-libretro-nx](https://github.com/libretro/mupen64plus-libretro-nx) | `f275caf4b2bf` |

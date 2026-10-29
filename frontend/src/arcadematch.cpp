@@ -27,6 +27,7 @@ namespace {
 struct Entry {
     bool works = true;
     char flag = '-';    // g a light gun, x made for anything but a controller
+    int buttons = 0;    // player 1's, where the catalogue says (b<n>)
     std::vector<std::pair<uint32_t, int64_t>> files;   // CRC32 and size; size 0 = any
     std::vector<Disc> discs;                           // sha1 empty = by name only
 };
@@ -37,7 +38,7 @@ struct Catalogue {
 };
 
 // THE ORDER, and it is the decision (arcadematch.h).
-constexpr const char* kOrder[] = {"flycast", "fbneo_libretro", "mame2003_plus"};
+constexpr const char* kOrder[] = {"flycast", "fbneo_libretro", "mame2003_plus", "mame_libretro"};
 constexpr size_t kCores = sizeof kOrder / sizeof kOrder[0];
 
 std::string gDir = "cores/build";
@@ -87,9 +88,25 @@ Catalogue parse(const std::string& text) {
         for (size_t i = 3; i < words.size(); ++i) {
             const std::string& w = words[i];
             const size_t colon = w.find(':');
-            if (colon == std::string::npos) continue;
+            if (colon == std::string::npos) {
+                if (w.size() > 1 && w[0] == 'b') e.buttons = std::atoi(w.c_str() + 1);
+                continue;
+            }
             if (w[0] == '@') {
-                e.discs.push_back({lower(w.substr(1, colon - 1)), lower(w.substr(colon + 1))});
+                // A space in a disc's name is written %20, and % as %25.
+                std::string disc;
+                for (size_t k = 1; k < colon; ++k) {
+                    if (w[k] == '%' && k + 2 < colon && w.compare(k, 3, "%20") == 0) {
+                        disc += ' ';
+                        k += 2;
+                    } else if (w[k] == '%' && k + 2 < colon && w.compare(k, 3, "%25") == 0) {
+                        disc += '%';
+                        k += 2;
+                    } else {
+                        disc += w[k];
+                    }
+                }
+                e.discs.push_back({lower(disc), lower(w.substr(colon + 1))});
             } else {
                 e.files.emplace_back(static_cast<uint32_t>(std::strtoul(w.c_str(), nullptr, 16)),
                                      std::strtoll(w.c_str() + colon + 1, nullptr, 10));
@@ -100,28 +117,32 @@ Catalogue parse(const std::string& text) {
     return c;
 }
 
-void load() {
-    std::call_once(gLoaded, [] {
-        for (size_t i = 0; i < kCores; ++i) {
-            std::string file = catalog::coreFileName(kOrder[i]);
-            file.replace(file.size() - 3, 3, ".catalogue");   // fbneo_libretro.so
-            const std::string path = gDir + "/" + file;
-            std::string text;
-            if (FILE* f = std::fopen(path.c_str(), "rb")) {
-                char buf[65536];
-                size_t n;
-                while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n);
-                std::fclose(f);
-            }
-            if (text.empty()) {
-                std::fprintf(stderr, "[arcade] no catalogue at %s: %s plays nothing\n",
-                             path.c_str(), kOrder[i]);
-                continue;
-            }
-            gCat[i] = parse(text);
-            std::fprintf(stderr, "[arcade] %s: %zu sets\n", kOrder[i], gCat[i].sets.size());
+// Every emulator's catalogue in `dir`, in the order. A missing one is said
+// and reads as empty.
+void loadFrom(const std::string& dir, Catalogue* cats) {
+    for (size_t i = 0; i < kCores; ++i) {
+        std::string file = catalog::coreFileName(kOrder[i]);
+        file.replace(file.size() - 3, 3, ".catalogue");   // fbneo_libretro.so
+        const std::string path = dir + "/" + file;
+        std::string text;
+        if (FILE* f = std::fopen(path.c_str(), "rb")) {
+            char buf[65536];
+            size_t n;
+            while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n);
+            std::fclose(f);
         }
-    });
+        if (text.empty()) {
+            std::fprintf(stderr, "[arcade] no catalogue at %s: %s plays nothing\n",
+                         path.c_str(), kOrder[i]);
+            continue;
+        }
+        cats[i] = parse(text);
+        std::fprintf(stderr, "[arcade] %s: %zu sets\n", kOrder[i], cats[i].sets.size());
+    }
+}
+
+void load() {
+    std::call_once(gLoaded, [] { loadFrom(gDir, gCat); });
 }
 
 // The emulators this game is asked of, in order, with their entry for it.
@@ -407,6 +428,86 @@ bool flycastBios(const std::string& fileName) {
     return ext == "zip" && gCat[0].bios.count(set);
 }
 
+int buttons(const char* core, const std::string& fileName) {
+    load();
+    std::string set, ext;
+    nameOf(fileName, &set, &ext);
+    for (size_t i = 0; i < kCores; ++i) {
+        if (std::strcmp(kOrder[i], core) != 0) continue;
+        const auto it = gCat[i].sets.find(set);
+        return it == gCat[i].sets.end() ? 0 : it->second.buttons;
+    }
+    return 0;
+}
+
+// ---- --arcade-changes ------------------------------------------------------------
+
+int changes(const std::string& oldDir, const std::string& newDir) {
+    Catalogue before[kCores], after[kCores];
+    loadFrom(oldDir, before);
+    loadFrom(newDir, after);
+    std::set<std::string> names;
+    for (size_t i = 0; i < kCores; ++i) {
+        for (const auto& [n, e] : before[i].sets) names.insert(n);
+        for (const auto& [n, e] : after[i].sets) names.insert(n);
+    }
+    // What a game shows for an answer: its emulator, or why it does not play.
+    auto said = [](const Answer& a) {
+        return a.verdict == Verdict::Plays ? std::string(a.core) : "(" + a.why + ")";
+    };
+    auto entryIn = [](const Catalogue* cats, const char* core, const std::string& n)
+        -> const Entry* {
+        for (size_t i = 0; i < kCores; ++i) {
+            if (!core || std::strcmp(kOrder[i], core) != 0) continue;
+            const auto it = cats[i].sets.find(n);
+            return it == cats[i].sets.end() ? nullptr : &it->second;
+        }
+        return nullptr;
+    };
+    // The emulators that have the set working, in order: the ones its files
+    // and its disc are tried on at Play.
+    auto tried = [](const Catalogue* cats, const std::string& n) {
+        std::string out;
+        for (const Candidate& k : candidates(cats, n + ".zip", false))
+            out += (out.empty() ? "" : ", ") + std::string(k.core);
+        return out;
+    };
+    size_t moved = 0, refiled = 0, retried = 0;
+    for (const std::string& n : names) {
+        const Answer a = byNameIn(before, n + ".zip", false);
+        const Answer b = byNameIn(after, n + ".zip", false);
+        if (said(a) != said(b)) {
+            std::printf("%s: %s -> %s\n", n.c_str(), said(a).c_str(), said(b).c_str());
+            ++moved;
+            continue;
+        }
+        if (b.verdict != Verdict::Plays) continue;
+        // THE SAME BY NAME, BUT TRIED ON OTHERS AT PLAY: a zip or a disc the
+        // first does not fit falls to the next (MAME 2003-Plus's Killer
+        // Instinct with MAME 0.289's CHD).
+        if (const std::string x = tried(before, n), y = tried(after, n); x != y) {
+            std::printf("%s: %s by name; at Play tried on %s, was %s\n", n.c_str(), b.core,
+                        y.c_str(), x.empty() ? "none" : x.c_str());
+            ++retried;
+            continue;
+        }
+        const Entry* x = entryIn(before, b.core, n);
+        const Entry* y = entryIn(after, b.core, n);
+        if (x && y && (x->files != y->files || x->discs.size() != y->discs.size() ||
+                       !std::equal(x->discs.begin(), x->discs.end(), y->discs.begin(),
+                                   [](const Disc& p, const Disc& q) {
+                                       return p.name == q.name && p.sha1 == q.sha1;
+                                   }))) {
+            std::printf("%s: %s, its files changed\n", n.c_str(), b.core);
+            ++refiled;
+        }
+    }
+    std::printf("arcade changes: %zu sets change emulator, %zu may at Play, %zu keep theirs "
+                "with other files, of %zu\n",
+                moved, retried, refiled, names.size());
+    return 0;
+}
+
 // ---- --arcade-match-test ----------------------------------------------------------
 
 int test() {
@@ -415,7 +516,8 @@ int test() {
         std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
         if (!ok) ++failures;
     };
-    // Three catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus.
+    // Four catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
+    // MAME 0.289.
     Catalogue cats[kCores] = {
         parse("# flycast\n!bios naomi awbios\n"
               "azumanga w - b71ede16:0 @gdl-0018:\n"
@@ -436,7 +538,16 @@ int test() {
               "blockgal n - 00000030:10\n"
               "vliner w - 00000040:10\n"
               "mjhaihai w x 00000050:10\n"
-              "zombraid w g 00000060:10\n"),
+              "zombraid w g 00000060:10\n"
+              "borntofi w - 00000080:10\n"),
+        parse("# mame_libretro\n"
+              "sf2 w - b6 00000001:100 00000003:300\n"
+              "gollygho w - b2 00000009:10\n"
+              "kinst w - b6 00000020:10 @kinst:cccc\n"
+              "raystorm w - b2 00000070:10 @raystorm:dddd\n"
+              "roadburn w - b4 000000a0:10 @road%20burners%20v1.04:eeee\n"
+              "borntofi w g b2 00000080:10\n"
+              "megat w x 00000090:10\n"),
     };
     auto name = [&](const char* f, bool dc = false) { return byNameIn(cats, f, dc); };
     auto files = [&](const char* f, std::vector<Member> m, std::vector<Disc> d = {},
@@ -467,8 +578,19 @@ int test() {
           "one list marking a game no controller's is enough, though another plays it");
     check(name("zombraid.zip").verdict == Verdict::NeedsGun,
           "and one list marking a light-gun game is enough, though the first plays it");
-    check(core(name("gollygho.7z")).empty(),
-          "a 7z is never MAME 2003-Plus's, which cannot open one");
+    check(core(name("gollygho.7z")) == "mame_libretro",
+          "a 7z is never MAME 2003-Plus's, which cannot open one: the next that has it");
+    check(core(name("raystorm.zip")) == "mame_libretro",
+          "MAME 0.289 plays what nothing older has");
+    check(core(name("gollygho.zip")) == "mame2003_plus",
+          "and MAME 2003-Plus comes before it, where both have the set working");
+    check(name("borntofi.zip").verdict == Verdict::NeedsGun,
+          "a game MAME 0.289's list makes a light-gun game needs one, though an older list "
+          "plays it");
+    check(name("megat.zip").verdict == Verdict::NotSupported,
+          "a touchscreen machine in MAME 0.289's list is not supported");
+    check(cats[3].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
+          "MAME 0.289's catalogue says how many buttons a game has; the others say none");
     check(core(name("azumanga.zip", true)) == "flycast",
           "in the Dreamcast folder, a Flycast set is Flycast's");
     check(name("sf2.zip", true).verdict == Verdict::NotSupported,
@@ -496,7 +618,7 @@ int test() {
     check(core(files("kinst.zip", {{"k", 0x20, 10}}, {{"kinst", "AAAA"}})) == "fbneo_libretro",
           "a set FinalBurn Neo has with no disc plays there");
     {
-        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2]};
+        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3]};
         check(core(byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"KINST", "AAAA"}}, false)) ==
                   "mame2003_plus",
               "a disc of the listed name and SHA1 fits, in any case");
@@ -504,7 +626,16 @@ int test() {
             byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"kinst", "bbbb"}}, false);
         check(d.verdict == Verdict::DiscDiffers && d.why == "Its disc image doesn't match its set",
               "a disc of another SHA1 does not fit");
+        check(core(byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"kinst", "cccc"}}, false)) ==
+                  "mame_libretro",
+              "a disc made for MAME 0.289 plays there, though MAME 2003-Plus comes first");
     }
+    check(core(files("raystorm.zip", {{"r", 0x70, 10}}, {{"raystorm", "dddd"}})) ==
+              "mame_libretro",
+          "by files, MAME 0.289's disc game with its CHD plays there");
+    check(core(files("roadburn.zip", {{"r", 0xa0, 10}}, {{"Road Burners v1.04", "EEEE"}})) ==
+              "mame_libretro",
+          "and a disc whose name has spaces, written %20 in the catalogue");
     check(files("hotd2.zip", {{"r", 0xb23d1a0c, 1}}).verdict == Verdict::NeedsGun,
           "by files too, a light-gun game needs a light gun");
     check(files("vliner.zip", {{"v", 0x40, 10}}).verdict == Verdict::NotSupported,

@@ -102,6 +102,15 @@ void App::finishExit() {
     cab::Core::shared().unloadGame();
     vectrexsheets::release();
     closePs2Window();
+    // AND THE EMULATOR SHUT DOWN, retro_deinit, as RetroArch's Close Content
+    // does, before any save below is gathered. Until 2026-10-28 this waited
+    // for the next launch, and libretro MAME writes its NVRAM, settings and
+    // high scores only there (measured on the A9: a quit wrote nothing), so
+    // they came late, or never when the console was switched off. Every core,
+    // since a core may write anything at deinit; the next launch loads it
+    // afresh, as it always has. After closePs2Window, the order PlayStation 2
+    // had at the next launch.
+    cab::Core::shared().unload();
     // AFTER the unload, for the one platform whose save is a tree. The
     // battery above is read out of the core's own memory and is finished
     // the moment the game stopped writing to it; a directory save is files

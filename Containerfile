@@ -77,20 +77,23 @@ FROM ghcr.io/ublue-os/bazzite:44.20261012.1@sha256:5d49529cf809ff5b9e1ba52fd4833
 #                                Moves on a base bump or a change to
 #                                build_files/ or system_files/.
 #    2. the cores         95 MB  pinned, and PCSX2. Moves when one moves.
-#    3. RPCS3            131 MB  pinned. Moves when RPCS3 is bumped.
-#    4. Xenia Edge        21 MB  pinned. Moves when Edge is bumped.
-#    5. Cemu              35 MB  built at a pin by build-cemu.yml.
-#    6. xemu's drive       1 MB  pinned.
-#    7. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
-#    8. the frontend       4 MB  the frontend, the Wii bridge, the
+#    3. MAME 0.289       116 MB  pinned (the core's zip; measured as the
+#                                layer at its first testing image). Moves
+#                                when MAME is bumped, which is seldom.
+#    4. RPCS3            131 MB  pinned. Moves when RPCS3 is bumped.
+#    5. Xenia Edge        21 MB  pinned. Moves when Edge is bumped.
+#    6. Cemu              35 MB  built at a pin by build-cemu.yml.
+#    7. xemu's drive       1 MB  pinned.
+#    8. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#    9. the frontend       4 MB  the frontend, the Wii bridge, the
 #                                controller lists and the shaders. Moves
 #                                with nearly every change.
-#    9. the boot splash  254 MB  the initramfs. Moves with the OS layer.
-#   10. the version       1 kB  every image.
-#   11. the lint               (nothing in it)
+#   10. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   11. the version       1 kB  every image.
+#   12. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
-# ships layer 8, PROVIDED the other layers rebuild to identical bytes. CI
+# ships layer 9, PROVIDED the other layers rebuild to identical bytes. CI
 # builds from nothing every time, so that rests on `podman build --timestamp`
 # in the Justfile, on build.sh stamping the packages it installs with a fixed
 # time (#511), and on there being NO RECHUNK, which throws this order away
@@ -107,6 +110,15 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-frontend.sh cores
+
+# MAME 0.289: libretro's own build of the core, its catalogue and the plugins
+# its high scores need, 416 MB, from the payload (cores/fetch-mame.sh checked
+# every pin). A layer of its own beside the cores: four times their size and
+# moving as rarely, so a change to another core does not ship it again.
+# build_files/install-mame.sh says what goes where.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-mame.sh
 
 # RPCS3, the PS3 emulator: the RPCS3 team's own build, pinned by checksum,
 # 338 MB. Beside the cores because it moves as rarely as they do. Not from

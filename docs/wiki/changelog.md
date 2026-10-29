@@ -8,8 +8,11 @@ one you install, so you only ever install the newest.
 
 - **New:** Sega Naomi, Naomi 2 and Atomiswave games now play, and CPS1, CPS2
   and Neo Geo folders get tiles of their own. Each arcade game now picks its
-  emulator from the files in its zip: see [Systems](systems.md#arcade) on the
+  emulator from the files in its zip: see [Systems](systems.md) on the
   wiki for how to set out arcade folders.
+- **New:** MAME 0.289 joins, for arcade games nothing else here plays: CPS3,
+  ST-V and many more. High scores are kept. A CPS3 CD set installs once,
+  about 22 minutes; the No CD sets start at once.
 
 ## 2026.10.27.3 {#v2026-10-27-3}
 
@@ -90,7 +93,7 @@ one you install, so you only ever install the newest.
   own settings: in a MAME 2003-Plus game, MAME's menu, whose **Dip Switches**
   set the difficulty, the lives and the rest; in a FinalBurn Neo game, the
   board's own test menu, where the board has one. Hold Start again to close
-  MAME's menu. See [Arcade](systems.md#arcade).
+  MAME's menu. See [Arcade](arcade.md).
   ([#580](https://github.com/MMagTech/cabinetos/pull/580))
 - **Fixed:** leaving a MAME 2003-Plus game with both stick clicks could
   open MAME's DIP switch menu. It no longer does.

@@ -15,6 +15,11 @@ picodrive-authors      libretro/picodrive                  733c711a477a642fd2006
 opera                  libretro/opera-libretro             a501a278d057b952d1ad6165549c59ab178ca497  libopera/opera_arm.c#L1-29
 # --- the other cores ---
 flycast                flyinghead/flycast                  a172e0001351dfbc49b86860a13d5390b1c493fe  LICENSE
+# MAME 0.289, libretro's own build of this commit (cores/fetch-mame.sh), and
+# the high-score plugin's json library, which ships beside it.
+mame                   libretro/mame                       5f5a07748ce5c239c4118463ce8e6473743d4859  COPYING
+mame-gpl2              libretro/mame                       5f5a07748ce5c239c4118463ce8e6473743d4859  docs/legal/GPL-2.0
+mame-json-plugin       libretro/mame                       5f5a07748ce5c239c4118463ce8e6473743d4859  plugins/json/LICENSE
 ppsspp                 hrydgard/ppsspp                     c989c2553e1099730736d965c221823fe974fa55  LICENSE.TXT
 ppsspp-ffmpeg          hrydgard/ppsspp-ffmpeg              b87f7c6d522d1edba77cfc4fac96ce48a236f806  LICENSE.md
 ppsspp-ffmpeg-lgpl     hrydgard/ppsspp-ffmpeg              b87f7c6d522d1edba77cfc4fac96ce48a236f806  COPYING.LGPLv2.1
