@@ -68,3 +68,5 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 ### Building and checking
 
 ### How we work
+
+- [wiki-side-list-groups](2026-10-29-wiki-side-list-groups.md): the wiki's side list has five groups, Set it up, Playing, Systems, Settings and Help, each with one rule for what goes in it.

@@ -1,4 +1,4 @@
-# Picture and colours
+# Display and Sound
 
 ![Display and Sound in Settings](../media/settings-display.webp)
 
@@ -58,7 +58,7 @@ behind the menu as you choose, and the choice is kept for that system.
 
 | Systems | Looks | Starts on |
 |---|---|---|
-| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx-16 and CD, Atari 2600 and 7800, arcade, PlayStation, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
+| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx-16 and CD, Atari 2600 and 7800, PlayStation, Saturn, and every arcade folder, which share one choice | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
 | Nintendo 64, Dreamcast, 3DO | Plain, Sharp, CRT easymode, CRT lottes, CRT aperture | CRT easymode |
 | Game Boy Advance, Game Gear, Neo Geo Pocket Color | Plain, Sharp, LCD 3x, LCD grid, LCD zfast | LCD 3x |
 | Game Boy | as above, plus Dot matrix and Dot matrix Pocket | LCD 3x |
@@ -113,5 +113,16 @@ two every few minutes, to be kind to OLED TVs.
 
 ## Sound
 
-**Interface sounds**: Off, Quiet, Medium or Loud, for the menu sounds. Game
-volume is the TV's.
+The sound plays on the TV the picture is on. Headphones in a jack that senses
+the plug take it over while they are in, and give it back when they come out.
+Nothing else takes it from the TV: not a speaker built into the PC's case, and
+not a USB sound card or headset. There is no setting for it. When the screen
+turns off or the TV sleeps, the sound comes back with the picture.
+
+The volume is the TV's. The volume keys on a keyboard change it too, and it
+goes back to full each time the console starts.
+
+- **Interface sounds**: Off, Quiet, Medium or Loud, for the menu sounds.
+- **Achievement sound**: the same, for the chime when you unlock an
+  achievement. It shows once you are signed in to
+  [RetroAchievements](achievements.md).

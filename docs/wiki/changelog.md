@@ -14,6 +14,15 @@ one you install, so you only ever install the newest.
   settings from MAME do not carry over, and their save states can no longer
   be loaded, since sm2-emu has none.
 
+## 2026.10.29.6 {#v2026-10-29-6}
+
+- **Changed:** arcade folders keep working after RomM's next update, which
+  gives MAME, FinalBurn Neo, Naomi and Atomiswave folders labels of their
+  own. A Gaelco folder now gets a tile. CPS and Neo Geo games now start on
+  the CRT look like the other arcade games, and all arcade folders share one
+  Look choice.
+  ([#610](https://github.com/MMagTech/cabinetos/pull/610))
+
 ## 2026.10.29.5 {#v2026-10-29-5}
 
 - **Fixed:** pausing a Switch, PS3, Xbox, Xbox 360, Wii U or PS Vita game

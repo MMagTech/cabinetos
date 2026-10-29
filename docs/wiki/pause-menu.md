@@ -44,7 +44,7 @@ Rows appear only where they apply:
 - **Picture**: only on systems with picture levels, and only for the owner
   when a PIN is set.
 - **Widescreen**: only on PS2 games that have a widescreen patch.
-- **Look**: only on systems that have looks. See [Picture and colours](picture.md).
+- **Look**: only on systems that have looks. See [Display and Sound](picture.md#screen-looks).
 - **Change disc**: only on a game with several discs. Not on GameCube, which
   changes discs by itself; 3DO has Insert and restart only. On Saturn Insert
   goes through the console's CD player screen: press Start there.
