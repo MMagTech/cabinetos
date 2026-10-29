@@ -4,6 +4,14 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.10.29.4 {#v2026-10-29-4}
+
+- **Changed:** with In-game shortcuts off, as a console starts, games no
+  longer keep a rewind history in the background that nothing could use.
+  It took memory and a little of the game's time twice a second. With
+  shortcuts on, rewind works as before.
+  ([#609](https://github.com/MMagTech/cabinetos/pull/609))
+
 ## 2026.10.29.3 {#v2026-10-29-3}
 
 - **New:** MAME 0.289 joins, for arcade games nothing else here plays: CPS3,
