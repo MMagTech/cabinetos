@@ -37,6 +37,15 @@ Offset pixelShift(double seconds, float scale, double everySeconds) {
     return Offset{(col - n) * px, (row - n) * px};
 }
 
+float overlayDepth(float depth) {
+    // What this window keeps of the picture, as the light it stands for
+    // (the sRGB curve), is what gamescope must keep.
+    const float keep = 1.0f - depth;
+    const float light = keep <= 0.04045f ? keep / 12.92f
+                                         : std::pow((keep + 0.055f) / 1.055f, 2.4f);
+    return 1.0f - light;
+}
+
 const char* name(Level l) {
     switch (l) {
         case Level::Awake: return "awake";
@@ -164,6 +173,14 @@ int test() {
         check(w.update(kGameDimAfter, true) == Level::Dim, "a game in play dims at 20 minutes");
         check(w.update(kGameDimAfter + off, true) == Level::Dim, "and never goes off");
     }
+    {
+        // gamescope's mix of the overlay, in linear light, back to sRGB.
+        const float light = 1.0f - overlayDepth(kDimDepth);
+        const float shown = 1.055f * std::pow(light, 1.0f / 2.4f) - 0.055f;
+        check(std::fabs(shown - (1.0f - kDimDepth)) < 0.002f,
+              "the dim over a game in its own emulator leaves white at 40%, as everywhere");
+        check(overlayDepth(0.0f) == 0.0f, "and no dim is no dim");
+    }
     std::printf("%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;
 }
@@ -184,14 +201,16 @@ int savedScreenOff() {
 //
 // After the keyboard and the guides, because it is not part of the
 // interface; it is the television resting. At full depth it is also
-// the blank wherever gamescope cannot put the output to sleep.
-void App::drawDim() {
+// the blank wherever gamescope cannot put the output to sleep. ON THE
+// OVERLAY, over a game in its own emulator, it is drawn deeper so it looks
+// the same (idle::overlayDepth).
+void App::drawDim(bool onOverlay) {
     const float d = dimLayer.value();
     if (d > 0.001f) {
         const float keep = renderer.contentAlpha();
         renderer.setContentAlpha(1.0f);
         renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, ui::kCanvasHeight, 0,
-                               ui::Color::black(d)});
+                               ui::Color::black(onOverlay ? idle::overlayDepth(d) : d)});
         renderer.setContentAlpha(keep);
     }
 }

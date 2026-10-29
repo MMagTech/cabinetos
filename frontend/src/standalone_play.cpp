@@ -694,7 +694,9 @@ void App::endPointer() {
 // (startStandalone), drawn transparent wherever nothing is. The dots are
 // white for the left stick's, red for the right's, as Sony's two pointers
 // are; each with a dark rim so it shows on any picture, and a little
-// smaller while it touches. The dim goes over them, as over everything.
+// smaller while it touches. The dim goes over them, as over everything,
+// deeper than elsewhere because gamescope mixes this window in linear light
+// (idle::overlayDepth), so the game under it dims as much as any other.
 // NEITHER MOVES WITH THE PIXEL SHIFT: this window cannot move the game's
 // picture, and a dim moved off it would leave a bright strip at one edge.
 void App::drawOverGame() {
@@ -718,7 +720,7 @@ void App::drawOverGame() {
         dot.shadowColor = ui::Color::black(0.4f);
         renderer.draw(dot);
     }
-    drawDim();
+    drawDim(/*onOverlay=*/true);
     standaloneDimDrawn = dimLayer.value();
     renderer.setPixelShift(shiftShown.dx, shiftShown.dy);
     SDL_GL_SwapWindow(window);

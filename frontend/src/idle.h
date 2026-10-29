@@ -78,6 +78,13 @@ constexpr float kDimDepth = 0.6f;
 constexpr float kDimFadeSeconds = 2.0f;    // going down is unhurried
 constexpr float kWakeFadeSeconds = 0.25f;  // coming back answers the press
 
+// THE SAME DIM OVER A GAME IN ITS OWN EMULATOR (#606). This window mixes the
+// dim into its picture as the values stand, but gamescope mixes this window
+// over another program's in linear light, where the same black lifts less:
+// at 0.6 it left that game's white at 170 of 255 on the A9, not 102. This is
+// the opacity there that leaves the picture as dark as `depth` does here.
+float overlayDepth(float depth);
+
 // A WAKE IS NOT A CHOICE (#411, docs/decisions/2026-10-27-a-wake-is-not-a-choice.md).
 // After the screen comes back from off, the machine comes back from Rest
 // (power::justWoke) or a device starts streaming, no press does anything in a

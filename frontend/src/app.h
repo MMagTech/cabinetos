@@ -2290,7 +2290,7 @@ struct App {
     // notice.cpp
     void drawNotice(float sc);
     // idle.cpp
-    void drawDim();
+    void drawDim(bool onOverlay = false);
     void wakeTvAtExit();
     // input.cpp
     void handleEvent(const SDL_Event& e);
