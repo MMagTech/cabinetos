@@ -39,16 +39,18 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **The arcade expansion, piece 1, on the TV** (PR #601, "Arcade:
-   pick each game's emulator from its zip; Naomi, Atomiswave and the CPS
-   and Neo Geo tiles"). Built and run headless on the A9; it waits for his
-   TV checks, then the testing push and his go to merge. Pieces 2 (MAME
-   0.289), 3 (sm2-emu, Model 2) and 4 (Supermodel, Model 3, after its gate
-   run) follow, each in a fresh session, from the approved arcade build plan
-   of 2026-10-28 in his research notes. Piece 2 also gives Arcade a wiki page
-   of its own, `docs/wiki/arcade.md` (his go, 2026-10-28): the Arcade section
-   of `docs/wiki/systems.md` moved there and grown with piece 2's text, the
-   systems table's Arcade row linking to it.
+1. **The arcade expansion, pieces 1 and 2, on the TV.** Piece 1 is PR
+   #601, "Arcade: pick each game's emulator from its zip; Naomi, Atomiswave
+   and the CPS and Neo Geo tiles", on testing, waiting for his go to merge.
+   Piece 2 is PR #605, "Arcade: MAME 0.289 for the games nothing older
+   plays, with high scores", built and run headless on the A9; it carries
+   #601's commits until #601 merges. Before its testing push MMagTech
+   publishes the release `prebuilt-mame-0.289` (a draft now; marked a
+   pre-release, not the latest), which the image build downloads; then its
+   TV checks, then his go to merge. Pieces 3 (sm2-emu, Model 2) and 4
+   (Supermodel, Model 3, after its gate run) follow, each in a fresh
+   session, from the approved arcade build plan of 2026-10-28 in his
+   research notes.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
    2026-10-28, at the TV).** Flycast feeds the analog stick only to a
    board's analog controls, so a game with a plain lever (Trigger Heart
