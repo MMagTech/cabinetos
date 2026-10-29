@@ -309,6 +309,16 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
 using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
 
 auto App::launchById(int romId) -> bool {
+    // NEVER OVER AN EMULATOR OF ITS OWN THAT IS STILL RUNNING, paused or
+    // not: its game would be left running unseen, frozen, its saves never
+    // sent, while a second started (seen on the A9, 2026-10-29; nav.cpp's
+    // inputOwner keeps the press that did it from the screens). Leaving it
+    // is Exit to Home.
+    if (standaloneRun.active()) {
+        std::fprintf(stderr, "[launch] %d not started: %s is still running\n", romId,
+                     standaloneRun.emulator()->program);
+        return false;
+    }
     // PRESSING PLAY ON SOMETHING ALREADY COMING JOINS IT — 2026-09-21.
     //
     // A download started by "Download and keep" runs in the background and
