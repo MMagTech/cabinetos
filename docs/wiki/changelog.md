@@ -10,6 +10,10 @@ one you install, so you only ever install the newest.
   played for longer than **Turn off screen after** turned the screen off at
   once. The time now counts from the pause, as in every other game.
   ([#604](https://github.com/MMagTech/cabinetos/issues/604))
+- **Fixed:** a Switch, PS3, Xbox, Xbox 360, Wii U or PS Vita game left
+  running with nobody pressing anything stayed at full brightness. It now
+  dims after 20 minutes, as every other game does, and any press brings it
+  back.
 
 ## 2026.10.29 {#v2026-10-29}
 
