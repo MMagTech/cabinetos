@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.29.6 {#v2026-10-29-6}
 
 - **Changed:** arcade folders keep working after RomM's next update, which
   gives MAME, FinalBurn Neo, Naomi and Atomiswave folders labels of their
