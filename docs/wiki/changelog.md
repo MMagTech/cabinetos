@@ -4,6 +4,20 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** every arcade folder in RomM is now one Library tile, **Arcade**,
+  in title order, with greyed games last. As you move through it, the line
+  beside the heading names each game's folder, such as
+  *Metal Slug · NeoGeoMVS*. Everywhere else (Search, collections, Home and a
+  game's page) an arcade game's system is *Arcade*. Your folders in RomM stay
+  as they are; for one board on its own, make a RomM collection. See
+  [Arcade](arcade.md). ([#611](https://github.com/MMagTech/cabinetos/issues/611))
+- **Changed:** the console says *the server*, not *your server*, since it may
+  be someone else's: *No Sega Saturn BIOS on the server*, *Waiting for the
+  server*. A missing arcade BIOS names its folder: *No Naomi BIOS on the
+  server*.
+
 ## 2026.10.29.7 {#v2026-10-29-7}
 
 - **New:** Sega Model 2 games now play, in sm2-emu: Daytona USA, Sega Rally,

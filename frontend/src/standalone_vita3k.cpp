@@ -177,9 +177,9 @@ bool installVitaFirmware(const Emulator& e, const std::atomic<bool>& cancel,
     const auto missing = [&](bool somethingFailed) {
         if (!hasSystemSoftware(e))
             *message = somethingFailed ? "Couldn't install the PlayStation Vita firmware"
-                                       : "No PlayStation Vita firmware on your server";
+                                       : "No PlayStation Vita firmware on the server";
         else
-            *message = "No PlayStation Vita font package on your server";
+            *message = "No PlayStation Vita font package on the server";
         return false;
     };
     // Nothing on the server, or no server: whatever is installed stands.

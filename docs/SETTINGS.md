@@ -283,7 +283,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   **Built, #60.**
 - **And from the startup screen, when the server does not answer.** A
   server whose IP changed is exactly the console that never reaches
-  Settings. So "Waiting for your server, 12s" gains a second, brighter line
+  Settings. So "Waiting for the server, 12s" gains a second, brighter line
   after 10 s: "Press (A) to change the server address". A opens the PIN pad
   if one is set, then the same keyboard and check as Settings. The same
   server at the new address: the start carries on there, no restart. A

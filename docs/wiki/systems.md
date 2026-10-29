@@ -8,7 +8,7 @@ and keys. CabinetOS ships none of them.
 
 - **One Library tile per RomM platform.** The console matches RomM's platform
   slug (the left column below). The tile's name is RomM's own name for the
-  platform.
+  platform. Every arcade folder is one tile, **Arcade** ([Arcade](arcade.md)).
 - **A platform the console cannot play gets no tile.** Its games still show in
   Search and in collections.
 - **A tile whose emulator is still being set up is greyed**, with *Emulator not
@@ -29,8 +29,9 @@ downloads anything new into the console's shared BIOS folder.
   names given are the usual ones.
 - Offline, the console uses what it already has.
 - When a required BIOS is missing, the game does not start and the screen says
-  so, for example *No Sega Saturn BIOS on your server*. For Switch, PS3 and
-  Xbox it says *keys*, *firmware* or *BIOS*.
+  so, for example *No Sega Saturn BIOS on the server*. For Switch, PS3 and
+  Xbox it says *keys*, *firmware* or *BIOS*. For an arcade game it names the
+  folder the BIOS goes in, for example *No Naomi BIOS on the server*.
 
 ## File formats in short
 

@@ -216,7 +216,7 @@ void App::watchPs2Start() {
     if (playClock.active()) playClock.finish(playtime::wallMs());
     finishExit();
     refuseLaunch(launchJob.biosMissing.load()
-                     ? "No " + launchJob.systemName + " BIOS on your server"
+                     ? "No " + launchJob.systemName + " BIOS on the server"
                      : std::string("Disc can't be read"));
 }
 

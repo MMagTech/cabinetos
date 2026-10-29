@@ -705,8 +705,8 @@ struct App {
     // every screen that draws from it.
     struct CoverFill {
         std::mutex m;
-        std::vector<std::pair<int, std::string>> done;   // platform id -> cover
-        std::vector<int> want;
+        std::vector<std::pair<int, std::string>> done;   // tile id -> cover
+        std::vector<std::pair<int, std::string>> want;   // tile id, its query
         std::atomic<size_t> next{0};
         std::atomic<bool> quit{false};
         std::vector<std::thread> workers;

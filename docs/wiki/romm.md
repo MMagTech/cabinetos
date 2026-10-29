@@ -16,8 +16,8 @@ your library. These things matter to CabinetOS:
    The slugs it plays are listed in [Systems, formats and BIOS](systems.md).
    Anything RomM recognises with the right slug appears as a Library tile.
 2. **Arcade.** One folder for each arcade system, named the way RomM knows
-   it. The console picks each game's emulator from the files in its zip. See
-   [Arcade](arcade.md).
+   it. The console shows them all as one Arcade tile, and picks each game's
+   emulator from the files in its zip. See [Arcade](arcade.md).
 3. **Firmware.** Put BIOS files, firmware and keys in RomM as firmware for the
    platform they belong to. The console downloads them when you first play that
    system. The exact files are in [Systems, formats and BIOS](systems.md).

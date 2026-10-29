@@ -151,7 +151,7 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
                  bool playWhenReady, bool keepWhenReady) {
     const catalog::Coverage cov = catalog::coverageFor(game);
     if (cov.support != catalog::Support::Playable || !cov.core) {
-        *err = game.platformName + ": " + (cov.reason ? cov.reason : "not playable here");
+        *err = catalog::systemName(game) + ": " + (cov.reason ? cov.reason : "not playable here");
         return false;
     }
 
@@ -166,7 +166,11 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
     job.title = game.name.empty() ? game.fsName : game.name;
     job.romId = game.id;
     job.platformFsSlug = game.platformFsSlug;
-    job.systemName = game.platformName;
+    // A MISSING BIOS NAMES THE PLATFORM IT IS UPLOADED TO, which for an
+    // arcade game is its folder: every arcade folder is "Arcade" on screen
+    // (#611).
+    job.systemName = arcadematch::isArcadeSlug(game.platformSlug) ? catalog::folderName(game)
+                                                                   : game.platformName;
     job.biosMissing = false;
     job.platformSlug = game.platformSlug;
     job.titleId = game.titleId;
@@ -864,7 +868,7 @@ bool App::loadLaunchedGame(LaunchContext& c) {
         // game's own screen and says it there, rather than inventing a
         // second place for refusals to live. See refuseLaunch.
         refuseLaunch(launchJob.biosMissing.load()
-                         ? "No " + launchJob.systemName + " BIOS on your server"
+                         ? "No " + launchJob.systemName + " BIOS on the server"
                          : std::string("Couldn't start this game"));
         return false;
     }
