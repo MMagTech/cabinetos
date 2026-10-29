@@ -47,9 +47,13 @@ RomM: keep test launches under a minute, or have his go.
    2026.10.29.7, with a fix for a press as a separate emulator's pause menu
    fades out. Its "For your call" list (the Controls row in Model 2 games,
    holding Start there, one arcade wiki line) waits on him, one at a time.
-   Piece 4 (Supermodel, Model 3) has its own session, which starts with
-   the gate run of his 17 Model 3 games on the A9, from the approved arcade
-   build plan of 2026-10-28 in his research notes. Waiting in Later: #608,
+   Piece 4, #616, "Arcade: Sega Model 3 games play in Supermodel", is
+   open: 15 of his 17 Model 3 games reached gameplay at 4K on the A9, with
+   Supermodel's net board linked to itself (his yes, 2026-10-29). Waiting on
+   him, one at a time: Dirt Devils, which waits for itself forever linked to
+   itself and plays with the board off (the PR's "For your call"); then Star
+   Wars Trilogy, which stops at its control check; then the TV checks the
+   PR lists, before any testing push. Waiting in Later: #608,
    "FinalBurn Neo games keep no high scores", planned with him before
    anything is built.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
