@@ -78,7 +78,8 @@ int sendOwedBeforeRemoving(const accounts::Account& who, const std::string& addr
 // downloads are released (a game nobody else downloaded drops to the cache:
 // still playable, cleared when room is needed), then their folder goes, then
 // the login LAST, so a power cut at any point leaves them listed and Remove
-// can simply be run again. Nothing on RomM is touched.
+// can simply be run again. Nothing on RomM is touched here; the callers
+// revoke the person's token after (accounts::revoke, #484).
 bool removePersonNow(const accounts::Account& who, std::string* err) {
     if (!accounts::canRemove(who.id, err)) return false;
     storage::User u;
