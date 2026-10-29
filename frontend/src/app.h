@@ -836,6 +836,9 @@ struct App {
     // next frame this window drew, which was the pause menu (2026-09-28,
     // Metroid Prime 4 loading behind its own launch page).
     int standaloneClearFrames = 0;
+    // The dim this window last drew over the game in play (drawOverGame), so
+    // a frame is drawn only while it changes.
+    float standaloneDimDrawn = 0.0f;
     // The shortcut button's tap, per player, as the in-process path reads it:
     // down, and whether anything else was pressed while it was, and by which
     // pad: a hold whose pad left is dropped, not released (ShortcutHold).
@@ -2246,7 +2249,7 @@ struct App {
     void pointerTick(float dt);
     void showPointer(bool on, int player);
     void endPointer();
-    void drawPointer();
+    void drawOverGame();
     // play.cpp
     void followRemotesInGame();
     bool readGameInput(cab::Core& core);
@@ -2287,7 +2290,7 @@ struct App {
     // notice.cpp
     void drawNotice(float sc);
     // idle.cpp
-    void drawDim();
+    void drawDim(bool onOverlay = false);
     void wakeTvAtExit();
     // input.cpp
     void handleEvent(const SDL_Event& e);
