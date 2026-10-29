@@ -58,7 +58,7 @@ behind the menu as you choose, and the choice is kept for that system.
 
 | Systems | Looks | Starts on |
 |---|---|---|
-| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx-16 and CD, Atari 2600 and 7800, arcade, PlayStation, Saturn | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
+| NES, SNES, Genesis, Master System, Sega CD, 32X, TurboGrafx-16 and CD, Atari 2600 and 7800, PlayStation, Saturn, and every arcade folder, which share one choice | Plain, Sharp, CRT easymode, CRT easymode halation, CRT lottes, CRT geom, CRT zfast, CRT aperture, CRT guest | CRT easymode |
 | Nintendo 64, Dreamcast, 3DO | Plain, Sharp, CRT easymode, CRT lottes, CRT aperture | CRT easymode |
 | Game Boy Advance, Game Gear, Neo Geo Pocket Color | Plain, Sharp, LCD 3x, LCD grid, LCD zfast | LCD 3x |
 | Game Boy | as above, plus Dot matrix and Dot matrix Pocket | LCD 3x |

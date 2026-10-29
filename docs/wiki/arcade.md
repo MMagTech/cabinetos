@@ -12,6 +12,7 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
   | `stv` | Sega ST-V |
   | `model2`, `model3` | Sega Model 2 and Model 3 |
   | `fbneo` | FinalBurn Neo sets |
+  | `gaelco` | Gaelco |
   | `arcade` or `mame` | everything else |
 
 - **Sets:** non-merged, for MAME 0.289 or MAME 2003-Plus (0.78), as zip or 7z. MAME 0.289 sets also play in FinalBurn Neo and Flycast. MAME 2003-Plus plays only zip.

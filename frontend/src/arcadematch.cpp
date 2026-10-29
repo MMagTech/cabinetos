@@ -357,8 +357,9 @@ bool sevenZipMembers(const std::string& path, std::vector<Member>* out, std::str
 }  // namespace
 
 bool isArcadeSlug(const std::string& slug) {
-    for (const char* s : {"arcade", "cps1", "cps2", "cps3", "neogeomvs", "neogeoaes", "stv",
-                          "model2", "model3"})
+    for (const char* s : {"arcade", "mame", "mame-advmame", "fbneo", "fba", "naomi", "naomi2",
+                          "naomigd", "atomiswave", "gaelco", "cps1", "cps2", "cps3", "neogeomvs",
+                          "neogeoaes", "stv", "model2", "model3"})
         if (slug == s) return true;
     return false;
 }
@@ -642,6 +643,13 @@ int test() {
           "and a game no controller plays is not supported, whatever its files");
     check(cats[0].bios.count("naomi") && cats[0].bios.count("awbios"),
           "Flycast's BIOS zips are read from its !bios line");
+    check(isArcadeSlug("arcade") && isArcadeSlug("cps2") && isArcadeSlug("neogeomvs"),
+          "RomM 5.4's arcade labels are arcade folders");
+    check(isArcadeSlug("mame") && isArcadeSlug("fbneo") && isArcadeSlug("naomi") &&
+              isArcadeSlug("naomigd") && isArcadeSlug("atomiswave") && isArcadeSlug("gaelco"),
+          "and so are the labels RomM gives each emulator's folder after rommapp/romm#5273");
+    check(!isArcadeSlug("triforce") && !isArcadeSlug("lindbergh") && !isArcadeSlug("dc"),
+          "a board no emulator here plays is not, nor is Dreamcast");
 
     std::printf("%s\n", failures ? "arcade match test: FAILED" : "arcade match test: passed");
     return failures ? 1 : 0;

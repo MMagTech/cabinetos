@@ -54,7 +54,7 @@ downloads anything new into the console's shared BIOS folder.
 | System | RomM slug | Emulator | Formats | BIOS, firmware or keys |
 |---|---|---|---|---|
 | 3DO | `3do` | Opera | iso, bin, chd, cue | **Required:** `panafz10.bin` (1 MB, any name) |
-| Arcade | `arcade`, `mame`, `fbneo`, `cps1`, `cps2`, `cps3`, `neogeomvs`, `naomi`, `naomi2`, `naomigd`, `atomiswave`, `stv`, `model2`, `model3` | FinalBurn Neo, MAME 2003-Plus, MAME 0.289, Flycast | zip, 7z | Naomi and Atomiswave: their BIOS zips. See [Arcade](arcade.md) |
+| Arcade | `arcade`, `mame`, `mame-advmame`, `fbneo`, `fba`, `cps1`, `cps2`, `cps3`, `neogeomvs`, `neogeoaes`, `naomi`, `naomi2`, `naomigd`, `atomiswave`, `gaelco`, `stv`, `model2`, `model3` | FinalBurn Neo, MAME 2003-Plus, MAME 0.289, Flycast | zip, 7z | Naomi and Atomiswave: their BIOS zips. See [Arcade](arcade.md) |
 | Atari 2600 | `atari2600` | Stella 2014 | a26, bin | None |
 | Atari 7800 | `atari7800` | ProSystem | a78, bin | None |
 | Dreamcast | `dc` | Flycast | chd, cdi, gdi, cue, m3u | Optional: `dc_boot.bin` (2 MB, any name). Without it Flycast uses its own. |

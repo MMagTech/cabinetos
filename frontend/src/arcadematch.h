@@ -38,8 +38,13 @@
 namespace arcadematch {
 
 // The RomM platform slugs whose games are arcade games, all picked here:
-// `arcade` (RomM's own for MAME, FinalBurn Neo, Naomi and Atomiswave folders),
-// `cps1`, `cps2`, `cps3`, `neogeomvs`, `neogeoaes`, `stv`, `model2`, `model3`.
+// `arcade`, `cps1`, `cps2`, `cps3`, `neogeomvs`, `neogeoaes`, `stv`, `model2`,
+// `model3`, and the labels RomM gives each emulator's folder from
+// rommapp/romm#5273 on: `mame`, `mame-advmame`, `fbneo`, `fba`, `naomi`,
+// `naomi2`, `naomigd` and `atomiswave` (RomM 5.4 called them all `arcade`),
+// and `gaelco`, whose games FinalBurn Neo and MAME play. RomM's other new
+// boards (Triforce, Chihiro, Lindbergh, Hikaru and the like) have no emulator
+// here, so get no tile.
 // Dreamcast's folder is not one, though a zip in it is asked about Flycast.
 bool isArcadeSlug(const std::string& slug);
 
