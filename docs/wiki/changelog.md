@@ -4,6 +4,13 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** pausing a Switch, PS3, Xbox, Xbox 360, Wii U or PS Vita game
+  played for longer than **Turn off screen after** turned the screen off at
+  once. The time now counts from the pause, as in every other game.
+  ([#604](https://github.com/MMagTech/cabinetos/issues/604))
+
 ## 2026.10.29 {#v2026-10-29}
 
 - **New:** Sega Naomi, Naomi 2 and Atomiswave games now play, and CPS1, CPS2

@@ -195,7 +195,8 @@ void App::finishStandalone() {
     curtain.elapsed = curtain.duration;
     curtain.retarget(0.0f, kCurtainUp);
     // Nothing reached this loop while the emulator had the screen, so the
-    // idle timers think nobody has touched anything since the launch.
+    // idle timers think nobody has touched anything since the launch or the
+    // last pause (openStandaloneMenu).
     idleWatch.input(clockSeconds());
     switch (standaloneRun.ended()) {
         case cab::standalone::Run::End::CouldNotLoad:
@@ -256,6 +257,12 @@ void App::openStandaloneMenu() {
     standalonePaused = true;
     for (auto& sh : standaloneShortcut) sh = {};
     for (auto& bs : backStart) bs = {};
+    // THE SCREEN-OFF TIMER STARTS AGAIN AT THE PAUSE (#604). No press
+    // reached it while the emulator had the screen (takeStandaloneEvent),
+    // so it still counted from the launch, and a game played past the
+    // screen-off time went dark the instant the menu opened. However the
+    // menu opened, somebody is there now.
+    idleWatch.input(clockSeconds());
     toggleOverlay();
     std::fprintf(stderr, "[standalone] paused\n");
 }
