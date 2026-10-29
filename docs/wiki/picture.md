@@ -1,4 +1,4 @@
-# Picture and colours
+# Display and Sound
 
 ![Display and Sound in Settings](../media/settings-display.webp)
 
@@ -113,5 +113,16 @@ two every few minutes, to be kind to OLED TVs.
 
 ## Sound
 
-**Interface sounds**: Off, Quiet, Medium or Loud, for the menu sounds. Game
-volume is the TV's.
+The sound plays on the TV the picture is on. Headphones in a jack that senses
+the plug take it over while they are in, and give it back when they come out.
+Nothing else takes it from the TV: not a speaker built into the PC's case, and
+not a USB sound card or headset. There is no setting for it. When the screen
+turns off or the TV sleeps, the sound comes back with the picture.
+
+The volume is the TV's. The volume keys on a keyboard change it too, and it
+goes back to full each time the console starts.
+
+- **Interface sounds**: Off, Quiet, Medium or Loud, for the menu sounds.
+- **Achievement sound**: the same, for the chime when you unlock an
+  achievement. It shows once you are signed in to
+  [RetroAchievements](achievements.md).
