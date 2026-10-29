@@ -11,6 +11,7 @@ one you install, so you only ever install the newest.
   own. A Gaelco folder now gets a tile. CPS and Neo Geo games now start on
   the CRT look like the other arcade games, and all arcade folders share one
   Look choice.
+  ([#610](https://github.com/MMagTech/cabinetos/pull/610))
 
 ## 2026.10.29.4 {#v2026-10-29-4}
 
