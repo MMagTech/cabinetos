@@ -54,6 +54,9 @@ LISTXML_URL=https://github.com/mamedev/mame/releases/download/mame0289/mame0289l
 LISTXML_SHA256=d5d8f40223aef8afddbb846c003402d4e348d07d3a867e6686267895ddbd2817
 
 OUT="${1:?usage: cores/fetch-mame.sh <out dir> [downloads dir]}"
+# Absolute: podman takes a relative path in -v for a volume's name.
+mkdir -p "${OUT}"
+OUT="$(cd "${OUT}" && pwd)"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILDER="${CABINETOS_BUILDER:-cabinetos-builder}"
 tmp=$(mktemp -d)
