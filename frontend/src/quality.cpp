@@ -175,7 +175,7 @@ Level forGame(int romId) {
 bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
-                          "eden", "rpcs3", "xemu", "vita3k", "sm2emu"})
+                          "eden", "rpcs3", "xemu", "vita3k", "sm2emu", "supermodel"})
         if (core == c) return true;
     return false;
 }
@@ -385,6 +385,16 @@ int sm2emu(Level l) {
     // upscaling and translucency stay at its faithful defaults.
     static const int kScale[] = {1, 3, 6};
     return pick(l, kScale);
+}
+
+int supermodelLines(Level l) {
+    // SEGA MODEL 3, 496x384, drawn at the size it is given: 720, 1080 and
+    // 2160 lines, at most the screen's, in its shape
+    // (standalone_supermodel.cpp). Measured on the A9 at 2160, 2026-10-29:
+    // all 17 games in the reference library ran at 60 frames a second, the
+    // median frame 16.7 ms.
+    static const int kLines[] = {720, 1080, 2160};
+    return pick(l, kLines);
 }
 
 void logApplied(const std::string& who, int romId, Level l) {

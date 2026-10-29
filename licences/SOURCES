@@ -64,6 +64,10 @@ cemu                   cemu-project/Cemu                   4e3c824faa00f6b85782d
 sm2emu                 dmanlfc/sm2-emu                     4c290c558afaaa85956fa2364971c92cfde707cf  LICENSE
 sm2emu-notice          dmanlfc/sm2-emu                     4c290c558afaaa85956fa2364971c92cfde707cf  NOTICE
 sm2emu-bsd3            dmanlfc/sm2-emu                     4c290c558afaaa85956fa2364971c92cfde707cf  LICENSES/BSD-3-Clause.txt
+# Supermodel's licence, and that of SDL2_net, Fedora 44's 2.4.0, which ships
+# beside it (cores/build-supermodel.sh).
+supermodel             trzy/Supermodel                     14815455dc28fca2c8662fb1ed99d447ecf8f364  Docs/LICENSE.txt
+sdl2-net               libsdl-org/SDL_net                  904600c6133e0435d627ec1878bfdfeac414a899  LICENSE.txt
 # Cemu's shared fonts are Noto Sans CJK, under the OFL.
 noto-cjk-ofl           notofonts/noto-cjk                  f8d157532fbfaeda587e826d4cd5b21a49186f7c  Sans/LICENSE
 xemu-dashboard         xemu-project/xemu-dashboard         8cb5e525a8d2c980a4daa6b2c2106b53661b5b20  LICENSE

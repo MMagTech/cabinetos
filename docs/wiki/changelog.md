@@ -4,6 +4,13 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** Sega Model 3 games now play, in Supermodel: Virtua Fighter 3,
+  Scud Race, Sega Rally 2 and more. Keep them as zip. Two do not play yet:
+  Star Wars Trilogy stops at its control check, and Dirt Devils at its
+  network check. See [Arcade](arcade.md) for how to set out arcade folders.
+
 ## 2026.10.29.7 {#v2026-10-29-7}
 
 - **New:** Sega Model 2 games now play, in sm2-emu: Daytona USA, Sega Rally,
