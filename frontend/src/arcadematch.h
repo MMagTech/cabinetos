@@ -5,9 +5,10 @@
 // emulator finds a game by the zip's name, so the name finds the set in each
 // emulator's catalogue, and the files (each by CRC32 and size) say whether the
 // zip is that emulator's version of it. Emulators are tried in a fixed order,
-// Flycast, FinalBurn Neo, MAME 2003-Plus, MAME 0.289, and the first whose
-// catalogue has the set, marks it working, and whose files the zip holds
-// plays it: MAME 0.289 gets only what nothing older plays. A set
+// Flycast, FinalBurn Neo, MAME 2003-Plus, sm2-emu, MAME 0.289, and the first
+// whose catalogue has the set, marks it working, and whose files the zip
+// holds plays it: sm2-emu, made for Model 2, plays every Model 2 game its
+// list marks working, and MAME 0.289 gets only what nothing else plays. A set
 // with a disc needs its CHD too, at the top of the game's folder
 // (docs/decisions/2026-10-28-arcade-discs-one-folder.md), with the SHA1 the
 // catalogue gives where it gives one. MAME 2003-Plus cannot open a 7z and is
@@ -22,7 +23,8 @@
 // RomM's list of what a loose zip holds, or from the archive itself for one
 // inside a folder game; a set whose files do not fit says so then.
 //
-// THE CATALOGUES are `<core file stem>.catalogue` beside the cores, made in CI
+// THE CATALOGUES are `<core file stem>.catalogue` beside the cores, or for a
+// program of its own `<its name>.catalogue` (sm2emu.catalogue), made in CI
 // from each emulator's own list at its pin (cores/arcade-sets.sh, which says
 // what a line holds). Read once, the first time a game asks. A missing one is
 // said once in the log and reads as empty: that emulator plays nothing.
@@ -109,8 +111,9 @@ std::string chdSha1(const std::string& path);
 bool flycastBios(const std::string& fileName);
 
 // How many buttons a set's player 1 has, by an emulator's catalogue, or 0
-// when it does not say. Only MAME 0.289's says: it names no game's buttons
-// to the console itself (fightstick::mameButtons).
+// when it does not say. Only MAME 0.289's and sm2-emu's say: neither names a
+// game's buttons to the console itself (fightstick::mameButtons, and
+// standalone_sm2emu.cpp, which lays them out on a fight stick).
 int buttons(const char* core, const std::string& fileName);
 
 // --arcade-match-test: the rule, every case, on catalogues written in the

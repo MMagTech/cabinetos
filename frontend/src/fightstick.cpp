@@ -68,8 +68,12 @@ constexpr cab::Button kMame[] = {cab::B, cab::A, cab::Y,  cab::X,
 // core's build stops when the maps move, cores/build-core.sh). Its name comes
 // here only for a Naomi or Atomiswave game: a Dreamcast game passes none.
 // MAME 0.289's are the console's own declaration, in its order (mameButtons).
+// SM2-EMU, A PROGRAM OF ITS OWN, hears no RetroPad at all: the console lays a
+// Model 2 game's buttons out here, in their order, and writes where each
+// landed into its settings before it starts (standalone_sm2emu.cpp).
 std::optional<Order> orderFor(const std::string& core) {
-    if (core == "fbneo_libretro" || core == "flycast" || core == "mame_libretro")
+    if (core == "fbneo_libretro" || core == "flycast" || core == "mame_libretro" ||
+        core == "sm2emu")
         return Order::Declared;
     if (core == "mame2003_plus") return Order::Classic;
     return std::nullopt;
@@ -156,6 +160,8 @@ int classicNumber(unsigned id) {
 }
 
 bool isArcadeCore(const std::string& core) { return orderFor(core).has_value(); }
+
+cab::Button slotButton(int slot) { return kSlot[slot]; }
 
 bool readsClassic(const std::string& core) { return orderFor(core) == Order::Classic; }
 
@@ -439,6 +445,19 @@ int test() {
         apply(*e, p);
         check(p.buttons == cab::bit(cab::R2) && p.rightTrigger == 1.0f && p.leftTrigger == 0.0f,
               "a button that sends a trigger's id pulls that trigger all the way");
+    }
+
+    // Virtua Fighter 2 in sm2-emu: its three buttons, as the console lays
+    // them out for it (standalone_sm2emu.cpp), the bottom row from the left
+    // with a gap before the third, which sm2-emu is told is the left trigger.
+    {
+        const D vf2 = {{cab::B, "Button 1"}, {cab::A, "Button 2"}, {cab::Y, "Button 3"}};
+        const std::optional<Layout> l = make(stick, "sm2emu", vf2, vf2);
+        check(slots(l) == ids({no, no, no, no, cab::B, cab::A, no, cab::Y}),
+              "sm2-emu's three-button game takes the bottom row's 5, 6 and 8");
+        check(slotButton(4) == cab::B && slotButton(5) == cab::A && slotButton(7) == cab::L2,
+              "and those slots are the stick's South, East and left trigger");
+        check(isArcadeCore("sm2emu"), "sm2-emu is an arcade emulator for a stick");
     }
 
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");

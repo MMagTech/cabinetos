@@ -162,6 +162,8 @@ here. See `frontend/src/catalog.cpp`.
 | **The libraries Vita3K's build carries** (glibc, Qt 6, FFmpeg with x264 and Xvid, Mesa's Vulkan drivers, the X11 and Wayland libraries and others, in its `lib`; SDL 3 is linked into the program) | bundled by Vita3K's own AppImage build, unchanged | each under its own licence, as Vita3K ships them (glibc LGPL v2.1 or later, Qt LGPL v3, FFmpeg LGPL v2.1 or later, x264 and Xvid GPL v2 or later, Mesa MIT, SDL zlib, the X11 libraries MIT) |
 | **Cemu**, in `/usr/lib/cabinetos/cemu` | built from source by `cores/build-cemu.sh`, unmodified, `cemu-project/Cemu` at commit `4e3c824faa00f6b85782db019f20f29f063f3a2a`, with Cemu's own game profiles and resources from the same commit | MPL 2.0, except its shared fonts (Noto Sans CJK, OFL 1.1) |
 | **The libraries compiled into Cemu** (wxWidgets, Boost, fmt, SDL 3, OpenSSL, curl, glslang, pugixml, libzip, zstd and others) | built by Cemu's own vcpkg recipe at the versions its pinned commit names, linked statically, unchanged | each under its own licence (wxWidgets licence, Boost licence, fmt MIT, SDL zlib, OpenSSL Apache 2.0, curl MIT-style, glslang BSD-style, pugixml MIT, libzip BSD 3-Clause, zstd BSD) |
+| **sm2-emu**, in `/usr/lib/cabinetos/sm2emu` | built from source by `cores/build-sm2emu.sh`, unmodified, `dmanlfc/sm2-emu` at commit `4c290c558afaaa85956fa2364971c92cfde707cf` (v0.9.56), with its own game list and translations from the same commit; copyright 2025+ Daniel Martin (dmanlfc) and the sm2-emu contributors | GPL v3 or later, with additional terms under its section 7 (its `NOTICE`: keep its copyright notices and author attributions, do not misrepresent its origin, and a modified copy takes another name); the code it takes from MAME's Model 2 driver stays BSD 3-Clause |
+| **The libraries compiled into sm2-emu** (Musashi, ymfm, Dear ImGui, pugixml, miniz, the LZMA SDK, stb, VulkanMemoryAllocator, SheenBidi) | its own submodules and committed sources at its pinned commit, linked statically by its own CMake, unchanged | each under its own licence (Musashi MIT, ymfm BSD 3-Clause, Dear ImGui MIT, pugixml MIT, miniz MIT, the LZMA SDK and stb public domain, VulkanMemoryAllocator MIT, SheenBidi Apache 2.0) |
 | **Sunshine** (Remote Play), `/usr/bin/sunshine` and `/usr/share/sunshine` | built from source by `cores/build-sunshine.sh` with LizardByte's own Fedora 44 recipe, `LizardByte/Sunshine` at tag `v2026.914.233613`, **modified**: our patches in `cores/sunshine-patches/` (#304); `build_files/install-sunshine.sh` removes only the file capability the package sets and its own service and launchers | GPL v3 |
 | **The libraries compiled into Sunshine** (FFmpeg, and x264 for its CPU encoder, which the console does not use) | linked statically by LizardByte's build recipe, unchanged | each under its own licence (FFmpeg LGPL 2.1 or later / GPL, x264 GPL v2 or later) |
 | **Tailscale** (Remote Play away from home), `/usr/bin/tailscale` and `/usr/sbin/tailscaled` | already in the Bazzite base (1.102.4); nothing is bundled, only its service given CabinetOS's settings | BSD 3-Clause |
@@ -201,6 +203,15 @@ source be available, and it is, at that commit. The console reads a `.wua`'s
 table of contents itself (`frontend/src/wiiu.cpp`) to find a game's product
 code; that is this project's own code, written from the format's description
 in Exzap/ZArchive (MIT No Attribution). No game, firmware or key is involved.
+**SEGA MODEL 2 IS A WHOLE PROGRAM TOO**, sm2-emu built here from its own
+source at a pinned commit by its own CMake, with nothing patched, so it keeps
+its name (its `NOTICE`, section 7(e)). GPL v3 asks that its source be
+available, and it is, at that commit. Its additional terms ask that its
+copyright notices and author attributions stay where users can reach them:
+its `NOTICE` ships in `/usr/share/licenses/`, and since the console never
+shows its own About screen, its copyright line is in Settings, About,
+Credits. No game or firmware ships: Model 2 boards need none beyond each
+game's zip.
 **REMOTE PLAY IS A WHOLE PROGRAM TOO**, Sunshine, built by LizardByte's own
 Fedora recipe at the pinned tag, with our changes (#304). GPL v3 asks that its
 source be available, modified as shipped: it is LizardByte's tag plus the

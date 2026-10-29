@@ -43,10 +43,12 @@ RomM: keep test launches under a minute, or have his go.
    pick each game's emulator from its zip; Naomi, Atomiswave and the CPS and
    Neo Geo tiles", shipped as 2026.10.29; piece 2, #605, "Arcade: MAME 0.289
    for the games nothing older plays, with high scores", as 2026.10.29.3,
-   with Arcade's own wiki page, `docs/wiki/arcade.md`. Pieces 3 (sm2-emu,
-   Model 2) and 4 (Supermodel, Model 3, after its gate run) follow, each in
-   a fresh session, from the approved arcade build plan of 2026-10-28 in his
-   research notes. Waiting in Later: #608, "FinalBurn Neo games keep no high
+   with Arcade's own wiki page, `docs/wiki/arcade.md`. Piece 3, #613,
+   "Arcade: Sega Model 2 games play in sm2-emu", is open: its TV checks
+   with him, then the testing push (where sm2-emu's CI build first runs),
+   then his word to merge; its "For your call" list waits on him. Piece 4
+   (Supermodel, Model 3, after its gate run) follows in a fresh session,
+   from the approved arcade build plan of 2026-10-28 in his research notes. Waiting in Later: #608, "FinalBurn Neo games keep no high
    scores", planned with him before anything is built.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
    2026-10-28, at the TV).** Flycast feeds the analog stick only to a
