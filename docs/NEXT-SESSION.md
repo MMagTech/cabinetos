@@ -39,17 +39,19 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **The arcade expansion, pieces 3 and 4.** Piece 1, #601, "Arcade:
-   pick each game's emulator from its zip; Naomi, Atomiswave and the CPS and
-   Neo Geo tiles", shipped as 2026.10.29; piece 2, #605, "Arcade: MAME 0.289
-   for the games nothing older plays, with high scores", as 2026.10.29.3,
-   with Arcade's own wiki page, `docs/wiki/arcade.md`. Piece 3, #613,
-   "Arcade: Sega Model 2 games play in sm2-emu", is open: its TV checks
-   with him, then the testing push (where sm2-emu's CI build first runs),
-   then his word to merge; its "For your call" list waits on him. Piece 4
-   (Supermodel, Model 3, after its gate run) follows in a fresh session,
-   from the approved arcade build plan of 2026-10-28 in his research notes. Waiting in Later: #608, "FinalBurn Neo games keep no high
-   scores", planned with him before anything is built.
+1. **The arcade expansion, piece 4.** Piece 1, #601, "Arcade: pick each
+   game's emulator from its zip; Naomi, Atomiswave and the CPS and Neo Geo
+   tiles", shipped as 2026.10.29; piece 2, #605, "Arcade: MAME 0.289 for
+   the games nothing older plays, with high scores", as 2026.10.29.3;
+   piece 3, #613, "Arcade: Sega Model 2 games play in sm2-emu", as
+   2026.10.29.7, with a fix for a press as a separate emulator's pause menu
+   fades out. Its "For your call" list (the Controls row in Model 2 games,
+   holding Start there, one arcade wiki line) waits on him, one at a time.
+   Piece 4 (Supermodel, Model 3) has its own session, which starts with
+   the gate run of his 17 Model 3 games on the A9, from the approved arcade
+   build plan of 2026-10-28 in his research notes. Waiting in Later: #608,
+   "FinalBurn Neo games keep no high scores", planned with him before
+   anything is built.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
    2026-10-28, at the TV).** Flycast feeds the analog stick only to a
    board's analog controls, so a game with a plain lever (Trigger Heart
