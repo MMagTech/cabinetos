@@ -77,9 +77,9 @@ FROM ghcr.io/ublue-os/bazzite:44.20261012.1@sha256:5d49529cf809ff5b9e1ba52fd4833
 #                                Moves on a base bump or a change to
 #                                build_files/ or system_files/.
 #    2. the cores         95 MB  pinned, and PCSX2. Moves when one moves.
-#    3. MAME 0.289       116 MB  pinned (the core's zip; measured as the
-#                                layer at its first testing image). Moves
-#                                when MAME is bumped, which is seldom.
+#    3. MAME 0.289       126 MB  pinned, the core, its catalogue and its
+#                                plugins (in 2026.10.29.2, its first image).
+#                                Moves when MAME is bumped, which is seldom.
 #    4. RPCS3            131 MB  pinned. Moves when RPCS3 is bumped.
 #    5. Xenia Edge        21 MB  pinned. Moves when Edge is bumped.
 #    6. Cemu              35 MB  built at a pin by build-cemu.yml.
