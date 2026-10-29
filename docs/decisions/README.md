@@ -35,6 +35,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [emulators-get-no-network](2026-10-26-emulators-get-no-network.md): one block keeps every emulator off the network, inside the console's program by who asked and outside it by starting each with no network.
 - [arcade-emulator-from-the-zip](2026-10-28-arcade-emulator-from-the-zip.md): an arcade game's emulator comes from its zip's name and files, in a fixed order, never from its folder.
 - [emulator-updates-and-saves](2026-10-28-emulator-updates-and-saves.md): every emulator update is taken to break saves and states, so it needs a reason, a run first and a changelog warning.
+- [prebuilt-mame-core](2026-10-28-prebuilt-mame-core.md): MAME 0.289 is libretro's own build, the one core we do not build.
 
 ### Controls
 

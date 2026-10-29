@@ -1,10 +1,10 @@
 // Holding Start in an arcade game opens the game's own settings (#577,
 // docs/decisions/2026-10-25-hold-start-opens-arcade-settings.md).
 //
-// THE CONSOLE DRAWS NOTHING. It opens what each emulator already has: MAME
-// 2003-Plus's own menu (the DIP switches, among the rest), and on FinalBurn
-// Neo and on a Naomi or Atomiswave board in Flycast the board's own test
-// menu. A game that has neither gets nothing.
+// THE CONSOLE DRAWS NOTHING. It opens what each emulator already has: MAME's
+// own menu in MAME 2003-Plus and MAME 0.289 (the DIP switches, among the
+// rest), and on FinalBurn Neo and on a Naomi or Atomiswave board in Flycast
+// the board's own test menu. A game that has neither gets nothing.
 //
 // ONE RULE FOR BOTH: player 1 holds Start for 60 frames, about a second, as
 // FinalBurn Neo does by itself (its fbneo-diagnostic-input, "Hold Start", left
@@ -30,6 +30,12 @@
 // Both lean on MAME's internals; the core's build stops when either reads
 // otherwise at a new pin (cores/build-core.sh, its mame2003_plus block).
 //
+// MAME 0.289 OPENS ITS MENU ON TAB ALONE (its UI menu key; no button opens
+// it), and hears keys only through its keyboard callback, which Core::setKey
+// tells (core_input.cpp). So the console presses Tab for it the same way, a
+// second hold closes it, and its left stick click, its button 7, reaches the
+// game. cores/fetch-mame.sh stops when its joypad gives a button the menu.
+//
 // FLYCAST HAS A BOARD'S TEST AND SERVICE BUTTONS ON L3 AND R3 (its nao_joymap
 // and aw_joymap), which no cabinet's player could reach. So, in a Naomi or
 // Atomiswave game:
@@ -47,8 +53,8 @@
 
 namespace arcadesettings {
 
-// libretro's RETROK_TAB, the key MAME 2003-Plus opens its menu with
-// (asserted against libretro.h in arcadesettings.cpp).
+// libretro's RETROK_TAB, the key both MAMEs open their menu with (asserted
+// against libretro.h in arcadesettings.cpp).
 constexpr unsigned kMenuKey = 9;
 // How long a hold is, in the game's frames: FinalBurn Neo's own.
 constexpr uint64_t kHoldFrames = 60;

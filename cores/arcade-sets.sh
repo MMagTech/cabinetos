@@ -18,26 +18,39 @@
 #   flycast         core/hw/naomi/naomi_roms.cpp and naomi_roms_input.h, the
 #                   sets its libretro build plays (NAOMI_MULTIBOARD is not
 #                   defined there, core/build.h)
+#   mame_libretro   MAME 0.289's -listxml, mamedev's release asset, pinned in
+#                   cores/fetch-mame.sh: its machines, and for the flags its
+#                   own words, ismechanical, a mahjong, hanafuda or gambling
+#                   control, a light gun, and a light gun on a machine with a
+#                   touchscreen device (Megatouch, Touchmaster, Funcube and
+#                   the rest, which MAME reports as light guns)
 #
 # THE FILE, <core file stem>.catalogue, one set a line:
-#   <set> <w|n> <-|g|x> <crc>:<size> ... @<disc>:<sha1> ...
+#   <set> <w|n> <-|g|x> [b<buttons>] <crc>:<size> ... @<disc>:<sha1> ...
 # w works and n does not, by the emulator's own word (FBNeo "preliminary",
-# 2003-Plus "preliminary" or "protection"); g a light-gun game; x a game made
+# 2003-Plus "preliminary" or "protection", MAME 0.289 "preliminary"); g a
+# light-gun game; x a game made
 # for anything but a controller or a light gun (docs/decisions/
 # 2026-10-28-arcade-emulator-from-the-zip.md): a touchscreen, a mahjong or
 # hanafuda panel, a gambling, medal or electromechanical machine, a photo
 # booth, a test tape. Only what each list marks plainly: an awkward set it
-# does not mark plays. Each file the zip must hold as its CRC32 and size (size 0
-# where the list gives none, Flycast's); each disc by the CHD's name and the
-# SHA1 the list gives (none for Flycast). Left out of the files: the BIOS
-# options (what the set takes from the BIOS at the end of its romof chain),
-# files with no dump, optional files, and Flycast's Copy and Eeprom entries.
-# Flycast's also has one `!bios` line: the BIOS zips it reads from bios/dc/.
+# does not mark plays. b<buttons>, MAME 0.289's alone, is how many buttons
+# player 1 has, since that core names none of a game's buttons
+# (frontend/src/fightstick.h). Each file the zip must hold as its CRC32 and
+# size (size 0 where the list gives none, Flycast's); each disc by the CHD's
+# name and the SHA1 the list gives (none for Flycast), a space in its name
+# written %20. Left out of the files:
+# the BIOS options (what the set takes from the BIOS at the end of its romof
+# chain; for MAME 0.289, the files with a `bios=`), files with no dump,
+# optional files, and Flycast's Copy and Eeprom entries. Flycast's also has
+# one `!bios` line: the BIOS zips it reads from bios/dc/.
 #
-# THE PIN IS READ FROM cores/build-core.sh, the one place it is written. Not
-# a mode of that script on purpose: every core's CI cache key covers
-# build-core.sh's shared lines (ci/core-cache-key.sh), so editing a mode
-# there would rebuild every core.
+# THE PIN IS READ FROM cores/build-core.sh, the one place it is written, and
+# for MAME 0.289, which is not built there, from cores/fetch-mame.sh (its
+# LISTXML_URL and LISTXML_SHA256; $CABINETOS_LISTXML may name a copy already
+# fetched, which is checked the same). Not a mode of build-core.sh on
+# purpose: every core's CI cache key covers its shared lines
+# (ci/core-cache-key.sh), so editing a mode there would rebuild every core.
 #
 # Any other core writes nothing and exits 0, so CI can run this for every
 # core.
@@ -66,11 +79,37 @@ flycast)
     FILES=("core/hw/naomi/naomi_roms.cpp" "core/hw/naomi/naomi_roms_input.h")
     LEAST=300
     ;;
+mame_libretro)
+    FILES=("mame0289lx.zip")
+    LEAST=40000
+    ;;
 *)
     exit 0
     ;;
 esac
 
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+src=()
+if [[ "${CORE}" == mame_libretro ]]; then
+    # MAME 0.289's -listxml, by the pin in cores/fetch-mame.sh. Asserted.
+    url=$(sed -n 's/^LISTXML_URL=//p' "${ROOT}/cores/fetch-mame.sh")
+    sha=$(sed -n 's/^LISTXML_SHA256=//p' "${ROOT}/cores/fetch-mame.sh")
+    [[ "${url}" =~ ^https://github.com/ && "${sha}" =~ ^[0-9a-f]{64}$ ]] ||
+        { echo "${CORE}: no LISTXML_URL= and LISTXML_SHA256= in cores/fetch-mame.sh" >&2; exit 1; }
+    dest="${tmp}/${FILES[0]}"
+    if [[ -n "${CABINETOS_LISTXML:-}" ]]; then
+        cp "${CABINETOS_LISTXML}" "${dest}"
+    else
+        curl -fsSL --retry 3 -o "${dest}" "${url}"
+    fi
+    got=$(sha256sum "${dest}" | cut -d' ' -f1)
+    [[ "${got}" == "${sha}" ]] ||
+        { echo "${CORE}: ${url} has sha256 ${got}, the pin says ${sha}" >&2; exit 1; }
+    src+=("${dest}")
+    COMMIT="${sha}"
+    FILES=("${url}")
+else
 # The case arm in build-core.sh, and its REPO= and COMMIT= lines. Asserted:
 # a pin that cannot be read fails the build rather than shipping no list.
 arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh")
@@ -83,9 +122,6 @@ COMMIT=$(sed -n 's/^ *COMMIT=//p' <<<"${arm}")
 
 slug=${REPO#https://github.com/}
 slug=${slug%.git}
-tmp=$(mktemp -d)
-trap 'rm -rf "${tmp}"' EXIT
-src=()
 for f in "${FILES[@]}"; do
     url="https://raw.githubusercontent.com/${slug}/${COMMIT}/${f// /%20}"
     url=${url//(/%28}
@@ -94,6 +130,7 @@ for f in "${FILES[@]}"; do
     curl -fsSL --retry 3 -o "${dest}" "${url}"
     src+=("${dest}")
 done
+fi
 # FBNeo's drivers, for its light-gun games: only src/burn/drv, at the pin
 # (about 50 MB).
 if [[ "${CORE}" == fbneo_libretro ]]; then
@@ -119,15 +156,19 @@ core, paths = sys.argv[1], sys.argv[2:]
 printed = set()
 
 
-def line(name, works, flag, files, discs):
+def line(name, works, flag, files, discs, buttons=0):
     # A name listed twice is the first one: the emulator finds a set by name
     # and takes the first it lists (Flycast's shors2k2).
     if name.lower() in printed:
         return
     printed.add(name.lower())
     parts = [name.lower(), "w" if works else "n", flag]
+    if buttons:
+        parts.append("b%d" % buttons)
     parts += ["%08x:%d" % (crc, size) for crc, size in files]
-    parts += ["@%s:%s" % (d, s) for d, s in discs]
+    # A disc's name may hold spaces (MAME 0.289's "road burners v1.04"),
+    # which the line separates by: written %20, and % as %25.
+    parts += ["@%s:%s" % (d.replace("%", "%25").replace(" ", "%20"), s) for d, s in discs]
     print(" ".join(parts))
 
 
@@ -300,6 +341,54 @@ elif core == "flycast":
         uses = rest[1].lstrip("&") if len(rest) > 1 else ""
         flag = "g" if uses in guns else "x" if uses in touch else "-"
         line(name.group(1), True, flag, files, discs)
+elif core == "mame_libretro":
+    import zipfile
+    # A machine is a set unless it is a BIOS, a device or not runnable. Read
+    # as it streams: the list is 327 MB.
+    panels = {"mahjong", "hanafuda", "gambling"}
+    marks = {"x": 0, "g": 0}
+    with zipfile.ZipFile(paths[0]) as z:
+        xml = [n for n in z.namelist() if n.endswith(".xml")]
+        if len(xml) != 1:
+            sys.exit("mame_libretro: the -listxml zip holds %d xml files, not one" % len(xml))
+        with z.open(xml[0]) as f:
+            for _, m in ET.iterparse(f):
+                if m.tag != "machine":
+                    continue
+                if "yes" in (m.get("isbios"), m.get("isdevice")) or m.get("runnable") == "no":
+                    m.clear()
+                    continue
+                files = []
+                for r in m.iter("rom"):
+                    crc = (r.get("crc") or "").lower()
+                    if (not crc or r.get("status") == "nodump" or r.get("optional") == "yes"
+                            or r.get("bios")):
+                        continue
+                    f2 = (int(crc, 16), int(r.get("size") or 0))
+                    if f2 not in files:
+                        files.append(f2)
+                discs = [(d.get("name"), (d.get("sha1") or "").lower()) for d in m.iter("disk")
+                         if d.get("status") != "nodump" and d.get("optional") != "yes"]
+                controls = list(m.iter("control"))
+                kinds = {c.get("type") for c in controls}
+                touch = any("touch" in (d.get("name") or "") for d in m.iter("device_ref"))
+                if m.get("ismechanical") == "yes" or kinds & panels or ("lightgun" in kinds and touch):
+                    flag = "x"
+                elif "lightgun" in kinds:
+                    flag = "g"
+                else:
+                    flag = "-"
+                if flag != "-":
+                    marks[flag] += 1
+                buttons = max([int(c.get("buttons") or 0) for c in controls
+                               if c.get("player") in (None, "1")] or [0])
+                driver = m.find("driver")
+                works = driver is None or driver.get("status") != "preliminary"
+                line(m.get("name"), works, flag, files, discs, buttons)
+                m.clear()
+    if marks["x"] < 5000 or marks["g"] < 400:
+        sys.exit("mame_libretro: only %d games marked not for a controller and %d light-gun "
+                 "games; the list changed shape" % (marks["x"], marks["g"]))
 PY
 } > "${file}"
 
@@ -309,7 +398,7 @@ count=$(grep -vc '^[#!]' "${file}")
 (( count >= LEAST )) ||
     { echo "${CORE}: only ${count} sets read, fewer than ${LEAST}" >&2; exit 1; }
 bad=$(grep -v '^[#!]' "${file}" |
-    grep -vcE '^[a-z0-9_]+ [wn] [-gx]( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*$' || true)
+    grep -vcE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*$' || true)
 (( bad == 0 )) || { echo "${CORE}: ${bad} lines are not in the catalogue's form" >&2; exit 1; }
-empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gx]$' || true)
+empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?$' || true)
 echo "${CORE}: ${count} sets (${empty} with nothing to check) at ${COMMIT} -> ${file}"

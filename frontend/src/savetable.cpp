@@ -151,6 +151,12 @@ const char* emulatorTag(const char* core) {
         // the console's plain "Couldn't load that state". No rewind
         // (rewindAllowed).
         {"azahar", "azahar"},                      // 219d743a, 2126.2
+        // MAME 0.289, libretro's own build (docs/decisions/
+        // 2026-10-28-prebuilt-mame-core.md). No Cabinet app plays it, so the
+        // tag is the emulator's name, as Azahar's is. A state loads only in
+        // the MAME that made it; a pin move is taken to break them
+        // (docs/decisions/2026-10-28-emulator-updates-and-saves.md).
+        {"mame_libretro", "mame"},                 // 5f5a0774, 0.289
         //
         // PS2 and GameCube have no states at all (snapshotsAllowed), by open
         // question 25, so they need no tag here.
@@ -422,6 +428,13 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
             f.path = "fbneo/" + stem + ".fs";
             return {f};
         }
+        // MAME 0.289 WRITES SEVERAL FILES A GAME, all in this person's save
+        // folder for it: `mame/nvram/<set>/`, `mame/cfg/<set>.cfg`, a hard
+        // disk game's `mame/diff/<set>.dif`, and the high scores
+        // (mamehome.h). None reaches RomM: a game's one save on RomM is one
+        // file, and these wait for RomM's save channels with the other arcade
+        // extras (#353). They stay on the console, never in cache/.
+        if (core == "mame_libretro") return {};
         // FLYCAST'S BOARD MEMORY, `reicast/<the zip's own name>.nvmem`, named
         // after the whole file it was handed (hostfs::getArcadeFlashPath at
         // our pin; cores/build-core.sh stops when it moves). The one file of

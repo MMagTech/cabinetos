@@ -50,6 +50,9 @@ const Entry kTable[] = {
     {"arcade",               Support::Playable, "flycast",         nullptr},
     {"arcade",               Support::Playable, "fbneo_libretro",  nullptr},
     {"arcade",               Support::Playable, "mame2003_plus",   nullptr},
+    // MAME 0.289, libretro's own build, for what nothing older plays
+    // (docs/decisions/2026-10-28-prebuilt-mame-core.md).
+    {"arcade",               Support::Playable, "mame_libretro",   nullptr},
     {"atari2600",            Support::Playable, "stella2014",      nullptr},
     {"atari7800",            Support::Playable, "prosystem",       nullptr},
     {"dc",                   Support::Playable, "flycast",         nullptr},
