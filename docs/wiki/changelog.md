@@ -4,15 +4,18 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** MAME 0.289 joins, for arcade games nothing else here plays: CPS3,
+  ST-V and many more. High scores are kept. A CPS3 CD set installs once,
+  about 22 minutes; the No CD sets start at once.
+
 ## 2026.10.29 {#v2026-10-29}
 
 - **New:** Sega Naomi, Naomi 2 and Atomiswave games now play, and CPS1, CPS2
   and Neo Geo folders get tiles of their own. Each arcade game now picks its
   emulator from the files in its zip: see [Systems](systems.md) on the
   wiki for how to set out arcade folders.
-- **New:** MAME 0.289 joins, for arcade games nothing else here plays: CPS3,
-  ST-V and many more. High scores are kept. A CPS3 CD set installs once,
-  about 22 minutes; the No CD sets start at once.
 
 ## 2026.10.27.3 {#v2026-10-27-3}
 
