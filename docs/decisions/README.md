@@ -36,6 +36,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [arcade-emulator-from-the-zip](2026-10-28-arcade-emulator-from-the-zip.md): an arcade game's emulator comes from its zip's name and files, in a fixed order, never from its folder.
 - [emulator-updates-and-saves](2026-10-28-emulator-updates-and-saves.md): every emulator update is taken to break saves and states, so it needs a reason, a run first and a changelog warning.
 - [prebuilt-mame-core](2026-10-28-prebuilt-mame-core.md): MAME 0.289 is libretro's own build, the one core we do not build.
+- [model-2-and-model-3](2026-10-28-model-2-and-model-3.md): Model 2 plays in sm2-emu and Model 3 in Supermodel, both built into the image.
 
 ### Controls
 

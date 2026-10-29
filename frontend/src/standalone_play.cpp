@@ -45,8 +45,8 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // THE GAME'S PICTURE QUALITY (#63), its own choice or the console's.
     const quality::Level level = quality::forGame(launchJob.romId);
     quality::logApplied(launchJob.coreName, launchJob.romId, level);
-    if (!cab::standalone::prepare(emu, launchJob.entryPath, saveDir, user.name, pads, level,
-                                  &missingKeys, &err)) {
+    if (!cab::standalone::prepare(emu, launchJob.entryPath, launchJob.romPath, saveDir,
+                                  user.name, pads, level, &missingKeys, &err)) {
         cab::vpad::close();
         if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
         refuseLaunch(missingKeys ? "No " + launchJob.systemName + " " + emu.needs +

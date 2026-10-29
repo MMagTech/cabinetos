@@ -213,6 +213,10 @@ bool beginLaunch(LaunchJob& job, romm::Client& client, const romm::Game& game,
         // file (`852 - Aqua Kitty UDX.nsp`), which is how every other system's
         // one-file game is kept, and it left each Switch game a folder.
         validExts = emu->extensions;
+        // EXCEPT AN ARCADE GAME (sm2-emu's Model 2), kept a folder with its
+        // zip under the set's own name, as an arcade core's is: the name is
+        // the set (arcadematch.h), and the one the arcade match picked by.
+        blockExtract = cov.arcade;
     } else {
         // The core is loaded here, on the frame thread, before the worker starts:
         // it is cheap, it is the thing that decides whether the archive gets

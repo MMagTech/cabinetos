@@ -6,9 +6,10 @@
 # ships (docs/decisions/2026-10-28-emulator-updates-and-saves.md).
 #
 # WHAT MAKES THE CATALOGUES: cores/arcade-sets.sh itself, the arcade cores'
-# arms in cores/build-core.sh (their pins), and cores/fetch-mame.sh (MAME
-# 0.289's -listxml). When none of it differs from the base, it says so and
-# stops. Otherwise it makes every catalogue at the base and here, and asks
+# arms in cores/build-core.sh (their pins), cores/fetch-mame.sh (MAME 0.289's
+# -listxml) and cores/build-sm2emu.sh (sm2-emu's pin). When none of it
+# differs from the base, it says so and stops. Otherwise it makes every
+# catalogue at the base and here, and asks
 # the frontend this run compiled, with this pull request's rule, which
 # emulator each set gets from each (cabinetos-frontend --arcade-changes,
 # frontend/src/arcadematch.h): by name, and whether its files changed in the
@@ -26,7 +27,7 @@ set -euo pipefail
 
 BASE="${1:?usage: ci/list-arcade-changes.sh <base commit>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CORES=(flycast fbneo_libretro mame2003_plus mame_libretro)
+CORES=(flycast fbneo_libretro mame2003_plus sm2emu mame_libretro)
 SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 git -C "${ROOT}" cat-file -e "${BASE}^{commit}" 2>/dev/null ||
@@ -41,6 +42,7 @@ inputs() {
             awk -v c="${core})" '$1 == c {on=1} on {print} on && /;;/ {exit}'
     done
     git -C "${ROOT}" show "${rev}:cores/fetch-mame.sh" 2>/dev/null | grep '^LISTXML_' || true
+    git -C "${ROOT}" show "${rev}:cores/build-sm2emu.sh" 2>/dev/null | grep -E '^(REPO|COMMIT)=' || true
 }
 
 if [[ "$(inputs "${BASE}" | sha256sum)" == "$(inputs HEAD | sha256sum)" ]]; then

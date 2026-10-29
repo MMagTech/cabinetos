@@ -24,6 +24,12 @@
 #                   control, a light gun, and a light gun on a machine with a
 #                   touchscreen device (Megatouch, Touchmaster, Funcube and
 #                   the rest, which MAME reports as light guns)
+#   sm2emu          sm2-emu's data/games.xml, at the commit cores/build-sm2emu.sh
+#                   pins: its games, a clone taking its parent's regions
+#                   where it names none of its own, and its preliminary flag
+#                   and light gun from its parent as sm2-emu's own loader
+#                   does (src/rom/game_db.cpp); a region it marks
+#                   required="false" is left out, as an optional file is
 #
 # THE FILE, <core file stem>.catalogue, one set a line:
 #   <set> <w|n> <-|g|x> [b<buttons>] <crc>:<size> ... @<disc>:<sha1> ...
@@ -34,10 +40,12 @@
 # 2026-10-28-arcade-emulator-from-the-zip.md): a touchscreen, a mahjong or
 # hanafuda panel, a gambling, medal or electromechanical machine, a photo
 # booth, a test tape. Only what each list marks plainly: an awkward set it
-# does not mark plays. b<buttons>, MAME 0.289's alone, is how many buttons
-# player 1 has, since that core names none of a game's buttons
-# (frontend/src/fightstick.h). Each file the zip must hold as its CRC32 and
-# size (size 0 where the list gives none, Flycast's); each disc by the CHD's
+# does not mark plays. b<buttons>, MAME 0.289's and sm2-emu's alone, is how
+# many buttons player 1 has, since neither names a game's buttons to the
+# console (frontend/src/fightstick.h): MAME's -listxml says, and sm2-emu's
+# list says 3 for a game it gives three buttons ("buttons3") and nothing for
+# a driving or gun game. Each file the zip must hold as its CRC32 and
+# size (size 0 where the list gives none, Flycast's and sm2-emu's); each disc by the CHD's
 # name and the SHA1 the list gives (none for Flycast), a space in its name
 # written %20. Left out of the files:
 # the BIOS options (what the set takes from the BIOS at the end of its romof
@@ -48,7 +56,8 @@
 # THE PIN IS READ FROM cores/build-core.sh, the one place it is written, and
 # for MAME 0.289, which is not built there, from cores/fetch-mame.sh (its
 # LISTXML_URL and LISTXML_SHA256; $CABINETOS_LISTXML may name a copy already
-# fetched, which is checked the same). Not a mode of build-core.sh on
+# fetched, which is checked the same), and for sm2-emu, a program of its own,
+# from cores/build-sm2emu.sh (its REPO= and COMMIT=). Not a mode of build-core.sh on
 # purpose: every core's CI cache key covers its shared lines
 # (ci/core-cache-key.sh), so editing a mode there would rebuild every core.
 #
@@ -56,7 +65,8 @@
 # core.
 #
 # Usage: cores/arcade-sets.sh <core> <out dir>
-#   writes <out dir>/<core file stem>.catalogue, e.g. fbneo_libretro.catalogue
+#   writes <out dir>/<core file stem>.catalogue, e.g. fbneo_libretro.catalogue,
+#   or for a program of its own its name's, sm2emu.catalogue
 
 set -euo pipefail
 
@@ -82,6 +92,10 @@ flycast)
 mame_libretro)
     FILES=("mame0289lx.zip")
     LEAST=40000
+    ;;
+sm2emu)
+    FILES=("data/games.xml")
+    LEAST=80
     ;;
 *)
     exit 0
@@ -110,15 +124,20 @@ if [[ "${CORE}" == mame_libretro ]]; then
     COMMIT="${sha}"
     FILES=("${url}")
 else
-# The case arm in build-core.sh, and its REPO= and COMMIT= lines. Asserted:
-# a pin that cannot be read fails the build rather than shipping no list.
-arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh")
+# The case arm in build-core.sh, and its REPO= and COMMIT= lines; for sm2-emu
+# its own build script's. Asserted: a pin that cannot be read fails the build
+# rather than shipping no list.
+if [[ "${CORE}" == sm2emu ]]; then
+    arm=$(cat "${ROOT}/cores/build-sm2emu.sh")
+else
+    arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh")
+fi
 REPO=$(sed -n 's/^ *REPO=//p' <<<"${arm}")
 COMMIT=$(sed -n 's/^ *COMMIT=//p' <<<"${arm}")
 [[ "${REPO}" =~ ^https://github.com/[^/]+/[^/]+\.git$ ]] ||
-    { echo "${CORE}: no REPO= in its build-core.sh arm" >&2; exit 1; }
+    { echo "${CORE}: no REPO= where its pin is written" >&2; exit 1; }
 [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] ||
-    { echo "${CORE}: no 40-character COMMIT= in its build-core.sh arm" >&2; exit 1; }
+    { echo "${CORE}: no 40-character COMMIT= where its pin is written" >&2; exit 1; }
 
 slug=${REPO#https://github.com/}
 slug=${slug%.git}
@@ -144,6 +163,8 @@ fi
 
 mkdir -p "${OUT}"
 file="${OUT}/${CORE%_libretro}_libretro.catalogue"
+# A program of its own is named for itself (arcadematch.cpp, loadFrom).
+[[ "${CORE}" == sm2emu ]] && file="${OUT}/${CORE}.catalogue"
 {
     echo "# ${CORE} @ ${COMMIT}, from ${FILES[*]}"
     python3 - "${CORE}" "${src[@]}" <<'PY'
@@ -389,6 +410,44 @@ elif core == "mame_libretro":
     if marks["x"] < 5000 or marks["g"] < 400:
         sys.exit("mame_libretro: only %d games marked not for a controller and %d light-gun "
                  "games; the list changed shape" % (marks["x"], marks["g"]))
+elif core == "sm2emu":
+    # Its comments hold "--", which an XML parser refuses; sm2-emu's own
+    # (pugixml) does not mind. Nothing it reads is in one.
+    text = re.sub(r"<!--.*?-->", "", open(paths[0], encoding="utf-8").read(), flags=re.S)
+    games = {g.get("name"): g for g in ET.fromstring(text).iter("game")}
+
+    def chain(g):
+        # The game, its parent, its parent's parent.
+        out = []
+        while g is not None and all(x is not g for x in out):
+            out.append(g)
+            g = games.get(g.get("parent")) if g.get("parent") else None
+        return out
+
+    guns = 0
+    for name, g in sorted(games.items()):
+        c = chain(g)
+        regions = {}
+        for x in reversed(c):
+            # A region the clone names replaces its parent's whole.
+            for r in x.iter("region"):
+                regions[r.get("name")] = r
+        files = []
+        for r in regions.values():
+            if r.get("required") == "false":
+                continue
+            for f in r.iter("file"):
+                crc = (f.get("crc") or "").lower().removeprefix("0x")
+                if crc and (int(crc, 16), 0) not in files:
+                    files.append((int(crc, 16), 0))
+        gun = any(x.find("lightgun") is not None for x in c)
+        guns += gun
+        inputs = next(([i.get("type") for i in x.iter("input")] for x in c
+                       if x.find("inputs") is not None), [])
+        line(name, not any(x.get("preliminary") == "true" for x in c), "g" if gun else "-",
+             files, [], 3 if "buttons3" in inputs else 0)
+    if guns < 3:
+        sys.exit("sm2emu: only %d light-gun games; the list changed shape" % guns)
 PY
 } > "${file}"
 

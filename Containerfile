@@ -83,14 +83,18 @@ FROM ghcr.io/ublue-os/bazzite:44.20261012.1@sha256:5d49529cf809ff5b9e1ba52fd4833
 #    4. RPCS3            131 MB  pinned. Moves when RPCS3 is bumped.
 #    5. Xenia Edge        21 MB  pinned. Moves when Edge is bumped.
 #    6. Cemu              35 MB  built at a pin by build-cemu.yml.
-#    7. xemu's drive       1 MB  pinned.
-#    8. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
-#    9. the frontend       4 MB  the frontend, the Wii bridge, the
+#    7. sm2-emu            2 MB  built at a pin by build-sm2emu.yml, with
+#                                its catalogue (Model 2). Not yet in an
+#                                image: 6.2 MB on disk, 2.3 MB gzipped, as
+#                                built on the A9 on 2026-10-29.
+#    8. xemu's drive       1 MB  pinned.
+#    9. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#   10. the frontend       4 MB  the frontend, the Wii bridge, the
 #                                controller lists and the shaders. Moves
 #                                with nearly every change.
-#   10. the boot splash  254 MB  the initramfs. Moves with the OS layer.
-#   11. the version       1 kB  every image.
-#   12. the lint               (nothing in it)
+#   11. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   12. the version       1 kB  every image.
+#   13. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
 # ships layer 9, PROVIDED the other layers rebuild to identical bytes. CI
@@ -146,6 +150,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-cemu.sh
+
+# Sega Model 2: sm2-emu, built from source at a pin by build-sm2emu.yml, and
+# its catalogue, from the payload. A layer of its own beside Cemu's, moving
+# only when its pin does.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-sm2emu.sh
 
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak

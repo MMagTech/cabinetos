@@ -170,9 +170,12 @@ bool snapshotsAllowed(const char* core) {
     if (!core) return true;
     // True to the machines: memory-card consoles, and everything after them.
     // Not the 3DS, a handheld, by MMagTech's decision of 2026-10-20, though
-    // its states may not survive an emulator update (emulatorTag).
+    // its states may not survive an emulator update (emulatorTag). And every
+    // emulator run as a program of its own, sm2-emu's Model 2 among them,
+    // whose pause menu is Resume, Screenshot and Exit to Home (MMagTech,
+    // 2026-10-29).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
-                                               "xenia", "cemu", "vita3k"};
+                                               "xenia", "cemu", "vita3k", "sm2emu"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -256,6 +259,11 @@ const char* saveTag(const char* core) {
         // load. No Cabinet app plays the Vita either (docs/PROJECT.md, open
         // question 49).
         {"vita3k", "vita3k"},
+        // Sega Model 2, in sm2-emu: a zip of the person's `nvram/` for the
+        // game, the board's `<set>.nv` and `<set>.eeprom` as sm2-emu names
+        // them, which drop into any sm2-emu's saves folder. No Cabinet app
+        // plays Model 2 either (docs/decisions/2026-10-28-model-2-and-model-3.md).
+        {"sm2emu", "sm2emu"},
         //
         // Nintendo 3DS has states, so its save tag comes from emulatorTag
         // above: a zip of the emulated SD card's `Nintendo 3DS` folder

@@ -25,7 +25,8 @@ namespace cab::standalone {
 namespace {
 
 // Eden and xemu are pinned in system_files/usr/share/cabinetos/flatpaks.list.
-// RPCS3, Xenia, Cemu and Vita3K are in the image (build_files/install-*.sh).
+// RPCS3, Xenia, Cemu, Vita3K and sm2-emu are in the image
+// (build_files/install-*.sh).
 const Emulator kEmulators[] = {
     // Eden's words for a game it cannot load (yuzu/main_window.cpp, before its
     // "Error while loading ROM!" box).
@@ -135,6 +136,25 @@ const Emulator kEmulators[] = {
      // notesPlaying: Vita3K writes the saves straight into the person's
      // folder, through the link standalone_vita3k.cpp makes, as Xenia does.
      "zip|vpk", "firmware", true, false, false, false, false, true, true},
+
+    // SEGA MODEL 2. sm2-emu, built from source at a pin (cores/build-sm2emu.sh)
+    // and in the image at /usr/lib/cabinetos/sm2emu, for the Model 2 games
+    // the arcade match gives it (arcadematch.h). Started on the game's zip with
+    // its set named, it opens no game list and no window of its own but the
+    // game's; it keeps no log of its own, so what it prints is it. A game it
+    // cannot open is one of these two lines (src/rom/rom_loader.cpp), and it
+    // exits 1 before any window. SIGTERM is SDL's quit, which ends its loop,
+    // writes NVRAM and EEPROM and exits 0 (measured on the A9, 2026-10-28).
+    // docs/decisions/2026-10-28-model-2-and-model-3.md.
+    {"sm2emu", nullptr, "/usr/lib/cabinetos/sm2emu/bin/sm2-emu", "sm2-emu", nullptr,
+     {"does not contain any game sm2-emu recognises", "missing required ROM"},
+     {nullptr, nullptr, nullptr, nullptr},
+     nullptr,
+     nullptr,
+     nullptr, 0, nullptr,
+     // notesPlaying: it writes the board's NVRAM straight into the person's
+     // folder, as Cemu writes its saves.
+     "zip|7z", "", false, false, false, false, false, true, false},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -387,9 +407,9 @@ bool installGame(const Emulator& e, const std::string& entryPath,
     return installRpcs3(e, entryPath, cancel, romPath, message);
 }
 
-bool prepare(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
-             const std::string& player, int players, quality::Level level, bool* missingKeys,
-             std::string* err) {
+bool prepare(const Emulator& e, const std::string& entryPath, const std::string& romPath,
+             const std::string& saveDir, const std::string& player, int players,
+             quality::Level level, bool* missingKeys, std::string* err) {
     *missingKeys = false;
     storage::makeDirs(saveDir);
     if (std::strcmp(e.core, "eden") == 0)
@@ -402,6 +422,8 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
     if (std::strcmp(e.core, "cemu") == 0) return prepareCemu(e, saveDir, players, err);
     if (std::strcmp(e.core, "vita3k") == 0)
         return prepareVita3k(e, entryPath, saveDir, player, players, level, missingKeys, err);
+    if (std::strcmp(e.core, "sm2emu") == 0)
+        return prepareSm2emu(e, romPath, saveDir, players, level, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -420,6 +442,8 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
     if (std::strcmp(e.core, "eden") == 0) return edenSaveRoot(e, saveDir);
     // Vita: the person's `savedata/`, linked in as Vita3K's ux0/user/00/savedata.
     if (std::strcmp(e.core, "vita3k") == 0) return vita3kSaveRoot(saveDir);
+    // Model 2: the board's NVRAM and EEPROM, as sm2-emu names them.
+    if (std::strcmp(e.core, "sm2emu") == 0) return sm2emuNvram(saveDir);
     return {};
 }
 
@@ -555,6 +579,8 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
             cemuArgs(full, dir, romPath);
         } else if (std::strcmp(e.core, "vita3k") == 0) {
             vita3kArgs(full, e, dir, romPath);
+        } else if (std::strcmp(e.core, "sm2emu") == 0) {
+            sm2emuArgs(full, dir, saveDir, romPath);
         } else {
             full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
         }

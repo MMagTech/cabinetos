@@ -47,6 +47,9 @@ constexpr Credit kCredits[] = {
     {"RPCS3", "PlayStation 3 \xC2\xB7 GPL v2"},
     {"Xenia Edge", "Xbox 360 \xC2\xB7 BSD 3-clause"},
     {"Cemu", "Wii U \xC2\xB7 MPL 2.0"},
+    // Its own About screen, which its licence's section 7 asks to keep its
+    // copyright line on, is never shown here, so the line is here.
+    {"sm2-emu", "Model 2, Daniel Martin (dmanlfc) \xC2\xB7 GPL v3+"},
     {"xemu-dashboard", "The Xbox drive \xC2\xB7 MIT"},
     {"Sunshine", "Remote Play \xC2\xB7 GPL v3"},
     {"Tailscale", "Remote Play away \xC2\xB7 BSD 3-clause"},

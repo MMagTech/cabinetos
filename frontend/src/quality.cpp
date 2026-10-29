@@ -175,7 +175,7 @@ Level forGame(int romId) {
 bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
-                          "eden", "rpcs3", "xemu", "vita3k"})
+                          "eden", "rpcs3", "xemu", "vita3k", "sm2emu"})
         if (core == c) return true;
     return false;
 }
@@ -374,6 +374,17 @@ std::string vita3k(Level l) {
     return std::string("resolution-multiplier: ") + pick(l, kScale) +
            "\nasync-pipeline-compilation: " + pick(l, kAsync) +
            "\nanisotropic-filtering: 16\n";
+}
+
+int sm2emu(Level l) {
+    // SEGA MODEL 2, 496x384: 1x, 3x (1152 lines, the 1080p step) and 6x
+    // (2304 lines, the 4K step), the plan's levels (2026-10-28). Measured on
+    // the A9 at 6x, Vulkan: 99 frames in 100 drawn in under 5.2 ms, against
+    // the 17.4 ms a frame of its 57.52 Hz allows. sm2-emu's own range is 1 to
+    // 8. Nothing else in it moves with the level: its texture filtering, 2D
+    // upscaling and translucency stay at its faithful defaults.
+    static const int kScale[] = {1, 3, 6};
+    return pick(l, kScale);
 }
 
 void logApplied(const std::string& who, int romId, Level l) {

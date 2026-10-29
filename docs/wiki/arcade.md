@@ -14,7 +14,7 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
   | `fbneo` | FinalBurn Neo sets |
   | `arcade` or `mame` | everything else |
 
-- **Sets:** non-merged, for MAME 0.289 or MAME 2003-Plus (0.78), as zip or 7z. MAME 0.289 sets also play in FinalBurn Neo and Flycast. MAME 2003-Plus plays only zip.
+- **Sets:** non-merged, for MAME 0.289 or MAME 2003-Plus (0.78), as zip or 7z. MAME 0.289 sets also play in FinalBurn Neo, Flycast and sm2-emu. MAME 2003-Plus plays only zip.
 - **Keep each set's own name**, for example `sf2.zip`. The name and the files inside it pick the emulator.
 - **A game with a disc is one folder** with the zip and its CHD side by side, for example `cps3/sfiii3/sfiii3.zip` and `cps3/sfiii3/cap-33s-2.chd`. Use the CHD that MAME 0.289 lists. A CHD in a subfolder is not found.
 - **CPS3:** a CD set, a small zip and a CHD, installs the game into the board the first time each person plays it, about 22 minutes: choose *Rewrite the game* with button 1. The No CD sets, whose names end in `n` (`sfiii3n`), start at once.
