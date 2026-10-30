@@ -51,8 +51,10 @@ RomM: keep test launches under a minute, or have his go.
    open: 16 of his 17 Model 3 games reached gameplay at 4K on the A9, with
    Supermodel's net board linked to itself (his yes, 2026-10-29) and its
    drive board running (Star Wars Trilogy's control check; driving games
-   rumble, as Model 2's do). Waiting on him: the TV checks the PR lists,
-   before any testing push. Dirt Devils
+   rumble, as Model 2's do). His TV checks passed on 2026-10-30 (Scud
+   Race, Star Wars Trilogy, Virtua Fighter 3 and Spikeout: controls,
+   rumble, NVRAM on RomM, all three picture levels); the testing push
+   waits on his go. Dirt Devils
    waits at its network check until Supermodel takes trzy/Supermodel#360
    (no patch of ours, his call 2026-10-29). Waiting in Later: #608,
    "FinalBurn Neo games keep no high scores", planned with him before
