@@ -7,9 +7,10 @@ one you install, so you only ever install the newest.
 ## Next
 
 - **New:** Sega Model 3 games now play, in Supermodel: Virtua Fighter 3,
-  Scud Race, Sega Rally 2 and more. Keep them as zip. Two do not play yet:
-  Star Wars Trilogy stops at its control check, and Dirt Devils at its
-  network check. See [Arcade](arcade.md) for how to set out arcade folders.
+  Scud Race, Sega Rally 2, Star Wars Trilogy and more. Their driving games
+  and Star Wars Trilogy rumble, as Model 2's driving games do. Keep them as
+  zip. Dirt Devils does not play yet: it stops at its network check. See
+  [Arcade](arcade.md) for how to set out arcade folders.
 
 ## 2026.10.29.7 {#v2026-10-29-7}
 

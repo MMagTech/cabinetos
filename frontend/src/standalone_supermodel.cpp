@@ -196,8 +196,14 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
         {"NbSoundChannels", "2"},
         {"SoundVolume", "100"},
         {"MusicVolume", "100"},
-        // No force feedback: no pad here has a wheel's motor.
-        {"ForceFeedback", "false"},
+        // THE DRIVE BOARD RUNS. Off, Supermodel switches the board off
+        // entirely, and Star Wars Trilogy stops at "Failed feedback lever
+        // initialize" (seen on the A9, 2026-10-29: the board answers the
+        // game's lever check only when it runs). On, the wheel's and yoke's
+        // forces reach a pad as rumble at Supermodel's own strengths, as
+        // every system with motors rumbles (rumble.h, the console's one
+        // switch) and sm2-emu's Model 2 driving games do.
+        {"ForceFeedback", "true"},
         // THE NET BOARD, LINKED TO ITSELF: Supermodel's own way to run a
         // linked cabinet alone (Src/Model3/SimNetBoard.cpp). Scud Race and
         // Daytona USA 2 stop at "Network board not present" without one. It
