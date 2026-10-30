@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.10.30.2 {#v2026-10-30-2}
 
 - **New:** every arcade folder in RomM is now one Library tile, **Arcade**,
   in title order, with greyed games last. As you move through it, the line
