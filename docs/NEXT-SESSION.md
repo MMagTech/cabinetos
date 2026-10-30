@@ -14,13 +14,11 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-10-26.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.10.27: #595, "No emulator reaches the internet: one
-block for all of them (#557)", merged on 2026-10-26 after his TV checks
-(Mario Kart Wii's download refused and its exit at once, Shovel Knight's
-pause and exit). Before it, 2026.10.26.3: #591, "Sound comes back after the
-TV sleeps: a backup output while the TV's is gone". Nothing else is in
-flight. #590, "A Wii Remote turned
+**2026-10-30.** The newest release is 2026.10.10. The newest image promoted
+to consoles is 2026.10.30: #616, "Arcade: Sega Model 3 games play in
+Supermodel", merged on 2026-10-30 after his TV checks, the last of the
+arcade expansion's four pieces. #615, "Arcade: one Library tile for every
+arcade folder", is open in its own session. #590, "A Wii Remote turned
 on after a Wii game starts is ignored by the game", waits in Later; fix it
 only in the console's own code, never by patching Dolphin (MMagTech,
 2026-10-25). What the A9 runs now is not written here: read it from
@@ -39,28 +37,20 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **The arcade expansion, piece 4.** Piece 1, #601, "Arcade: pick each
-   game's emulator from its zip; Naomi, Atomiswave and the CPS and Neo Geo
-   tiles", shipped as 2026.10.29; piece 2, #605, "Arcade: MAME 0.289 for
-   the games nothing older plays, with high scores", as 2026.10.29.3;
-   piece 3, #613, "Arcade: Sega Model 2 games play in sm2-emu", as
-   2026.10.29.7, with a fix for a press as a separate emulator's pause menu
-   fades out. A Controls row for Model 2 and Model 3 games is #617,
-   "Arcade: a Controls row for Model 2 and Model 3 games", in Later (his
-   call, 2026-10-30); holding Start there and one arcade wiki line wait
-   on him, one at a time.
-   Piece 4, #616, "Arcade: Sega Model 3 games play in Supermodel", is
-   open: 16 of his 17 Model 3 games reached gameplay at 4K on the A9, with
-   Supermodel's net board linked to itself (his yes, 2026-10-29) and its
-   drive board running (Star Wars Trilogy's control check; driving games
-   rumble, as Model 2's do). His TV checks passed on 2026-10-30 (Scud
-   Race, Star Wars Trilogy, Virtua Fighter 3 and Spikeout: controls,
-   rumble, NVRAM on RomM, all three picture levels); the testing push
-   waits on his go. Dirt Devils
-   waits at its network check until Supermodel takes trzy/Supermodel#360
-   (no patch of ours, his call 2026-10-29). Waiting in Later: #608,
-   "FinalBurn Neo games keep no high scores", planned with him before
-   anything is built.
+1. **What is left of the arcade expansion.** All four pieces shipped:
+   #601, "Arcade: pick each game's emulator from its zip; Naomi, Atomiswave
+   and the CPS and Neo Geo tiles" (2026.10.29); #605, "Arcade: MAME 0.289
+   for the games nothing older plays, with high scores" (2026.10.29.3);
+   #613, "Arcade: Sega Model 2 games play in sm2-emu" (2026.10.29.7); and
+   #616, "Arcade: Sega Model 3 games play in Supermodel" (2026.10.30), where
+   16 of his 17 Model 3 games play and Dirt Devils waits at its network
+   check until Supermodel takes trzy/Supermodel#360 (no patch of ours, his
+   call 2026-10-29). For his call, one at a time: holding Start does
+   nothing in a Model 2 or Model 3 game, and the arcade wiki's "High scores
+   and arcade settings are kept on this console" leaves out that Model 3
+   NVRAM travels to RomM. In Later, each planned with him before anything
+   is built: #617, "Arcade: a Controls row for Model 2 and Model 3 games",
+   and #608, "FinalBurn Neo games keep no high scores".
 2. **The left stick in Naomi and Atomiswave lever games (his note,
    2026-10-28, at the TV).** Flycast feeds the analog stick only to a
    board's analog controls, so a game with a plain lever (Trigger Heart
