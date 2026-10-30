@@ -45,8 +45,10 @@ RomM: keep test launches under a minute, or have his go.
    the games nothing older plays, with high scores", as 2026.10.29.3;
    piece 3, #613, "Arcade: Sega Model 2 games play in sm2-emu", as
    2026.10.29.7, with a fix for a press as a separate emulator's pause menu
-   fades out. Its "For your call" list (the Controls row in Model 2 games,
-   holding Start there, one arcade wiki line) waits on him, one at a time.
+   fades out. A Controls row for Model 2 and Model 3 games is #617,
+   "Arcade: a Controls row for Model 2 and Model 3 games", in Later (his
+   call, 2026-10-30); holding Start there and one arcade wiki line wait
+   on him, one at a time.
    Piece 4, #616, "Arcade: Sega Model 3 games play in Supermodel", is
    open: 16 of his 17 Model 3 games reached gameplay at 4K on the A9, with
    Supermodel's net board linked to itself (his yes, 2026-10-29) and its
