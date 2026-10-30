@@ -45,11 +45,20 @@ RomM: keep test launches under a minute, or have his go.
    the games nothing older plays, with high scores", as 2026.10.29.3;
    piece 3, #613, "Arcade: Sega Model 2 games play in sm2-emu", as
    2026.10.29.7, with a fix for a press as a separate emulator's pause menu
-   fades out. Its "For your call" list (the Controls row in Model 2 games,
-   holding Start there, one arcade wiki line) waits on him, one at a time.
-   Piece 4 (Supermodel, Model 3) has its own session, which starts with
-   the gate run of his 17 Model 3 games on the A9, from the approved arcade
-   build plan of 2026-10-28 in his research notes. Waiting in Later: #608,
+   fades out. A Controls row for Model 2 and Model 3 games is #617,
+   "Arcade: a Controls row for Model 2 and Model 3 games", in Later (his
+   call, 2026-10-30); holding Start there and one arcade wiki line wait
+   on him, one at a time.
+   Piece 4, #616, "Arcade: Sega Model 3 games play in Supermodel", is
+   open: 16 of his 17 Model 3 games reached gameplay at 4K on the A9, with
+   Supermodel's net board linked to itself (his yes, 2026-10-29) and its
+   drive board running (Star Wars Trilogy's control check; driving games
+   rumble, as Model 2's do). His TV checks passed on 2026-10-30 (Scud
+   Race, Star Wars Trilogy, Virtua Fighter 3 and Spikeout: controls,
+   rumble, NVRAM on RomM, all three picture levels); the testing push
+   waits on his go. Dirt Devils
+   waits at its network check until Supermodel takes trzy/Supermodel#360
+   (no patch of ours, his call 2026-10-29). Waiting in Later: #608,
    "FinalBurn Neo games keep no high scores", planned with him before
    anything is built.
 2. **The left stick in Naomi and Atomiswave lever games (his note,
@@ -131,6 +140,7 @@ RomM: keep test launches under a minute, or have his go.
   RomM token revoke, rommapp/romm#5274), #534 (the Azahar patch,
   azahar-emu/azahar#2694),
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
+  trzy/Supermodel#360 (Dirt Devils linked to itself; no patch of ours),
   #203 closed until libretro/dolphin#508 moves.
 - **Filed, not scheduled:** #559, "A power cut right after a download or an
   unpack can leave a damaged game that the console keeps (exFAT and NTFS

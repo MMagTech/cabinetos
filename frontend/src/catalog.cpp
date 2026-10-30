@@ -53,6 +53,9 @@ const Entry kTable[] = {
     // sm2-emu, a program of its own (standalone.cpp), for every Model 2 game
     // its list marks working (docs/decisions/2026-10-28-model-2-and-model-3.md).
     {"arcade",               Support::Playable, "sm2emu",          nullptr},
+    // Supermodel, a program of its own (standalone.cpp), for every Model 3
+    // game (docs/decisions/2026-10-28-model-2-and-model-3.md).
+    {"arcade",               Support::Playable, "supermodel",      nullptr},
     // MAME 0.289, libretro's own build, for what nothing else plays
     // (docs/decisions/2026-10-28-prebuilt-mame-core.md).
     {"arcade",               Support::Playable, "mame_libretro",   nullptr},

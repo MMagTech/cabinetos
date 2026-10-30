@@ -107,6 +107,9 @@ std::vector<std::string> xenia(Level l);
 std::string vita3k(Level l);
 // sm2-emu's render_scale, which standalone_sm2emu.cpp writes into its settings.
 int sm2emu(Level l);
+// Supermodel's picture height, which standalone_supermodel.cpp caps at the
+// screen's and writes into its settings with the width in the screen's shape.
+int supermodelLines(Level l);
 
 // One line on stderr saying what was applied, so a log shows the level a game
 // actually ran at.

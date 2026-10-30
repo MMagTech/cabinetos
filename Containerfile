@@ -87,17 +87,21 @@ FROM ghcr.io/ublue-os/bazzite:44.20261012.1@sha256:5d49529cf809ff5b9e1ba52fd4833
 #                                its catalogue (Model 2). Not yet in an
 #                                image: 6.2 MB on disk, 2.3 MB gzipped, as
 #                                built on the A9 on 2026-10-29.
-#    8. xemu's drive       1 MB  pinned.
-#    9. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
-#   10. the frontend       4 MB  the frontend, the Wii bridge, the
+#    8. Supermodel         2 MB  built at a pin by build-supermodel.yml, with
+#                                SDL2_net and its catalogue (Model 3). Not
+#                                yet in an image: 4.3 MB on disk, 1.6 MB
+#                                gzipped, as built on the A9 on 2026-10-29.
+#    9. xemu's drive       1 MB  pinned.
+#   10. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#   11. the frontend       4 MB  the frontend, the Wii bridge, the
 #                                controller lists and the shaders. Moves
 #                                with nearly every change.
-#   11. the boot splash  254 MB  the initramfs. Moves with the OS layer.
-#   12. the version       1 kB  every image.
-#   13. the lint               (nothing in it)
+#   12. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   13. the version       1 kB  every image.
+#   14. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
-# ships layer 9, PROVIDED the other layers rebuild to identical bytes. CI
+# ships layer 11, PROVIDED the other layers rebuild to identical bytes. CI
 # builds from nothing every time, so that rests on `podman build --timestamp`
 # in the Justfile, on build.sh stamping the packages it installs with a fixed
 # time (#511), and on there being NO RECHUNK, which throws this order away
@@ -157,6 +161,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-sm2emu.sh
+
+# Sega Model 3: Supermodel, built from source at a pin by build-supermodel.yml,
+# with SDL2_net and its catalogue, from the payload. A layer of its own beside
+# sm2-emu's, moving only when its pin does.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-supermodel.sh
 
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak

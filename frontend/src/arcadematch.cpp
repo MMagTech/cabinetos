@@ -39,10 +39,10 @@ struct Catalogue {
 };
 
 // THE ORDER, and it is the decision (arcadematch.h).
-// sm2-emu is a program of its own (standalone.h), named as its catalog row
-// names it.
-constexpr const char* kOrder[] = {"flycast", "fbneo_libretro", "mame2003_plus", "sm2emu",
-                                  "mame_libretro"};
+// sm2-emu and Supermodel are programs of their own (standalone.h), named as
+// their catalog rows name them.
+constexpr const char* kOrder[] = {"flycast",    "fbneo_libretro", "mame2003_plus", "sm2emu",
+                                  "supermodel", "mame_libretro"};
 constexpr size_t kCores = sizeof kOrder / sizeof kOrder[0];
 
 std::string gDir = "cores/build";
@@ -126,7 +126,8 @@ Catalogue parse(const std::string& text) {
 void loadFrom(const std::string& dir, Catalogue* cats) {
     for (size_t i = 0; i < kCores; ++i) {
         // fbneo_libretro.so's is fbneo_libretro.catalogue; a program of its
-        // own has no .so, and its catalogue is named for it (sm2emu.catalogue).
+        // own has no .so, and its catalogue is named for it (sm2emu.catalogue,
+        // supermodel.catalogue).
         std::string file = catalog::coreFileName(kOrder[i]);
         file.replace(file.size() - 3, 3, ".catalogue");
         if (cab::standalone::find(kOrder[i])) file = std::string(kOrder[i]) + ".catalogue";
@@ -165,7 +166,8 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
     for (size_t i = 0; i < kCores; ++i) {
         const std::string core = kOrder[i];
         if (dreamcast && core != "flycast") continue;
-        if (ext == "7z" && core == "mame2003_plus") continue;
+        // MAME 2003-Plus and Supermodel open a zip only.
+        if (ext == "7z" && (core == "mame2003_plus" || core == "supermodel")) continue;
         const auto it = cats[i].sets.find(set);
         if (it == cats[i].sets.end() || !it->second.works) continue;
         // NOTHING LEFT TO CHECK is never a fit: an empty list fits any zip.
@@ -524,8 +526,8 @@ int test() {
         std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
         if (!ok) ++failures;
     };
-    // Five catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
-    // sm2-emu, MAME 0.289.
+    // Six catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
+    // sm2-emu, Supermodel, MAME 0.289.
     Catalogue cats[kCores] = {
         parse("# flycast\n!bios naomi awbios\n"
               "azumanga w - b71ede16:0 @gdl-0018:\n"
@@ -554,6 +556,10 @@ int test() {
               "vf2 w - b3 00000103:0\n"
               "vcop n g 00000104:0\n"
               "lastbrnx n - b3 00000106:0\n"),
+        parse("# supermodel\n"
+              "scud w - 00000201:0\n"
+              "vf3 w - b4 00000202:0\n"
+              "lostwsga w g 00000203:0\n"),
         parse("# mame_libretro\n"
               "sf2 w - b6 00000001:100 00000003:300\n"
               "gollygho w - b2 00000009:10\n"
@@ -565,7 +571,10 @@ int test() {
               "daytona w - b9 00000101:10\n"
               "doa w - b3 00000102:10\n"
               "vcop w g b1 00000104:10\n"
-              "lastbrnx n - b3 00000106:10\n"),
+              "lastbrnx n - b3 00000106:10\n"
+              "scud n - b2 00000201:10\n"
+              "vf3 n - b4 00000202:10\n"
+              "lostwsga n g b2 00000203:10\n"),
     };
     auto name = [&](const char* f, bool dc = false) { return byNameIn(cats, f, dc); };
     auto files = [&](const char* f, std::vector<Member> m, std::vector<Disc> d = {},
@@ -607,7 +616,7 @@ int test() {
           "plays it");
     check(name("megat.zip").verdict == Verdict::NotSupported,
           "a touchscreen machine in MAME 0.289's list is not supported");
-    check(cats[4].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
+    check(cats[5].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
           "MAME 0.289's catalogue says how many buttons a game has; the others say none");
     check(core(name("daytona.zip")) == "sm2emu",
           "sm2-emu comes before MAME 0.289, where both have a Model 2 game working");
@@ -619,6 +628,15 @@ int test() {
           "a light-gun game in sm2-emu's list needs a light gun");
     check(cats[3].sets.at("vf2").buttons == 3 && cats[3].sets.at("daytona").buttons == 0,
           "sm2-emu's catalogue gives a three-button game's buttons, and a driving game none");
+    check(core(name("scud.zip")) == "supermodel",
+          "Supermodel comes before MAME 0.289, which marks every Model 3 game not working");
+    check(core(name("scud.7z")) == "",
+          "a Model 3 7z is never Supermodel's, which opens a zip only, and MAME 0.289's is "
+          "not working");
+    check(name("lostwsga.zip").verdict == Verdict::NeedsGun,
+          "a light-gun game in Supermodel's catalogue needs a light gun");
+    check(cats[4].sets.at("vf3").buttons == 4 && cats[4].sets.at("scud").buttons == 0,
+          "Supermodel's catalogue gives a fighting game's four buttons, and a driving game none");
     check(core(name("azumanga.zip", true)) == "flycast",
           "in the Dreamcast folder, a Flycast set is Flycast's");
     check(name("sf2.zip", true).verdict == Verdict::NotSupported,
@@ -646,7 +664,7 @@ int test() {
     check(core(files("kinst.zip", {{"k", 0x20, 10}}, {{"kinst", "AAAA"}})) == "fbneo_libretro",
           "a set FinalBurn Neo has with no disc plays there");
     {
-        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3], cats[4]};
+        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3], cats[4], cats[5]};
         check(core(byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"KINST", "AAAA"}}, false)) ==
                   "mame2003_plus",
               "a disc of the listed name and SHA1 fits, in any case");
@@ -666,6 +684,8 @@ int test() {
           "and a disc whose name has spaces, written %20 in the catalogue");
     check(core(files("daytona.zip", {{"d", 0x101, 10}})) == "sm2emu",
           "by files, a Model 2 zip with the files both lists give plays in sm2-emu");
+    check(core(files("vf3.zip", {{"v", 0x202, 10}})) == "supermodel",
+          "by files, a Model 3 zip with the files its list gives plays in Supermodel");
     check(files("hotd2.zip", {{"r", 0xb23d1a0c, 1}}).verdict == Verdict::NeedsGun,
           "by files too, a light-gun game needs a light gun");
     check(files("vliner.zip", {{"v", 0x40, 10}}).verdict == Verdict::NotSupported,

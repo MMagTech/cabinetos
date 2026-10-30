@@ -25,6 +25,7 @@
 #                  checked against its pins by cores/fetch-mame.sh)
 #   Cemu           .github/workflows/build-cemu.yml
 #   sm2-emu        .github/workflows/build-sm2emu.yml (and its catalogue)
+#   Supermodel     .github/workflows/build-supermodel.yml (and its catalogue)
 #   Sunshine       .github/workflows/build-sunshine.yml
 #
 # So this only ever COLLECTS and CHECKS. It builds nothing, and it fails before
@@ -51,6 +52,8 @@
 #   cemu/{bin,share/Cemu}/...     Wii U's emulator, its game profiles and resources
 #   sm2emu/{bin,share/sm2-emu}/..., sm2emu.catalogue   Model 2's emulator and
 #                                 which sets it plays
+#   supermodel/{bin,lib,share/supermodel}/..., supermodel.catalogue   Model 3's
+#                                 emulator, SDL2_net, and which sets it plays
 #   sunshine/Sunshine-*.rpm       Remote Play's streaming host, with our patch (#304)
 #
 # This starts image_payload/ afresh. Two more folders go in after it, from
@@ -76,6 +79,7 @@ if [ $# -ge 1 ]; then
     SYSTEM="$SRC/system"
     CEMUSRC="$SRC/cemu"
     SM2SRC="$SRC/sm2emu"
+    SUPERMODELSRC="$SRC/supermodel"
     SUNSHINESRC="$SRC/sunshine"
     MAMESRC="$SRC/mame"
 else
@@ -85,6 +89,7 @@ else
     SYSTEM="$ROOT/cores/system"
     CEMUSRC="$ROOT/cores/build/cemu"
     SM2SRC="$ROOT/cores/build/sm2emu"
+    SUPERMODELSRC="$ROOT/cores/build/supermodel"
     SUNSHINESRC="$ROOT/cores/build/sunshine"
     MAMESRC="$ROOT/cores/build/mame"
 fi
@@ -328,6 +333,23 @@ done
 rm -rf "$OUT/sm2emu"
 cp -R "$SM2SRC" "$OUT/sm2emu"
 
+# --- Sega Model 3 -----------------------------------------------------------
+# Supermodel, built by cores/build-supermodel.sh at its pin, and its catalogue
+# (cores/arcade-sets.sh supermodel, run into the same folder). REQUIRED, for
+# PlayStation 2's reason: without it every Model 3 game greys, since MAME
+# 0.289 runs none. build_files/install-supermodel.sh puts it at
+# /usr/lib/cabinetos/supermodel and the catalogue beside the cores.
+for f in bin/supermodel lib/libSDL2_net-2.0.so.0 share/supermodel/Games.xml VERSION \
+         supermodel.catalogue; do
+    [ -s "$SUPERMODELSRC/$f" ] || {
+        echo "Supermodel's $f is not in $SUPERMODELSRC, so the image would lose Model 3" >&2
+        echo "Build it with cores/build-supermodel.sh, then cores/arcade-sets.sh supermodel $SUPERMODELSRC." >&2
+        exit 1
+    }
+done
+rm -rf "$OUT/supermodel"
+cp -R "$SUPERMODELSRC" "$OUT/supermodel"
+
 # --- Remote Play ------------------------------------------------------------
 # Sunshine, built by cores/build-sunshine.sh at its pin with our patch (#304).
 # REQUIRED: build_files/install-sunshine.sh installs this package and nothing
@@ -358,6 +380,7 @@ printf '  ps2       %s emulator, %s libraries, %s resources\n' \
 printf '  mame      0.289 (%s), %s\n' "$(cut -c1-8 "$OUT/mame/VERSION")" "$(du -sh "$OUT/mame" | cut -f1)"
 printf '  wii u     Cemu %s, %s\n' "$(cut -c1-10 "$OUT/cemu/VERSION")" "$(du -sh "$OUT/cemu" | cut -f1)"
 printf '  model 2   sm2-emu %s, %s\n' "$(cut -c1-10 "$OUT/sm2emu/VERSION")" "$(du -sh "$OUT/sm2emu" | cut -f1)"
+printf '  model 3   Supermodel %s, %s\n' "$(cut -c1-10 "$OUT/supermodel/VERSION")" "$(du -sh "$OUT/supermodel" | cut -f1)"
 printf '  sunshine  %s, %s\n' "$(head -1 "$OUT/sunshine/VERSION" | cut -d' ' -f1)" "$(du -sh "$OUT/sunshine" | cut -f1)"
 printf '  system    %s, %s entries\n' "$(du -sh "$OUT/system" | cut -f1)" \
        "$(find "$OUT/system" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ')"

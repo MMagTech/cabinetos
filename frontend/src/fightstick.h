@@ -6,7 +6,8 @@
 // on the table (fightstick.cpp) is a pad, and nothing here touches it: no
 // setting, no screen, no change in how it is read. A stick that is on it
 // plays an arcade game (FBNeo, MAME 2003-Plus, MAME 0.289, a Naomi or
-// Atomiswave board in Flycast, a Model 2 board in sm2-emu) through a layout
+// Atomiswave board in Flycast, a Model 2 board in sm2-emu, a Model 3 board
+// in Supermodel) through a layout
 // made from the buttons the game says it uses, and
 // every other game as the pad it says it is. Its Home opens the pause menu in every game, switch or not, since it
 // has no stick clicks for the pair that opens it on a pad (play.cpp).
@@ -37,8 +38,9 @@
 // declares them in RetroPad id order, so they are put in its Classic table's
 // order (fightstick.cpp). MAME 0.289 names no game's buttons, so the console
 // declares them for it (mameButtons), in its order, with its 7th and 8th on
-// L3 and R3. sm2-emu, a program of its own, is told where each button is in
-// its settings instead, from the same rules (standalone_sm2emu.cpp).
+// L3 and R3. sm2-emu and Supermodel, programs of their own, are told where
+// each button is in their settings instead, from the same rules
+// (standalone_sm2emu.cpp, standalone_supermodel.cpp).
 // Otherwise labels are the core's words, shown as they are. A port the core
 // said nothing about takes port 0's.
 //
@@ -77,9 +79,9 @@ const Stick* match(uint16_t vendor, uint16_t product, const std::string& device)
 std::string kind(SDL_Gamepad* gp);
 
 // Whether a core is an arcade core, FBNeo, MAME 2003-Plus, MAME 0.289 or
-// Flycast, or sm2-emu: the games a stick gets a layout in, and, but for
-// sm2-emu, whose pause menu has no Controls row, Controls is offered in
-// (controls.h).
+// Flycast, or sm2-emu or Supermodel: the games a stick gets a layout in, and,
+// but for those two, whose pause menus have no Controls row, Controls is
+// offered in (controls.h).
 // Callers pass the session's arcadeCore (gamesession.h), which is empty for a
 // game that is not an arcade game, Flycast's Dreamcast discs among them.
 bool isArcadeCore(const std::string& core);

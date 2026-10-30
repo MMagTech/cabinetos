@@ -43,7 +43,8 @@ downloads a whole new image and boots into it.
 - **Seven emulators run as separate programs**, started and stopped by the
   frontend like a game: Eden (Switch) and xemu (Xbox) from Flathub, and RPCS3
   (PlayStation 3), Xenia Edge (Xbox 360), Cemu (Wii U), Vita3K (PlayStation
-  Vita) and sm2-emu (Sega Model 2) built into the image. Steam's Big Picture is a seventh,
+  Vita), sm2-emu (Sega Model 2) and Supermodel (Sega Model 3) built into the
+  image. Steam's Big Picture is a seventh,
   an optional entry that hands the screen over and comes back.
 - **Everything comes from RomM:** games, covers, firmware, saves and save
   states. The console keeps a cache of downloaded games and its own
@@ -101,10 +102,11 @@ folder by itself (`--core-dir` points it anywhere else; with neither, it
 uses the image's `/usr/lib/cabinetos/cores`). The script then checks the
 core's options against `cores/options/<core>.txt` and prints any
 difference; for a new core, that printed list (from `tools/core-options.c`)
-is what the file is made from. **PCSX2, Cemu, sm2-emu and Sunshine**
-(Remote Play's streaming host) each have a script beside it,
-`cores/build-pcsx2.sh`, `cores/build-cemu.sh`, `cores/build-sm2emu.sh` and
-`cores/build-sunshine.sh`, which builds its own container from
+is what the file is made from. **PCSX2, Cemu, sm2-emu, Supermodel and
+Sunshine** (Remote Play's streaming host) each have a script beside it,
+`cores/build-pcsx2.sh`, `cores/build-cemu.sh`, `cores/build-sm2emu.sh`,
+`cores/build-supermodel.sh` and `cores/build-sunshine.sh`, which builds its
+own container from
 `cores/<name>-builder/` the first time. **MAME 0.289** is
 the one core not built: `cores/fetch-mame.sh cores/build` fetches
 libretro's own build, checks it against its pins, and adds its plugins and
@@ -115,8 +117,10 @@ script's header says how to run it.
 box it is `ci/stage-image-payload.sh` with no arguments, which collects and
 checks your local builds into `image_payload/`, then `just build`. It needs
 every piece built first: the frontend, the Wii bridge, all 23 cores,
-MAME 0.289, PCSX2, Cemu, sm2-emu and Sunshine under `cores/build/`, the arcade
-emulators' catalogues (`cores/arcade-sets.sh`, sm2-emu's into `cores/build/sm2emu/`) and PPSSPP's and Dolphin's files in
+MAME 0.289, PCSX2, Cemu, sm2-emu, Supermodel and Sunshine under `cores/build/`,
+the arcade emulators' catalogues (`cores/arcade-sets.sh`, sm2-emu's into
+`cores/build/sm2emu/` and Supermodel's into `cores/build/supermodel/`) and
+PPSSPP's and Dolphin's files in
 `cores/system/`. That path is not walked
 through here; read the Justfile's `build` recipe first.
 
@@ -358,7 +362,7 @@ purpose, none today): each is removed, or kept with the reason in the pull
 request (CLAUDE.md, rule 6).
 
 **A pull request to `main` never builds the image**, the cores, MAME 0.289,
-PCSX2 (and so `frontend/ps2`), Cemu, sm2-emu or Sunshine; a mistake there first shows
+PCSX2 (and so `frontend/ps2`), Cemu, sm2-emu, Supermodel or Sunshine; a mistake there first shows
 when the maintainer pushes to `testing`. That includes the check of each
 core's options against `cores/options/` (`cores/check-options.sh`, which
 `cores/build-core.sh` runs on every core it builds or takes from the
@@ -367,7 +371,7 @@ difference in its options shows at the testing push. Dolphin's and FBNeo's
 lists need a game loaded, so `tools/check-applied.sh` compares them on the
 reference console. A pull request into any other branch runs
 `build-frontend.yml`, `build-core.yml`, `build-mame.yml`, `build-pcsx2.yml`,
-`build-cemu.yml`, `build-sm2emu.yml` and `build-sunshine.yml` when it touches their paths (each workflow's
+`build-cemu.yml`, `build-sm2emu.yml`, `build-supermodel.yml` and `build-sunshine.yml` when it touches their paths (each workflow's
 `paths:` list).
 
 **Every pull request**, whatever it is aimed at and whatever it changes,
