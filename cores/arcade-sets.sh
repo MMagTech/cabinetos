@@ -30,6 +30,16 @@
 #                   and light gun from its parent as sm2-emu's own loader
 #                   does (src/rom/game_db.cpp); a region it marks
 #                   required="false" is left out, as an optional file is
+#   supermodel      Supermodel's Config/Games.xml, at the commit
+#                   cores/build-supermodel.sh pins: its Model 3 games, a
+#                   clone's files laid over its parent's region by region as
+#                   its own loader does (src/GameLoader.cpp), a region marked
+#                   required="false" left out. Its list marks nothing not
+#                   working and gives the mounted guns and the light gun the
+#                   same control, so the g and x marks are MAME 0.289's for the
+#                   same set (its -listxml, as for mame_libretro): The Lost
+#                   World is a light gun there, L.A. Machineguns and The Ocean
+#                   Hunter are not
 #
 # THE FILE, <core file stem>.catalogue, one set a line:
 #   <set> <w|n> <-|g|x> [b<buttons>] <crc>:<size> ... @<disc>:<sha1> ...
@@ -40,12 +50,14 @@
 # 2026-10-28-arcade-emulator-from-the-zip.md): a touchscreen, a mahjong or
 # hanafuda panel, a gambling, medal or electromechanical machine, a photo
 # booth, a test tape. Only what each list marks plainly: an awkward set it
-# does not mark plays. b<buttons>, MAME 0.289's and sm2-emu's alone, is how
-# many buttons player 1 has, since neither names a game's buttons to the
-# console (frontend/src/fightstick.h): MAME's -listxml says, and sm2-emu's
-# list says 3 for a game it gives three buttons ("buttons3") and nothing for
-# a driving or gun game. Each file the zip must hold as its CRC32 and
-# size (size 0 where the list gives none, Flycast's and sm2-emu's); each disc by the CHD's
+# does not mark plays. b<buttons>, MAME 0.289's, sm2-emu's and Supermodel's
+# alone, is how many buttons player 1 has, since none names a game's buttons
+# to the console (frontend/src/fightstick.h): MAME's -listxml says, sm2-emu's
+# list says 3 for a game it gives three buttons ("buttons3"), Supermodel's 4
+# for a fighting game or Spikeout and 3 for Virtua Striker, and neither says
+# anything for a driving or gun game. Each file the zip must hold as its CRC32
+# and size (size 0 where the list gives none, Flycast's, sm2-emu's and
+# Supermodel's); each disc by the CHD's
 # name and the SHA1 the list gives (none for Flycast), a space in its name
 # written %20. Left out of the files:
 # the BIOS options (what the set takes from the BIOS at the end of its romof
@@ -56,8 +68,9 @@
 # THE PIN IS READ FROM cores/build-core.sh, the one place it is written, and
 # for MAME 0.289, which is not built there, from cores/fetch-mame.sh (its
 # LISTXML_URL and LISTXML_SHA256; $CABINETOS_LISTXML may name a copy already
-# fetched, which is checked the same), and for sm2-emu, a program of its own,
-# from cores/build-sm2emu.sh (its REPO= and COMMIT=). Not a mode of build-core.sh on
+# fetched, which is checked the same), and for sm2-emu and Supermodel,
+# programs of their own, from cores/build-sm2emu.sh and
+# cores/build-supermodel.sh (their REPO= and COMMIT=). Not a mode of build-core.sh on
 # purpose: every core's CI cache key covers its shared lines
 # (ci/core-cache-key.sh), so editing a mode there would rebuild every core.
 #
@@ -66,7 +79,8 @@
 #
 # Usage: cores/arcade-sets.sh <core> <out dir>
 #   writes <out dir>/<core file stem>.catalogue, e.g. fbneo_libretro.catalogue,
-#   or for a program of its own its name's, sm2emu.catalogue
+#   or for a program of its own its name's, sm2emu.catalogue or
+#   supermodel.catalogue
 
 set -euo pipefail
 
@@ -97,6 +111,10 @@ sm2emu)
     FILES=("data/games.xml")
     LEAST=80
     ;;
+supermodel)
+    FILES=("Config/Games.xml")
+    LEAST=55
+    ;;
 *)
     exit 0
     ;;
@@ -105,33 +123,37 @@ esac
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
 src=()
-if [[ "${CORE}" == mame_libretro ]]; then
-    # MAME 0.289's -listxml, by the pin in cores/fetch-mame.sh. Asserted.
-    url=$(sed -n 's/^LISTXML_URL=//p' "${ROOT}/cores/fetch-mame.sh")
-    sha=$(sed -n 's/^LISTXML_SHA256=//p' "${ROOT}/cores/fetch-mame.sh")
-    [[ "${url}" =~ ^https://github.com/ && "${sha}" =~ ^[0-9a-f]{64}$ ]] ||
+# MAME 0.289's -listxml into $1, by the pin in cores/fetch-mame.sh, with its
+# URL and SHA-256 in LISTXML_URL and LISTXML_SHA. Asserted.
+listxml() {
+    LISTXML_URL=$(sed -n 's/^LISTXML_URL=//p' "${ROOT}/cores/fetch-mame.sh")
+    LISTXML_SHA=$(sed -n 's/^LISTXML_SHA256=//p' "${ROOT}/cores/fetch-mame.sh")
+    [[ "${LISTXML_URL}" =~ ^https://github.com/ && "${LISTXML_SHA}" =~ ^[0-9a-f]{64}$ ]] ||
         { echo "${CORE}: no LISTXML_URL= and LISTXML_SHA256= in cores/fetch-mame.sh" >&2; exit 1; }
-    dest="${tmp}/${FILES[0]}"
     if [[ -n "${CABINETOS_LISTXML:-}" ]]; then
-        cp "${CABINETOS_LISTXML}" "${dest}"
+        cp "${CABINETOS_LISTXML}" "$1"
     else
-        curl -fsSL --retry 3 -o "${dest}" "${url}"
+        curl -fsSL --retry 3 -o "$1" "${LISTXML_URL}"
     fi
-    got=$(sha256sum "${dest}" | cut -d' ' -f1)
-    [[ "${got}" == "${sha}" ]] ||
-        { echo "${CORE}: ${url} has sha256 ${got}, the pin says ${sha}" >&2; exit 1; }
-    src+=("${dest}")
-    COMMIT="${sha}"
-    FILES=("${url}")
+    local got
+    got=$(sha256sum "$1" | cut -d' ' -f1)
+    [[ "${got}" == "${LISTXML_SHA}" ]] ||
+        { echo "${CORE}: ${LISTXML_URL} has sha256 ${got}, the pin says ${LISTXML_SHA}" >&2; exit 1; }
+}
+if [[ "${CORE}" == mame_libretro ]]; then
+    listxml "${tmp}/${FILES[0]}"
+    src+=("${tmp}/${FILES[0]}")
+    COMMIT="${LISTXML_SHA}"
+    FILES=("${LISTXML_URL}")
 else
 # The case arm in build-core.sh, and its REPO= and COMMIT= lines; for sm2-emu
-# its own build script's. Asserted: a pin that cannot be read fails the build
-# rather than shipping no list.
-if [[ "${CORE}" == sm2emu ]]; then
-    arm=$(cat "${ROOT}/cores/build-sm2emu.sh")
-else
-    arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh")
-fi
+# and Supermodel their own build scripts'. Asserted: a pin that cannot be read
+# fails the build rather than shipping no list.
+case "${CORE}" in
+sm2emu) arm=$(cat "${ROOT}/cores/build-sm2emu.sh") ;;
+supermodel) arm=$(cat "${ROOT}/cores/build-supermodel.sh") ;;
+*) arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh") ;;
+esac
 REPO=$(sed -n 's/^ *REPO=//p' <<<"${arm}")
 COMMIT=$(sed -n 's/^ *COMMIT=//p' <<<"${arm}")
 [[ "${REPO}" =~ ^https://github.com/[^/]+/[^/]+\.git$ ]] ||
@@ -160,18 +182,53 @@ if [[ "${CORE}" == fbneo_libretro ]]; then
     git -C "${tmp}/fbneo" checkout -q FETCH_HEAD
     src+=("${tmp}/fbneo/src/burn/drv")
 fi
+# Supermodel's marks are MAME 0.289's for the same set (above).
+if [[ "${CORE}" == supermodel ]]; then
+    listxml "${tmp}/mame0289lx.zip"
+    src+=("${tmp}/mame0289lx.zip")
+    FILES+=("${LISTXML_URL}")
+fi
 
 mkdir -p "${OUT}"
 file="${OUT}/${CORE%_libretro}_libretro.catalogue"
 # A program of its own is named for itself (arcadematch.cpp, loadFrom).
-[[ "${CORE}" == sm2emu ]] && file="${OUT}/${CORE}.catalogue"
+[[ "${CORE}" == sm2emu || "${CORE}" == supermodel ]] && file="${OUT}/${CORE}.catalogue"
 {
     echo "# ${CORE} @ ${COMMIT}, from ${FILES[*]}"
     python3 - "${CORE}" "${src[@]}" <<'PY'
-import os, re, sys
+import os, re, sys, zipfile
 import xml.etree.ElementTree as ET
 
 core, paths = sys.argv[1], sys.argv[2:]
+
+
+def mame_machines(path):
+    # MAME 0.289's machines from its -listxml zip, one at a time as the list
+    # streams (it is 327 MB), each cleared once used. A BIOS, a device or a
+    # machine that cannot run is not a set.
+    with zipfile.ZipFile(path) as z:
+        xml = [n for n in z.namelist() if n.endswith(".xml")]
+        if len(xml) != 1:
+            sys.exit("%s: the -listxml zip holds %d xml files, not one" % (core, len(xml)))
+        with z.open(xml[0]) as f:
+            for _, m in ET.iterparse(f):
+                if m.tag != "machine":
+                    continue
+                if "yes" not in (m.get("isbios"), m.get("isdevice")) and m.get("runnable") != "no":
+                    yield m
+                m.clear()
+
+
+def mame_flag(m):
+    # MAME 0.289's own words: x for ismechanical, a mahjong, hanafuda or
+    # gambling control, or a light gun on a machine with a touchscreen device
+    # (which MAME reports as a light gun); g for a light gun.
+    kinds = {c.get("type") for c in m.iter("control")}
+    touch = any("touch" in (d.get("name") or "") for d in m.iter("device_ref"))
+    if (m.get("ismechanical") == "yes" or kinds & {"mahjong", "hanafuda", "gambling"}
+            or ("lightgun" in kinds and touch)):
+        return "x"
+    return "g" if "lightgun" in kinds else "-"
 
 
 printed = set()
@@ -363,50 +420,27 @@ elif core == "flycast":
         flag = "g" if uses in guns else "x" if uses in touch else "-"
         line(name.group(1), True, flag, files, discs)
 elif core == "mame_libretro":
-    import zipfile
-    # A machine is a set unless it is a BIOS, a device or not runnable. Read
-    # as it streams: the list is 327 MB.
-    panels = {"mahjong", "hanafuda", "gambling"}
     marks = {"x": 0, "g": 0}
-    with zipfile.ZipFile(paths[0]) as z:
-        xml = [n for n in z.namelist() if n.endswith(".xml")]
-        if len(xml) != 1:
-            sys.exit("mame_libretro: the -listxml zip holds %d xml files, not one" % len(xml))
-        with z.open(xml[0]) as f:
-            for _, m in ET.iterparse(f):
-                if m.tag != "machine":
-                    continue
-                if "yes" in (m.get("isbios"), m.get("isdevice")) or m.get("runnable") == "no":
-                    m.clear()
-                    continue
-                files = []
-                for r in m.iter("rom"):
-                    crc = (r.get("crc") or "").lower()
-                    if (not crc or r.get("status") == "nodump" or r.get("optional") == "yes"
-                            or r.get("bios")):
-                        continue
-                    f2 = (int(crc, 16), int(r.get("size") or 0))
-                    if f2 not in files:
-                        files.append(f2)
-                discs = [(d.get("name"), (d.get("sha1") or "").lower()) for d in m.iter("disk")
-                         if d.get("status") != "nodump" and d.get("optional") != "yes"]
-                controls = list(m.iter("control"))
-                kinds = {c.get("type") for c in controls}
-                touch = any("touch" in (d.get("name") or "") for d in m.iter("device_ref"))
-                if m.get("ismechanical") == "yes" or kinds & panels or ("lightgun" in kinds and touch):
-                    flag = "x"
-                elif "lightgun" in kinds:
-                    flag = "g"
-                else:
-                    flag = "-"
-                if flag != "-":
-                    marks[flag] += 1
-                buttons = max([int(c.get("buttons") or 0) for c in controls
-                               if c.get("player") in (None, "1")] or [0])
-                driver = m.find("driver")
-                works = driver is None or driver.get("status") != "preliminary"
-                line(m.get("name"), works, flag, files, discs, buttons)
-                m.clear()
+    for m in mame_machines(paths[0]):
+        files = []
+        for r in m.iter("rom"):
+            crc = (r.get("crc") or "").lower()
+            if (not crc or r.get("status") == "nodump" or r.get("optional") == "yes"
+                    or r.get("bios")):
+                continue
+            f2 = (int(crc, 16), int(r.get("size") or 0))
+            if f2 not in files:
+                files.append(f2)
+        discs = [(d.get("name"), (d.get("sha1") or "").lower()) for d in m.iter("disk")
+                 if d.get("status") != "nodump" and d.get("optional") != "yes"]
+        flag = mame_flag(m)
+        if flag != "-":
+            marks[flag] += 1
+        buttons = max([int(c.get("buttons") or 0) for c in m.iter("control")
+                       if c.get("player") in (None, "1")] or [0])
+        driver = m.find("driver")
+        works = driver is None or driver.get("status") != "preliminary"
+        line(m.get("name"), works, flag, files, discs, buttons)
     if marks["x"] < 5000 or marks["g"] < 400:
         sys.exit("mame_libretro: only %d games marked not for a controller and %d light-gun "
                  "games; the list changed shape" % (marks["x"], marks["g"]))
@@ -448,6 +482,48 @@ elif core == "sm2emu":
              files, [], 3 if "buttons3" in inputs else 0)
     if guns < 3:
         sys.exit("sm2emu: only %d light-gun games; the list changed shape" % guns)
+elif core == "supermodel":
+    text = re.sub(r"<!--.*?-->", "", open(paths[0], encoding="utf-8").read(), flags=re.S)
+    # Model 3 only: its list also defines the Real3D Pro-1000, a graphics
+    # board, which is no game.
+    games = {g.get("name"): g for g in ET.fromstring(text).iter("game")
+             if g.findtext("hardware/platform") == "Sega Model 3"}
+    marks = {}
+    for m in mame_machines(paths[1]):
+        if m.get("name") in games:
+            marks[m.get("name")] = mame_flag(m)
+
+    def regions(g):
+        # Its regions by name, each a list of (offset, crc), as its loader
+        # builds them: a clone's region replaces the parent's file at each
+        # offset it names and adds the rest; a region only the clone has is
+        # added whole. One level of parent, which is all it allows.
+        out = {}
+        parent = games.get(g.get("parent")) if g.get("parent") else None
+        for x in ([parent] if parent is not None else []) + [g]:
+            for r in x.iter("region"):
+                if r.get("required") == "false":
+                    out.pop(r.get("name"), None)
+                    continue
+                files = out.setdefault(r.get("name"), {})
+                for f in r.iter("file"):
+                    files[int(f.get("offset"), 0)] = int(f.get("crc32"), 16)
+        return out
+
+    for name, g in sorted(games.items()):
+        files = []
+        for r in regions(g).values():
+            for crc in r.values():
+                if (crc, 0) not in files:
+                    files.append((crc, 0))
+        inputs = {i.get("type") for i in g.iter("input")}
+        if not inputs and g.get("parent") in games:
+            inputs = {i.get("type") for i in games[g.get("parent")].iter("input")}
+        buttons = 4 if inputs & {"fighting", "spikeout"} else 3 if "soccer" in inputs else 0
+        line(name, True, marks.get(name, "-"), files, [], buttons)
+    if "g" not in marks.values():
+        sys.exit("supermodel: MAME 0.289 marks none of its sets a light-gun game; "
+                 "a list changed shape")
 PY
 } > "${file}"
 

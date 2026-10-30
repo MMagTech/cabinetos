@@ -2,7 +2,8 @@
 // standalone.cpp, and each emulator's own entry points, defined in its file.
 // Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
 // standalone_xenia.cpp, standalone_cemu.cpp, standalone_xemu.cpp,
-// standalone_vita3k.cpp and standalone_sm2emu.cpp include it.
+// standalone_vita3k.cpp, standalone_sm2emu.cpp and standalone_supermodel.cpp
+// include it.
 // Moved out of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
@@ -49,6 +50,8 @@ bool removeTree(const std::string& path);
 std::vector<std::string> listDir(const std::string& dir);
 bool endsWithNoCase(const std::string& s, const char* suffix);
 std::string yamlQuote(const std::string& v);
+bool placeLink(const std::string& target, const std::string& link);
+std::string arcadeSet(const std::string& romPath);
 
 // Switch (standalone_eden.cpp).
 bool prepareEden(const Emulator& e, const std::string& saveDir, const std::string& player,
@@ -99,6 +102,15 @@ bool prepareSm2emu(const Emulator& e, const std::string& romPath, const std::str
 // entries before the program, then its folders, the set and the game's zip.
 void sm2emuArgs(std::vector<std::string>& full, const std::string& dir,
                 const std::string& saveDir, const std::string& romPath);
+
+// Sega Model 3 (standalone_supermodel.cpp).
+std::string supermodelNvram(const std::string& saveDir);
+bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std::string& saveDir,
+                       int players, quality::Level level, std::string* err);
+// Run::start's arguments for Supermodel, as for sm2emuArgs, and before them
+// its working folder, bwrap's --chdir after "bwrap".
+void supermodelArgs(std::vector<std::string>& full, const Emulator& e, const std::string& dir,
+                    const std::string& romPath);
 
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,

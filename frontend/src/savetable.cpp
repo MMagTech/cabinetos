@@ -171,11 +171,12 @@ bool snapshotsAllowed(const char* core) {
     // True to the machines: memory-card consoles, and everything after them.
     // Not the 3DS, a handheld, by MMagTech's decision of 2026-10-20, though
     // its states may not survive an emulator update (emulatorTag). And every
-    // emulator run as a program of its own, sm2-emu's Model 2 among them,
-    // whose pause menu is Resume, Screenshot and Exit to Home (MMagTech,
-    // 2026-10-29).
+    // emulator run as a program of its own, sm2-emu's Model 2 and
+    // Supermodel's Model 3 among them, whose pause menu is Resume, Screenshot
+    // and Exit to Home (MMagTech, 2026-10-29).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
-                                               "xenia", "cemu", "vita3k", "sm2emu"};
+                                               "xenia", "cemu", "vita3k", "sm2emu",
+                                               "supermodel"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -264,6 +265,10 @@ const char* saveTag(const char* core) {
         // them, which drop into any sm2-emu's saves folder. No Cabinet app
         // plays Model 2 either (docs/decisions/2026-10-28-model-2-and-model-3.md).
         {"sm2emu", "sm2emu"},
+        // Sega Model 3, in Supermodel: a zip of the person's `nvram/` for the
+        // game, the board's `<set>.nv` as Supermodel names it, which drops
+        // into any Supermodel's NVRAM folder. No Cabinet app plays Model 3.
+        {"supermodel", "supermodel"},
         //
         // Nintendo 3DS has states, so its save tag comes from emulatorTag
         // above: a zip of the emulated SD card's `Nintendo 3DS` folder

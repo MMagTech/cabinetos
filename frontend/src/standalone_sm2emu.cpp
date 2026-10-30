@@ -11,7 +11,6 @@
 #include "storage.h"
 #include "vpad.h"
 
-#include <cctype>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -43,16 +42,6 @@ namespace cab::standalone::detail {
 std::string sm2emuNvram(const std::string& saveDir) { return saveDir + "/nvram"; }
 
 namespace {
-
-// The set, from its zip's name: `daytona` from `.../daytona.zip`. The arcade
-// match picked sm2-emu by that name (arcadematch.h), so it is in its list.
-std::string setOf(const std::string& romPath) {
-    std::string base = romPath.substr(romPath.find_last_of('/') + 1);
-    const size_t dot = base.find_last_of('.');
-    if (dot != std::string::npos) base.erase(dot);
-    for (char& c : base) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return base;
-}
 
 // sm2-emu's number for a pad control (core/config.h): an SDL gamepad button's
 // own, or 100 + an SDL axis for that axis pushed past half travel, which is
@@ -133,7 +122,7 @@ bool prepareSm2emu(const Emulator& e, const std::string& romPath, const std::str
     storage::makeDirs(config);
     storage::makeDirs(sm2emuNvram(saveDir));
     storage::makeDirs(home(e) + "/screenshots");
-    const std::string set = setOf(romPath);
+    const std::string set = arcadeSet(romPath);
     // THE CONSOLE'S SETTINGS, written whole before every start; sm2-emu
     // writes the file back as it quits, so nothing it kept can differ, and a
     // key left out is its own default. Names from core/config.cpp at the pin.
@@ -216,7 +205,7 @@ void sm2emuArgs(std::vector<std::string>& full, const std::string& dir,
     // `--game` names the set, which its own match by the zip's files would
     // otherwise choose among a parent and its clones.
     full.insert(full.end(), {"--config", saveDir + "/config", "--nvram", sm2emuNvram(saveDir),
-                             "--game", setOf(romPath), romPath});
+                             "--game", arcadeSet(romPath), romPath});
 }
 
 }  // namespace cab::standalone::detail
