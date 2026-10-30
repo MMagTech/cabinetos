@@ -21190,11 +21190,9 @@ repository; this is its substance.
 
 #### Why it waits: RomM
 
-**His rule, 2026-10-21:** "I don't want the OS to become a management client
-to features already offered in RomM." The console uses what RomM offers (games
-load from it, saves and states sync through it, screenshots go to its gallery,
-RetroAchievements show in it), and RomM is where people view, share and
-delete. A clip endpoint would serve every RomM client, not only this one.
+The rule this rests on moved to
+`docs/decisions/2026-10-21-romm-owns-management.md`. A clip endpoint would
+serve every RomM client, not only this one.
 
 **What RomM 5.4 has** (its API description on the project's write-test RomM,
 and RomM's master on GitHub, both read 2026-10-21):

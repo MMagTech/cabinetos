@@ -60,10 +60,12 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [arcade-discs-one-folder](2026-10-28-arcade-discs-one-folder.md): an arcade game with a disc is one folder with its CHD at the top, the only layout RomM documents.
 - [arcade-sets-non-merged](2026-09-27-arcade-sets-non-merged.md): arcade sets are non-merged, for every emulator.
 - [one-arcade-tile](2026-10-29-one-arcade-tile.md): every arcade folder is one Library tile, Arcade, whose grid names each game's folder; everywhere else an arcade game's system is Arcade.
+- [romm-owns-management](2026-10-21-romm-owns-management.md): the console uses what RomM offers and never manages it: no gallery, list or manager of its own.
 
 ### Screens and settings
 
 - [focused-game-names-its-system](2026-10-25-focused-game-names-its-system.md): the focused game's line names its system on Home, in a collection and in Search, and not in a system's own grid.
+- [no-ui-for-the-few](2026-10-13-no-ui-for-the-few.md): an option only a few players would use never goes on Home, a grid or a game's page.
 
 ### The image and updates
 
