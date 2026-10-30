@@ -8,7 +8,8 @@ The same menu in every game, on every system.
 
 - **Press both sticks in together (L3 + R3).** Always, on any pad.
 - **Escape** on a USB keyboard. In PS2, Switch, PS3, Xbox, Xbox 360, Wii U
-  and PS Vita games the keyboard does not reach the menu: use a pad.
+  and PS Vita games, and Model 2 and Model 3 arcade games, the keyboard does
+  not reach the menu: use a pad.
 - A tap of the **shortcut button** (Home, unless you chose another), when
   [In-game shortcuts](navigation.md#in-game-shortcuts) are on.
 - **Hold HOME** for a second on a Wii Remote, in any game.
@@ -39,7 +40,8 @@ Remote Play stream starts or ends.
 Rows appear only where they apply:
 
 - **Save state** and **Load latest state**: not on PS2, GameCube, Wii,
-  Switch, PS3, Xbox, Xbox 360, Wii U or PS Vita, which have no save states. A 3DS
+  Switch, PS3, Xbox, Xbox 360, Wii U or PS Vita, or in Model 2 and Model 3
+  arcade games, which have no save states. A 3DS
   state may not load after an update changes the emulator.
 - **Picture**: only on systems with picture levels, and only for the owner
   when a PIN is set.
@@ -48,7 +50,8 @@ Rows appear only where they apply:
 - **Change disc**: only on a game with several discs. Not on GameCube, which
   changes discs by itself; 3DO has Insert and restart only. On Saturn Insert
   goes through the console's CD player screen: press Start there.
-- **Controls**: only in arcade games that name their buttons.
+- **Controls**: only in arcade games that name their buttons; not yet in
+  Model 2 and Model 3 games.
 
 ## Controls
 
