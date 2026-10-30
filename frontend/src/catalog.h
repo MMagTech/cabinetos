@@ -139,10 +139,19 @@ std::map<std::string, std::vector<std::string>> libretroCores();
 
 Coverage coverageFor(const romm::Platform& p);
 
-// The name to put on a tile, a grid's heading, a launch screen: the server's
-// name for the platform, and an arcade folder's own name, which tells its
-// tile apart from the others RomM also calls "Arcade" (catalog.cpp).
+// The name to put on a tile, a grid's heading, Settings' Downloads: the
+// server's name for the platform, and "Arcade" for every arcade folder, whose
+// games share one tile (#611, catalog.cpp).
 std::string displayName(const romm::Platform& p);
+
+// A game's system wherever a screen names it, by the same rule: "Arcade" for a
+// game in any arcade folder, RomM's name for the rest.
+std::string systemName(const romm::Game& g);
+
+// A game's RomM folder, its platform's fs_slug: what the Arcade tile's line
+// names after each game, and where an arcade game's BIOS is uploaded (#611).
+// RomM's name for the platform when the game carries no folder.
+std::string folderName(const romm::Game& g);
 
 // The same answer in a handful of words, for a place that has a handful of
 // words' worth of room — a library tile's second line.

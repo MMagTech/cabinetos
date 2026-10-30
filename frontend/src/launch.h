@@ -51,7 +51,7 @@ struct LaunchJob {
     // WHAT A FAILED LAUNCH SAYS, in words (#146, #90). The worker notes
     // whether a system that cannot start without its BIOS got none from the
     // server; if the game then fails, that is what the page says, "No Saturn
-    // BIOS on your server", rather than the core's own wording. It is never
+    // BIOS on the server", rather than the core's own wording. It is never
     // a reason to refuse: the core is still asked, and may manage.
     std::atomic<bool> biosMissing{false};
     std::string systemName;

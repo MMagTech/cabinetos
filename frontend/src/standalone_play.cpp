@@ -50,7 +50,7 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
         cab::vpad::close();
         if (!err.empty()) std::fprintf(stderr, "[standalone] %s\n", err.c_str());
         refuseLaunch(missingKeys ? "No " + launchJob.systemName + " " + emu.needs +
-                                       " on your server"
+                                       " on the server"
                                  : std::string("Couldn't start this game"));
         return;
     }
@@ -204,10 +204,10 @@ void App::finishStandalone() {
             refuseLaunch("Couldn't start this game");
             break;
         case cab::standalone::Run::End::KeysTooOld:
-            refuseLaunch("Needs newer " + launchJob.systemName + " keys on your server");
+            refuseLaunch("Needs newer " + launchJob.systemName + " keys on the server");
             break;
         case cab::standalone::Run::End::NoLicence:
-            refuseLaunch("No license for this game on your server");
+            refuseLaunch("No license for this game on the server");
             break;
         case cab::standalone::Run::End::Crashed:
             menuNotice.say("The game closed unexpectedly", Tone::Problem);

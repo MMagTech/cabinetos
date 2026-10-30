@@ -402,12 +402,22 @@ const char* shortReason(const Coverage& c) {
 }
 
 std::string displayName(const romm::Platform& p) {
-    // AN ARCADE TILE IS ITS FOLDER'S NAME, as Argosy, RomM's own Android app,
-    // names them: RomM calls MAME's, FinalBurn Neo's, Naomi's and
-    // Atomiswave's folders all "Arcade", and its name for CPS1's is "Capcom
-    // Play System", where the folder says which board.
-    if (arcadematch::isArcadeSlug(p.slug) && !p.fsSlug.empty()) return p.fsSlug;
+    // EVERY ARCADE FOLDER IS ONE SYSTEM, "Arcade" (#611): its games share one
+    // tile, as they share one look and one achievements system (looks.cpp,
+    // achievements.cpp). RomM calls MAME's, FinalBurn Neo's, Naomi's and
+    // Atomiswave's folders "Arcade" and CPS1's "Capcom Play System"; the
+    // folder itself is named only inside that tile (folderName).
+    if (arcadematch::isArcadeSlug(p.slug)) return "Arcade";
     return p.name.empty() ? p.slug : p.name;
+}
+
+std::string systemName(const romm::Game& g) {
+    if (arcadematch::isArcadeSlug(g.platformSlug)) return "Arcade";
+    return g.platformName;
+}
+
+std::string folderName(const romm::Game& g) {
+    return g.platformFsSlug.empty() ? g.platformName : g.platformFsSlug;
 }
 
 }  // namespace catalog

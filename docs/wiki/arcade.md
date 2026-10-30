@@ -2,7 +2,7 @@
 
 How to set out arcade games in RomM for CabinetOS, and what each one gets.
 
-- **One folder for each system**, named the way RomM knows it. Each is a tile, named after its folder.
+- **One folder for each system**, named the way RomM knows it. All of them are one Library tile, **Arcade**, in RomM's title order. The line beside its heading names the focused game's folder: *Metal Slug · NeoGeoMVS*. Everywhere else an arcade game's system is *Arcade*. A game in two folders shows twice. For one board on its own, make a RomM collection of it.
 
   | Folder | Games |
   |---|---|

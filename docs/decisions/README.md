@@ -59,6 +59,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 
 - [arcade-discs-one-folder](2026-10-28-arcade-discs-one-folder.md): an arcade game with a disc is one folder with its CHD at the top, the only layout RomM documents.
 - [arcade-sets-non-merged](2026-09-27-arcade-sets-non-merged.md): arcade sets are non-merged, for every emulator.
+- [one-arcade-tile](2026-10-29-one-arcade-tile.md): every arcade folder is one Library tile, Arcade, whose grid names each game's folder; everywhere else an arcade game's system is Arcade.
 
 ### Screens and settings
 

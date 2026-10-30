@@ -105,7 +105,7 @@ struct Emulator {
     // format. The console never unpacks them.
     const char* extensions;
     // What it cannot start a game without, in the words the console refuses
-    // with: "No Switch keys on your server", "No PS3 firmware on your server".
+    // with: "No Switch keys on the server", "No PS3 firmware on the server".
     const char* needs;
     // GAMES THAT HAVE TO BE INSTALLED BEFORE THEY RUN (a PS3 PKG, a Vita
     // game's zip). The game is always a folder, fetched file by file into it,

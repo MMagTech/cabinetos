@@ -347,7 +347,7 @@ void App::openDetail(int cardIndex) {
         if (g.id != d.romId) continue;
         raHash = g.raHash;
         raPlatform = g.platformSlug;
-        d.platform = g.platformName;
+        d.platform = catalog::systemName(g);
         d.sizeBytes = g.sizeBytes;
         const catalog::Coverage cov = catalog::coverageFor(g);
         raReadable = !cov.core || ra::coreReadable(cov.core, cov.arcade);
