@@ -203,6 +203,9 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
         // Daytona USA 2 stop at "Network board not present" without one. It
         // listens on 1970 and connects to 127.0.0.1:1970, inside the
         // sandbox's empty network (Run::start), so nothing outside sees it.
+        // Dirt Devils, set as a slave, waits for itself this way and plays
+        // when Supermodel takes trzy/Supermodel#360 (no patch of ours,
+        // MMagTech 2026-10-29).
         {"Network", "true"},
         {"SimulateNet", "true"},
         {"PortIn", "1970"},
