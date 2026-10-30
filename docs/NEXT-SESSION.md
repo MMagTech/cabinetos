@@ -45,11 +45,9 @@ RomM: keep test launches under a minute, or have his go.
    #616, "Arcade: Sega Model 3 games play in Supermodel" (2026.10.30), where
    16 of his 17 Model 3 games play and Dirt Devils waits at its network
    check until Supermodel takes trzy/Supermodel#360 (no patch of ours, his
-   call 2026-10-29). For his call, one at a time: holding Start does
-   nothing in a Model 2 or Model 3 game, and the arcade wiki's "High scores
-   and arcade settings are kept on this console" leaves out that Model 3
-   NVRAM travels to RomM. In Later, each planned with him before anything
-   is built: #617, "Arcade: a Controls row for Model 2 and Model 3 games",
+   call 2026-10-29). For his call: holding Start does nothing in a Model 2
+   or Model 3 game. In Later, each planned with him before anything is
+   built: #617, "Arcade: a Controls row for Model 2 and Model 3 games",
    and #608, "FinalBurn Neo games keep no high scores".
 2. **The left stick in Naomi and Atomiswave lever games (his note,
    2026-10-28, at the TV).** Flycast feeds the analog stick only to a
