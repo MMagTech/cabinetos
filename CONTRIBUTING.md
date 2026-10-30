@@ -554,6 +554,13 @@ here, not reworded; follow the link for the full text.
   together with RomM's behaviour is the source of truth" (MMagTech; it
   stands in docs/NEXT-SESSION.md's first paragraph, and is quoted here so it
   stays when that file is rewritten).
+- **The console uses RomM, never manages it.** Looking at, sorting and
+  deleting a person's saves, screenshots and the rest is RomM's job; no
+  gallery, list or manager goes on the console
+  (`docs/decisions/2026-10-21-romm-owns-management.md`).
+- **No option on a main screen for a few players.** Home, a system's grid
+  and a game's page carry only what every player uses
+  (`docs/decisions/2026-10-13-no-ui-for-the-few.md`).
 - **The controller is the input the design assumes.** A keyboard is the
   guaranteed input at first run, and a mouse "moves focus and clicks the
   focused thing, and nothing else" (docs/PROJECT.md, open question 16,
