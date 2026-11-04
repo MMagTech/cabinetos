@@ -57,132 +57,64 @@ concurrency:
 
 jobs:
   build:
-    name: Build ${{ matrix.disk-type }}
+    name: Probe the portable image
     runs-on: ubuntu-24.04
-    # The ISO alone by default: the qcow2 is only for making a new test VM,
-    # which is updated in place and almost never remade. A computed matrix,
-    # because `matrix` is not available in a job-level `if`.
-    strategy:
-      fail-fast: false
-      matrix:
-        disk-type: ${{ fromJSON(inputs.types == 'both' && '["qcow2","anaconda-iso"]' || format('["{0}"]', inputs.types)) }}
-
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: read
       id-token: write
-
     steps:
-      - name: Prepare environment
+      - name: Runner facts
         run: |
-          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"
-          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
-          echo "USER_UID=$(id -u)" >> "${GITHUB_ENV}"
-          echo "USER_GID=$(id -g)" >> "${GITHUB_ENV}"
-
+          uname -a; nproc; free -g; df -h; id
+          ls -l /dev/kvm || echo "no /dev/kvm"
+          grep -c -E 'vmx|svm' /proc/cpuinfo || true
+          lscpu | grep -E 'Model name|Virtualization|Hypervisor'
+          for m in kvm_intel kvm_amd btrfs nbd loop vhost_vsock; do printf '%s: ' $m; modinfo -F filename $m 2>&1 | head -1; done
+          echo "USER_UID=$(id -u)" >> "${GITHUB_ENV}"; echo "USER_GID=$(id -g)" >> "${GITHUB_ENV}"
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> "${GITHUB_ENV}"; echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "${GITHUB_ENV}"
       - name: Maximize build space
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
         with:
           remove-codeql: true
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
-
-      # The upstream template omits this, because its example images are public.
-      # A newly created GHCR package is private by default, and bootc-image-builder
-      # cannot pull a private image anonymously. Logging in means the disk build
-      # works whether or not you have made the package public yet.
       - name: Login to GHCR
         uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7  # v4.5.1
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build disk image
         id: build
         uses: osbuild/bootc-image-builder-action@8661cd3832544ad68c12dcde8681b13ab0f56a8d  # main
         with:
           builder-image: ${{ env.BIB_IMAGE }}
-          config-file: ${{ matrix.disk-type == 'anaconda-iso' && './disk_config/iso.toml' || './disk_config/disk.toml' }}
+          config-file: ./disk_config/portable-probe.toml
           image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.tag }}
           chown: ${{ env.USER_UID }}:${{ env.USER_GID }}
-          types: ${{ matrix.disk-type }}
-          # --rootfs is required unless the image declares a root filesystem.
-          # CabinetOS declares one in /usr/lib/bootc/install/20-cabinetos.toml,
-          # but passing it explicitly means disk builds also work against an
-          # image built before that file existed.
+          types: raw
           additional-args: --use-librepo=True --rootfs=btrfs
-
-      # THE INSTALLER'S LOOK. The builder has no setting for the boot menu or
-      # the installer's own files (#284), so its ISO is repacked here: the
-      # boot menu, and a product image the installer lays over itself with
-      # CabinetOS's colours, logo and title, and Network & Host Name hidden.
-      # Nothing the builder made is rebuilt.
-      # docs/decisions/2026-11-02-installer-iso-repacked.md says why. The ISO
-      # is replaced where it lies, so the upload and the publish below take
-      # the repacked one.
-      - name: Brand the installer ISO
-        if: matrix.disk-type == 'anaconda-iso'
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq btrfs-progs gdisk xz-utils qemu-system-x86 ovmf time >/dev/null
+          df -h; ls -R "${{ steps.build.outputs.output-directory }}" | head
+      - name: Probe
         env:
           OUT: ${{ steps.build.outputs.output-directory }}
         run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq xorriso mtools squashfs-tools gettext grub-common >/dev/null
-          iso=$(find "${OUT}" -name '*.iso' -type f | head -n1)
-          [[ -n "${iso}" ]] || { echo "no ISO in ${OUT}"; exit 1; }
-          df -h "${RUNNER_TEMP}" "$(dirname "${iso}")"
-          ci/brand-installer-iso.sh "${iso}" "${RUNNER_TEMP}/branded.iso"
-          mv "${RUNNER_TEMP}/branded.iso" "${iso}"
-
-      - name: Upload disk image
+          raw=$(find "${OUT}" -name '*.raw' -type f | head -n1)
+          bash ci/probe-portable.sh "$(realpath "$raw")" "${RUNNER_TEMP}/probe"
+      - name: Upload
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: cabinetos-${{ matrix.disk-type }}
-          path: ${{ steps.build.outputs.output-directory }}
-          if-no-files-found: error
-          # 90 days, the maximum for a public repository and free at that.
-          # The artifact is only a convenience: the image it is built from lives
-          # on GHCR permanently, and a fresh disk build takes about 5 minutes.
-          # But there is no reason to make anyone re-run one unnecessarily.
-          retention-days: 90
+          name: portable-probe
+          path: |
+            ${{ runner.temp }}/probe/x9.xz
+            ${{ runner.temp }}/probe/*.png
+            ${{ runner.temp }}/probe/serial.log
+          retention-days: 5
           compression-level: 0
-          overwrite: true
-
-      # THE DOWNLOAD (#308). One file people can get without an account:
-      # GitHub takes at most 2 GB per release file and the ISO is about
-      # 7 GB, so it lives in Cloudflare R2, which charges nothing for
-      # downloads (MMagTech, 2026-10-10). ONE NAME, REPLACED EACH RELEASE:
-      # the link never changes, and the bucket only ever holds one ISO,
-      # inside R2's free storage. Its SHA-256 beside it, for the release
-      # page. The keys are repository secrets, MMagTech's; nothing here
-      # prints them.
-      - name: Publish the ISO
-        if: inputs.publish && matrix.disk-type == 'anaconda-iso'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          # Newer AWS CLIs add checksums R2 does not take; only when required.
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          OUT: ${{ steps.build.outputs.output-directory }}
-        run: |
-          set -euo pipefail
-          iso=$(find "${OUT}" -name '*.iso' -type f | head -n1)
-          [[ -n "${iso}" ]] || { echo "no ISO in ${OUT}"; exit 1; }
-          echo "ISO: ${iso} ($(du -h "${iso}" | cut -f1))"
-          (cd "$(dirname "${iso}")" && sha256sum "$(basename "${iso}")" | sed 's/ .*$/  cabinetos.iso/') > cabinetos.iso.sha256
-          cat cabinetos.iso.sha256
-          aws s3 cp "${iso}" s3://cabinetos/cabinetos.iso --endpoint-url "${ENDPOINT}" \
-            --content-type application/x-iso9660-image --no-progress
-          aws s3 cp cabinetos.iso.sha256 s3://cabinetos/cabinetos.iso.sha256 --endpoint-url "${ENDPOINT}" \
-            --content-type text/plain --no-progress
-          # Read back what is there, so a green run means the download is
-          # the file just built.
-          aws s3api head-object --bucket cabinetos --key cabinetos.iso --endpoint-url "${ENDPOINT}" \
-            --query ContentLength --output text > remote-size
-          [[ "$(cat remote-size)" == "$(stat -c %s "${iso}")" ]] || { echo "size on R2 differs"; exit 1; }
-          echo "Published cabinetos.iso, $(cat remote-size) bytes, and its SHA-256"
