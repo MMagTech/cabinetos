@@ -10,6 +10,7 @@
 
 #include <json-c/json.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <mutex>
 
@@ -37,13 +38,23 @@ namespace {
 // and logs.read. The line is that this can change YOUR data and never THE
 // library.
 //
+// me.write IS ASKED FOR ONE THING: revoking the console's own token on Sign
+// out, on Remove, and the old one on a re-pairing (#484, ROMM-10). RomM
+// 5.4.0's only revoke a token can call, DELETE /api/client-tokens/{id},
+// needs it. IT REACHES FURTHER THAN THAT, and the person approving sees it
+// in the list: RomM checks a new token's scopes against the PERSON's, not
+// the token's, so a token with me.write can make itself a token with
+// everything that person may do, approve a pairing and change their RomM
+// profile. Unticked on RomM's approval page, the console works as before
+// and revokes nothing (each refusal is logged).
+//
 // Two rounds of under-scoping got here. "Ask again when something needs it" is
 // right for genuinely occasional access and wrong for a requirement, and each
 // mistake costs a re-pairing that a person has to walk across a room for.
 const char* kScopes[] = {
     "me.read", "platforms.read", "roms.read", "assets.read",
     "roms.user.read", "collections.read", "firmware.read",
-    "assets.write", "roms.user.write", "collections.write",
+    "assets.write", "roms.user.write", "collections.write", "me.write",
 };
 
 }  // namespace
@@ -161,6 +172,12 @@ bool Client::loadToken(const std::string& path) {
     token_ = std::move(t);
     deviceId_.clear();   // a device belongs to a token
     return true;
+}
+
+void Client::setToken(const std::string& token) {
+    std::lock_guard<std::mutex> lock(mu_);
+    token_ = token;
+    deviceId_.clear();   // a device belongs to a token
 }
 
 bool Client::beginPairing(Pairing* out, std::string* err) {
@@ -285,6 +302,46 @@ bool Client::fetchCurrentUser(User* out, std::string* err) {
     json_object_put(root);
     if (out->id <= 0) {
         if (err) *err = "users/me carried no id";
+        return false;
+    }
+    return true;
+}
+
+bool Client::newestDeviceToken(int* out, std::string* err) const {
+    std::string device;
+    if (!deviceId(&device, err)) return false;
+    std::string body;
+    if (!get("/api/client-tokens", &body, err)) return false;
+    json_object* root = json_tokener_parse(body.c_str());
+    if (!root || json_object_get_type(root) != json_type_array) {
+        if (root) json_object_put(root);
+        if (err) *err = "client-tokens response was not a list";
+        return false;
+    }
+    int newest = 0;
+    const size_t n = json_object_array_length(root);
+    for (size_t i = 0; i < n; ++i) {
+        json_object* t = json_object_array_get_idx(root, i);
+        if (jstr(t, "device_id") != device) continue;
+        newest = std::max(newest, static_cast<int>(jint(t, "id")));
+    }
+    json_object_put(root);
+    if (newest <= 0) {
+        if (err) *err = "no token on this device";
+        return false;
+    }
+    *out = newest;
+    return true;
+}
+
+bool Client::revokeToken(int tokenId, std::string* err) const {
+    std::string body;
+    long status = 0;
+    if (!sendJson("DELETE", "/api/client-tokens/" + std::to_string(tokenId), "", &body,
+                  &status, err))
+        return false;
+    if (status < 200 || status >= 300) {
+        if (err) *err = "HTTP " + std::to_string(status);
         return false;
     }
     return true;
