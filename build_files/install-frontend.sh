@@ -201,7 +201,7 @@ log "installed /usr/libexec/cabinetos-wii-bridge ($(du -h /usr/libexec/cabinetos
 install -D -m 0755 "${PAYLOAD}/bin/cabinetos-linkup" /usr/libexec/cabinetos-linkup
 log "installed /usr/libexec/cabinetos-linkup ($(du -h /usr/libexec/cabinetos-linkup | cut -f1))"
 # The controller list, beside the binary that reads it (players::loadMappings)
-# and in the same small layer, so its weekly update ships one file.
+# and in the same small layer, so its monthly update ships one file.
 install -D -m 0644 /ctx/frontend-data/gamecontrollerdb.txt /usr/share/cabinetos/gamecontrollerdb.txt
 log "installed the controller list ($(grep -c 'platform:Linux' /usr/share/cabinetos/gamecontrollerdb.txt) Linux entries)"
 # Which controllers each Wii game accepts, from GameTDB (tools/wii-controls.py):

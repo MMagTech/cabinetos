@@ -1724,10 +1724,7 @@ then whether he was drifting into adding too much: *"the os is meant to be
 simple and take the complexity away alot of emulators add."* Decided:
 
 - **No remapping:** moved to [decisions/2026-09-26-no-remapping.md](decisions/2026-09-26-no-remapping.md).
-- **No mapping screen for unknown pads either (#66).** The console carries
-  SDL_GameControllerDB (`players::loadMappings`) and a weekly pull request
-  keeps it current; a pad that is still missing is added to the list. The
-  person never maps anything, which is the rule this section began with.
+- **No mapping screen for unknown pads either (#66):** moved to [decisions/2026-09-26-no-mapping-screen.md](decisions/2026-09-26-no-mapping-screen.md).
 - **Officially supported controllers: Xbox, PlayStation and Switch**
   (MMagTech, 2026-10-10, #318): *"the most likely controller someone would
   have laying around home."* Their kernel drivers (`hid_microsoft`,

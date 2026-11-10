@@ -6,16 +6,18 @@
 # button-mapping screen (issue #66), so a list that never moves is a list that
 # slowly stops covering new pads.
 #
-# Weekly, like the base update, and for the same reason: one reviewable
-# change a week. It never merges anything; a merge ships the new list to every
-# console through System update.
+# Monthly, on the 1st with the base update, so both ride the same System
+# update: new pads appear slowly, and a week's freshness bought nothing a
+# player sees (docs/decisions/2026-11-10-scheduled-checks-monthly.md). It
+# never merges anything; a merge ships the new list to every console through
+# System update.
 
 name: Check controller list update
 
 on:
   schedule:
-    # Monday 09:30 UTC, half an hour after the base check.
-    - cron: '30 9 * * 1'
+    # The 1st at 09:30 UTC, half an hour after the base check.
+    - cron: '30 9 1 * *'
   workflow_dispatch:
 
 permissions:
