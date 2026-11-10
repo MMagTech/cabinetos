@@ -140,6 +140,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [installer-iso-repacked](2026-11-02-installer-iso-repacked.md): the installer ISO is repacked after the builder, for CabinetOS's boot menu and look, with nothing the builder made rebuilt.
 - [portable-download](2026-11-05-portable-download.md): the portable's download is the file from a finished run, which was tried, not a new build; it sits beside the ISO on R2 for about 4 cents a month.
 - [scheduled-checks-monthly](2026-11-10-scheduled-checks-monthly.md): the controller list and Steam's spare are checked on the 1st of each month with the Bazzite base, not every Monday.
+- [flathub-pins-held-and-watched](2026-11-10-flathub-pins-held-and-watched.md): every console ends with exactly the Flathub builds pinned, Flathub's Mesa included, and a monthly check fails while a pin is near the end of what Flathub keeps.
 
 ### How we work
 

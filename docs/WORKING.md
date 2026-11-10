@@ -149,6 +149,12 @@ so all three ride one update.
 
 None of the three merges anything.
 
+**Also on the 1st, `flatpak-pins.yml`** checks that every Flathub pin (Eden,
+xemu, their runtimes and Flathub's Mesa) can still be downloaded. It opens
+nothing: a red run means a pin is gone or near the end of what Flathub keeps,
+so try a newer build on the A9 and move the pin in
+`system_files/usr/share/cabinetos/flatpaks.list`.
+
 **`build-disk.yml`**, by hand only: the installer ISO (`anaconda-iso`, an
 artifact kept 90 days, repacked in CabinetOS's look by
 `ci/brand-installer-iso.sh`), a qcow2, or the file a tester writes to a USB

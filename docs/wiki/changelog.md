@@ -4,6 +4,14 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Changed:** Switch and original Xbox games run on exactly the same
+  graphics driver and libraries on every console, the ones they are tested
+  with. If your console had a different build of the driver, each of these
+  games builds its shaders again the first time you play it after this
+  update, so its first minutes may stutter.
+
 ## 2026.11.10 {#v2026-11-10}
 
 - **New:** tilting and turning in the Game Boy Advance and 3DS games made for

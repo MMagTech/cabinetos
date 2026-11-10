@@ -459,6 +459,10 @@ runs `checks.yml`, a few seconds each:
   with podman, and the console's probe (`linkup/probe.cpp`, built and run in the builder) speaks every
   part of PROTOCOL.md to them through `tools/linkup-interop.sh`. Moving the pin is a pull request.
   Report only until 2026-11-14.
+- **Flathub pins** (`ci/check-flatpak-pins.sh`, in `flatpak-pins.yml`), on a pull request that changes
+  `system_files/usr/share/cabinetos/flatpaks.list`: each pinned build must still be on Flathub with at
+  least two older builds behind it, so a mistyped commit, or one about to go, fails before it ships. The
+  same check runs on the 1st of each month.
 - **Licences** (`ci/check-licences.sh`): a text in `licences/` that
   `licences/SOURCES` lists and that is missing, or whose first line does not
   name the repository, path and revision SOURCES pins, fails: a text added by
