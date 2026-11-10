@@ -232,6 +232,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--first-run-writes` | that finishing first run actually sticks |
 | `--accounts-test` | the rules for the people on a console and switching between them |
 | `--players-test` | the rules for which controller is which player, and LinkUp's friend as player two: no third seat, a TV's other controllers heard by no game, and the TV's numbers back as they were |
+| `--tilt-test` | a controller's motion sensors for a game that asks (`tilt.h`), on two controllers made inside the test, one with an accelerometer and a gyroscope and one with neither, and no real controller opened: asking says yes only for the one with them, what it reads is SDL's own numbers, player 1 never reads player 2's controller, an empty seat reads nothing, off stops the sensor, the request stays with the player's seat when a controller leaves, a new one arrives or two swap, and a reset turns every controller's sensors off |
 | `--fightstick-test` | which fight sticks are known, and where a game's buttons go on one: every count of buttons in the arcade cores' orders, a Naomi board's in Flycast, MAME 0.289's from its catalogue's count with its 7th and 8th on the stick clicks, and no layout for any other pad or a Dreamcast game |
 | `--arcade-settings-test` | holding Start in an arcade game: a hold of about a second presses a MAME's menu key once, in MAME 2003-Plus or MAME 0.289, or a Naomi or Atomiswave board's Test button in Flycast, a tap or a shorter hold presses nothing, a second hold closes MAME's menu, player 1's left stick click never reaches MAME 2003-Plus and does reach MAME 0.289 (its button 7), no player's stick clicks reach a board, and nothing changes on FinalBurn Neo, a Dreamcast game or any other core |
 | `--arcade-match-test` | which emulator plays an arcade game (`arcadematch.cpp`), on catalogues written in the test: by the zip's name for a grid, by its files and CHDs at Play, an emulator that marks the set not working skipped, MAME 2003-Plus before MAME 0.289 and never for a 7z, a disc going to the MAME its CHD was made for, a disc name with spaces, a light-gun game greyed for a light gun, one any list marks as made for anything but a controller not supported, a Dreamcast zip only Flycast's, and the reason when no emulator's files fit |
@@ -258,7 +259,7 @@ under load, against the stand-in server `tools/racemock.py <port>` only
 (start it, then `--romm-race-test 127.0.0.1:<port> 30`; it exits 0 when
 nothing went out wrong); do not point it at a real RomM.
 
-**Every flag is in `frontend/src/cli.cpp`**, 122 of them plus
+**Every flag is in `frontend/src/cli.cpp`**, 124 of them plus
 `--check-option-tables` in `main.cpp`; there is no `--help`.
 `frontend/README.md` holds the build recipe and the storage tree. What it
 said about running and the flags in September 2026 is history, in

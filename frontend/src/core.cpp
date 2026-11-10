@@ -20,6 +20,7 @@
 
 #include "libretro.h"
 #include "rumble.h"
+#include "tilt.h"
 #include "vkhost.h"
 
 namespace cab {
@@ -464,6 +465,7 @@ void Core::unload() {
 bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
                     const std::string& saveDir) {
     rumble::reset();
+    tilt::reset();
     // The last game's buttons go with it, whatever this one declares, and
     // no key it pressed is still down.
     clearInputDescriptors();
@@ -677,6 +679,7 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
 
 void Core::unloadGame() {
     rumble::reset();
+    tilt::reset();
     // Home is back on every core, whatever happens below (cpus.h).
     struct BackOnAllCores { ~BackOnAllCores() { cpus::gameEnd(); } } allCores;
     if (gIsPs2) {

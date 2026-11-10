@@ -60,6 +60,15 @@ connected.
 Settings, Controllers, **Rumble**: on or off for every controller and every
 system. It is on to start with.
 
+## Motion
+
+PS4, PS5 and Switch controllers have motion sensors; Xbox controllers do not.
+In the games made for tilting or turning the handheld, player 1's controller
+does it: Game Boy Advance cartridges with a tilt or gyro sensor, and 3DS games
+that use the 3DS's gyro, such as aiming by moving it. Tilt or turn the
+controller as the game asks. With a controller that has no motion sensors
+those games play as before, and the parts made for motion do nothing.
+
 ## Fight sticks
 
 The **8BitDo Arcade Stick**, paired over Bluetooth in **X mode**, plays arcade
