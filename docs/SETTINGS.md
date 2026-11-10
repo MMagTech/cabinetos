@@ -192,7 +192,7 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
 - **No Button mapping screen** (#66, decided with MMagTech 2026-09-26). An
   unrecognised pad is handled by the console, not the person: the image
   carries the community's controller list (SDL_GameControllerDB, 491 more
-  controllers than SDL knows alone), refreshed by a weekly pull request, and
+  controllers than SDL knows alone), refreshed by a monthly pull request, and
   a pad reported missing is added to it. **No remapping in Settings**: every
   system plays with RetroArch's default layout by button position, arcade
   games on a fight stick the console knows with a fixed fight-stick layout,

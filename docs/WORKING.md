@@ -142,13 +142,18 @@ is what only the maintainer runs.
 opens a pull request listing what moved. A player's fault that a newer
 Bazzite fixes, or a security hole, is taken by hand in between
 (`gh workflow run base-update.yml`; docs/PROJECT.md, "Staying current with
-Bazzite").
-
-**Weekly, on Mondays.** `pad-db-update.yml` refreshes the controller list
-(`frontend/data/gamecontrollerdb.txt`); `terra-fallback-update.yml` keeps the
-stored spare of Steam's session (`build_files/terra-fallback/`) current.
+Bazzite"). The same day, `pad-db-update.yml` refreshes the controller list
+(`frontend/data/gamecontrollerdb.txt`) and `terra-fallback-update.yml` keeps
+the stored spare of Steam's session (`build_files/terra-fallback/`) current,
+so all three ride one update.
 
 None of the three merges anything.
+
+**Also on the 1st, `flatpak-pins.yml`** checks that every Flathub pin (Eden,
+xemu, their runtimes and Flathub's Mesa) can still be downloaded. It opens
+nothing: a red run means a pin is gone or near the end of what Flathub keeps,
+so try a newer build on the A9 and move the pin in
+`system_files/usr/share/cabinetos/flatpaks.list`.
 
 **`build-disk.yml`**, by hand only: the installer ISO (`anaconda-iso`, an
 artifact kept 90 days, repacked in CabinetOS's look by
