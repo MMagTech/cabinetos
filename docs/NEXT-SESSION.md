@@ -14,8 +14,14 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-11-09.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.11.09.5: #678, "Wi-Fi: Forget removes a network saved
+**2026-11-10.** The newest release is 2026.10.10. The newest image promoted
+to consoles is 2026.11.10.2: #691, "Every console gets exactly the Flathub
+builds pinned, Flathub's Mesa included, and a monthly check watches them",
+carrying #688, "The controller list and Steam's spare are checked monthly,
+with the Bazzite base", merged on 2026-11-10 after his TV checks. Before it
+the same day, 2026.11.10: #685, "Tilt for the Game Boy Advance and 3DS
+cores: answer libretro's sensor interface (#670)". On 2026-11-09,
+2026.11.09.5: #678, "Wi-Fi: Forget removes a network saved
 twice (#642)", carrying #677, "System update row: "under 1 MB" instead of
 "0.0 MB", and no size when it is not known" (#672), merged on 2026-11-09
 after his TV checks. Before it the same day: #671, "On-screen keyboard: a
@@ -48,7 +54,7 @@ RomM: keep test launches under a minute, or have his go.
 1. **LinkUp, step 6 of #654, "LinkUp: play a game with a friend on another
    CabinetOS console over the internet": across the internet.** Steps 1 to 5
    are done and recorded on the issue; the server is cabinet-linkup v0.1.1,
-   pinned in `ci/linkup-server.txt`. First his friend, on latest 2026.11.09.5,
+   pinned in `ci/linkup-server.txt`. First his friend, on latest,
    against his own server, whose Relay tab test passed on 2026-11-09; then the
    two testers in other homes. The result goes on #654 (how each game
    connected, direct or relay, from the server's admin page); nothing is filed
