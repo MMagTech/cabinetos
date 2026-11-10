@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.10 {#v2026-11-10}
 
 - **New:** tilting and turning in the Game Boy Advance and 3DS games made for
   it, with a controller that has motion sensors (PS4, PS5 and Switch
