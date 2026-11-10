@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.10.3 {#v2026-11-10-3}
 
 - **New:** tilting and turning the controller in PlayStation 3 games made for
   it, with a controller that has motion sensors (PS4, PS5 and Switch
