@@ -62,24 +62,31 @@ void reset() {
     SDL_free(ids);
 }
 
-// ---- --tilt-test ------------------------------------------------------------
+// ---- The tests' own pads ----------------------------------------------------
 
-namespace {
+// Under a made-up vendor and product, which testStart lets SDL take.
+constexpr Uint16 kTestVendor = 0x1209, kTestProduct = 0x7117;
 
-// THE TEST'S OWN PADS, SDL virtual joysticks that live inside this process
-// and nowhere else, under a made-up vendor and product. SDL is told to take
-// no other device for a gamepad, and HIDAPI is off, so no real pad on the
-// machine is opened, read or seated while it runs.
-constexpr Uint16 kVendor = 0x1209, kProduct = 0x7117;
+bool testStart() {
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
+    char only[32];
+    std::snprintf(only, sizeof only, "0x%04x/0x%04x", kTestVendor, kTestProduct);
+    SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT, only);
+    if (!SDL_Init(SDL_INIT_GAMEPAD)) {
+        std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        return false;
+    }
+    return true;
+}
 
-SDL_JoystickID attach(bool sensors) {
+uint32_t testPad(bool sensors) {
     static const SDL_VirtualJoystickSensorDesc both[] = {{SDL_SENSOR_ACCEL, 250.0f},
                                                          {SDL_SENSOR_GYRO, 250.0f}};
     SDL_VirtualJoystickDesc desc;
     SDL_INIT_INTERFACE(&desc);
     desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
-    desc.vendor_id = kVendor;
-    desc.product_id = kProduct;
+    desc.vendor_id = kTestVendor;
+    desc.product_id = kTestProduct;
     desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
     desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
     desc.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
@@ -94,18 +101,22 @@ SDL_JoystickID attach(bool sensors) {
     return id;
 }
 
-void detach(SDL_JoystickID id) {
-    players::removed(id);
-    SDL_DetachVirtualJoystick(id);
+void testUnplug(uint32_t pad) {
+    players::removed(pad);
+    SDL_DetachVirtualJoystick(pad);
 }
 
-// What a pad's sensors say, as SDL's driver would hand it on, then taken in.
-void send(SDL_JoystickID id, SDL_SensorType type, float x, float y, float z) {
+void testFeel(uint32_t pad, Sensor s, float x, float y, float z) {
     const float v[3] = {x, y, z};
-    if (SDL_Gamepad* gp = SDL_GetGamepadFromID(id))
-        SDL_SendJoystickVirtualSensorData(SDL_GetGamepadJoystick(gp), type, SDL_GetTicksNS(), v, 3);
+    if (SDL_Gamepad* gp = SDL_GetGamepadFromID(pad))
+        SDL_SendJoystickVirtualSensorData(SDL_GetGamepadJoystick(gp), typeOf(s), SDL_GetTicksNS(), v,
+                                          3);
     SDL_UpdateGamepads();
 }
+
+// ---- --tilt-test ------------------------------------------------------------
+
+namespace {
 
 bool is(const float v[3], float x, float y, float z) {
     return std::fabs(v[0] - x) < 1e-5f && std::fabs(v[1] - y) < 1e-5f && std::fabs(v[2] - z) < 1e-5f;
@@ -120,19 +131,12 @@ int test() {
         if (!ok) ++failures;
     };
 
-    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
-    char only[32];
-    std::snprintf(only, sizeof only, "0x%04x/0x%04x", kVendor, kProduct);
-    SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT, only);
-    if (!SDL_Init(SDL_INIT_GAMEPAD)) {
-        std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-        return 1;
-    }
+    if (!testStart()) return 1;
 
     float v[3];
     // Player 1's pad has no sensors; player 2's has both.
-    const SDL_JoystickID plain = attach(false);
-    const SDL_JoystickID gyro = attach(true);
+    const SDL_JoystickID plain = testPad(false);
+    const SDL_JoystickID gyro = testPad(true);
     check(plain && gyro && players::playerOf(plain) == 0 && players::playerOf(gyro) == 1,
           "two test pads are seated, the one with no sensors as player 1");
 
@@ -140,8 +144,8 @@ int test() {
           "asking player 1's sensors answers no: that pad has none");
     check(set(1, Sensor::Accel, true) && set(1, Sensor::Gyro, true),
           "asking player 2's sensors answers yes");
-    send(gyro, SDL_SENSOR_ACCEL, 1.5f, 9.80665f, -2.25f);
-    send(gyro, SDL_SENSOR_GYRO, 0.5f, -1.25f, 3.0f);
+    testFeel(gyro, Sensor::Accel, 1.5f, 9.80665f, -2.25f);
+    testFeel(gyro, Sensor::Gyro, 0.5f, -1.25f, 3.0f);
     check(read(1, Sensor::Accel, v) && is(v, 1.5f, 9.80665f, -2.25f),
           "player 2's accelerometer reads as SDL hands it over, m/s2, x y z");
     check(read(1, Sensor::Gyro, v) && is(v, 0.5f, -1.25f, 3.0f),
@@ -164,14 +168,14 @@ int test() {
     // Outside a game the seats close up: the sensor pad leaves, the plain pad
     // is player 1 alone, and a new sensor pad takes seat 2.
     check(set(1, Sensor::Gyro, true), "player 2's gyroscope back on");
-    detach(gyro);
+    testUnplug(gyro);
     check(!read(1, Sensor::Gyro, v) && is(v, 0, 0, 0), "with player 2's pad gone, seat 2 reads nothing");
-    const SDL_JoystickID again = attach(true);
+    const SDL_JoystickID again = testPad(true);
     check(players::playerOf(again) == 1, "a new pad with both sensors takes seat 2");
     SDL_Gamepad* a = SDL_GetGamepadFromID(again);
     check(!SDL_GamepadSensorEnabled(a, SDL_SENSOR_GYRO), "its gyroscope is off until seat 2 is read");
     read(1, Sensor::Gyro, v);
-    send(again, SDL_SENSOR_GYRO, -0.75f, 0.25f, 1.0f);
+    testFeel(again, Sensor::Gyro, -0.75f, 0.25f, 1.0f);
     check(read(1, Sensor::Gyro, v) && is(v, -0.75f, 0.25f, 1.0f),
           "and the seat's request turns it on with nothing asked again");
 
@@ -188,8 +192,8 @@ int test() {
     check(!SDL_GamepadSensorEnabled(a, SDL_SENSOR_GYRO) && !SDL_GamepadSensorEnabled(a, SDL_SENSOR_ACCEL),
           "and every pad's sensors are off");
 
-    detach(again);
-    detach(plain);
+    testUnplug(again);
+    testUnplug(plain);
     SDL_Quit();
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;

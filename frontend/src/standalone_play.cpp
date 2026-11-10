@@ -38,8 +38,10 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // ONE VIRTUAL CONTROLLER PER PLAYER, and at least one: the emulator
     // is given these and never the real pads (vpad.h). Without them the
     // game would start and nothing would move it, so that refuses here.
+    // Beside them, for an emulator that reads one, a motion device for each
+    // player whose pad has the sensors (PS3, #683).
     const int pads = std::max(1, players::count());
-    if (!cab::vpad::open(pads)) {
+    if (!cab::vpad::open(pads, emu.motion)) {
         refuseLaunch("Couldn't start this game");
         return;
     }

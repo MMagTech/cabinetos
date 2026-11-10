@@ -1,0 +1,13 @@
+# The PS3's motion (#683): each player's motion device, which the console
+# makes beside the player's virtual controller (frontend/src/vpad.cpp) for
+# RPCS3 to read as its "Buddy Device". A uinput device with the
+# accelerometer property, under the virtual controllers' identity (pid.codes
+# 1209, product cab0), which nothing else on the console has.
+#
+# RPCS3 runs as the seat's user, and an accelerometer is the input group's
+# alone by default, so this gives the seat's user access, as systemd does for
+# pads. After 60-input-id.rules, which marks it ID_INPUT_ACCELEROMETER, and
+# 70-uaccess.rules; before 71-seat.rules and 73-seat-late.rules, which turn
+# the tag into the grant.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_ACCELEROMETER}=="1", \
+  ATTRS{id/vendor}=="1209", ATTRS{id/product}=="cab0", TAG+="uaccess"
