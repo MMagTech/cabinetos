@@ -259,7 +259,17 @@ under load, against the stand-in server `tools/racemock.py <port>` only
 (start it, then `--romm-race-test 127.0.0.1:<port> 30`; it exits 0 when
 nothing went out wrong); do not point it at a real RomM.
 
-**Every flag is in `frontend/src/cli.cpp`**, 124 of them plus
+`--motion-device-test` checks the PS3's motion devices (`vpad.h`, #683) on a
+console, not in CI: it makes them for real through `/dev/uinput`, beside test
+pads inside the test with and without sensors, and opens them as RPCS3 does,
+which needs the image's udev rule. It asserts that only a player whose pad
+has sensors gets one, the shape RPCS3 looks for, a tilt landing in the
+DualShock 3's units, player 2's tilt never reaching player 1, rest when a
+pad has gone, and the sensors off and the devices gone when the pads close.
+Never run it while a PS3 game runs on the same console: RPCS3 finds the
+devices by name.
+
+**Every flag is in `frontend/src/cli.cpp`**, 125 of them plus
 `--check-option-tables` in `main.cpp`; there is no `--help`.
 `frontend/README.md` holds the build recipe and the storage tree. What it
 said about running and the flags in September 2026 is history, in

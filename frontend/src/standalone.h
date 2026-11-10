@@ -143,6 +143,10 @@ struct Emulator {
     // virtual touch screen (vtouch.h; App::pointerButton). The Vita, played
     // as a PS TV (docs/PROJECT.md question 49, decision 4).
     bool touchPointer;
+    // IT READS EACH PLAYER'S TILT FROM A MOTION DEVICE beside their virtual
+    // controller (vpad.h), which the console makes for every player whose
+    // pad has the sensors: RPCS3's Buddy Device, for every PS3 game (#683).
+    bool motion;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.

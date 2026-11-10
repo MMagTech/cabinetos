@@ -4,6 +4,17 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.10.3 {#v2026-11-10-3}
+
+- **New:** tilting and turning the controller in PlayStation 3 games made for
+  it, with a controller that has motion sensors (PS4, PS5 and Switch
+  controllers). Every player's own controller moves their part of the game:
+  tilt or turn it where a game asks you to move the controller, such as
+  steering, balancing or aiming. A controller without motion sensors plays
+  them as before.
+  ([#683](https://github.com/MMagTech/cabinetos/issues/683),
+  [Motion](controllers.md#motion))
+
 ## 2026.11.10.2 {#v2026-11-10-2}
 
 - **Changed:** Switch and original Xbox games run on exactly the same

@@ -20,6 +20,11 @@
 #                     real one.
 #   --evict-test, --state-test, --speed-test, --sync-test, --overlay-test
 #                     need a screen, a core and a game, or a server.
+#   --motion-device-test
+#                     makes real devices through /dev/uinput and opens them
+#                     as RPCS3 does, which needs the image's udev rule; the
+#                     container has neither. It runs on a console
+#                     (ci/base-watch.txt, Kernel and startup).
 #
 # REPORT ONLY UNTIL A DATE: while today (UTC) is not past REPORT_ONLY_UNTIL
 # (YYYY-MM-DD, set by build-frontend.yml), a failing test is the same report

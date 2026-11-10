@@ -299,6 +299,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             playersTestMode = true;
         } else if (SDL_strcmp(argv[i], "--tilt-test") == 0) {
             return tilt::test();
+        } else if (SDL_strcmp(argv[i], "--motion-device-test") == 0) {
+            return cab::vpad::motionTest();
         } else if (SDL_strcmp(argv[i], "--fightstick-test") == 0) {
             return fightstick::test();
         } else if (SDL_strcmp(argv[i], "--arcade-settings-test") == 0) {
