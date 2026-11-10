@@ -49,6 +49,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [fight-stick-layout](2026-10-24-fight-stick-layout.md): the 8BitDo Arcade Stick over Bluetooth plays arcade games with a fixed fight-stick layout, and every other pad as before.
 - [hold-start-opens-arcade-settings](2026-10-25-hold-start-opens-arcade-settings.md): holding Start in an arcade game opens the emulator's own menu, never one of the console's.
 - [no-remapping](2026-09-26-no-remapping.md): no button remapping on any system but arcade games, which have Controls.
+- [no-mapping-screen](2026-09-26-no-mapping-screen.md): nobody maps a controller; the image carries the community's controller list, and a missing pad is added to it.
 - [arcade-controls](2026-10-25-arcade-controls.md): an arcade game's pause menu has a Controls row that moves its buttons, per game, kind of controller and person.
 - [model-2-and-model-3-controls](2026-10-30-model-2-and-model-3-controls.md): Model 2 and Model 3 games with buttons have Controls, numbered from their emulator's list, played from the next start.
 - [rewind-only-with-shortcuts](2026-10-29-rewind-only-with-shortcuts.md): a game keeps a rewind history only while In-game shortcuts are on, and rewind has no switch of its own.
@@ -138,6 +139,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 
 - [installer-iso-repacked](2026-11-02-installer-iso-repacked.md): the installer ISO is repacked after the builder, for CabinetOS's boot menu and look, with nothing the builder made rebuilt.
 - [portable-download](2026-11-05-portable-download.md): the portable's download is the file from a finished run, which was tried, not a new build; it sits beside the ISO on R2 for about 4 cents a month.
+- [scheduled-checks-monthly](2026-11-10-scheduled-checks-monthly.md): the controller list and Steam's spare are checked on the 1st of each month with the Bazzite base, not every Monday.
 
 ### How we work
 

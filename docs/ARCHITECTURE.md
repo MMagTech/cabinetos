@@ -161,9 +161,9 @@ is in the file named for its feature, and
   `require-signed-updates.sh`). Nothing goes in `/var`, which an update never
   touches (lessons rule 9). The `require-*.sh` scripts fail the build rather
   than ship an image that cannot work.
-- **CI** builds, stages and promotes. The scheduled jobs (the base check
-  monthly, the controller list and Steam's spare weekly) open pull requests
-  and never merge them.
+- **CI** builds, stages and promotes. The scheduled jobs (the base check,
+  the controller list and Steam's spare, all monthly on the 1st) open pull
+  requests and never merge them.
 
 ## 3. The main flows, step by step
 
