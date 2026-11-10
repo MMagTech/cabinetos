@@ -38,6 +38,7 @@ TESTS=(
     --first-run-writes
     --accounts-test
     --players-test
+    --tilt-test
     --fightstick-test
     --arcade-settings-test
     --arcade-match-test
