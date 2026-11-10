@@ -15,7 +15,10 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-11-10.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.11.10.2: #691, "Every console gets exactly the Flathub
+to consoles is 2026.11.10.3: #689, "Motion for PS3: a motion device beside
+each player's virtual pad (#683)", merged on 2026-11-10 after his TV checks
+(Flower, LittleBigPlanet, God of War III's rumble, two controllers). Before
+it the same day, 2026.11.10.2: #691, "Every console gets exactly the Flathub
 builds pinned, Flathub's Mesa included, and a monthly check watches them",
 carrying #688, "The controller list and Steam's spare are checked monthly,
 with the Bazzite base", merged on 2026-11-10 after his TV checks. Before it
@@ -51,37 +54,26 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **LinkUp, step 6 of #654, "LinkUp: play a game with a friend on another
-   CabinetOS console over the internet": across the internet.** Steps 1 to 5
-   are done and recorded on the issue; the server is cabinet-linkup v0.1.1,
-   pinned in `ci/linkup-server.txt`. First his friend, on latest,
-   against his own server, whose Relay tab test passed on 2026-11-09; then the
-   two testers in other homes. The result goes on #654 (how each game
-   connected, direct or relay, from the server's admin page); nothing is filed
-   from it unless he asks. Beside it: cabinet-linkup#7, the server's README
-   head, merges on his word; two server tidy-ups with no issue,
-   `.dockerignore` lets `docs/` into the build stage and the relay's block
-   list lacks 3fff::/20.
-2. **Gyro, beside item 1, which waits on his friend and holds up nothing
-   here but the last session; in this order, each a fresh session that
-   starts from its issue and builds nothing the issue does not say:** #670, "Tilt
-   for the Game Boy Advance and 3DS cores: answer libretro's sensor
-   interface" (Opus, one session; TV: WarioWare: Twisted!, Ocarina of Time
-   3D, Star Fox 64 3D); then #683, "Motion for PS3: a sensor device beside
-   each player's virtual pad" (Opus, one session; TV: LittleBigPlanet); then
-   #669, "Gyro for Switch, Wii U and Vita: a virtual pad that carries the
-   player's tilt", in two sessions: the fake pad proven with one Switch game
-   in Eden (Fable, decided 2026-11-09, the one session where a wrong turn
-   costs most; no TV sitting, the proof is the log), then the three emulators
-   (Opus; TV: Mario Kart 8 Deluxe, Captain Toad, Breath of the Wild's shrines,
-   Gravity Rush); last, the friend's tilt over LinkUp for Switch and PS3
+1. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
+   #654, passed twice: his console and his friend's, two servers linking up
+   and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
+   `docs/` into the server's build stage, and the relay's block list lacks
+   3fff::/20.
+2. **Gyro, in this order, each a fresh session that starts from its issue
+   and builds nothing the issue does not say.** Done: #670 (Game Boy Advance
+   and 3DS, 2026.11.10) and #683 (PS3, 2026.11.10.3). Next: #669, "Gyro for
+   Switch, Wii U and Vita: a virtual pad that carries the player's tilt", in
+   two sessions: the fake pad proven with one Switch game in Eden (Fable,
+   decided 2026-11-09, the one session where a wrong turn costs most; no TV
+   sitting, the proof is the log), then the three emulators (Opus; TV: Mario
+   Kart 8 Deluxe, Captain Toad, Breath of the Wild's shrines, Gravity Rush).
+   The fake pad works in `vpad.cpp`, where each PS3 player's motion device
+   now is too (#683). Last, the friend's tilt over LinkUp for Switch and PS3
    (Opus, one session, two consoles; the friend needs a gyro pad of their
-   own). If it lands before item 1's sitting, that sitting tests both, as
-   two steps, the connection first; if not, the tilt gets its own short
-   test later. Settled 2026-11-09: Game Boy and Game
-   Boy Color stay on Gambatte and the two MBC7 cartridges stay out; no
-   greying for a few games; each issue carries its files and docs under
-   #398's rules. His DualSense is the gyro pad for every sitting.
+   own). Settled 2026-11-09: Game Boy and Game Boy Color stay on Gambatte
+   and the two MBC7 cartridges stay out; no greying for a few games; each
+   issue carries its files and docs under #398's rules. His DualSense is the
+   gyro pad for every sitting.
 3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
