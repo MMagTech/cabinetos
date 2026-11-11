@@ -76,10 +76,11 @@ constexpr const char* kScratch = ".install";
 //                  games that ask for the PS TV's pad (ctrl.cpp)
 //   front/back-camera-type 0, a plain colour: a PS TV has no camera, and 2,
 //                  Vita3K's default, is the machine's own webcam
-//   disable-motion off (#669): each player's tilt reaches the game through
-//                  their stand-in DualSense (vpad.h); a pad without sensors
-//                  gets a stand-in with none, and the game reads a Vita
-//                  lying still, as it did with this on
+//   disable-motion off (#669): player 1's tilt reaches the game through
+//                  their stand-in DualSense (vpad.h), the one Vita's gyro;
+//                  every other player's stand-in, and one for a pad without
+//                  sensors, has none, and the game reads a Vita lying still,
+//                  as it did with this on
 //   http-enable, discord-rich-presence  nothing leaves the console
 //   show-compile-shaders  no notice over the game while shaders build
 //   validation-layer  Vulkan's debugging layer, only ever a cost

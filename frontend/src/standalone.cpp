@@ -47,7 +47,7 @@ const Emulator kEmulators[] = {
      // folder (user/save/), as Xenia and Cemu do, so a session cut off by a
      // crash, a power cut or an app restart is sent at the next start or
      // launch instead of being overwritten by the older copy on RomM.
-     "nsp|xci", "keys", false, false, false, false, false, true, false, false, true},
+     "nsp|xci", "keys", false, false, false, false, false, true, false, false, true, false},
 
     // PLAYSTATION 3. Its log sits beside its cache, in the game's folder
     // (XDG_CACHE_HOME, rpcs3/ appended: Utilities/File.cpp, get_cache_dir).
@@ -64,7 +64,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying (#213): its savedata is in the person's folder too
      // (hdd0/home/<user>/savedata), the same case as Eden's.
-     "iso|pkg", "firmware", true, true, true, false, false, true, false, true, false},
+     "iso|pkg", "firmware", true, true, true, false, false, true, false, true, false, false},
 
     // ORIGINAL XBOX. xemu keeps no log of its own; what it prints is it. A
     // game is a folder, as a PS3 game is, because its hard drive lives beside
@@ -77,7 +77,7 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr, nullptr, nullptr},
      nullptr, nullptr,
      nullptr, 0, nullptr,
-     "iso|xiso", "BIOS", true, false, false, true, true, false, false, false, false},
+     "iso|xiso", "BIOS", true, false, false, true, true, false, false, false, false, false},
 
     // XBOX 360. Xenia Edge's own Linux build, in the image
     // (build_files/install-xenia.sh). Its log is where the console tells it
@@ -96,7 +96,7 @@ const Emulator kEmulators[] = {
      nullptr,
      "x> ",
      "Xenia-edge", 2, nullptr,
-     "iso|xex|zar", "", false, false, true, false, false, true, false, false, false},
+     "iso|xex|zar", "", false, false, true, false, false, true, false, false, false, false},
 
     // WII U. Cemu main, built from source at a pin (cores/build-cemu.sh) and in
     // the image at /usr/lib/cabinetos/cemu. Its log is under its home
@@ -115,8 +115,9 @@ const Emulator kEmulators[] = {
      nullptr,
      "Unrecoverable error in Vulkan",
      nullptr, 0, "Error",
-     // dualsense (#669): Cemu reads a pad's own sensors, as SDL pairs them.
-     "wua", "", false, false, true, false, false, true, false, false, true},
+     // dualsense (#669): Cemu reads a pad's own sensors, as SDL pairs them;
+     // onlyPlayerOneTilts: the GamePad, the one Wii U controller with a gyro.
+     "wua", "", false, false, true, false, false, true, false, false, true, true},
 
     // PLAYSTATION VITA. Vita3K's own build, in the image
     // (build_files/install-vita3k.sh), started through its SDL frontend: a
@@ -137,8 +138,9 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: Vita3K writes the saves straight into the person's
      // folder, through the link standalone_vita3k.cpp makes, as Xenia does.
-     // dualsense (#669): Vita3K reads a pad's own sensors, as SDL pairs them.
-     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true},
+     // dualsense (#669): Vita3K reads a pad's own sensors, as SDL pairs them;
+     // onlyPlayerOneTilts: the Vita is one handheld, held by player 1.
+     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true, true},
 
     // SEGA MODEL 2. sm2-emu, built from source at a pin (cores/build-sm2emu.sh)
     // and in the image at /usr/lib/cabinetos/sm2emu, for the Model 2 games
@@ -157,7 +159,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: it writes the board's NVRAM straight into the person's
      // folder, as Cemu writes its saves.
-     "zip|7z", "", false, false, false, false, false, true, false, false, false},
+     "zip|7z", "", false, false, false, false, false, true, false, false, false, false},
 
     // SEGA MODEL 3. Supermodel, built from source at a pin
     // (cores/build-supermodel.sh) and in the image at
@@ -178,7 +180,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: its NVRAM is written straight into the person's folder,
      // through the link standalone_supermodel.cpp makes, as Vita3K's saves are.
-     "zip", "", false, false, false, false, false, true, false, false, false},
+     "zip", "", false, false, false, false, false, true, false, false, false, false},
 };
 
 // How long a program that was asked to close gets before it is made to.

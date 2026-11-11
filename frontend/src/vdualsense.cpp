@@ -766,7 +766,7 @@ int test() {
           "two test pads seated: player 1's with an accelerometer and a gyroscope, player 2's with none");
     const int seated = players::count();
 
-    const bool up = cab::vpad::open(2, /*motion=*/false, /*dualsense=*/true);
+    const bool up = cab::vpad::open(2, /*motion=*/false, /*dualsense=*/true, /*onlyPlayerOneTilts=*/false);
     check(up, "two stand-ins made through /dev/uhid, as for a Switch, Wii U or Vita game");
     check(up && cab::vpad::carriesMotion(0) && !cab::vpad::carriesMotion(1),
           "player 1's carries its pad's tilt; player 2's, whose pad has no sensors, does not");
@@ -943,6 +943,21 @@ int test() {
               ::access(n1.touchpad.c_str(), F_OK) != 0 && ::access(n2.gamepad.c_str(), F_OK) != 0,
           "and the kernel has taken their devices away");
 
+    // WII U AND VITA: the machine's one gyro is player 1's, so a third
+    // player's pad with sensors still gets a stand-in without them, and its
+    // seat's sensors stay off.
+    const uint32_t third = tilt::testPad(true);
+    const bool up3 = third && players::playerOf(third) == 2 &&
+                     cab::vpad::open(3, /*motion=*/false, /*dualsense=*/true, /*onlyPlayerOneTilts=*/true);
+    SDL_Gamepad* gp3 = third ? SDL_GetGamepadFromID(third) : nullptr;
+    check(up3 && cab::vpad::carriesMotion(0) && !cab::vpad::carriesMotion(2) && nodes(2).uniq == "ca:b1:4e:70:51:03" &&
+              gp3 && !SDL_GamepadSensorEnabled(gp3, SDL_SENSOR_ACCEL) && !SDL_GamepadSensorEnabled(gp3, SDL_SENSOR_GYRO),
+          "for a Wii U or Vita game only player 1's stand-in carries tilt: player 3's, whose pad has sensors, "
+          "has none, and that pad's sensors stay off");
+    cab::vpad::close();
+    settle(100);
+
+    tilt::testUnplug(third);
     tilt::testUnplug(sensors);
     tilt::testUnplug(plain);
     players::setInGame(false);

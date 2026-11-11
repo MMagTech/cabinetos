@@ -147,9 +147,13 @@ downloads anything new into the console's shared BIOS folder.
   move the right stick again. While the dots show, the sticks, L2 and R2 work
   them and every other button goes to the game. A click of L3 still goes to
   the game.
+- **Tilting the Vita:** with a controller that has motion sensors (PS4, PS5,
+  Switch), player 1 tilts or turns it where a game asks you to move the Vita.
+  Other players' controllers do not tilt it. See
+  [Motion](controllers.md#motion).
 - **What a PS TV could not do, the console cannot either:** the rear touch
-  pad, tilting and the camera. A game that needs them may stop where it does.
-  Sony kept those games off the PS TV.
+  pad and the camera. A game that needs them may stop where it does. Sony
+  kept those games off the PS TV.
 - **No save states**, fast forward or rewind. Saves sync with your server. A
   real Vita's saves do not load.
 - **Updates and DLC do not play yet.** Games get no internet.

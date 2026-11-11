@@ -103,10 +103,11 @@ std::string cemuProfile(int player) {
     x += "    <display_name>CabinetOS player " + std::to_string(player + 1) + "</display_name>\n";
     x += "    <rumble>1</rumble>\n";
     // THE PLAYER'S TILT (#669), when their controller is a stand-in DualSense
-    // carrying it: Cemu reads a pad's motion only when its profile says so
+    // carrying it, which for Cemu is player 1's alone (standalone.h): Cemu
+    // reads a pad's motion only when its profile says so
     // (input/InputManager.cpp, "motion"; Controller.h, use_motion), and only
     // for the GamePad (VPADController::update_motion), the one Wii U
-    // controller with a gyro, so player 1's is the tilt a game reads.
+    // controller with a gyro.
     if (cab::vpad::carriesMotion(player)) x += "    <motion>true</motion>\n";
     for (const char* a : {"axis", "rotation", "trigger"})
         x += std::string("    <") + a + "><deadzone>0.25</deadzone><range>1</range></" + a + ">\n";

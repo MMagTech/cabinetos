@@ -31,7 +31,8 @@
 //   into a gamepad, a motion device and a touchpad sharing one uniq, which
 //   the emulator's SDL pairs by itself. pump() writes the pad's tilt into it
 //   too. A player whose pad has no sensors gets a stand-in on which the
-//   emulator finds none. Should the stand-in fail to come up, the plain
+//   emulator finds none, and so does every player but the first in a Wii U
+//   or Vita game, whose machine has one gyro (standalone.h). Should the stand-in fail to come up, the plain
 //   controllers stand in for it, with a line in the log, and the game plays
 //   as it did before #669. The console tells its stand-ins from real pads by
 //   their name (players.cpp), since their id is Sony's.
@@ -86,9 +87,12 @@ constexpr int kMaxPlayers = 4;
 // With `dualsense` (an emulator that reads a pad's own sensors: Eden, Cemu,
 // Vita3K), every player gets a stand-in DualSense of vdualsense.h in place of
 // the plain controller, and every seat's sensors are turned on until close();
-// a player whose pad has none gets a stand-in with none. When one cannot be
-// made, the plain controllers are made instead, with a line in the log.
-bool open(int players, bool motion, bool dualsense);
+// a player whose pad has none gets a stand-in with none. With
+// `onlyPlayerOneTilts` too (Cemu, Vita3K: the machine's one gyro is player
+// 1's), only player 1's stand-in carries tilt and only that seat's sensors are
+// turned on; every other player's stand-in has none. When one cannot be made,
+// the plain controllers are made instead, with a line in the log.
+bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts);
 void close();
 int count();
 // True while player `player`'s controller is a stand-in DualSense carrying

@@ -50,6 +50,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [hold-start-opens-arcade-settings](2026-10-25-hold-start-opens-arcade-settings.md): holding Start in an arcade game opens the emulator's own menu, never one of the console's.
 - [stand-in-dualsense-id](2026-11-10-stand-in-dualsense-id.md): the controller the console gives Eden, Cemu and Vita3K is a stand-in DualSense Edge over USB, Sony's id and the console's name, so the kernel's own driver makes the sensor pair SDL needs; the console tells its stand-ins apart by name.
 - [a-pad-without-sensors-gives-none](2026-11-11-a-pad-without-sensors-gives-none.md): a player whose controller has no motion sensors gets a stand-in on which the emulator finds none, so a Switch, Wii U or Vita game reads no tilt from it.
+- [wii-u-and-vita-tilt-is-player-ones](2026-11-11-wii-u-and-vita-tilt-is-player-ones.md): in Wii U and Vita games only player 1's controller tilts the game, as on a GamePad or a Vita held by one person.
 - [no-remapping](2026-09-26-no-remapping.md): no button remapping on any system but arcade games, which have Controls.
 - [no-mapping-screen](2026-09-26-no-mapping-screen.md): nobody maps a controller; the image carries the community's controller list, and a missing pad is added to it.
 - [arcade-controls](2026-10-25-arcade-controls.md): an arcade game's pause menu has a Controls row that moves its buttons, per game, kind of controller and person.

@@ -152,6 +152,13 @@ struct Emulator {
     // vdualsense.h and not the plain one: Eden, Cemu and Vita3K (#669). The
     // two switches are never both set.
     bool dualsense;
+    // THE MACHINE HAS ONE GYRO, AND PLAYER 1 HOLDS IT: the Wii U's GamePad
+    // (Cemu), the Vita itself (Vita3K), as a Game Boy Advance's or a 3DS's
+    // tilt is player 1's controller's. With `dualsense`, only player 1's stand-in
+    // carries tilt and every other player's shows no sensors, so a second
+    // controller never moves the game: Vita3K reads every controller's
+    // motion into the one Vita. Never set without `dualsense`.
+    bool onlyPlayerOneTilts;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.

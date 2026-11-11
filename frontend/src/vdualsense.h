@@ -39,6 +39,8 @@
 // sensors on the pad (SDL_sysjoystick.c, ConfigJoystick), and sees a pad
 // without them, as the player's own is. The pad is judged when the stand-in
 // is made, at the game's start, as everything else about the controllers is.
+// Every player but the first wears it too in a Wii U or Vita game, whose
+// machine has one gyro, player 1's (standalone.h, `onlyPlayerOneTilts`).
 //
 // THE UNITS, END TO END. tilt.h hands over SDL's units and axes, metres per
 // second squared and radians per second in the DualSense's own frame, because
@@ -153,8 +155,9 @@ Nodes nodes(int player);
 // carry, pairs its motion device (the udev rule) and reads a written tilt back
 // in SDL's units, and a press and a stick where the layout puts them, by its
 // own mapping and by the console's line; that a pad without sensors gets a
-// stand-in on which SDL finds none; that rumble comes back; and that closing
-// takes every device away. Prints plainly and
+// stand-in on which SDL finds none; that rumble comes back; that closing
+// takes every device away; and that for a Wii U or Vita game only player 1's
+// stand-in carries tilt. Prints plainly and
 // exits 0 on a machine with no /dev/uhid, which CI's builder is; it runs for
 // real on a console.
 int test();

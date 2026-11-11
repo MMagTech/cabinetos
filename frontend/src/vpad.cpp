@@ -298,14 +298,20 @@ void pumpDualSense() {
 
 }  // namespace
 
-bool open(int players, bool motion, bool dualsense) {
+bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts) {
     close();
     if (players < 1) players = 1;
     if (players > kMaxPlayers) players = kMaxPlayers;
     if (dualsense) {
         bool ok = true;
         for (int i = 0; i < players && ok; ++i) {
-            gTilt[i] = openSenses(i);
+            if (i > 0 && onlyPlayerOneTilts) {
+                gTilt[i] = false;
+                std::fprintf(stderr, "[vpad] player %d's stand-in carries no tilt: this game reads player 1's alone\n",
+                             i + 1);
+            } else {
+                gTilt[i] = openSenses(i);
+            }
             ok = vdualsense::open(i, gTilt[i]);
         }
         if (ok) {
@@ -657,7 +663,7 @@ int motionTest() {
           "three test pads seated: players 1 and 2 with both sensors, player 3 with none");
 
     // AN EMULATOR THAT READS NO MOTION DEVICE.
-    if (!open(3, /*motion=*/false, /*dualsense=*/false)) {
+    if (!open(3, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false)) {
         std::printf("  FAIL  no virtual controllers: /dev/uinput cannot be opened\n");
         players::setInGame(false);
         SDL_Quit();
@@ -668,7 +674,8 @@ int motionTest() {
     close();
 
     // RPCS3.
-    check(open(3, /*motion=*/true, /*dualsense=*/false), "three virtual controllers, motion asked");
+    check(open(3, /*motion=*/true, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false),
+          "three virtual controllers, motion asked");
     check(motionName(0) == "CabinetOS player 1 motion" && motionName(1) == "CabinetOS player 2 motion" &&
               motionName(2).empty(),
           "players 1 and 2 get a motion device; player 3, whose pad has no sensors, none");

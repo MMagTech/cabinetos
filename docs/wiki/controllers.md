@@ -64,9 +64,9 @@ system. It is on to start with.
 
 PS4, PS5 and Switch controllers have motion sensors; Xbox controllers do not.
 In the games made for tilting or turning the handheld, player 1's controller
-does it: Game Boy Advance cartridges with a tilt or gyro sensor, and 3DS games
-that use the 3DS's gyro, such as aiming by moving it. Tilt or turn the
-controller as the game asks.
+does it: Game Boy Advance cartridges with a tilt or gyro sensor, 3DS games
+that use the 3DS's gyro, such as aiming by moving it, and PS Vita games that
+use the Vita's. Tilt or turn the controller as the game asks.
 
 In PlayStation 3 and Switch games every player's controller moves as that
 console's controller did: tilt or turn it where a game asks you to move the
