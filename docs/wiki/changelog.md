@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.11.2 {#v2026-11-11-2}
 
 - **New:** tilting and turning the controller in Switch, Wii U and PS Vita
   games made for it, with a controller that has motion sensors (PS4, PS5 and
@@ -16,6 +16,9 @@ one you install, so you only ever install the newest.
   before.
   ([#669](https://github.com/MMagTech/cabinetos/issues/669),
   [Motion](controllers.md#motion))
+
+## 2026.11.11 {#v2026-11-11}
+
 - **Fixed:** in LinkUp, the soft glow in the bars beside the game reached
   your friend's TV in blocky steps. Their console now draws the glow itself,
   as smooth as on yours.
