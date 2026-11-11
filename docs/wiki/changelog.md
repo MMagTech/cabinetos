@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.11.3 {#v2026-11-11-3}
+
+- **New:** in LinkUp, your friend's controller tilts and turns in Switch and
+  PlayStation 3 games made for it, as it would on their own console: steering,
+  aiming or balancing where a game asks. Both consoles need this update. In
+  Wii U and PS Vita games only player 1's controller tilts, and that is yours.
+  ([#669](https://github.com/MMagTech/cabinetos/issues/669),
+  [Motion](controllers.md#motion))
+- **Fixed:** in LinkUp, a game never paused by itself when neither of you
+  pressed anything, and the session never ended. It now pauses after 10
+  minutes with no press and ends 15 minutes later, as it was meant to.
+  ([LinkUp](linkup.md#while-you-play))
+
 ## 2026.11.11.2 {#v2026-11-11-2}
 
 - **New:** tilting and turning the controller in Switch, Wii U and PS Vita

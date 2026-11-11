@@ -77,6 +77,11 @@ In Wii U games player 1's controller is the GamePad, so tilting it is tilting
 the GamePad: aiming, looking around or steering where a game asks. The other
 players hold Pro Controllers, which had no motion on a Wii U.
 
+In [LinkUp](linkup.md) your friend's controller moves their part of a Switch or
+PlayStation 3 game the same way, when both consoles have the newest update.
+In Wii U and PS Vita games your friend is player 2, so their controller does
+not tilt the game.
+
 With a controller that has no motion sensors those games play as before, and
 the parts made for motion do nothing.
 

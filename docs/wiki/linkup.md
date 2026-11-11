@@ -58,6 +58,8 @@ show Offline after 15 minutes with no press, when the screen is off, while the c
   with **Resume** and **Leave**, and you see *Alex paused*. **A** on either console resumes both.
 - **Your friend sees only the game.** When you open a menu, or anything else is on your screen, no picture or sound
   is sent, and they see *Waiting for Alex*.
+- **Your friend's controller tilts too,** in Switch and PlayStation 3 games made for it, as on their own console.
+  In Wii U and PS Vita games only player one's controller tilts, and that is yours ([Motion](controllers.md#motion)).
 - **Saves, states and achievements are yours.** Nothing from the game is kept on your friend's console.
 - **If the connection drops,** the game pauses on both with *Reconnecting to Alex*. After a minute, *Alex left*, and
   your game carries on as a normal game.

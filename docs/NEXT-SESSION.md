@@ -15,10 +15,13 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-11-11.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.11.11.2: #696, "Gyro for Switch, Wii U and Vita: a
-stand-in DualSense carries the player's tilt (#669)", merged on 2026-11-11
-after his TV checks (Splatoon 2, Shovel Knight, WipEout 2048, an Xbox
-controller). Before it, 2026.11.11: #695, "LinkUp: the friend's console
+to consoles is 2026.11.11.3: #697, "LinkUp: the friend's controller tilts
+Switch and PS3 games, and the idle pause works again (#669)", merged on
+2026-11-11 after his checks between the A9 and the mini PC (Mario Kart 8
+Deluxe with both players tilting, LittleBigPlanet, a LinkUp game paused after
+10 minutes with nothing pressed). It closed #669. Before it, 2026.11.11.2:
+#696, "Gyro for Switch, Wii U and Vita: a stand-in DualSense carries the
+player's tilt (#669)"; 2026.11.11: #695, "LinkUp: the friend's console
 draws its own letterbox glow (#692)"; on 2026-11-10, 2026.11.10.3 (#689,
 PS3 motion, #683), 2026.11.10.2 (#691, the Flathub pins) and 2026.11.10
 (#685, Game Boy Advance and 3DS tilt, #670). Open:
@@ -46,23 +49,7 @@ RomM: keep test launches under a minute, or have his go.
    and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
    `docs/` into the server's build stage, and the relay's block list lacks
    3fff::/20.
-2. **Gyro: the friend's tilt over LinkUp, the last step of #669**, "Gyro
-   for Switch, Wii U and Vita: a virtual pad that carries the player's
-   tilt", for Switch and PS3 (Opus, one session, from its issue). Done:
-   #670 (Game Boy Advance and 3DS), #683 (PS3) and #669's three emulators,
-   #696 (2026.11.11.2): every Switch, Wii U and Vita player's controller is
-   a stand-in DualSense (`vdualsense.cpp`, fed from `vpad.cpp`), only player
-   1's tilts a Wii U or Vita game, and a pad without sensors shows none
-   (two decision files of 2026-11-11). The friend's tilt rides LinkUp's pad
-   message into the host's stand-in; a Wii U or Vita friend is player 2 and
-   gets none. He tests it between the A9 (host, his Xbox controller) and
-   the mini PC (friend, his DualSense, the house's only gyro pad), both on
-   the testing image, since both halves change: it goes through a testing
-   push, not the TV loop. Never run `--dualsense-test` beside a frontend
-   older than #696 (docs/lessons/testing.md). Still unseen: a Wii U game
-   answering the tilt on screen; his Splatoon `.wua` came out of its
-   conversion with a blank title folder and stays greyed until remade.
-3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+2. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -70,7 +57,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-4. **Words from him, one at a time, no work:** #181, "Updates and DLC as
+3. **Words from him, one at a time, no work:** #181, "Updates and DLC as
    separate files in RomM (Switch, PS3, Xbox 360)", and #215, "Proposal, not
    decided: opt-in "Help improve CabinetOS" report sharing" (he is unsure of
    both); and which of the 36 faults the PROJECT.md scan found with no issue

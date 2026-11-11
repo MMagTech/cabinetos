@@ -24,6 +24,7 @@
 
 #include "accounts.h"
 #include "fileio.h"
+#include "linkup_pad.h"
 #include "linkup_wire.h"
 #include "overlaywin.h"
 #include "players.h"
@@ -57,6 +58,8 @@ constexpr float kIdleEndSeconds = 15 * 60.0f;
 constexpr float kDropEndsSeconds = 60.0f;
 constexpr float kPressEverySeconds = 2.0f;
 constexpr float kPadKeepAliveSeconds = 0.1f;
+// The host's first game waits this long at most for the friend's controller (linkupFollowGame).
+constexpr double kFirstPadWaitSeconds = 1.0;
 
 json_object* command(const char* name) {
     json_object* o = json_object_new_object();
@@ -240,9 +243,9 @@ void App::linkupFollowLink() {
 
 void App::linkupOnMessage(const uint8_t* data, size_t len) {
     if (len == 0) return;
-    if (data[0] == linkupwire::kTagPad && len >= sizeof(linkupwire::Pad)) {
-        std::memcpy(&linkupFriendPad, data, sizeof linkupFriendPad);
-        linkupFriendPadChanged();
+    linkupwire::Pad pad;
+    if (linkuppad::decode(data, len, &pad)) {
+        linkupFriendPadChanged(pad);
         return;
     }
     if (data[0] == linkupwire::kTagRumble && len >= sizeof(linkupwire::Rumble)) {
@@ -408,7 +411,13 @@ void App::linkupSessionOpens(LinkupSide side) {
     linkupLost = false;
     linkupLostFor = 0.0f;
     linkupIdleFor = 0.0f;
+    linkupHeardAt = -1.0;
     linkupGameAsked = false;
+    linkupStartPending = false;
+    linkupFriendPad = linkupwire::Pad{};
+    linkupFriendPadHeard = false;
+    linkupLastPadSeq = 0;
+    linkupPadsHeard = 0;
     std::fill(linkupPlaceSent, linkupPlaceSent + 4, 0.0f);
     linkupPlay.clearPlace();
     // ONE AT A TIME WITH REMOTE PLAY: Sunshine stops for the length of a session and comes back by
@@ -423,8 +432,11 @@ void App::linkupSessionOpens(LinkupSide side) {
 }
 
 void App::linkupSessionClosed() {
+    // The friend's player 1 sent its tilt; nothing reads it now.
+    if (linkupSide == LinkupSide::Friend) linkuppad::senseHere(false);
     linkupSide = LinkupSide::None;
     linkupStreamUp = false;
+    linkupStartPending = false;
     if (linkupHeldRemotePlay) {
         std::string why;
         if (!unit::start(kRemotePlayUnit, &why)) std::fprintf(stderr, "[linkup] Remote Play would not start again: %s\n", why.c_str());
@@ -538,7 +550,8 @@ void App::linkupTookPlace(json_object* message) {
     standaloneClearFrames = 30;
 }
 
-// The two consoles are connected. On the host the game starts, so that both begin at its title screen.
+// The two consoles are connected. On the host the game starts, so that both begin at its title screen,
+// as soon as the friend's controller is heard (linkupFollowGame). The friend's sends its tilt.
 void App::linkupConnected(const std::string& path) {
     // Direct or relay goes to the log only, and no name goes with it: the report is made to be attached
     // to a public issue.
@@ -547,14 +560,17 @@ void App::linkupConnected(const std::string& path) {
     if (linkupStreamUp) return;
     linkupStreamUp = true;
     if (linkupSide == LinkupSide::Host) {
-        linkupSeatFriend();
-        linkupStartGame();
+        linkupStartPending = true;
+        linkupConnectedAt = clockSeconds();
     } else if (linkupSide == LinkupSide::Friend) {
+        linkuppad::senseHere(true);
         linkupFriendHandover(true);
     }
 }
 
 void App::linkupStartGame() {
+    // Each game: the friend's seat with the sensors their controller has now.
+    linkupSeatFriend();
     linkupGameAsked = true;
     linkupGameStartedAt = clockSeconds();
     // The friend forgets where the last game sat when this one starts, so it is said again.
@@ -594,62 +610,42 @@ bool hostAtFriendRumble(void* userdata, Uint16 low, Uint16 high) {
 
 }  // namespace
 
-// The friend is a pad: a virtual one SDL treats as any other, so every game hears player two the way
-// it hears anybody, and a game's rumble comes back through it. The menus never hear it
-// (players::setAside), which is how a friend's presses stay out of the host's console.
+// The friend is a pad: a virtual one SDL treats as any other, with the motion sensors their controller
+// has (linkup_pad.h), so every game hears player two the way it hears anybody, and a game's rumble
+// comes back through it. The menus never hear it (players::setAside), which is how a friend's presses
+// stay out of the host's console. Before each game: seated again only when that controller's sensors
+// changed since.
 void App::linkupSeatFriend() {
-    if (linkupFriendJoystick) return;
-    SDL_VirtualJoystickDesc desc;
-    SDL_INIT_INTERFACE(&desc);
-    desc.type = SDL_JOYSTICK_TYPE_GAMEPAD;
-    desc.naxes = SDL_GAMEPAD_AXIS_COUNT;
-    desc.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
-    desc.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
-    desc.button_mask = (1u << SDL_GAMEPAD_BUTTON_COUNT) - 1u;
-    desc.name = "LinkUp friend";
-    desc.userdata = &linkupLink;
-    desc.Rumble = hostAtFriendRumble;
-    const SDL_JoystickID id = SDL_AttachVirtualJoystick(&desc);
-    if (id == 0) {
-        std::fprintf(stderr, "[linkup] no seat for the friend: %s\n", SDL_GetError());
-        return;
-    }
-    linkupFriendJoystick = id;
-    players::seatFriend(id);
-    linkupFriendPad = linkupwire::Pad{};
+    if (linkuppad::seated() && linkuppad::seatSenses() == linkupFriendPad.senses) return;
+    if (!linkuppad::seat(linkupFriendPad.senses, hostAtFriendRumble, &linkupLink)) return;
     linkupVpadSaid = linkupwire::Pad{};
-    linkupLastPadSeq = 0;
+    linkuppad::play(linkupFriendPad);
 }
 
 void App::linkupUnseatFriend() {
-    if (!linkupFriendJoystick) return;
-    std::fprintf(stderr, "[linkup] heard %u states of the friend's pad\n", static_cast<unsigned>(linkupLastPadSeq));
-    players::unseatFriend();
-    SDL_DetachVirtualJoystick(linkupFriendJoystick);
-    linkupFriendJoystick = 0;
+    if (!linkuppad::seated()) return;
+    std::fprintf(stderr, "[linkup] heard %u states of the friend's pad\n", static_cast<unsigned>(linkupPadsHeard));
+    linkuppad::unseat();
 }
 
-// A pad's state from the friend. Trigger axes run from the bottom of a joystick's range in SDL's
-// virtual pad, where a pad's own triggers read from 0.
-void App::linkupFriendPadChanged() {
-    if (linkupLastPadSeq == linkupFriendPad.seq) return;
-    const int16_t ahead = static_cast<int16_t>(linkupFriendPad.seq - linkupLastPadSeq);
-    if (ahead < 0 && ahead > -1000) return;   // an old one overtaken by a later one
-    linkupLastPadSeq = linkupFriendPad.seq;
-    linkupIdleFor = 0.0f;
-    linkupPressHeard = true;
-    SDL_Gamepad* gp = SDL_GetGamepadFromID(linkupFriendJoystick);
-    SDL_Joystick* joy = gp ? SDL_GetGamepadJoystick(gp) : nullptr;
-    if (!joy) return;
-    SDL_LockJoysticks();
-    for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b)
-        SDL_SetJoystickVirtualButton(joy, b, (linkupFriendPad.buttons >> b) & 1u);
-    for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) {
-        int value = linkupFriendPad.axes[a];
-        if (a == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || a == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) value = value * 2 - 32768;
-        SDL_SetJoystickVirtualAxis(joy, a, static_cast<Sint16>(std::clamp(value, -32768, 32767)));
+// A pad's state from the friend, heard from the moment the consoles connect, before the seat is made.
+void App::linkupFriendPadChanged(const linkupwire::Pad& pad) {
+    if (linkupFriendPadHeard) {
+        const int16_t ahead = static_cast<int16_t>(pad.seq - linkupLastPadSeq);
+        if (ahead <= 0 && ahead > -1000) return;   // the same one, or an old one overtaken by a later one
     }
-    SDL_UnlockJoysticks();
+    // Only a press is somebody there: this state comes every tenth of a second all the same, and a
+    // controller lying on a table still reads a little tilt.
+    if (linkuppad::pressed(linkupFriendPad, pad)) {
+        linkupIdleFor = 0.0f;
+        linkupPressHeard = true;
+    }
+    linkupLastPadSeq = pad.seq;
+    linkupFriendPad = pad;
+    linkupFriendPadHeard = true;
+    ++linkupPadsHeard;
+    if (!linkuppad::seated()) return;
+    linkuppad::play(pad);
     linkupPassToEmulator();
 }
 
@@ -679,6 +675,15 @@ bool App::linkupGameAloneOnScreen() const {
 // achievement, and those are harmless and stay.
 void App::linkupFollowGame() {
     if (linkupSide != LinkupSide::Host || !linkupStreamUp) return;
+    // The first game waits for the friend's controller, so their seat has the sensors it has: its state
+    // comes every tenth of a second, and an older console's says it has none.
+    if (linkupStartPending &&
+        (linkupFriendPadHeard || clockSeconds() - linkupConnectedAt >= kFirstPadWaitSeconds)) {
+        linkupStartPending = false;
+        if (!linkupFriendPadHeard)
+            std::fprintf(stderr, "[linkup] nothing heard from the friend's controller yet: seated with no motion sensors\n");
+        linkupStartGame();
+    }
     const bool show = linkupGameAloneOnScreen();
     if (show != linkupPictureSent) {
         json_object* c = command("picture");
@@ -804,25 +809,14 @@ bool App::linkupPictureBehind() {
            linkupPlay.shows() == screens::LinkUpPlayScreen::Shows::Picture;
 }
 
-// The friend's pad, to the host. Only presses travel: a friend's keyboard and mouse stay at home.
+// The friend's pad, to the host: its presses, sticks and tilt (linkup_pad.h). A friend's keyboard and
+// mouse stay at home.
 void App::linkupSendPad(float dt) {
     if (linkupSide != LinkupSide::Friend || !linkupStreamUp) return;
-    linkupwire::Pad pad;
-    SDL_Gamepad* gp = players::gamepad(0);
     const bool asleep = !linkupPictureBehind() || choiceScreen.visible();
-    pad.buttons = linkupScriptPad;
-    if (gp && !asleep) {
-        for (int b = 0; b < SDL_GAMEPAD_BUTTON_COUNT; ++b) {
-            // The console's own button never reaches the other console, and a shortcut button is this
-            // console's: it opens this console's menu.
-            if (b == SDL_GAMEPAD_BUTTON_GUIDE) continue;
-            if (SDL_GetGamepadButton(gp, static_cast<SDL_GamepadButton>(b))) pad.buttons |= 1u << b;
-        }
-        for (int a = 0; a < SDL_GAMEPAD_AXIS_COUNT; ++a) pad.axes[a] = SDL_GetGamepadAxis(gp, static_cast<SDL_GamepadAxis>(a));
-    }
+    linkupwire::Pad pad = linkuppad::read(asleep, linkupScriptPad, linkupPadSent);
     linkupPadAge += dt;
-    const bool changed = pad.buttons != linkupPadSent.buttons || std::memcmp(pad.axes, linkupPadSent.axes, sizeof pad.axes) != 0;
-    if (!changed && linkupPadAge < kPadKeepAliveSeconds) return;
+    if (!linkuppad::differs(pad, linkupPadSent) && linkupPadAge < kPadKeepAliveSeconds) return;
     linkupPadAge = 0.0f;
     pad.seq = ++linkupPadSeq;
     linkupPadSent = pad;
@@ -916,6 +910,7 @@ void App::linkupFromPeer(const std::string& word, json_object* message) {
     using Shows = screens::LinkUpPlayScreen::Shows;
     if (word == "press") {
         idleWatch.input(clockSeconds());
+        linkupHeardAt = clockSeconds();
         linkupIdleFor = 0.0f;
     } else if (word == "slow") {
         menuNotice.say(linkup::kTooSlow, Tone::Problem);
@@ -997,11 +992,7 @@ void App::linkupFriendLeft() {
     const bool inGame = playing || standaloneRun.active();
     linkupSide = LinkupSide::None;
     linkupStreamUp = false;
-    players::unseatFriend();
-    if (linkupFriendJoystick) {
-        SDL_DetachVirtualJoystick(linkupFriendJoystick);
-        linkupFriendJoystick = 0;
-    }
+    linkupUnseatFriend();
     if (linkupHeldRemotePlay) {
         std::string why;
         if (!unit::start(kRemotePlayUnit, &why)) std::fprintf(stderr, "[linkup] %s\n", why.c_str());
@@ -1100,7 +1091,9 @@ void App::linkupIdlePause() {
 void App::tickLinkUpSession(float dt) {
     if (linkupSide == LinkupSide::None) return;
     // A press from either player keeps both screens awake, and the idle rule below is the only clock.
-    if (idleWatch.idleFor(clockSeconds()) < 0.2) {
+    // Only a press made here is told to the other console: one heard from it and told back would go
+    // back and forth every two seconds for ever, and neither console would ever be idle.
+    if (idleWatch.idleFor(clockSeconds()) < 0.2 && clockSeconds() - linkupHeardAt >= 0.2) {
         linkupIdleFor = 0.0f;
         linkupPressHere = true;
     }
@@ -1113,6 +1106,7 @@ void App::tickLinkUpSession(float dt) {
     if (linkupPressHeard) {
         linkupPressHeard = false;
         idleWatch.input(clockSeconds());
+        linkupHeardAt = clockSeconds();
     }
     if (linkupLost) {
         linkupLostFor += dt;
@@ -1136,6 +1130,8 @@ void App::tickLinkUpSession(float dt) {
         linkupIdleFor += dt;
         if (!linkupIdlePaused && linkupIdleFor >= kIdlePauseSeconds && !overlayOpen && !choiceScreen.isOpen()) {
             linkupIdlePaused = true;
+            std::fprintf(stderr, "[linkup] no press from either player for %d minutes: both paused\n",
+                         static_cast<int>(kIdlePauseSeconds / 60));
             linkupTellPeer("idle");
             linkupIdlePause();
         } else if (linkupIdlePaused && linkupIdleFor < kIdlePauseSeconds) {
@@ -1143,6 +1139,8 @@ void App::tickLinkUpSession(float dt) {
         } else if (linkupIdlePaused && linkupIdleFor >= kIdlePauseSeconds + kIdleEndSeconds) {
             // LinkUp ends the session and frees the relay; the host's game stays paused on the TV.
             linkupIdlePaused = false;
+            std::fprintf(stderr, "[linkup] still no press %d minutes later: the session ends\n",
+                         static_cast<int>(kIdleEndSeconds / 60));
             linkupTellPeer("ended");
             linkupSend(command("end"));
             linkupSide = LinkupSide::None;

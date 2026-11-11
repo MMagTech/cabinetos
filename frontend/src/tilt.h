@@ -8,7 +8,9 @@
 // asks, since RPCS3 reads a motion device for every game, so vpad.cpp turns
 // a player's sensors on as it makes that device and off as it closes it
 // (#683). Nothing in this file knows a core or an emulator, so Switch, Wii U
-// and Vita (#669) can read the same.
+// and Vita (#669) can read the same. Nor LinkUp: on the host a friend's seat
+// is a pad with the friend's sensors, read here as any pad's, and on the
+// friend's console linkup_pad.cpp reads player 1's to send it.
 //
 // IN SDL'S UNITS AND AXES, as SDL hands them out, never converted here. For a
 // pad held in front of you: +x to the right, +y up out of its face, +z toward
