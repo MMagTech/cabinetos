@@ -65,7 +65,7 @@ constexpr Abs kAxes[] = {
 
 int gFd[kMaxPlayers] = {-1, -1, -1, -1};
 // THE KIND OPEN NOW: the plain uinput controllers, or the stand-in DualSenses
-// (vdualsense.h), one per player, when the emulator's row asked for them.
+// of vdualsense.h, one per player, when the emulator's row asked for them.
 bool gDualSense = false;
 
 // What the emulator uploaded, per pad: a rumble's two strengths and length.

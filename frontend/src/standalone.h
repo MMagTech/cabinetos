@@ -148,9 +148,9 @@ struct Emulator {
     // pad has the sensors: RPCS3's Buddy Device, for every PS3 game (#683).
     bool motion;
     // IT READS EACH PLAYER'S TILT FROM THE PAD'S OWN SENSORS, as SDL pairs
-    // them, so its virtual controller is the stand-in DualSense (vdualsense.h)
-    // and not the plain one: Eden (#669, part one). Part two sets it for Cemu
-    // and Vita3K. The two switches are never both set.
+    // them, so its virtual controller is the stand-in DualSense of
+    // vdualsense.h and not the plain one: Eden (#669, part one). Part two
+    // sets it for Cemu and Vita3K. The two switches are never both set.
     bool dualsense;
 };
 

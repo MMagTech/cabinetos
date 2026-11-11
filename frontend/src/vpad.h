@@ -82,7 +82,7 @@ constexpr int kMaxPlayers = 4;
 // be made leaves that player's game as it was, with a line in the log.
 //
 // With `dualsense` (an emulator that reads a pad's own sensors, Eden), every
-// player gets a stand-in DualSense (vdualsense.h) in place of the plain
+// player gets a stand-in DualSense of vdualsense.h in place of the plain
 // controller, and every seat's sensors are turned on until close(); a player
 // whose pad has none gets a stand-in lying still. When one cannot be made,
 // the plain controllers are made instead, with a line in the log.

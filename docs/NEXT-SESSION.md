@@ -67,8 +67,11 @@ RomM: keep test launches under a minute, or have his go.
    decided 2026-11-09, the one session where a wrong turn costs most; no TV
    sitting, the proof is the log), then the three emulators (Opus; TV: Mario
    Kart 8 Deluxe, Captain Toad, Breath of the Wild's shrines, Gravity Rush).
-   The fake pad works in `vpad.cpp`, where each PS3 player's motion device
-   now is too (#683). Last, the friend's tilt over LinkUp for Switch and PS3
+   Part one is pull request #696, "Switch: a stand-in DualSense carries the
+   player's tilt into Eden (#669, part one)", not merged: the stand-in is
+   `frontend/src/vdualsense.cpp`, fed from `vpad.cpp`, where each PS3
+   player's motion device is too (#683); its handover for part two is on
+   the pull request. Last, the friend's tilt over LinkUp for Switch and PS3
    (Opus, one session, two consoles; the friend needs a gyro pad of their
    own). Settled 2026-11-09: Game Boy and Game Boy Color stay on Gambatte
    and the two MBC7 cartridges stay out; no greying for a few games; each
