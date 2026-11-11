@@ -1473,10 +1473,8 @@ into the picture, banding, not reaching the edge. A continuous slider on a real
 panel found the numbers, and only then were presets chosen. Do not guess these;
 build the slider.
 
-**DECIDED, MMagTech 2026-10-04: the glow is always on at Strong (0.04), with
-no setting anywhere.** The pause-menu row recorded above was never built, and
-he chose to leave it that way for now (fewer settings is the rule), raised from
-Subtle to Strong. `--glow off|subtle|strong` remains for testing only.
+**Moved:** the decision that the glow is always on at Strong is
+docs/decisions/2026-10-04-glow-always-on-at-strong.md.
 
 #### DECIDED, MMagTech 2026-10-04: screen looks are RetroArch's own shaders (#122)
 

@@ -1073,8 +1073,10 @@ right there and the choice is about a system:
   out. Cabinet's option is not carried over.
 - ~~Shader and glow, as already decided.~~ **Reopened and decided
   2026-10-04 (#122):** one Look row per system, RetroArch's own shaders,
-  on by default; the glow has no row and is always on at Strong. Both in
-  docs/PROJECT.md, *Shaders, and the glow around the picture*.
+  on by default; the glow has no row and is always on at Strong. The
+  shaders are in docs/PROJECT.md, *Shaders, and the glow around the
+  picture*, and the glow in
+  docs/decisions/2026-10-04-glow-always-on-at-strong.md.
 
 **Built, #73 ("Pause menu: per-system picture and controller options"), in
 pull request #225 ("Picture quality: one setting for every system, and the

@@ -4,6 +4,13 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** in LinkUp, the soft glow in the bars beside the game reached
+  your friend's TV in blocky steps. Their console now draws the glow itself,
+  as smooth as on yours.
+  ([#692](https://github.com/MMagTech/cabinetos/issues/692))
+
 ## 2026.11.10.3 {#v2026-11-10-3}
 
 - **New:** tilting and turning the controller in PlayStation 3 games made for

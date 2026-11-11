@@ -409,6 +409,8 @@ void App::linkupSessionOpens(LinkupSide side) {
     linkupLostFor = 0.0f;
     linkupIdleFor = 0.0f;
     linkupGameAsked = false;
+    std::fill(linkupPlaceSent, linkupPlaceSent + 4, 0.0f);
+    linkupPlay.clearPlace();
     // ONE AT A TIME WITH REMOTE PLAY: Sunshine stops for the length of a session and comes back by
     // itself, with the switch unchanged, and nobody else's device can get into the game. Not
     // App::setRemotePlay, which saves the switch as off and takes Tailscale with it.
@@ -493,10 +495,47 @@ void App::linkupTellPeer(const std::string& word, const std::string& game) {
     json_object* inner = json_object_new_object();
     setText(inner, "t", word);
     if (!game.empty()) setText(inner, "game", game);
+    linkupSendPeer(inner);
+}
+
+// To the other console as it is, through the program's peer command. Takes the object.
+void App::linkupSendPeer(json_object* inner) {
     json_object* c = command("peer");
     setText(c, "text", json_object_to_json_string_ext(inner, JSON_C_TO_STRING_PLAIN));
     json_object_put(inner);
     linkupSend(c);
+}
+
+// THE HOST: WHERE THE GAME SITS, in canvas points with the pixel shift in, so the friend's console
+// draws the bars and the glow around it on its own TV (#692). The stream carries this screen's glow
+// too, but the encoder keeps nothing that faint and turns its fade into flat steps. Said when a game
+// first shows and whenever it moves. An emulator in a window of its own says nothing, and the friend
+// has no glow, as this TV has none.
+void App::linkupTellPlace(float x, float y, float w, float h) {
+    if (linkupSide != LinkupSide::Host || !linkupStreamUp) return;
+    const float k = renderer.scale() > 0.0f ? renderer.scale() : 1.0f;
+    const float place[4] = {x + static_cast<float>(shiftShown.dx) / k, y + static_cast<float>(shiftShown.dy) / k, w, h};
+    if (std::equal(place, place + 4, linkupPlaceSent)) return;
+    std::copy(place, place + 4, linkupPlaceSent);
+    json_object* inner = json_object_new_object();
+    setText(inner, "t", "place");
+    const char* names[4] = {"x", "y", "w", "h"};
+    for (int i = 0; i < 4; ++i) json_object_object_add(inner, names[i], json_object_new_double(place[i]));
+    linkupSendPeer(inner);
+}
+
+// THE FRIEND: the host's word on where the game sits. The bars are drawn from the next frame on
+// (linkupWatchPicture), and an older host that never says leaves this TV as it was.
+void App::linkupTookPlace(json_object* message) {
+    float v[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const char* names[4] = {"x", "y", "w", "h"};
+    for (int i = 0; i < 4; ++i) {
+        json_object* n = nullptr;
+        if (!json_object_object_get_ex(message, names[i], &n)) return;
+        v[i] = static_cast<float>(json_object_get_double(n));
+    }
+    linkupPlay.setPlace(v[0], v[1], v[2], v[3], glowPeak);
+    standaloneClearFrames = 30;
 }
 
 // The two consoles are connected. On the host the game starts, so that both begin at its title screen.
@@ -518,6 +557,8 @@ void App::linkupConnected(const std::string& path) {
 void App::linkupStartGame() {
     linkupGameAsked = true;
     linkupGameStartedAt = clockSeconds();
+    // The friend forgets where the last game sat when this one starts, so it is said again.
+    std::fill(linkupPlaceSent, linkupPlaceSent + 4, 0.0f);
     // With its name: a session's next game is not the one the invite named.
     linkupTellPeer("starting", linkupGame);
     std::fprintf(stderr, "[linkup] starting the game for both\n");
@@ -843,7 +884,8 @@ bool App::takeLinkUpEvent(const SDL_Event& e) {
 }
 
 // Every frame while the picture is all there is. True when this frame is done: nothing is drawn but
-// the dim, and a short wait for the next press, so nothing is added to the time a press takes.
+// the dim and the bars around the host's game, each only when it changes, and a short wait for the
+// next press, so nothing is added to the time a press takes.
 bool App::linkupWatchPicture(float dt) {
     if (!linkupPictureOnly()) return false;
     tickLinkUpLive(dt);
@@ -852,11 +894,16 @@ bool App::linkupWatchPicture(float dt) {
     else if (standaloneClearFrames > 0) {
         --standaloneClearFrames;
         renderer.setTransparentBackground(true);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDisable(GL_SCISSOR_TEST);
-        glClearColor(0, 0, 0, 0);
-        glClear(GL_COLOR_BUFFER_BIT);
-        SDL_GL_SwapWindow(window);
+        // With the host's word on where the game sits, the bars and the glow around it (#692).
+        if (linkupPlay.placed()) {
+            drawOverGame();
+        } else {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glDisable(GL_SCISSOR_TEST);
+            glClearColor(0, 0, 0, 0);
+            glClear(GL_COLOR_BUFFER_BIT);
+            SDL_GL_SwapWindow(window);
+        }
     }
     SDL_WaitEventTimeout(nullptr, 3);
     return true;
@@ -904,8 +951,12 @@ void App::linkupFromPeer(const std::string& word, json_object* message) {
     } else if (word == "starting" && linkupSide == LinkupSide::Friend) {
         const std::string game = textOf(message, "game");
         if (!game.empty()) linkupGame = game;
+        linkupPlay.clearPlace();
         linkupPlay.open(Shows::Waiting, linkup::waitingFor(who), linkupGame, /*friendSide=*/true);
+    } else if (word == "place" && linkupSide == LinkupSide::Friend) {
+        linkupTookPlace(message);
     } else if (word == "quit" && linkupSide == LinkupSide::Friend) {
+        linkupPlay.clearPlace();
         linkupPlay.open(Shows::Waiting, linkup::waitingFor(who), "", /*friendSide=*/true);
     } else if (word == "ended" && linkupSide == LinkupSide::Friend) {
         linkupPeerEndedSession();

@@ -786,6 +786,8 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // a picture that fills the height leaves no room to ramp
         // across. The rect is the whole interface.
         renderer.drawBiasGlow(px, py, dw, dh, glowPeak);
+        // A LinkUp friend draws the same glow on their own TV, from where the picture sits (#692).
+        linkupTellPlace(px, py, dw, dh);
     }
 }
 
