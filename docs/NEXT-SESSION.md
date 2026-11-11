@@ -14,27 +14,14 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-11-10.** The newest release is 2026.10.10. The newest image promoted
-to consoles is 2026.11.10.3: #689, "Motion for PS3: a motion device beside
-each player's virtual pad (#683)", merged on 2026-11-10 after his TV checks
-(Flower, LittleBigPlanet, God of War III's rumble, two controllers). Before
-it the same day, 2026.11.10.2: #691, "Every console gets exactly the Flathub
-builds pinned, Flathub's Mesa included, and a monthly check watches them",
-carrying #688, "The controller list and Steam's spare are checked monthly,
-with the Bazzite base", merged on 2026-11-10 after his TV checks. Before it
-the same day, 2026.11.10: #685, "Tilt for the Game Boy Advance and 3DS
-cores: answer libretro's sensor interface (#670)". On 2026-11-09,
-2026.11.09.5: #678, "Wi-Fi: Forget removes a network saved
-twice (#642)", carrying #677, "System update row: "under 1 MB" instead of
-"0.0 MB", and no size when it is not known" (#672), merged on 2026-11-09
-after his TV checks. Before it the same day: #671, "On-screen keyboard: a
-held direction repeats, Shift locks, and the field has a cursor"
-(2026.11.09.4), and #666, "LinkUp: the console's side, step 3 of #654"
-(2026.11.09.3); LinkUp is on the wiki, in the README and in the changelog
-(#673, #674), and every wiki page and the README were read against the
-code on 2026-11-09, the lines found wrong fixed in #679, "Wiki: fix the
-lines the docs review found wrong, stale or missing", and #680, "Controls
-guide: LinkUp in the top bar, the keyboard's Shift lock, the date". Open:
+**2026-11-11.** The newest release is 2026.10.10. The newest image promoted
+to consoles is 2026.11.11.2: #696, "Gyro for Switch, Wii U and Vita: a
+stand-in DualSense carries the player's tilt (#669)", merged on 2026-11-11
+after his TV checks (Splatoon 2, Shovel Knight, WipEout 2048, an Xbox
+controller). Before it, 2026.11.11: #695, "LinkUp: the friend's console
+draws its own letterbox glow (#692)"; on 2026-11-10, 2026.11.10.3 (#689,
+PS3 motion, #683), 2026.11.10.2 (#691, the Flathub pins) and 2026.11.10
+(#685, Game Boy Advance and 3DS tilt, #670). Open:
 #528 waits on RomM and #644 is the controller list. #590, "A
 Wii Remote turned on after a Wii game starts is ignored by the game",
 waits in Later; fix it only in the console's own code, never by patching
@@ -59,24 +46,22 @@ RomM: keep test launches under a minute, or have his go.
    and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
    `docs/` into the server's build stage, and the relay's block list lacks
    3fff::/20.
-2. **Gyro, in this order, each a fresh session that starts from its issue
-   and builds nothing the issue does not say.** Done: #670 (Game Boy Advance
-   and 3DS, 2026.11.10) and #683 (PS3, 2026.11.10.3). Next: #669, "Gyro for
-   Switch, Wii U and Vita: a virtual pad that carries the player's tilt", in
-   two sessions: the fake pad proven with one Switch game in Eden (Fable,
-   decided 2026-11-09, the one session where a wrong turn costs most; no TV
-   sitting, the proof is the log), then the three emulators (Opus; TV: Mario
-   Kart 8 Deluxe, Captain Toad, Breath of the Wild's shrines, Gravity Rush).
-   Part one is pull request #696, "Switch: a stand-in DualSense carries the
-   player's tilt into Eden (#669, part one)", not merged: the stand-in is
-   `frontend/src/vdualsense.cpp`, fed from `vpad.cpp`, where each PS3
-   player's motion device is too (#683); its handover for part two is on
-   the pull request. Last, the friend's tilt over LinkUp for Switch and PS3
-   (Opus, one session, two consoles; the friend needs a gyro pad of their
-   own). Settled 2026-11-09: Game Boy and Game Boy Color stay on Gambatte
-   and the two MBC7 cartridges stay out; no greying for a few games; each
-   issue carries its files and docs under #398's rules. His DualSense is the
-   gyro pad for every sitting.
+2. **Gyro: the friend's tilt over LinkUp, the last step of #669**, "Gyro
+   for Switch, Wii U and Vita: a virtual pad that carries the player's
+   tilt", for Switch and PS3 (Opus, one session, from its issue). Done:
+   #670 (Game Boy Advance and 3DS), #683 (PS3) and #669's three emulators,
+   #696 (2026.11.11.2): every Switch, Wii U and Vita player's controller is
+   a stand-in DualSense (`vdualsense.cpp`, fed from `vpad.cpp`), only player
+   1's tilts a Wii U or Vita game, and a pad without sensors shows none
+   (two decision files of 2026-11-11). The friend's tilt rides LinkUp's pad
+   message into the host's stand-in; a Wii U or Vita friend is player 2 and
+   gets none. He tests it between the A9 (host, his Xbox controller) and
+   the mini PC (friend, his DualSense, the house's only gyro pad), both on
+   the testing image, since both halves change: it goes through a testing
+   push, not the TV loop. Never run `--dualsense-test` beside a frontend
+   older than #696 (docs/lessons/testing.md). Still unseen: a Wii U game
+   answering the tilt on screen; his Splatoon `.wua` came out of its
+   conversion with a blank title folder and stays greyed until remade.
 3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
