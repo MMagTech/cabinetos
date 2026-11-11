@@ -96,7 +96,11 @@ void button(int player, SDL_GamepadButton b, bool down);
 void axis(int player, SDL_GamepadAxis a, int16_t value);
 void releaseAll(int player);
 // The pad's tilt in SDL's units and axes (tilt.h): x, y, z. nullptr for a
-// sensor the player's pad lacks, which reads as a pad lying still, face up.
+// sensor the player's pad lacks: the report then carries a pad lying still,
+// face up, which the kernel's node holds and SDL never hears, since the kernel
+// passes an axis on only when it changes and SDL starts every axis at zero
+// when the sensors are turned on. Eden reads that as no motion data and does
+// nothing with it, which is what it has for a plain controller today.
 void motion(int player, const float* accel, const float* gyro);
 // What the emulator last asked of the motors, as SDL's two strengths, 0 to
 // 65535, strong then weak. True when it changed since the last ask.

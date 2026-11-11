@@ -674,10 +674,13 @@ Nodes nodes(int player) {
 namespace cab::vdualsense {
 namespace {
 
-// Lets SDL see what has arrived: a few turns of its hotplug and event reading.
+// Lets SDL see what has arrived: a few turns of its event pump, which is where
+// SDL's Linux joystick code polls udev for new devices (LINUX_JoystickDetect:
+// "Polling will happen in the main event loop"), and of its gamepad update.
 void settle(int ms) {
     for (int t = 0; t < ms; t += 10) {
         SDL_Delay(10);
+        SDL_PumpEvents();
         SDL_UpdateGamepads();
     }
 }
@@ -782,10 +785,12 @@ int test() {
     check(on, "its sensors turn on: the seat's user may open the motion device (the udev rule)");
     if (gp1 && !on) std::printf("        SDL: %s\n", SDL_GetError());
 
-    // Player 1's pad tilted: half a g along x, one g up, a quarter g toward
-    // the player; half a radian a second about x, minus one about y, two
-    // about z.
-    const float ax = 0.5f * SDL_STANDARD_GRAVITY, ay = SDL_STANDARD_GRAVITY, az = -0.25f * SDL_STANDARD_GRAVITY;
+    // Player 1's pad tilted: half a g along x, three quarters of a g up, a
+    // quarter g toward the player; half a radian a second about x, minus one
+    // about y, two about z. Every value differs from the resting one, since
+    // the kernel passes an axis on only when it changes.
+    const float ax = 0.5f * SDL_STANDARD_GRAVITY, ay = 0.75f * SDL_STANDARD_GRAVITY,
+                az = -0.25f * SDL_STANDARD_GRAVITY;
     const float gx = 0.5f, gy = -1.0f, gz = 2.0f;
     tilt::testFeel(sensors, tilt::Sensor::Accel, ax, ay, az);
     tilt::testFeel(sensors, tilt::Sensor::Gyro, gx, gy, gz);
@@ -795,7 +800,7 @@ int test() {
     const bool readA = gp1 && SDL_GetGamepadSensorData(gp1, SDL_SENSOR_ACCEL, a, 3);
     const bool readG = gp1 && SDL_GetGamepadSensorData(gp1, SDL_SENSOR_GYRO, g, 3);
     check(readA && near3(a, ax, ay, az, 0.01f),
-          "the tilt reads back through SDL as it went in: 4.90, 9.81, -2.45 m/s2 within 0.01");
+          "the tilt reads back through SDL as it went in: 4.90, 7.35, -2.45 m/s2 within 0.01");
     check(readG && near3(g, gx, gy, gz, 0.002f),
           "and the turn: 0.5, -1.0, 2.0 rad/s within 0.002 (a sixteenth of a degree a second)");
     if (readA && readG && !(near3(a, ax, ay, az, 0.01f) && near3(g, gx, gy, gz, 0.002f)))
@@ -803,9 +808,9 @@ int test() {
                     g[2]);
     const int motionFd = n1.motion.empty() ? -1 : ::open(n1.motion.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     check(motionFd >= 0, "the motion node opens for this user");
-    check(motionFd >= 0 && nodeValue(motionFd, ABS_X) == rawAccel(0.5f) && nodeValue(motionFd, ABS_Y) == rawAccel(1.0f) &&
+    check(motionFd >= 0 && nodeValue(motionFd, ABS_X) == rawAccel(0.5f) && nodeValue(motionFd, ABS_Y) == rawAccel(0.75f) &&
               nodeValue(motionFd, ABS_Z) == rawAccel(-0.25f),
-          "on the node itself the accelerometer reads 4096, 8192, -2048: 1/8192 g a count, the driver's own unit");
+          "on the node itself the accelerometer reads 4096, 6144, -2048: 1/8192 g a count, the driver's own unit");
     check(motionFd >= 0 && nodeValue(motionFd, ABS_RX) == rawGyro(gx) && nodeValue(motionFd, ABS_RY) == rawGyro(gy) &&
               nodeValue(motionFd, ABS_RZ) == rawGyro(gz),
           "and the gyroscope 29312, -58688, 117312: 1/1024 degree a second a count, 64 to our raw count");
@@ -849,16 +854,25 @@ int test() {
           "and comes back within 0.3 s: strong 128 and weak 64 of 255");
     if (came) std::printf("        rumble back: strong %u, weak %u\n", strong, weak);
 
-    // A player whose pad has no sensors gets a pad lying still, face up.
+    // A player whose pad has no sensors gets a pad lying still, face up, on
+    // the node; SDL, which hears an axis only when it changes, reads nothing
+    // from it, and Eden takes that as no motion data (the header).
     SDL_Gamepad* gp2 = fake2 ? SDL_OpenGamepad(fake2) : nullptr;
     const bool on2 = gp2 && SDL_SetGamepadSensorEnabled(gp2, SDL_SENSOR_ACCEL, true) &&
                      SDL_SetGamepadSensorEnabled(gp2, SDL_SENSOR_GYRO, true);
     cab::vpad::pump(0);
     settle(60);
+    const int motionFd2 = n2.motion.empty() ? -1 : ::open(n2.motion.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    check(motionFd2 >= 0 && nodeValue(motionFd2, ABS_X) == 0 && nodeValue(motionFd2, ABS_Y) == kNodePerG &&
+              nodeValue(motionFd2, ABS_Z) == 0 && nodeValue(motionFd2, ABS_RX) == 0 &&
+              nodeValue(motionFd2, ABS_RY) == 0 && nodeValue(motionFd2, ABS_RZ) == 0,
+          "player 2's stand-in, whose pad has no sensors, holds a pad lying still face up on its node: 0, 8192, 0 "
+          "and no turn");
+    if (motionFd2 >= 0) ::close(motionFd2);
     float a2[3] = {}, g2[3] = {};
-    check(on2 && SDL_GetGamepadSensorData(gp2, SDL_SENSOR_ACCEL, a2, 3) && near3(a2, 0.0f, SDL_STANDARD_GRAVITY, 0.0f, 0.01f) &&
+    check(on2 && SDL_GetGamepadSensorData(gp2, SDL_SENSOR_ACCEL, a2, 3) && near3(a2, 0.0f, 0.0f, 0.0f, 0.01f) &&
               SDL_GetGamepadSensorData(gp2, SDL_SENSOR_GYRO, g2, 3) && near3(g2, 0.0f, 0.0f, 0.0f, 0.002f),
-          "player 2's stand-in, whose pad has no sensors, lies still face up: 0, 9.81, 0 and no turn");
+          "and SDL, hearing nothing change on it, reads no motion from it, as Eden does today");
     check(readA && gp1 && SDL_GetGamepadSensorData(gp1, SDL_SENSOR_ACCEL, a, 3) && near3(a, ax, ay, az, 0.01f),
           "and player 1's still reads its own pad's tilt");
 
