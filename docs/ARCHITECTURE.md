@@ -307,6 +307,9 @@ the frontend asks for it over the local socket (`linkup_wire.h`, `linkupsession.
    (`linkupFriendHandover`).
 5. **The picture is off unless the game alone is on the host's screen** (`linkupFollowGame`, before the
    frame draws): `picture` turns the capture off and drops the sound, and the friend's console says Waiting.
+   Where the game sits on the host's screen passes over the reliable data channel (`linkupTellPlace`, from
+   the picture's draw), and the friend's console draws black bars and the letterbox glow around it, over
+   the stream's own (`LinkUpPlayScreen::drawPlace`), because the encoder turns the host's glow into steps.
 6. **Presses.** The friend's frontend reads its player one's pad (`linkupSendPad`), sends its whole state
    to its program, and that goes over the unreliable data channel to the host's program and frontend
    (`linkupFriendPadChanged`), into the virtual pad a core reads, or `vpad.h` for an emulator run as a

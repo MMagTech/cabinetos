@@ -62,6 +62,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [one-sound-rule](2026-11-04-one-sound-rule.md): the screen the picture is on plays the sound, an output that reports a plug takes over, nothing else; one script reads what each output reports, on every PC.
 - [sound-backup-output](2026-10-26-sound-backup-output.md): the image starts pipewire-pulse at login, so a backup output catches the console's sound while the TV's is gone.
 - [games-draw-on-the-screens-gpu](2026-11-06-games-draw-on-the-screens-gpu.md): on a PC with two GPUs, games draw on the one the screen is on, matched by device UUID; one GPU is unchanged; the old order is the fallback.
+- [glow-always-on-at-strong](2026-10-04-glow-always-on-at-strong.md): the glow in the bars around a game is always on at Strong, with no setting.
 
 ### LinkUp
 
@@ -99,6 +100,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [linkup-one-bitrate-rule](2026-11-03-linkup-one-bitrate-rule.md): one rule for every game, a steady bitrate up to 18 Mbit/s with a quality floor, and no tiers by system.
 - [linkup-picture-floor](2026-11-07-linkup-picture-floor.md): a LinkUp picture never goes below 720p at 3.5 Mbit/s; below that both consoles say *Slow connection* and the game carries on.
 - [linkup-friends-picture-in-opengl](2026-11-05-linkup-friends-picture-in-opengl.md): the friend's picture is drawn with OpenGL, because Vulkan costs 20 to 40 ms more delay to be as smooth; emulators keep Vulkan.
+- [linkup-friend-draws-the-glow](2026-11-10-linkup-friend-draws-the-glow.md): the host says where its game sits, and the friend's console draws black bars and the glow around it over the stream's.
 - [linkup-friend-sound-queue](2026-11-08-linkup-friend-sound-queue.md): a friend plays the sound from LinkUp's own queue at the host's pace, keeping 40 ms, more after a Wi-Fi stall, at most 100.
 - [linkup-host-sound-through-pulse](2026-11-08-linkup-host-sound-through-pulse.md): a host captures its sound with pulsesrc, because pipewiresrc lost more and more of it on the mini PC.
 - [linkup-server-small-surface](2026-11-03-linkup-server-small-surface.md): the server holds no logins and has no public page, runs without admin rights, and its worst case cannot reach anyone's RomM.

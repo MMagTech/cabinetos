@@ -390,6 +390,31 @@ void LinkUpPlayScreen::open(Shows shows, std::string title, std::string detail, 
     fade_ = 1.0f;
 }
 
+void LinkUpPlayScreen::setPlace(float x, float y, float w, float h, float glowPeak) {
+    // From the other console, so kept on the screen whatever it says.
+    placeX_ = std::clamp(x, 0.0f, ui::kCanvasWidth);
+    placeY_ = std::clamp(y, 0.0f, ui::kCanvasHeight);
+    placeW_ = std::clamp(w, 0.0f, ui::kCanvasWidth - placeX_);
+    placeH_ = std::clamp(h, 0.0f, ui::kCanvasHeight - placeY_);
+    glowPeak_ = glowPeak;
+    placed_ = placeW_ > 0.0f && placeH_ > 0.0f;
+}
+
+// Opaque over the stream's bars, which carry the host's glow in flat steps: black, and this console's
+// own glow over it, smooth, both stopping exactly at the picture. Not rectangles: their smoothed edge
+// darkened the game's outermost column of pixels. The edges on this screen's whole pixels, as the
+// host's are on its own.
+void LinkUpPlayScreen::drawPlace(ui::Renderer& r) const {
+    if (!placed_) return;
+    const float k = r.scale() > 0.0f ? r.scale() : 1.0f;
+    auto snap = [k](float v) { return std::round(v * k) / k; };
+    const float left = snap(placeX_);
+    const float top = snap(placeY_);
+    const float right = snap(placeX_ + placeW_);
+    const float bottom = snap(placeY_ + placeH_);
+    r.drawBiasGlow(left, top, right - left, bottom - top, glowPeak_, /*opaque=*/true);
+}
+
 void LinkUpPlayScreen::tick(float dt) { clock_ += dt; }
 
 Result LinkUpPlayScreen::key(Nav n) {
@@ -411,6 +436,7 @@ void LinkUpPlayScreen::draw(Ctx& c) {
     if (shows_ == Shows::Picture) {
         if (!standIn_) {
             c.r.setContentAlpha(1.0f);
+            drawPlace(c.r);
             return;
         }
         // Stands in for the game, where there is no program to show one.

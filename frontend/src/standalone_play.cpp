@@ -743,6 +743,8 @@ void App::drawOverGame() {
     renderer.setPixelShift(0, 0);
     renderer.beginFrame(dw, dh);
     renderer.presentScene();
+    // A LinkUp friend's bars and glow around the host's game, under the rest (#692).
+    if (linkupPictureBehind()) linkupPlay.drawPlace(renderer);
     for (int d = 0; pointer.on && d < 2; ++d) {
         if (d == 1 && !pointer.second) break;
         const float r = pointer.finger[d] ? kDotPressed : kDotRadius;

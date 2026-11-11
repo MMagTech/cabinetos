@@ -692,6 +692,9 @@ struct App {
     bool linkupGameAsked = false;
     double linkupGameStartedAt = 0.0;
     bool linkupPictureSent = false;
+    // The host: where the game was last said to sit (linkupTellPlace), so it is said again only when
+    // it moves. All zero until a game shows.
+    float linkupPlaceSent[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     bool standaloneNoticeUp = false;   // a pill over an emulator run as a program (drawOverGame)
     bool linkupFriendShowsPicture = false;
     bool linkupOverlayMarked = false;
@@ -2422,6 +2425,9 @@ struct App {
     void linkupSendJoin(const linkup::Friend& f);
     void linkupSendDecline(const linkup::Friend& f);
     void linkupTellPeer(const std::string& word, const std::string& game = "");
+    void linkupSendPeer(json_object* inner);
+    void linkupTellPlace(float x, float y, float w, float h);
+    void linkupTookPlace(json_object* message);
     void linkupConnected(const std::string& path);
     void linkupStartGame();
     void linkupConnectFailed(const std::string& reason);
