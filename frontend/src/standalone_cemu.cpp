@@ -208,6 +208,15 @@ void cemuArgs(std::vector<std::string>& full, const std::string& dir, const std:
     full.insert(full.end() - 1, "XDG_DATA_HOME=" + dir);
     full.insert(full.end() - 1, "SDL_GAMECONTROLLERCONFIG=" + db);
     full.insert(full.end() - 1, "SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=" + cab::vpad::sdlIds());
+    // AND NOT THROUGH SONY'S HID PROTOCOL. Cemu turns SDL's PlayStation HID
+    // drivers back on in its code (input/api/SDL/SDLControllerProvider.cpp,
+    // SDL_HINT_JOYSTICK_HIDAPI_PS5), over the SDL_JOYSTICK_HIDAPI=0 every
+    // program gets (standalone.cpp), so its SDL took the stand-in DualSense
+    // through its hidraw node, under a GUID of the HID driver's that the
+    // profile does not name, and the game had no controller (measured on the
+    // A9 2026-11-11, Shovel Knight). A hint in the environment wins over one
+    // set in code, so the evdev path and the profile's GUID hold.
+    full.insert(full.end() - 1, "SDL_JOYSTICK_HIDAPI_PS5=0");
     full.insert(full.end() - 1, "GDK_BACKEND=x11");
     // `-g` starts the game with no game list and closes Cemu when it
     // ends; `-f` is fullscreen.
