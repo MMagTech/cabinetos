@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.11.3 {#v2026-11-11-3}
 
 - **New:** in LinkUp, your friend's controller tilts and turns in Switch and
   PlayStation 3 games made for it, as it would on their own console: steering,
