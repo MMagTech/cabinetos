@@ -24,6 +24,7 @@
 #include "gonegames.h"
 #include "idle.h"
 #include "launch.h"
+#include "linkup_pad.h"
 #include "netblock.h"
 #include "samenames.h"
 #include "screenview.h"
@@ -351,6 +352,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             firstRunServerCheck = true;
         } else if (SDL_strcmp(argv[i], "--linkup-test") == 0) {
             return linkup::test();
+        } else if (SDL_strcmp(argv[i], "--linkup-pad-test") == 0) {
+            return linkuppad::test();
         } else if (SDL_strcmp(argv[i], "--same-names-test") == 0) {
             return samenames::test();
         } else if (SDL_strcmp(argv[i], "--arcade-tile-test") == 0) {

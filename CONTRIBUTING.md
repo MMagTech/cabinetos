@@ -248,6 +248,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--disc-test` | the rules for games on several discs |
 | `--same-names-test` | the diagnostic report's list of games with the same name |
 | `--linkup-test` | LinkUp's rules with no network in them: the friends list's order and its names, and the pairing code's format |
+| `--linkup-pad-test` | a LinkUp friend's controller at both ends (`linkup_pad.h`), on controllers made inside the test and no network: the friend's console sends its presses and tilt with the sensors its controller has, never the console's own button, and, while its own panel is up, lets go and holds the controller still; the host reads an older console's shorter state as a controller with no sensors, seats the friend with exactly the sensors theirs has, so a game asking player 2's hears none for a controller without them, reads back the friend's numbers in SDL's units, and a controller lying flat and still for a sensor the friend's no longer has; for the idle rule, a state sent again or a tilt alone is no press, and a button going down or a stick past the deadzone is |
 | `--files-test` | that a full disk leaves the file it was replacing whole, credentials stay 0600, a cut save's marker is not counted as owed, two settings changed at once both stick, the cover sweeps spare the tile map, a cover being written and what a link points at, and a game's archive keeps its folders and refuses a name outside them or one that comes twice, and is not unpacked again at a later start, but is when a file that came out of it was changed or cut short, its unpacking was cancelled, or it was downloaded again |
 | `--gone-games-test` | a game RomM no longer has (#625, `gonegames.h`): gone only when its own entry answers 404 to every person on the console, never for a 5xx, a 403, no answer, a list that does not come or a game another person can see; and on a scratch drive, a played copy with its manual, a download kept by two people with both keeps, the record and the covers removed, a game being played or still holding Xbox saves left, a game RomM has untouched; then every person's saves, states, screenshots and copy of RomM's saves of it removed, the signed-in person's owed save only once RomM has refused it this run, a person's saves still in an emulator's folder left, and a live game's owed save still owed |
 | `--vectrex-sheets-test` | which Vectrex game takes which screen sheet: RomM's md5 first, then the longest name token, and the sheets that never shipped drawing nothing, against `frontend/data/vectrex-overlays.json` |
@@ -270,7 +271,7 @@ pad has gone, and the sensors off and the devices gone when the pads close.
 Never run it while a PS3 game runs on the same console: RPCS3 finds the
 devices by name.
 
-**Every flag is in `frontend/src/cli.cpp`**, 126 of them plus
+**Every flag is in `frontend/src/cli.cpp`**, 127 of them plus
 `--check-option-tables` in `main.cpp`; there is no `--help`.
 `frontend/README.md` holds the build recipe and the storage tree. What it
 said about running and the flags in September 2026 is history, in

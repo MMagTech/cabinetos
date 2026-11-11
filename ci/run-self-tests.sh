@@ -64,6 +64,7 @@ TESTS=(
     --disc-test
     --same-names-test
     --linkup-test
+    --linkup-pad-test
     --files-test
     --vectrex-sheets-test
     --gone-games-test

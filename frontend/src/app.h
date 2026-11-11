@@ -706,10 +706,14 @@ struct App {
     bool linkupIdlePaused = false;
     bool linkupPressHere = false;
     bool linkupPressHeard = false;
+    double linkupHeardAt = -1.0;        // when the other console's press last reached this one
     float linkupPressAge = 0.0f;
     bool linkupHeldRemotePlay = false;
-    SDL_JoystickID linkupFriendJoystick = 0;
     linkupwire::Pad linkupFriendPad;     // the host: what the friend's pad is doing
+    bool linkupFriendPadHeard = false;   // the host: a state of it has come this session
+    uint32_t linkupPadsHeard = 0;
+    bool linkupStartPending = false;     // the host: the first game waits for the friend's pad
+    double linkupConnectedAt = 0.0;
     linkupwire::Pad linkupVpadSaid;      // the host: what an emulator of its own was last told
     uint16_t linkupLastPadSeq = 0;
     linkupwire::Pad linkupPadSent;       // the friend: what was last sent
@@ -2433,7 +2437,7 @@ struct App {
     void linkupConnectFailed(const std::string& reason);
     void linkupSeatFriend();
     void linkupUnseatFriend();
-    void linkupFriendPadChanged();
+    void linkupFriendPadChanged(const linkupwire::Pad& pad);
     void linkupPassToEmulator();
     bool linkupGameAloneOnScreen() const;
     void linkupFollowGame();
