@@ -39,9 +39,11 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // is given these and never the real pads (vpad.h). Without them the
     // game would start and nothing would move it, so that refuses here.
     // Beside them, for an emulator that reads one, a motion device for each
-    // player whose pad has the sensors (PS3, #683).
+    // player whose pad has the sensors (PS3, #683); or, for an emulator that
+    // reads a pad's own sensors, the stand-in DualSense in place of the plain
+    // controller (Switch, Wii U and Vita, #669).
     const int pads = std::max(1, players::count());
-    if (!cab::vpad::open(pads, emu.motion)) {
+    if (!cab::vpad::open(pads, emu.motion, emu.dualsense, emu.onlyPlayerOneTilts)) {
         refuseLaunch("Couldn't start this game");
         return;
     }

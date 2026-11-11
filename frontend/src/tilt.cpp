@@ -67,10 +67,11 @@ void reset() {
 // Under a made-up vendor and product, which testStart lets SDL take.
 constexpr Uint16 kTestVendor = 0x1209, kTestProduct = 0x7117;
 
-bool testStart() {
+bool testStart(const char* alsoTake) {
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
-    char only[32];
-    std::snprintf(only, sizeof only, "0x%04x/0x%04x", kTestVendor, kTestProduct);
+    char only[96];
+    std::snprintf(only, sizeof only, "0x%04x/0x%04x%s%s", kTestVendor, kTestProduct, alsoTake ? "," : "",
+                  alsoTake ? alsoTake : "");
     SDL_SetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT, only);
     if (!SDL_Init(SDL_INIT_GAMEPAD)) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());

@@ -239,6 +239,14 @@ std::string edenProfile(const std::string& homeDir, const std::string& player) {
 // the button on the right of the diamond is A on every pad, as it is on a
 // Switch (sdl_driver.cpp, GetDefaultButtonBinding). Players past `players` are
 // unplugged, or a game would count four controllers and offer four seats.
+//
+// MOTION (#669): for a player whose controller is a stand-in DualSense
+// carrying their pad's tilt, both of Eden's motion slots are bound to the
+// controller itself, as Eden binds a real pad with sensors
+// (sdl_driver.cpp, BuildMotionParam: "motion:0" is its one sensor). Eden
+// pairs the sensors by SDL's uniq and reads them in SDL's units. For any
+// other player, a pad without sensors or a plain controller, both slots are
+// written empty, as before #669, so nothing older binds.
 std::vector<std::string> edenControls(int players) {
     const std::string guid = cab::vpad::edenGuid();
     std::vector<std::string> lines;   // "key=value" for [Controls]
@@ -260,6 +268,11 @@ std::vector<std::string> edenControls(int players) {
                ",axis_x:" + std::to_string(cab::vpad::axisIndex(x)) +
                ",axis_y:" + std::to_string(cab::vpad::axisIndex(y)) +
                ",offset_x:0,offset_y:0,invert_x:+,invert_y:+\"";
+    };
+    auto sensors = [&](int p) {
+        return cab::vpad::carriesMotion(p)
+                   ? "\"engine:sdl,motion:0,port:" + std::to_string(p) + ",guid:" + guid + "\""
+                   : std::string("\"\"");
     };
     for (int p = 0; p < 8; ++p) {
         const std::string k = "player_" + std::to_string(p) + "_";
@@ -290,6 +303,8 @@ std::vector<std::string> edenControls(int players) {
         lines.push_back(k + "button_screenshot=\"\"");
         lines.push_back(k + "lstick=" + stick(p, SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY));
         lines.push_back(k + "rstick=" + stick(p, SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY));
+        lines.push_back(k + "motionleft=" + sensors(p));
+        lines.push_back(k + "motionright=" + sensors(p));
     }
     return lines;
 }

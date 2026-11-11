@@ -399,7 +399,7 @@ bool Run::startXemu(const Emulator& e, const std::string& romPath, const std::st
         // (ui/xui/input-manager.cc), so a real pad's Guide, or Back and
         // Start together, opened it over the game (FlatOut, 2026-09-29).
         // The ID is vpad.cpp's; SDL's own hint, no patch.
-        "--env=SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=0x1209/0xCAB0",
+        "--env=SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=" + cab::vpad::sdlIds(),
         "--env=LC_NUMERIC=C",
         std::string("--command=") + e.program,
         e.flatpak,
