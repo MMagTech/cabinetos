@@ -3,6 +3,7 @@
 #include "players.h"
 #include "rumble.h"
 #include "tilt.h"
+#include "vdualsense.h"
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -63,6 +64,9 @@ constexpr Abs kAxes[] = {
 };
 
 int gFd[kMaxPlayers] = {-1, -1, -1, -1};
+// THE KIND OPEN NOW: the plain uinput controllers, or the stand-in DualSenses
+// (vdualsense.h), one per player, when the emulator's row asked for them.
+bool gDualSense = false;
 
 // What the emulator uploaded, per pad: a rumble's two strengths and length.
 // SDL uploads one effect per pad and replays it; sixteen is plenty.
@@ -249,12 +253,64 @@ void openMotion(int players) {
     }
 }
 
+// THE SEATS' SENSORS ON, for the stand-in DualSenses, which carry the tilt
+// themselves: every player's, since every player has one. A pad with none
+// reads nothing (tilt.h), and pump() writes its stand-in a pad lying still.
+void openSenses(int players) {
+    for (int i = 0; i < players; ++i) {
+        const bool accel = tilt::set(i, tilt::Sensor::Accel, true);
+        const bool gyro = tilt::set(i, tilt::Sensor::Gyro, true);
+        if (accel || gyro)
+            std::fprintf(stderr, "[vpad] player %d's stand-in carries its pad's tilt (accelerometer %s, gyroscope %s)\n",
+                         i + 1, accel ? "on" : "none", gyro ? "on" : "none");
+        else
+            std::fprintf(stderr, "[vpad] player %d's pad has no motion sensors; its stand-in lies still\n", i + 1);
+    }
+}
+
+void closeSenses() {
+    for (int p = 0; p < kMaxPlayers; ++p) {
+        tilt::set(p, tilt::Sensor::Accel, false);
+        tilt::set(p, tilt::Sensor::Gyro, false);
+    }
+}
+
+// Each player's tilt into its stand-in, and the rumble the stand-in was asked
+// for to the player's real pad: pump()'s half for the DualSenses.
+void pumpDualSense() {
+    for (int p = 0; p < gCount; ++p) {
+        float a[3], g[3];
+        const bool accel = tilt::read(p, tilt::Sensor::Accel, a);
+        const bool gyro = tilt::read(p, tilt::Sensor::Gyro, g);
+        vdualsense::motion(p, accel ? a : nullptr, gyro ? g : nullptr);
+        uint16_t strong = 0, weak = 0;
+        if (vdualsense::rumbleChanged(p, &strong, &weak)) {
+            rumble::set(static_cast<unsigned>(p), 0, strong);
+            rumble::set(static_cast<unsigned>(p), 1, weak);
+        }
+    }
+}
+
 }  // namespace
 
-bool open(int players, bool motion) {
+bool open(int players, bool motion, bool dualsense) {
     close();
     if (players < 1) players = 1;
     if (players > kMaxPlayers) players = kMaxPlayers;
+    if (dualsense) {
+        bool ok = true;
+        for (int i = 0; i < players && ok; ++i) ok = vdualsense::open(i);
+        if (ok) {
+            gDualSense = true;
+            gCount = players;
+            rumble::reset();
+            std::fprintf(stderr, "[vpad] %d stand-in DualSense(s)\n", gCount);
+            openSenses(players);
+            return true;
+        }
+        vdualsense::closeAll();
+        std::fprintf(stderr, "[vpad] falling back to the plain virtual controllers, which carry no tilt\n");
+    }
     for (int i = 0; i < players; ++i) {
         gFd[i] = create(i);
         if (gFd[i] < 0) {
@@ -277,6 +333,13 @@ bool open(int players, bool motion) {
 
 void close() {
     if (gCount > 0) rumble::reset();
+    if (gDualSense) {
+        vdualsense::closeAll();
+        closeSenses();
+        gDualSense = false;
+        gCount = 0;
+        return;
+    }
     for (int& fd : gFd) {
         if (fd < 0) continue;
         ioctl(fd, UI_DEV_DESTROY);
@@ -296,6 +359,8 @@ void close() {
 
 int count() { return gCount; }
 
+bool carriesMotion() { return gDualSense && gCount > 0; }
+
 std::string motionName(int player) {
     if (player < 0 || player >= kMaxPlayers || gMotionFd[player] < 0) return "";
     return motionNameOf(player);
@@ -303,6 +368,10 @@ std::string motionName(int player) {
 
 void button(int player, SDL_GamepadButton b, bool down) {
     if (player < 0 || player >= gCount) return;
+    if (gDualSense) {
+        vdualsense::button(player, b, down);
+        return;
+    }
     const int fd = gFd[player];
     const int dpad = b == SDL_GAMEPAD_BUTTON_DPAD_UP      ? 0
                      : b == SDL_GAMEPAD_BUTTON_DPAD_DOWN  ? 1
@@ -327,6 +396,10 @@ void button(int player, SDL_GamepadButton b, bool down) {
 
 void axis(int player, SDL_GamepadAxis a, int16_t value) {
     if (player < 0 || player >= gCount) return;
+    if (gDualSense) {
+        vdualsense::axis(player, a, value);
+        return;
+    }
     for (const Abs& x : kAxes) {
         if (x.axis != a) continue;
         emit(gFd[player], EV_ABS, x.code, value);
@@ -336,6 +409,10 @@ void axis(int player, SDL_GamepadAxis a, int16_t value) {
 }
 
 void releaseAll() {
+    if (gDualSense) {
+        for (int p = 0; p < gCount; ++p) vdualsense::releaseAll(p);
+        return;
+    }
     for (int p = 0; p < gCount; ++p) {
         const int fd = gFd[p];
         for (const Key& k : kKeys) emit(fd, EV_KEY, k.code, 0);
@@ -348,6 +425,10 @@ void releaseAll() {
 }
 
 void pump(int64_t nowMs) {
+    if (gDualSense) {
+        pumpDualSense();
+        return;
+    }
     for (int p = 0; p < gCount; ++p) {
         const int fd = gFd[p];
         input_event ev;
@@ -404,6 +485,7 @@ void pump(int64_t nowMs) {
 }
 
 std::string edenGuid() {
+    if (gDualSense) return vdualsense::edenGuid();
     // SDL's GUID for a USB evdev device: bus, the name's CRC, vendor, 0,
     // product, 0, version, then two driver bytes, each 16-bit field little
     // endian. Eden clears the CRC, so it is written as zero here.
@@ -448,12 +530,14 @@ std::string sdlMapping(int player) {
 }
 
 int buttonIndex(SDL_GamepadButton b) {
+    if (gDualSense) return vdualsense::buttonIndex(b);
     for (size_t i = 0; i < sizeof kKeys / sizeof kKeys[0]; ++i)
         if (kKeys[i].button == b) return static_cast<int>(i);
     return -1;
 }
 
 int axisIndex(SDL_GamepadAxis a) {
+    if (gDualSense) return vdualsense::axisIndex(a);
     for (size_t i = 0; i < sizeof kAxes / sizeof kAxes[0]; ++i)
         if (kAxes[i].axis == a) return static_cast<int>(i);
     return -1;
@@ -553,7 +637,7 @@ int motionTest() {
           "three test pads seated: players 1 and 2 with both sensors, player 3 with none");
 
     // AN EMULATOR THAT READS NO MOTION DEVICE.
-    if (!open(3, /*motion=*/false)) {
+    if (!open(3, /*motion=*/false, /*dualsense=*/false)) {
         std::printf("  FAIL  no virtual controllers: /dev/uinput cannot be opened\n");
         players::setInGame(false);
         SDL_Quit();
@@ -564,7 +648,7 @@ int motionTest() {
     close();
 
     // RPCS3.
-    check(open(3, /*motion=*/true), "three virtual controllers, motion asked");
+    check(open(3, /*motion=*/true, /*dualsense=*/false), "three virtual controllers, motion asked");
     check(motionName(0) == "CabinetOS player 1 motion" && motionName(1) == "CabinetOS player 2 motion" &&
               motionName(2).empty(),
           "players 1 and 2 get a motion device; player 3, whose pad has no sensors, none");

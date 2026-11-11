@@ -252,6 +252,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--gone-games-test` | a game RomM no longer has (#625, `gonegames.h`): gone only when its own entry answers 404 to every person on the console, never for a 5xx, a 403, no answer, a list that does not come or a game another person can see; and on a scratch drive, a played copy with its manual, a download kept by two people with both keeps, the record and the covers removed, a game being played or still holding Xbox saves left, a game RomM has untouched; then every person's saves, states, screenshots and copy of RomM's saves of it removed, the signed-in person's owed save only once RomM has refused it this run, a person's saves still in an emulator's folder left, and a live game's owed save still owed |
 | `--vectrex-sheets-test` | which Vectrex game takes which screen sheet: RomM's md5 first, then the longest name token, and the sheets that never shipped drawing nothing, against `frontend/data/vectrex-overlays.json` |
 | `--gpu-choice-test` | which GPU the games draw on (#659, `gpu.h`), on made-up devices: with one GPU that one; with two, the one the screen is on, in either order and whether or not it is the discrete card; the screen's GPU not known or not among them, a discrete card first and then the first listed; no device, none |
+| `--dualsense-test` | the stand-in DualSense (#669, `vdualsense.h`), made for real through `/dev/uhid` beside two test pads, one with sensors and one with none: the kernel's driver made its gamepad, motion and touchpad devices with one uniq; the console refuses to seat it and the player count stays; SDL, standing in for Eden's, takes it as a game controller with the GUID Eden's lines carry, pairs its motion device (the udev rule) and reads a written tilt back in SDL's units, and a press and a stick where the layout puts them; a pad without sensors lies still; rumble comes back; closing takes every device away. On a machine with no `/dev/uhid`, which CI's builder is, it says so and passes |
 | `--check-option-tables cores/options` | that every option the console sets (`coreoptions.cpp`, `quality.cpp`, `sysopts.cpp`, the Wii's rumble in `wii.cpp` and the Vectrex sheets' fit in `vectrexsheets.cpp`, with every answer that depends on the machine or a setting) exists in the core it is set on, and that every libretro core in `catalog.cpp`'s table has its list in `cores/options/` (CI runs it as a step of its own) |
 
 `--romm-race-test <address> <seconds>` checks the RomM client's thread rule
@@ -269,7 +270,7 @@ pad has gone, and the sensors off and the devices gone when the pads close.
 Never run it while a PS3 game runs on the same console: RPCS3 finds the
 devices by name.
 
-**Every flag is in `frontend/src/cli.cpp`**, 125 of them plus
+**Every flag is in `frontend/src/cli.cpp`**, 126 of them plus
 `--check-option-tables` in `main.cpp`; there is no `--help`.
 `frontend/README.md` holds the build recipe and the storage tree. What it
 said about running and the flags in September 2026 is history, in

@@ -30,6 +30,7 @@
 #include "storage.h"
 #include "tilt.h"
 #include "update.h"
+#include "vdualsense.h"
 #include "xboxhdd.h"
 
 using namespace design;   // NOLINT: the design system's names (design.h, motion.h, card.h)
@@ -301,6 +302,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             return tilt::test();
         } else if (SDL_strcmp(argv[i], "--motion-device-test") == 0) {
             return cab::vpad::motionTest();
+        } else if (SDL_strcmp(argv[i], "--dualsense-test") == 0) {
+            return cab::vdualsense::test();
         } else if (SDL_strcmp(argv[i], "--fightstick-test") == 0) {
             return fightstick::test();
         } else if (SDL_strcmp(argv[i], "--arcade-settings-test") == 0) {

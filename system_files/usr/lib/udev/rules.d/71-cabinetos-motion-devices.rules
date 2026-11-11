@@ -11,3 +11,14 @@
 # the tag into the grant.
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_ACCELEROMETER}=="1", \
   ATTRS{id/vendor}=="1209", ATTRS{id/product}=="cab0", TAG+="uaccess"
+
+# The stand-in DualSense (#669, frontend/src/vdualsense.cpp): a /dev/uhid
+# device with Sony's id, which the kernel's PlayStation driver turns into a
+# gamepad, a "Motion Sensors" device and a touchpad. The gamepad is a joystick
+# to udev and gets the seat's access by systemd's own rule; the motion device
+# is an accelerometer and would stay the input group's, so Eden's SDL, running
+# as the seat's user, could not open it and would pair nothing. The console's
+# own name picks it out, since Sony's id is a real pad's too.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_ACCELEROMETER}=="1", \
+  ATTRS{id/vendor}=="054c", ATTRS{id/product}=="0df2", \
+  ATTRS{name}=="CabinetOS player ? Motion Sensors", TAG+="uaccess"

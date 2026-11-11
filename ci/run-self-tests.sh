@@ -26,6 +26,11 @@
 #                     container has neither. It runs on a console
 #                     (ci/base-watch.txt, Kernel and startup).
 #
+# RUN HERE BUT PASSING FOR WANT OF A DEVICE: --dualsense-test makes its
+# stand-ins through /dev/uhid, which the container has no more than it has
+# /dev/uinput, so it says so and exits 0; it runs for real on a console
+# (ci/base-watch.txt, Kernel and startup).
+#
 # REPORT ONLY UNTIL A DATE: while today (UTC) is not past REPORT_ONLY_UNTIL
 # (YYYY-MM-DD, set by build-frontend.yml), a failing test is the same report
 # and a warning annotation, and it exits 0; from the next day it fails, the
@@ -63,6 +68,7 @@ TESTS=(
     --vectrex-sheets-test
     --gone-games-test
     --gpu-choice-test
+    --dualsense-test
 )
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

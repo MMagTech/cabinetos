@@ -52,13 +52,15 @@ void reset();
 // screen. 0 when all pass.
 int test();
 
-// THE TESTS' OWN PADS, for --tilt-test and vpad.h's --motion-device-test:
-// SDL's virtual joysticks that live inside the test's process and nowhere
-// else, seated as real pads are (players.h). testStart turns HIDAPI off and
-// tells SDL to take no device for a gamepad but these, so no real pad on the
-// machine is opened, read or seated; false when SDL cannot start. The test
-// calls SDL_Quit.
-bool testStart();
+// THE TESTS' OWN PADS, for --tilt-test, vpad.h's --motion-device-test and
+// vdualsense.h's --dualsense-test: SDL's virtual joysticks that live inside
+// the test's process and nowhere else, seated as real pads are (players.h).
+// testStart turns HIDAPI off and tells SDL to take no device for a gamepad
+// but these, and `alsoTake` when a test gives one (more "0xVVVV/0xPPPP" ids,
+// comma separated: the stand-in DualSense's), so no real pad on the machine
+// is opened, read or seated; false when SDL cannot start. The test calls
+// SDL_Quit.
+bool testStart(const char* alsoTake = nullptr);
 // A pad seated as a real one is, with an accelerometer and a gyroscope or
 // with neither; 0 when SDL refuses. testUnplug takes it out of its seat.
 uint32_t testPad(bool sensors);
