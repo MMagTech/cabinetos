@@ -6,6 +6,16 @@ one you install, so you only ever install the newest.
 
 ## Next
 
+- **New:** tilting and turning the controller in Switch, Wii U and PS Vita
+  games made for it, with a controller that has motion sensors (PS4, PS5 and
+  Switch controllers). Tilt or turn it where a game asks you to move the
+  controller, such as aiming, steering or looking around. In Switch games
+  each player's own controller moves their part of the game; in Wii U games
+  player 1's controller is the GamePad; in PS Vita games player 1's
+  controller is the Vita. A controller without motion sensors plays them as
+  before.
+  ([#669](https://github.com/MMagTech/cabinetos/issues/669),
+  [Motion](controllers.md#motion))
 - **Fixed:** in LinkUp, the soft glow in the bars beside the game reached
   your friend's TV in blocky steps. Their console now draws the glow itself,
   as smooth as on yours.

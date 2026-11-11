@@ -88,13 +88,15 @@ log: RPCS3 can read a PS3 player's motion device :: d=$(mktemp -d); HOME="$d" CA
 # kernel's PlayStation driver, hid-playstation, taking a /dev/uhid device with
 # the DualSense Edge's id, asking it the three feature reports, applying the
 # calibration it answers and making its gamepad, "Motion Sensors" and touchpad
-# devices with one uniq; on uhid itself; on udev marking the motion device an
-# accelerometer, which 71-cabinetos-motion-devices.rules turns into the seat's
-# access; and on SDL's Linux joystick code pairing a sensor device by uniq and
-# scaling it by the node's resolution. A kernel that changed any of it shows
-# as a Switch game's pad lying still, or no pad at all. The self-test makes two
-# for real and reads them back through SDL as Eden's SDL does. Never while a
-# Switch game runs.
+# devices with one uniq, the address it answers; on uhid itself; on udev
+# marking the motion device an accelerometer, which
+# 71-cabinetos-motion-devices.rules turns into the seat's access for a
+# stand-in whose address says it carries a pad's tilt; and on SDL's Linux
+# joystick code pairing a sensor device by uniq and scaling it by the node's
+# resolution. A kernel that changed any of it shows as a Switch, Wii U or Vita
+# game's pad lying still, or no pad at all. The self-test makes two for real,
+# one for a pad without sensors, and reads them back through SDL as the
+# emulators' SDL does. Never while a Switch, Wii U or Vita game runs.
 log: The kernel's PlayStation driver takes the stand-in DualSense and SDL reads its tilt :: d=$(mktemp -d); HOME="$d" CABINETOS_DRIVES="$d" cabinetos-frontend --storage-root "$d" --dualsense-test > "$d/out" 2>&1; r=$?; grep -a FAIL "$d/out"; rm -rf "$d"; exit "$r"
 # Picture quality's Auto judges the machine by the GPU's top clock from
 # amdgpu's pp_dpm_sclk ("2: 2900Mhz") and the processor's from cpufreq and

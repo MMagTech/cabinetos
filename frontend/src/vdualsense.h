@@ -1,6 +1,7 @@
 // The console's stand-in DualSense (#669): a virtual controller that carries
 // the player's tilt, for an emulator that reads motion only from a pad's own
-// sensors. The Switch (Eden) in part one; Cemu and Vita3K are part two.
+// sensors: Eden (Switch), Cemu (Wii U) and Vita3K (Vita), each chosen by the
+// `dualsense` field on its row in standalone.cpp's table.
 //
 // WHY A DUALSENSE AND NOT THE PLAIN VIRTUAL PAD. The plain pads (vpad.h) are
 // uinput devices, and SDL reads a pad's motion from the kernel's "Motion
@@ -23,7 +24,21 @@
 // share, and both SDLs in question treat it as a PS5 pad. The name is the
 // console's own, "CabinetOS player N", which is how the console tells its
 // stand-ins from real pads (players.cpp); the address is made up,
-// ca:b1:4e:70:50:0N.
+// ca:b1:4e:70:50:0N, or ca:b1:4e:70:51:0N for a pad without sensors (below).
+//
+// A PAD WITHOUT SENSORS CHANGES NOTHING. The kernel's driver gives every
+// stand-in a motion device, and SDL starts its six axes at zero and hears
+// them only when they change, so a stand-in for a pad without sensors would
+// read to an emulator as a pad weighing nothing, sent 250 times a second:
+// Eden ignores that, but Cemu and Vita3K take it as tilt, and Vita3K, which
+// reads every controller's motion into the one Vita, would mix it with
+// another player's real tilt. So such a stand-in wears the second address,
+// and the udev rule gives the seat's user the motion device of the first
+// only (system_files/usr/lib/udev/rules.d/71-cabinetos-motion-devices.rules).
+// An emulator's SDL, running as that user, cannot open the other, finds no
+// sensors on the pad (SDL_sysjoystick.c, ConfigJoystick), and sees a pad
+// without them, as the player's own is. The pad is judged when the stand-in
+// is made, at the game's start, as everything else about the controllers is.
 //
 // THE UNITS, END TO END. tilt.h hands over SDL's units and axes, metres per
 // second squared and radians per second in the DualSense's own frame, because
@@ -60,8 +75,8 @@
 // that ignores the plain pads by id (startup.cpp) cannot tell a Sony id
 // apart. players.cpp refuses to seat a pad whose device is named "CabinetOS
 // player ..." before it is opened, so the player count never moves and no
-// press is passed back. Eden's SDL, with its HID drivers off, finds the
-// gamepad through its event node and pairs the motion node to it by uniq.
+// press is passed back. An emulator's SDL, with its HID drivers off, finds
+// the gamepad through its event node and pairs the motion node to it by uniq.
 //
 // THE LAYOUT IS SDL'S OWN RULE FOR AN evdev DEVICE: buttons numbered in the
 // order of their key codes, axes in the order of theirs, the d-pad as hat 0.
@@ -82,10 +97,12 @@ namespace cab::vdualsense {
 constexpr int kMaxPlayers = 4;
 
 // Makes player `player`'s (from 0) stand-in and waits for the kernel's driver
-// to make its devices, about 50 ms and 2 s at most. False, with the reason in
-// the log, when /dev/uhid cannot be opened or the driver did not take it; the
-// caller then falls back to the plain pads (vpad.cpp).
-bool open(int player);
+// to make its devices, about 50 ms and 2 s at most. `tilt` says the player's
+// pad has sensors; without it the stand-in's motion device is nobody's to
+// open (above). False, with the reason in the log, when /dev/uhid cannot be
+// opened or the driver did not take it; the caller then falls back to the
+// plain pads (vpad.cpp).
+bool open(int player, bool tilt);
 void close(int player);
 void closeAll();
 bool isOpen(int player);
@@ -96,11 +113,9 @@ void button(int player, SDL_GamepadButton b, bool down);
 void axis(int player, SDL_GamepadAxis a, int16_t value);
 void releaseAll(int player);
 // The pad's tilt in SDL's units and axes (tilt.h): x, y, z. nullptr for a
-// sensor the player's pad lacks: the report then carries a pad lying still,
-// face up, which the kernel's node holds and SDL never hears, since the kernel
-// passes an axis on only when it changes and SDL starts every axis at zero
-// when the sensors are turned on. Eden reads that as no motion data and does
-// nothing with it, which is what it has for a plain controller today.
+// sensor the player's pad lacks, or has lost when it left mid-game: the
+// report then carries a pad lying still, face up, on that sensor. A stand-in
+// made for a pad with neither is written the same, and nothing reads it.
 void motion(int player, const float* accel, const float* gyro);
 // What the emulator last asked of the motors, as SDL's two strengths, 0 to
 // 65535, strong then weak. True when it changed since the last ask.
@@ -111,6 +126,12 @@ bool rumbleChanged(int player, uint16_t* strong, uint16_t* weak);
 // same for every player since the name is what differs. And where each input
 // lands in SDL's numbering of the device, -1 when it has none.
 std::string edenGuid();
+// The same as SDL itself writes it, name checksum and all, so each player's
+// is its own: what Cemu's profile binds to and Vita3K's mapping line names.
+std::string sdlGuid(int player);
+// Its vendor and product as SDL's IGNORE_DEVICES hints take them,
+// "0x054c/0x0df2".
+std::string sdlIds();
 int buttonIndex(SDL_GamepadButton b);
 int axisIndex(SDL_GamepadAxis a);
 // "CabinetOS player N", the device's name and the kernel's gamepad's.
@@ -127,11 +148,13 @@ Nodes nodes(int player);
 // test pads made inside the test (tilt.h's), one with sensors and one with
 // none. Asserts the kernel made the gamepad, motion and touchpad devices with
 // one uniq; that the console's own seating refuses the stand-in and the
-// player count stays; that SDL, standing in for Eden's, takes it as a gamepad
-// with the GUID Eden's lines carry, pairs its motion device (the udev rule)
-// and reads a written tilt back in SDL's units, and a press and a stick where
-// the layout puts them; that a pad without sensors lies still; that rumble
-// comes back; and that closing takes every device away. Prints plainly and
+// player count stays; that SDL, standing in for an emulator's, takes it as a
+// gamepad with the GUIDs Eden's lines, Cemu's profile and Vita3K's mapping
+// carry, pairs its motion device (the udev rule) and reads a written tilt back
+// in SDL's units, and a press and a stick where the layout puts them, by its
+// own mapping and by the console's line; that a pad without sensors gets a
+// stand-in on which SDL finds none; that rumble comes back; and that closing
+// takes every device away. Prints plainly and
 // exits 0 on a machine with no /dev/uhid, which CI's builder is; it runs for
 // real on a console.
 int test();

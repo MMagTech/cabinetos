@@ -149,8 +149,8 @@ struct Emulator {
     bool motion;
     // IT READS EACH PLAYER'S TILT FROM THE PAD'S OWN SENSORS, as SDL pairs
     // them, so its virtual controller is the stand-in DualSense of
-    // vdualsense.h and not the plain one: Eden (#669, part one). Part two
-    // sets it for Cemu and Vita3K. The two switches are never both set.
+    // vdualsense.h and not the plain one: Eden, Cemu and Vita3K (#669). The
+    // two switches are never both set.
     bool dualsense;
 };
 

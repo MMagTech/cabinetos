@@ -105,18 +105,21 @@ void put32(uint8_t* at, uint32_t v) {
     for (int i = 0; i < 4; ++i) at[i] = static_cast<uint8_t>((v >> (8 * i)) & 0xFF);
 }
 
-// The made-up address of player `player`'s stand-in, "ca:b1:4e:70:50:0N", and
-// the bytes the pairing report carries it as: the driver copies six bytes
-// from offset 1 and prints them last first (its "%pMR").
-std::string addressOf(int player) {
+// The made-up address of player `player`'s stand-in and the bytes the pairing
+// report carries it as: the driver copies six bytes from offset 1 and prints
+// them last first (its "%pMR"), and every device it makes carries it as uniq.
+// "ca:b1:4e:70:50:0N" for a stand-in that carries its pad's tilt, the only
+// address the udev rule gives the seat's user the motion device of;
+// "ca:b1:4e:70:51:0N" for one whose pad has no sensors (the header).
+std::string addressOf(int player, bool tilt) {
     char out[18];
-    std::snprintf(out, sizeof out, "ca:b1:4e:70:50:%02x", player + 1);
+    std::snprintf(out, sizeof out, "ca:b1:4e:70:%02x:%02x", tilt ? 0x50 : 0x51, player + 1);
     return out;
 }
 
-void addressBytes(int player, uint8_t out[6]) {
+void addressBytes(int player, bool tilt, uint8_t out[6]) {
     out[0] = static_cast<uint8_t>(player + 1);
-    out[1] = 0x50;
+    out[1] = tilt ? 0x50 : 0x51;
     out[2] = 0x70;
     out[3] = 0x4e;
     out[4] = 0xb1;
@@ -137,6 +140,7 @@ struct State {
 struct Fake {
     int fd = -1;
     bool started = false;   // the kernel's UHID_START has come
+    bool tilt = true;       // its pad has sensors: which address it wears
     State state;
     uint8_t seq = 0;
     uint16_t strong = 0, weak = 0;
@@ -241,7 +245,7 @@ void answerGetReport(Fake& f, const uhid_get_report_req& req) {
         ev.u.get_report_reply.size = kCalibrationSize;
     } else if (req.rtype == UHID_FEATURE_REPORT && req.rnum == kReportPairing) {
         d[0] = kReportPairing;
-        addressBytes(static_cast<int>(&f - gFakes), d + 1);
+        addressBytes(static_cast<int>(&f - gFakes), f.tilt, d + 1);
         ev.u.get_report_reply.size = kPairingSize;
     } else if (req.rtype == UHID_FEATURE_REPORT && req.rnum == kReportFirmware) {
         // Hardware and firmware versions at 24 and 28, the feature version at
@@ -444,9 +448,10 @@ Nodes findNodes(const std::string& uniq) {
 
 std::string name(int player) { return "CabinetOS player " + std::to_string(player + 1); }
 
-bool open(int player) {
+bool open(int player, bool tilt) {
     if (player < 0 || player >= kMaxPlayers) return false;
     close(player);
+    const std::string address = addressOf(player, tilt);
     const int fd = ::open("/dev/uhid", O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0) {
         std::fprintf(stderr, "[vdualsense] player %d: /dev/uhid: %s\n", player + 1, std::strerror(errno));
@@ -457,7 +462,7 @@ bool open(int player) {
     uhid_create2_req& c = ev.u.create2;
     std::snprintf(reinterpret_cast<char*>(c.name), sizeof c.name, "%s", name(player).c_str());
     std::snprintf(reinterpret_cast<char*>(c.phys), sizeof c.phys, "cabinetos/uhid/player%d", player + 1);
-    std::snprintf(reinterpret_cast<char*>(c.uniq), sizeof c.uniq, "%s", addressOf(player).c_str());
+    std::snprintf(reinterpret_cast<char*>(c.uniq), sizeof c.uniq, "%s", address.c_str());
     c.rd_size = sizeof kDescriptor;
     std::memcpy(c.rd_data, kDescriptor, sizeof kDescriptor);
     c.bus = BUS_USB;
@@ -478,6 +483,7 @@ bool open(int player) {
         Fake& f = gFakes[player];
         f = Fake{};
         f.fd = fd;
+        f.tilt = tilt;
     }
     wakeThread();
     // The driver probes on a worker of the kernel's, asking its three
@@ -486,7 +492,7 @@ bool open(int player) {
     const int64_t deadline = nowNs() + 2000000000ll;
     Nodes nodes;
     while (nowNs() < deadline) {
-        nodes = findNodes(addressOf(player));
+        nodes = findNodes(address);
         if (!nodes.gamepad.empty() && !nodes.motion.empty() && !nodes.touchpad.empty()) break;
         usleep(20000);
     }
@@ -601,15 +607,34 @@ bool rumbleChanged(int player, uint16_t* strong, uint16_t* weak) {
     return changed;
 }
 
-std::string edenGuid() {
-    // SDL's GUID for a USB evdev device (SDL_joystick.c, SDL_CreateJoystickGUID):
-    // bus, the name's CRC, vendor, 0, product, 0, version, then two driver
-    // bytes, each 16-bit field little endian. Eden clears the CRC, so it is
-    // written as zero here, and the version carries the driver's mark.
-    const uint16_t words[8] = {0x0003, 0, kVendor, 0, kProduct, 0, kVersionSeen, 0};
+namespace {
+
+// SDL's GUID for a USB evdev device (SDL_joystick.c, SDL_CreateJoystickGUID):
+// bus, the name's CRC, vendor, 0, product, 0, version, then two driver bytes,
+// each 16-bit field little endian. The version carries the driver's mark.
+std::string guidWith(uint16_t crc) {
+    const uint16_t words[8] = {0x0003, crc, kVendor, 0, kProduct, 0, kVersionSeen, 0};
     char out[33];
     for (int i = 0; i < 8; ++i)
         std::snprintf(out + i * 4, 5, "%02x%02x", words[i] & 0xFF, words[i] >> 8);
+    return out;
+}
+
+}  // namespace
+
+// Eden clears the CRC, so it is written as zero.
+std::string edenGuid() { return guidWith(0); }
+
+// SDL's Linux joystick code checksums the device's name alone, there being no
+// vendor name for an evdev device (IsJoystick), as for the plain pads.
+std::string sdlGuid(int player) {
+    const std::string n = name(player);
+    return guidWith(SDL_crc16(0, n.c_str(), n.size()));
+}
+
+std::string sdlIds() {
+    char out[16];
+    std::snprintf(out, sizeof out, "0x%04x/0x%04x", kVendor, kProduct);
     return out;
 }
 
@@ -663,9 +688,10 @@ Nodes nodes(int player) {
 
 // ---- --dualsense-test ---------------------------------------------------------
 //
-// REAL DEVICES, through the same path a Switch game takes (vpad.h), read back
-// through SDL as Eden's SDL reads them. Never while a Switch game runs on the
-// same console: the console's own stand-ins would be made beside the game's.
+// REAL DEVICES, through the same path a Switch, Wii U or Vita game takes
+// (vpad.h), read back through SDL as the emulator's SDL reads them. Never
+// while one of those games runs on the same console: the console's own
+// stand-ins would be made beside the game's.
 
 #include "players.h"
 #include "tilt.h"
@@ -732,8 +758,8 @@ int test() {
 
     // SDL takes the stand-ins (Sony's id, the kernel's event nodes) and the
     // test's own pads, and no real pad on the machine; its HID drivers are
-    // off, as Eden's are.
-    if (!tilt::testStart("0x054c/0x0df2")) return 1;
+    // off, as the emulators' are.
+    if (!tilt::testStart(sdlIds().c_str())) return 1;
     players::setInGame(true);
     const uint32_t sensors = tilt::testPad(true), plain = tilt::testPad(false);
     check(sensors && plain && players::playerOf(sensors) == 0 && players::playerOf(plain) == 1,
@@ -741,13 +767,16 @@ int test() {
     const int seated = players::count();
 
     const bool up = cab::vpad::open(2, /*motion=*/false, /*dualsense=*/true);
-    check(up, "two stand-ins made through /dev/uhid, as for a Switch game");
-    check(up && cab::vpad::carriesMotion(), "and they carry the players' tilt themselves");
+    check(up, "two stand-ins made through /dev/uhid, as for a Switch, Wii U or Vita game");
+    check(up && cab::vpad::carriesMotion(0) && !cab::vpad::carriesMotion(1),
+          "player 1's carries its pad's tilt; player 2's, whose pad has no sensors, does not");
+    check(up && cab::vpad::sdlIds() == "0x054c/0x0df2",
+          "the emulator's SDL is told to take Sony's DualSense Edge, 0x054c/0x0df2, and nothing else");
     const Nodes n1 = nodes(0), n2 = nodes(1);
     check(!n1.gamepad.empty() && !n1.motion.empty() && !n1.touchpad.empty() && n1.uniq == "ca:b1:4e:70:50:01",
           "the kernel's driver made player 1's gamepad, motion and touchpad devices, uniq ca:b1:4e:70:50:01");
-    check(!n2.gamepad.empty() && !n2.motion.empty() && !n2.touchpad.empty() && n2.uniq == "ca:b1:4e:70:50:02",
-          "and player 2's, uniq ca:b1:4e:70:50:02");
+    check(!n2.gamepad.empty() && !n2.motion.empty() && !n2.touchpad.empty() && n2.uniq == "ca:b1:4e:70:51:02",
+          "and player 2's, uniq ca:b1:4e:70:51:02, the address of a stand-in for a pad without sensors");
 
     // THE CONSOLE'S OWN SDL sees them as pads and must not seat them.
     SDL_JoystickID fake1 = 0, fake2 = 0;
@@ -763,20 +792,29 @@ int test() {
               players::count() == seated,
           "and the console refuses to seat either: the player count stays at 2");
 
-    // EDEN'S SDL: a game controller, the GUID the lines carry, the motion
-    // device paired by uniq and opened (the udev rule), the tilt in SDL's units.
+    // THE EMULATOR'S SDL: a game controller, the GUIDs the lines carry, the
+    // motion device paired by uniq and opened (the udev rule), the tilt in
+    // SDL's units.
     check(fake1 && SDL_IsGamepad(fake1),
           "it is a game controller to SDL (its own Linux mapping), which Eden needs before it turns motion on");
-    char guid[33] = {};
+    char guid[33] = {}, whole1[33] = {}, whole2[33] = {};
     if (fake1) {
         SDL_GUID g = SDL_GetJoystickGUIDForID(fake1);
+        SDL_GUIDToString(g, whole1, sizeof whole1);
         g.data[2] = g.data[3] = 0;
         SDL_GUIDToString(g, guid, sizeof guid);
     }
+    if (fake2) SDL_GUIDToString(SDL_GetJoystickGUIDForID(fake2), whole2, sizeof whole2);
     check(fake1 && guid == cab::vpad::edenGuid() && guid == edenGuid(),
           "its GUID with the name checksum cleared is the one Eden's lines carry");
     if (fake1 && guid != cab::vpad::edenGuid())
         std::printf("        SDL says %s, the lines say %s\n", guid, cab::vpad::edenGuid().c_str());
+    check(fake1 && fake2 && whole1 == cab::vpad::sdlGuid(0) && whole2 == cab::vpad::sdlGuid(1) &&
+              std::string(whole1) != whole2,
+          "its whole GUID, name checksum and all, is the one Cemu's profile binds and the mapping line names, "
+          "and player 2's is its own");
+    if (fake1 && whole1 != cab::vpad::sdlGuid(0))
+        std::printf("        SDL says %s, the console says %s\n", whole1, cab::vpad::sdlGuid(0).c_str());
     SDL_Gamepad* gp1 = fake1 ? SDL_OpenGamepad(fake1) : nullptr;
     check(gp1 && SDL_GamepadHasSensor(gp1, SDL_SENSOR_ACCEL) && SDL_GamepadHasSensor(gp1, SDL_SENSOR_GYRO),
           "opened as Eden opens it, it has an accelerometer and a gyroscope: the motion device paired by uniq");
@@ -838,6 +876,28 @@ int test() {
     check(gp1 && SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_SOUTH) && SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_BACK) &&
               SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_DPAD_UP),
           "and SDL's own mapping of it agrees: South, Back and Up");
+    // The line Cemu and Vita3K are handed (vpad::sdlMapping), which names the
+    // whole GUID checked above, so SDL takes it for this device before any
+    // mapping of its own: accepted, and the same layout.
+    const std::string line = cab::vpad::sdlMapping(0);
+    const bool taken = line.compare(0, 33, cab::vpad::sdlGuid(0) + ",") == 0 &&
+                       SDL_AddGamepadMapping(line.c_str()) >= 0;
+    // A mapping added to an open pad recentres its axes in SDL, and the
+    // kernel passes an axis on only when it changes, so R2 is let go and
+    // pulled again; an emulator is handed the line before it opens the pad.
+    cab::vpad::axis(0, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0);
+    settle(20);
+    cab::vpad::axis(0, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 32767);
+    settle(20);
+    check(taken && gp1 && SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_SOUTH) &&
+              SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_BACK) && SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_DPAD_UP) &&
+              !SDL_GetGamepadButton(gp1, SDL_GAMEPAD_BUTTON_EAST) &&
+              SDL_GetGamepadAxis(gp1, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 32000,
+          "the console's mapping line for it is accepted and puts South, Back, Up and R2 where SDL's own does");
+    if (char* now = gp1 ? SDL_GetGamepadMapping(gp1) : nullptr) {
+        std::printf("        SDL maps it now: %s\n", now);
+        SDL_free(now);
+    }
     cab::vpad::releaseAll();
 
     // Rumble comes back through the driver: SDL's strong and weak become the
@@ -854,25 +914,20 @@ int test() {
           "and comes back within 0.3 s: strong 128 and weak 64 of 255");
     if (came) std::printf("        rumble back: strong %u, weak %u\n", strong, weak);
 
-    // A player whose pad has no sensors gets a pad lying still, face up, on
-    // the node; SDL, which hears an axis only when it changes, reads nothing
-    // from it, and Eden takes that as no motion data (the header).
-    SDL_Gamepad* gp2 = fake2 ? SDL_OpenGamepad(fake2) : nullptr;
-    const bool on2 = gp2 && SDL_SetGamepadSensorEnabled(gp2, SDL_SENSOR_ACCEL, true) &&
-                     SDL_SetGamepadSensorEnabled(gp2, SDL_SENSOR_GYRO, true);
+    // A player whose pad has no sensors gets a stand-in whose motion device
+    // the udev rule leaves to the input group (the header), so an emulator's
+    // SDL, running as this user, finds no sensors on it: a pad without them,
+    // as the player's own is.
     cab::vpad::pump(0);
     settle(60);
+    errno = 0;
     const int motionFd2 = n2.motion.empty() ? -1 : ::open(n2.motion.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    check(motionFd2 >= 0 && nodeValue(motionFd2, ABS_X) == 0 && nodeValue(motionFd2, ABS_Y) == kNodePerG &&
-              nodeValue(motionFd2, ABS_Z) == 0 && nodeValue(motionFd2, ABS_RX) == 0 &&
-              nodeValue(motionFd2, ABS_RY) == 0 && nodeValue(motionFd2, ABS_RZ) == 0,
-          "player 2's stand-in, whose pad has no sensors, holds a pad lying still face up on its node: 0, 8192, 0 "
-          "and no turn");
+    check(!n2.motion.empty() && motionFd2 < 0 && errno == EACCES,
+          "player 2's stand-in, whose pad has no sensors, keeps its motion device from this user");
     if (motionFd2 >= 0) ::close(motionFd2);
-    float a2[3] = {}, g2[3] = {};
-    check(on2 && SDL_GetGamepadSensorData(gp2, SDL_SENSOR_ACCEL, a2, 3) && near3(a2, 0.0f, 0.0f, 0.0f, 0.01f) &&
-              SDL_GetGamepadSensorData(gp2, SDL_SENSOR_GYRO, g2, 3) && near3(g2, 0.0f, 0.0f, 0.0f, 0.002f),
-          "and SDL, hearing nothing change on it, reads no motion from it, as Eden does today");
+    SDL_Gamepad* gp2 = fake2 ? SDL_OpenGamepad(fake2) : nullptr;
+    check(gp2 && !SDL_GamepadHasSensor(gp2, SDL_SENSOR_ACCEL) && !SDL_GamepadHasSensor(gp2, SDL_SENSOR_GYRO),
+          "so SDL finds no accelerometer and no gyroscope on it, and no emulator reads tilt from it");
     check(readA && gp1 && SDL_GetGamepadSensorData(gp1, SDL_SENSOR_ACCEL, a, 3) && near3(a, ax, ay, az, 0.01f),
           "and player 1's still reads its own pad's tilt");
 
@@ -882,7 +937,7 @@ int test() {
     if (gp2) SDL_CloseGamepad(gp2);
     cab::vpad::close();
     settle(100);
-    check(!cab::vpad::carriesMotion() && nodes(0).gamepad.empty() && !isOpen(0) && !isOpen(1),
+    check(!cab::vpad::carriesMotion(0) && nodes(0).gamepad.empty() && !isOpen(0) && !isOpen(1),
           "closing forgets both stand-ins");
     check(!n1.gamepad.empty() && ::access(n1.gamepad.c_str(), F_OK) != 0 && ::access(n1.motion.c_str(), F_OK) != 0 &&
               ::access(n1.touchpad.c_str(), F_OK) != 0 && ::access(n2.gamepad.c_str(), F_OK) != 0,

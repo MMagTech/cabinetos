@@ -115,7 +115,8 @@ const Emulator kEmulators[] = {
      nullptr,
      "Unrecoverable error in Vulkan",
      nullptr, 0, "Error",
-     "wua", "", false, false, true, false, false, true, false, false, false},
+     // dualsense (#669): Cemu reads a pad's own sensors, as SDL pairs them.
+     "wua", "", false, false, true, false, false, true, false, false, true},
 
     // PLAYSTATION VITA. Vita3K's own build, in the image
     // (build_files/install-vita3k.sh), started through its SDL frontend: a
@@ -136,7 +137,8 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: Vita3K writes the saves straight into the person's
      // folder, through the link standalone_vita3k.cpp makes, as Xenia does.
-     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, false},
+     // dualsense (#669): Vita3K reads a pad's own sensors, as SDL pairs them.
+     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true},
 
     // SEGA MODEL 2. sm2-emu, built from source at a pin (cores/build-sm2emu.sh)
     // and in the image at /usr/lib/cabinetos/sm2emu, for the Model 2 games

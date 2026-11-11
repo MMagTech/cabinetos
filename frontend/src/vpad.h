@@ -25,15 +25,16 @@
 //   is told by name, its "Buddy Device", so beside each player whose real pad
 //   has an accelerometer or a gyroscope the console makes a motion device,
 //   "CabinetOS player N motion", and pump() writes the pad's tilt into it.
-// - Eden (#669, the row's `dualsense`; part two sets it for Cemu and Vita3K)
-//   is given a stand-in DualSense in place of the plain controller
-//   (vdualsense.h): a /dev/uhid device with Sony's id that the kernel's own
-//   PlayStation driver turns into a gamepad, a motion device and a touchpad
-//   sharing one uniq, which the emulator's SDL pairs by itself. pump() writes
-//   the pad's tilt into it too. Should the stand-in fail to come up, the
-//   plain controllers stand in for it, with a line in the log, and the game
-//   plays as it did before #669. The console tells its stand-ins from real
-//   pads by their name (players.cpp), since their id is Sony's.
+// - Eden, Cemu and Vita3K (#669, the row's `dualsense`) are given a stand-in
+//   DualSense in place of the plain controller (vdualsense.h): a /dev/uhid
+//   device with Sony's id that the kernel's own PlayStation driver turns
+//   into a gamepad, a motion device and a touchpad sharing one uniq, which
+//   the emulator's SDL pairs by itself. pump() writes the pad's tilt into it
+//   too. A player whose pad has no sensors gets a stand-in on which the
+//   emulator finds none. Should the stand-in fail to come up, the plain
+//   controllers stand in for it, with a line in the log, and the game plays
+//   as it did before #669. The console tells its stand-ins from real pads by
+//   their name (players.cpp), since their id is Sony's.
 //
 // Xbox, Xbox 360, Model 2 and Model 3 keep the plain controller. Rumble comes
 // back the other way from both kinds: each virtual controller takes the
@@ -58,7 +59,8 @@
 // versions in question, which is the whole reason for choosing it. The
 // stand-in DualSense follows the same rule over the key codes the kernel's
 // driver gives it, so its numbering differs (vdualsense.h), and edenGuid,
-// buttonIndex and axisIndex answer for whichever kind is open.
+// sdlGuid, sdlIds, sdlMapping, buttonIndex and axisIndex answer for whichever
+// kind is open.
 
 #pragma once
 
@@ -81,18 +83,18 @@ constexpr int kMaxPlayers = 4;
 // them off. A player without one gets none, and a motion device that cannot
 // be made leaves that player's game as it was, with a line in the log.
 //
-// With `dualsense` (an emulator that reads a pad's own sensors, Eden), every
-// player gets a stand-in DualSense of vdualsense.h in place of the plain
-// controller, and every seat's sensors are turned on until close(); a player
-// whose pad has none gets a stand-in lying still. When one cannot be made,
-// the plain controllers are made instead, with a line in the log.
+// With `dualsense` (an emulator that reads a pad's own sensors: Eden, Cemu,
+// Vita3K), every player gets a stand-in DualSense of vdualsense.h in place of
+// the plain controller, and every seat's sensors are turned on until close();
+// a player whose pad has none gets a stand-in with none. When one cannot be
+// made, the plain controllers are made instead, with a line in the log.
 bool open(int players, bool motion, bool dualsense);
 void close();
 int count();
-// True while the open controllers are the stand-in DualSenses, which carry
-// the players' tilt themselves: standalone_eden.cpp then binds motion to
-// them.
-bool carriesMotion();
+// True while player `player`'s controller is a stand-in DualSense carrying
+// its pad's tilt: Eden's motion lines and Cemu's profile then turn motion on
+// for that player.
+bool carriesMotion(int player);
 
 // The name of player `player`'s motion device, the one its emulator is told
 // to read, or empty when that player has none.
@@ -121,9 +123,14 @@ void pump(int64_t nowMs);
 std::string edenGuid();
 
 // The same, as SDL itself writes it (SDL_GUIDToString), name checksum and
-// all: what xemu binds a port to. Each player's controller is named for its
-// seat ("CabinetOS player 2"), so each has its own. `player` from 0.
+// all: what xemu and Cemu bind a port to. Each player's controller is named
+// for its seat ("CabinetOS player 2"), so each has its own. `player` from 0.
 std::string sdlGuid(int player);
+
+// The vendor and product of the kind open, as SDL's IGNORE_DEVICES hints
+// take them: what each emulator's SDL is told to take and nothing else
+// (SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT), so it never sees the real pads.
+std::string sdlIds();
 
 // A line of SDL's controller database for player `player`'s controller:
 // every button and axis where the layout above puts it, so an emulator that

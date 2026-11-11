@@ -65,8 +65,11 @@ constexpr Abs kAxes[] = {
 
 int gFd[kMaxPlayers] = {-1, -1, -1, -1};
 // THE KIND OPEN NOW: the plain uinput controllers, or the stand-in DualSenses
-// of vdualsense.h, one per player, when the emulator's row asked for them.
+// of vdualsense.h, one per player, when the emulator's row asked for them;
+// and which of those carry their player's tilt, the ones whose pad had an
+// accelerometer or a gyroscope when they were made.
 bool gDualSense = false;
+bool gTilt[kMaxPlayers] = {};
 
 // What the emulator uploaded, per pad: a rumble's two strengths and length.
 // SDL uploads one effect per pad and replays it; sixteen is plenty.
@@ -253,19 +256,21 @@ void openMotion(int players) {
     }
 }
 
-// THE SEATS' SENSORS ON, for the stand-in DualSenses, which carry the tilt
-// themselves: every player's, since every player has one. A pad with none
-// reads nothing (tilt.h), and pump() writes its stand-in a pad lying still.
-void openSenses(int players) {
-    for (int i = 0; i < players; ++i) {
-        const bool accel = tilt::set(i, tilt::Sensor::Accel, true);
-        const bool gyro = tilt::set(i, tilt::Sensor::Gyro, true);
-        if (accel || gyro)
-            std::fprintf(stderr, "[vpad] player %d's stand-in carries its pad's tilt (accelerometer %s, gyroscope %s)\n",
-                         i + 1, accel ? "on" : "none", gyro ? "on" : "none");
-        else
-            std::fprintf(stderr, "[vpad] player %d's pad has no motion sensors; its stand-in lies still\n", i + 1);
-    }
+// THE SEAT'S SENSORS ON, for a stand-in DualSense, which carries the tilt
+// itself; and whether the seat's pad has any, which decides the stand-in it
+// gets (vdualsense.h, "A pad without sensors"). What is asked stays with the
+// seat (tilt.h), so a pad that has none reads nothing and pump() writes its
+// stand-in a pad lying still.
+bool openSenses(int player) {
+    const bool accel = tilt::set(player, tilt::Sensor::Accel, true);
+    const bool gyro = tilt::set(player, tilt::Sensor::Gyro, true);
+    if (accel || gyro)
+        std::fprintf(stderr, "[vpad] player %d's stand-in carries its pad's tilt (accelerometer %s, gyroscope %s)\n",
+                     player + 1, accel ? "on" : "none", gyro ? "on" : "none");
+    else
+        std::fprintf(stderr, "[vpad] player %d's pad has no motion sensors; neither has its stand-in\n",
+                     player + 1);
+    return accel || gyro;
 }
 
 void closeSenses() {
@@ -299,16 +304,20 @@ bool open(int players, bool motion, bool dualsense) {
     if (players > kMaxPlayers) players = kMaxPlayers;
     if (dualsense) {
         bool ok = true;
-        for (int i = 0; i < players && ok; ++i) ok = vdualsense::open(i);
+        for (int i = 0; i < players && ok; ++i) {
+            gTilt[i] = openSenses(i);
+            ok = vdualsense::open(i, gTilt[i]);
+        }
         if (ok) {
             gDualSense = true;
             gCount = players;
             rumble::reset();
             std::fprintf(stderr, "[vpad] %d stand-in DualSense(s)\n", gCount);
-            openSenses(players);
             return true;
         }
         vdualsense::closeAll();
+        closeSenses();
+        std::memset(gTilt, 0, sizeof gTilt);
         std::fprintf(stderr, "[vpad] falling back to the plain virtual controllers, which carry no tilt\n");
     }
     for (int i = 0; i < players; ++i) {
@@ -337,6 +346,7 @@ void close() {
         vdualsense::closeAll();
         closeSenses();
         gDualSense = false;
+        std::memset(gTilt, 0, sizeof gTilt);
         gCount = 0;
         return;
     }
@@ -359,7 +369,9 @@ void close() {
 
 int count() { return gCount; }
 
-bool carriesMotion() { return gDualSense && gCount > 0; }
+bool carriesMotion(int player) {
+    return gDualSense && player >= 0 && player < gCount && gTilt[player];
+}
 
 std::string motionName(int player) {
     if (player < 0 || player >= kMaxPlayers || gMotionFd[player] < 0) return "";
@@ -497,6 +509,7 @@ std::string edenGuid() {
 }
 
 std::string sdlGuid(int player) {
+    if (gDualSense) return vdualsense::sdlGuid(player);
     // SDL_CreateJoystickGUID for a Linux evdev device (SDL_sysjoystick.c,
     // IsJoystick): no vendor name, so the checksum is of the device name
     // alone, the one create() gives it.
@@ -507,6 +520,13 @@ std::string sdlGuid(int player) {
     char out[33];
     for (int i = 0; i < 8; ++i)
         std::snprintf(out + i * 4, 5, "%02x%02x", words[i] & 0xFF, words[i] >> 8);
+    return out;
+}
+
+std::string sdlIds() {
+    if (gDualSense) return vdualsense::sdlIds();
+    char out[16];
+    std::snprintf(out, sizeof out, "0x%04x/0x%04x", kVendor, kProduct);
     return out;
 }
 
