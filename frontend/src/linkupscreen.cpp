@@ -84,6 +84,7 @@ void LinkUpScreen::setState(const linkup::State& state, bool inUse) {
     inUse_ = inUse;
     pill_ = inUse ? "Remote Play in use" : linkup::statusLine(state.appearOffline);
     instead_ = state.instead;
+    enterCode_ = state.instead == linkup::kConsoleRemoved && !inUse;
     tiles_.clear();
     if (state.instead.empty()) {
         const std::vector<int> colours = linkup::coloursApart(state.friends, kFriendColours, 1);
@@ -165,6 +166,7 @@ Result LinkUpScreen::key(Nav n) {
     if (n == Nav::Back) return {Action::Back, 0};
     if (at_ < 0) {
         if (n == Nav::Up) return {Action::FocusBar, 0};
+        if (n == Nav::Activate && enterCode_) return {Action::LinkUp, kEnterCode};
         if (n == Nav::Activate && count > 0 && !inUse_) return {Action::LinkUp, kAppearOffline};
         if (n == Nav::Down && count > 0) return go(0);
         sound::play(sound::Cue::Edge);
@@ -247,7 +249,8 @@ void LinkUpScreen::drawTile(Ctx& c, const FriendTile& tile, float x, float y, fl
 }
 
 // The console's cabinet, with a player two who is not here yet standing behind it, and
-// what the screen is for in words. Nothing here takes a press.
+// what the screen is for in words. Nothing here takes a press but A on a console taken off
+// its server.
 void LinkUpScreen::drawNoFriends(Ctx& c, float stars, float picture) {
     c.r.setContentAlpha(appear_.value() * stars);
     constexpr float kCabinetH = 340.0f;
@@ -310,6 +313,10 @@ void LinkUpScreen::drawNoFriends(Ctx& c, float stars, float picture) {
         centred(split == std::string::npos ? instead_ : instead_.substr(0, split + 1), big, 740.0f, 0.96f);
         if (split != std::string::npos)
             centred(instead_.substr(split + 2), ui::TextStyle::Title3, 804.0f, 0.60f);
+        // Dimmed while focus is up in the top bar, where A means something else, as Home's empty
+        // screen does.
+        if (enterCode_)
+            drawPressPrompt(c.r, c.text, c.sc, "Press", "to enter a code", 816.0f, hasFocus_ ? 1.0f : 0.45f);
     }
     // The cabinet is stacked shapes, and faded one by one they show through each other and
     // come apart. So it stays whole, and the ground comes over it.

@@ -675,6 +675,7 @@ struct App {
     bool linkupSignedIn = false;
     bool linkupAwaySent = false;
     std::string linkupStatusSent;
+    bool linkupChoiceToSend = false;   // Status pressed here and not yet sent as the person's choice
     romm::User linkupUser;
     int linkupUserFor = 0;
     cab::Job<romm::User> linkupUserJob;
@@ -740,6 +741,7 @@ struct App {
     float linkupGalleryPictureIn = 0.0f;
     float linkupGalleryJoinIn = 0.0f;
     float linkupGalleryFriendIn = 0.0f;
+    float linkupGalleryChosenIn = 0.0f;
     float linkupGalleryNoAnswerIn = 0.0f;
     float linkupGalleryDeclineIn = 0.0f;
     float linkupGalleryHostQuitIn = 0.0f;
@@ -2413,6 +2415,9 @@ struct App {
     void linkupBeginPairing(const std::string& address, const std::string& code);
     void linkupFollowAccount();
     std::string linkupStatusWord() const;
+    void linkupChooseStatus(bool offline);
+    void linkupTookChosen(bool offline);
+    void linkupKeepStatus(bool offline);
     void linkupFollowStatus();
     void linkupFollowLink();
     void linkupOnMessage(const uint8_t* data, size_t len);
@@ -2512,6 +2517,7 @@ struct App {
     void linkupRetypeAddress();
     void pressRunYourOwn();
     void pressLinkUpServer();
+    void linkupEnterCode();
     void pressLinkUpLeave();
     void tickLinkUp(float dt);
     // linkupgallery.cpp

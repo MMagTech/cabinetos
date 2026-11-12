@@ -161,9 +161,7 @@ void Conductor::onClient(bool connected) {
     }
     if (!connected && signedIn_) {
         status_ = "offline";
-        json_object* q = requestNamed("status");
-        set(q, "status", status_);
-        ask(q, nullptr);
+        sendStatus();
     }
 }
 
@@ -202,10 +200,14 @@ void Conductor::onCommand(json_object* o) {
         friends_.clear();
         ask(requestNamed("signout"), nullptr);
     } else if (cmd == "status") {
+        // `chosen`: the person pressed Status, and it holds on all their consoles.
         status_ = str(o, "status");
-        json_object* q = requestNamed("status");
-        set(q, "status", status_);
-        ask(q, nullptr);
+        if (flag(o, "chosen")) {
+            chosenOwed_ = status_;
+            sendChosen();
+        } else {
+            sendStatus();
+        }
     } else if (cmd == "friends") {
         fetchFriends();
     } else if (cmd == "away") {
@@ -310,6 +312,7 @@ void Conductor::cmdLeave() {
         link_.reset();
         paired_ = false;
         signedIn_ = false;
+        chosenOwed_.clear();
         friends_.clear();
         connection_ = "ok";
         ++waitGeneration_;
@@ -320,7 +323,10 @@ void Conductor::cmdLeave() {
 
 void Conductor::cmdSignin(json_object* o) {
     username_ = str(o, "username");
-    account_ = accountOf(num(o, "id"), str(o, "created"));
+    const std::string account = accountOf(num(o, "id"), str(o, "created"));
+    // A choice not yet taken was the last person's.
+    if (account != account_) chosenOwed_.clear();
+    account_ = account;
     status_ = str(o, "status");
     signedIn_ = true;
     signIn();
@@ -332,10 +338,47 @@ void Conductor::signIn() {
     set(q, "account", account_);
     set(q, "username", username_);
     set(q, "status", status_);
-    ask(q, [this](ServerLink::Outcome outcome, json_object* answer) {
+    const std::string account = account_;
+    ask(q, [this, account](ServerLink::Outcome outcome, json_object* answer) {
         --signinsOut_;
-        if (outcome == ServerLink::Outcome::Ok && str(answer, "error").empty()) fetchFriends();
+        if (outcome != ServerLink::Outcome::Ok || !str(answer, "error").empty()) return;
+        // The answer says what the person chose, on whichever console they chose it. A choice made
+        // here that the server has not taken is newer, so it is sent instead. A server from before
+        // PROTOCOL.md's `chosen` says nothing, and the main program keeps its own.
+        if (account == account_) {
+            if (!chosenOwed_.empty()) sendChosen();
+            else tellChosen(str(answer, "chosen"));
+        }
+        fetchFriends();
     });
+}
+
+void Conductor::sendStatus() {
+    json_object* q = requestNamed("status");
+    set(q, "status", status_);
+    ask(q, nullptr);
+}
+
+// Sent until the server takes it. The console's own word goes after it when it differs, as when the
+// choice is Online but nobody has pressed anything for a while: that Offline is this console's alone.
+void Conductor::sendChosen() {
+    const std::string chose = chosenOwed_;
+    json_object* q = requestNamed("status");
+    set(q, "status", chose);
+    set(q, "chosen", true);
+    ask(q, [this, chose](ServerLink::Outcome outcome, json_object* answer) {
+        if (outcome == ServerLink::Outcome::Ok && str(answer, "error").empty() && chosenOwed_ == chose)
+            chosenOwed_.clear();
+    });
+    if (status_ != chose) sendStatus();
+}
+
+// The main program keeps it and sends nothing back.
+void Conductor::tellChosen(const std::string& status) {
+    if (status != "online" && status != "offline") return;
+    json_object* ev = eventNamed("chosen");
+    set(ev, "status", status);
+    local_.sendJson(ev);
 }
 
 // The server keeps who is signed in on each console in memory only, so after it restarts it knows
@@ -616,6 +659,10 @@ void Conductor::onEvents(json_object* events) {
             }
         } else if (type == "removed") {
             setConnection(ServerLink::Outcome::Removed);
+        } else if (type == "chosen") {
+            // Chosen on another of this person's consoles. One chosen here and not yet taken is
+            // newer, and a sign-in still out answers with the person's choice anyway.
+            if (chosenOwed_.empty() && signinsOut_ == 0) tellChosen(str(e, "status"));
         }
     }
     if (refresh) fetchFriends();

@@ -21,6 +21,8 @@ public:
     // What Action::LinkUp says in its value. 0 and up is a friend's index in the
     // list; a friend who cannot be pressed says nothing.
     static constexpr int kAppearOffline = -2;
+    // A on a console taken off its server: type a code for it again.
+    static constexpr int kEnterCode = -8;
     // A friend's colour, bright enough for a small dot. Amber for nobody on the list.
     static ui::Color dotColour(const std::vector<linkup::Friend>& friends, const std::string& name);
 
@@ -29,8 +31,9 @@ public:
     void enter();
     void settleArrival();
     void setHasFocus(bool on);
-    // With no friends there is nothing to focus, not even Status (App::screenTakesFocus).
-    bool takesFocus() const { return !tiles_.empty(); }
+    // With no friends there is nothing to focus, not even Status (App::screenTakesFocus), unless
+    // the console was taken off its server, where A types a code again.
+    bool takesFocus() const { return !tiles_.empty() || enterCode_; }
 
     void tick(float dt);
     Result key(Nav n);
@@ -53,6 +56,7 @@ private:
     std::vector<FriendTile> tiles_;
     std::string pill_, instead_;
     bool inUse_ = false;
+    bool enterCode_ = false;   // taken off the server, and no stream: "Press (A) to enter a code"
     int at_ = -1;          // the focused friend, or -1 on Status
     bool hasFocus_ = true;
     design::Animated appear_;

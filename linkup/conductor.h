@@ -107,6 +107,9 @@ private:
     void send(const std::string& request, Then then, bool mayRetry);
     void signIn();
     void signInAgain();
+    void sendStatus();
+    void sendChosen();
+    void tellChosen(const std::string& status);
     void work(std::function<void()> onWorker);
     void workerLoop();
     void waitLoop();
@@ -152,6 +155,9 @@ private:
     std::string username_;
     std::string account_;
     std::string status_;       // the account's own, as the main program last said it
+    // Online or Offline the person chose here and the server has not taken yet (PROTOCOL.md, "One
+    // account on more than one console"). Empty once it has.
+    std::string chosenOwed_;
     bool signedIn_ = false;
     int signinsOut_ = 0;       // sign-ins sent and not yet answered
     std::vector<Friend> friends_;

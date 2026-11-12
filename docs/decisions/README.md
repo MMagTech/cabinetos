@@ -75,9 +75,9 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [linkup-own-program-and-hard-off](2026-11-03-linkup-own-program-and-hard-off.md): LinkUp is a program of its own, off on every new console, and a firewall table of its own blocks it while it is off.
 - [linkup-self-run-server](2026-11-03-linkup-self-run-server.md): the server is a container anyone runs, from a repository of its own; the project runs no service.
 - [linkup-server-in-go-with-pion](2026-11-03-linkup-server-in-go-with-pion.md): the server is one small Go program with Pion's relay inside, in a nearly empty container, and not coturn.
-- [linkup-one-server-per-console](2026-11-03-linkup-one-server-per-console.md): a console has one server, set by the admin; friends belong to an account on the server, and only its owner makes friends.
+- [linkup-one-person-on-every-console](2026-11-12-linkup-one-person-on-every-console.md): a console has one server, set by the admin; a RomM account is one person on every console, with one code that never expires, the owner looks after people, a knock rings the console used last, and Offline chosen holds on all.
 - [linkup-servers-link-two-accounts](2026-11-03-linkup-servers-link-two-accounts.md): linking two servers connects the two accounts picked and nobody else, with no chain to a third.
-- [linkup-pairing-by-the-owners-code](2026-11-03-linkup-pairing-by-the-owners-code.md): the owner makes a code that works once for 7 days, each side proves it with a slow hash and the code never travels.
+- [linkup-pairing-by-the-owners-code](2026-11-03-linkup-pairing-by-the-owners-code.md): the owner makes a code that becomes the person's own once used, or stops after 7 days unused; each side proves it with a slow hash and the code never travels.
 - [linkup-change-server](2026-11-08-linkup-change-server.md): Change server with another server's address asks for that server's code, and the old server stays until it pairs.
 - [linkup-pin-guards-what-is-new](2026-11-03-linkup-pin-guards-what-is-new.md): with a PIN set, turning LinkUp on, changing the server and Leave ask for it, and playing with friends asks nothing.
 - [linkup-works-like-a-friends-house](2026-11-04-linkup-works-like-a-friends-house.md): a game starts by inviting an Online friend and waiting for them to join, and the console never chases anyone.
@@ -89,7 +89,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [linkup-session-outlives-a-game](2026-11-05-linkup-session-outlives-a-game.md): quitting a game keeps the session for the next one, and a friend leaving ends it.
 - [linkup-idle-time](2026-11-02-linkup-idle-time.md): after 10 minutes with no press the game pauses on both screens, and 15 more end the session.
 - [linkup-game-list](2026-11-05-linkup-game-list.md): the list leaves out games a friend cannot play, and one-player games stay.
-- [linkup-status](2026-11-05-linkup-status.md): Status is each account's, and an account also shows Offline after 15 minutes with no press, with the screen off, asleep or in Steam.
+- [linkup-status](2026-11-05-linkup-status.md): Status is each account's, on every console it signs in on, and a console also says Offline after 15 minutes with no press, with the screen off, asleep or in Steam.
 - [linkup-friends-list](2026-11-05-linkup-friends-list.md): friends are ordered by status, each has a colour worked out from their name, and the empty screen stays.
 - [linkup-where-it-lives](2026-11-05-linkup-where-it-lives.md): a top-bar screen and rows in Settings' Streaming section, and while LinkUp is off only its switch shows.
 - [linkup-versions-and-the-pinned-server](2026-11-04-linkup-versions-and-the-pinned-server.md): the protocol only adds, a console names who is behind, no update is forced, and CI runs against one pinned server image.
