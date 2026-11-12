@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.12.4 {#v2026-11-12-4}
 
 - **New:** in LinkUp, **Status** follows you onto every console you sign in
   on as the same account: choose Offline on one and the others turn Offline
