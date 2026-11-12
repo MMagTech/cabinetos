@@ -267,6 +267,11 @@ int accountsTest() {
 
     check(accounts::add(alice, "alice-again", &err), "re-pairing an existing id succeeds");
     check(accounts::all().size() == 2, "and replaces rather than making a second row");
+    check(accounts::login(1).token == "alice-again" && accounts::login(1).tokenId == 0,
+          "a token whose number RomM did not give is kept with none");
+    check(accounts::add(alice, "alice-third", &err, 41) && accounts::login(1).tokenId == 41 &&
+              accounts::login(1).token == "alice-third",
+          "a token's number on RomM is kept beside it, to revoke it by (#484)");
 
     check(!accounts::remove(1, &err), "removing the ACTIVE account is refused");
     check(!accounts::remove(99, &err), "removing an unknown account is refused");
