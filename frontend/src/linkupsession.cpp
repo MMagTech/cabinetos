@@ -50,11 +50,9 @@ const char* folder() {
 }
 std::string switchPath() { return std::string(folder()) + "/on"; }
 
-// Offline after this long with no press (#654, "Status belongs to each account"). The figures of the
-// session's own idle rule are beside it.
+// Offline after this long with no press (#654, "Status belongs to each account"). The session's own
+// idle rule is linkuprules.h's.
 constexpr double kAwaySeconds = 15 * 60.0;
-constexpr float kIdlePauseSeconds = 10 * 60.0f;
-constexpr float kIdleEndSeconds = 15 * 60.0f;
 constexpr float kDropEndsSeconds = 60.0f;
 constexpr float kPressEverySeconds = 2.0f;
 constexpr float kPadKeepAliveSeconds = 0.1f;
@@ -1124,28 +1122,34 @@ void App::tickLinkUpSession(float dt) {
             }
         }
     }
-    // Only over a running game, on the host's clock: 10 minutes with no press from either player
-    // pauses both, and through the relay those minutes are a full-quality stream nobody watches.
+    // Only over a running game, on the host's clock (linkup::idleStep): through the relay, idle minutes
+    // are a full-quality stream nobody watches.
     if (linkupSide == LinkupSide::Host && linkupStreamUp && (playing || standaloneRun.active())) {
         linkupIdleFor += dt;
-        if (!linkupIdlePaused && linkupIdleFor >= kIdlePauseSeconds && !overlayOpen && !choiceScreen.isOpen()) {
-            linkupIdlePaused = true;
-            std::fprintf(stderr, "[linkup] no press from either player for %d minutes: both paused\n",
-                         static_cast<int>(kIdlePauseSeconds / 60));
-            linkupTellPeer("idle");
-            linkupIdlePause();
-        } else if (linkupIdlePaused && linkupIdleFor < kIdlePauseSeconds) {
-            linkupIdlePaused = false;
-        } else if (linkupIdlePaused && linkupIdleFor >= kIdlePauseSeconds + kIdleEndSeconds) {
-            // LinkUp ends the session and frees the relay; the host's game stays paused on the TV.
-            linkupIdlePaused = false;
-            std::fprintf(stderr, "[linkup] still no press %d minutes later: the session ends\n",
-                         static_cast<int>(kIdleEndSeconds / 60));
-            linkupTellPeer("ended");
-            linkupSend(command("end"));
-            linkupSide = LinkupSide::None;
-            linkupStreamUp = false;
-            linkupUnseatFriend();
+        switch (linkup::idleStep(linkupIdleFor, linkupIdlePaused, overlayOpen || choiceScreen.isOpen())) {
+            case linkup::IdleStep::Pause:
+                linkupIdlePaused = true;
+                std::fprintf(stderr, "[linkup] no press from either player for %d minutes: both paused\n",
+                             static_cast<int>(linkup::kIdlePauseSeconds / 60));
+                linkupTellPeer("idle");
+                linkupIdlePause();
+                break;
+            case linkup::IdleStep::PressedSince:
+                linkupIdlePaused = false;
+                break;
+            case linkup::IdleStep::End:
+                // LinkUp ends the session and frees the relay; the host's game stays paused on the TV.
+                linkupIdlePaused = false;
+                std::fprintf(stderr, "[linkup] no press from either player for %d minutes: the session ends\n",
+                             static_cast<int>((linkup::kIdlePauseSeconds + linkup::kIdleEndSeconds) / 60));
+                linkupTellPeer("ended");
+                linkupSend(command("end"));
+                linkupSide = LinkupSide::None;
+                linkupStreamUp = false;
+                linkupUnseatFriend();
+                break;
+            case linkup::IdleStep::None:
+                break;
         }
     }
 }

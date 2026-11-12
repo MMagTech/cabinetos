@@ -4,6 +4,13 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.12 {#v2026-11-12}
+
+- **Fixed:** in LinkUp, if someone woke the TV during *Still playing?* without
+  pressing **A**, or the game was left paused under a menu, the session never
+  ended by itself. It now ends 25 minutes after the last press, whatever is on
+  the screen. ([LinkUp](linkup.md#while-you-play))
+
 ## 2026.11.11.3 {#v2026-11-11-3}
 
 - **New:** in LinkUp, your friend's controller tilts and turns in Switch and
