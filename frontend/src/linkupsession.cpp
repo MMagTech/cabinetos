@@ -742,19 +742,24 @@ void App::linkupPauseGame() {
     }
 }
 
+// The panel goes with the pause menu under it, fading out as the menu does (toggleOverlay closes a
+// question with the menu). Closed first, it left the menu's own rows showing for the length of the
+// menu's fade, Resume, Save State and Load State, as if the menu had come back.
 void App::linkupResumeGame() {
-    if (choiceScreen.isOpen()) choiceScreen.close();
     choiceThen = nullptr;
     if (overlayOpen) toggleOverlay();
+    if (choiceScreen.isOpen()) choiceScreen.close();
 }
 
 // The panel over the host's stopped game. The pause menu is what stops a game, and its own rows do not
 // show while a question is up (App::drawPauseMenu), so this reads as LinkUp's panel over the picture.
+// A does not close it: linkupResumeGame closes the menu with it still up, so the two go together.
 void App::linkupHostPanel(const std::string& title, std::function<void()> then) {
     linkupPauseGame();
     linkupPanel(title, "", {}, 0, [then = std::move(then)](int) { then(); });
     choiceScreen.setPrompt("Press", "A", "to resume");
     choiceScreen.setOnlyA(true);
+    choiceScreen.setStaysOpen(true);
 }
 
 // ---- The friend: the picture on this television ----------------------------------
@@ -1000,6 +1005,7 @@ void App::linkupFriendLeft() {
     if (inGame) {
         if (choiceScreen.isOpen()) {
             choiceThen = [this](int) { linkupResumeGame(); };
+            choiceScreen.setStaysOpen(true);
             choiceScreen.changeTitle(linkup::left(who));
         } else {
             linkupHostPanel(linkup::left(who), [this]() { linkupResumeGame(); });

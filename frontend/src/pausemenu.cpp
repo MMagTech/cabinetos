@@ -378,9 +378,13 @@ void App::drawPauseMenu(float sc) {
     const bool level = inGame && choiceScreen.overPauseMenu();
     choiceScreen.setMenuFade(ovl);
     const float rowsA = ovl * (level ? choiceScreen.menuRows() : 1.0f);
-    // NOT UNDER A QUESTION ASKED FROM IT (Change disc, #162): the panel
-    // takes its place, and the menu's words showed through the glass.
-    if (ovl > 0.001f && !(inGame && choiceScreen.isOpen() && !level)) {
+    // NOT UNDER A QUESTION ASKED OVER IT (Change disc, #162; LinkUp's panels
+    // over the host's game): the panel takes its place, and the menu's words
+    // showed through the glass. Nor while one closed with the menu fades out
+    // with it (ChoiceScreen::closeWithMenu): Resume, Save State and Load State
+    // showed for the length of the fade, as if the menu had come back.
+    const bool question = choiceScreen.isOpen() || choiceScreen.fadingWithMenu();
+    if (ovl > 0.001f && !(inGame && question && !level)) {
         const int ovN = ovCount();
         const float panelH = pauseMenuHeight();
         const float px = (ui::kCanvasWidth - kOverlayPanelWidth) * 0.5f;

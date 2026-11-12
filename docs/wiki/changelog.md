@@ -4,6 +4,14 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** in LinkUp, when the game was paused for both of you and either
+  of you pressed **A** to resume, the console hosting the game showed its own
+  pause menu (Resume, Save State, Load State) for a moment before the game
+  came back. The LinkUp message now fades straight back to the game.
+  ([LinkUp](linkup.md#while-you-play))
+
 ## 2026.11.12 {#v2026-11-12}
 
 - **Fixed:** in LinkUp, if someone woke the TV during *Still playing?* without
