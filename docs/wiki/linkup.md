@@ -13,7 +13,8 @@ contacted.
 ## What you need
 
 - A CabinetOS console each, on a RomM server. It can be your own or one someone shares with you, and it does not
-  have to be the same one.
+  have to be the same one. A friend with no console can join from a computer instead, with
+  [2P Start](#a-friend-with-no-console).
 - One LinkUp server between you, which either of you can run. It is a small free program, and the project runs no
   service. Settings, **Streaming**, **Server**, **Run your own** shows a QR code to how to set one up.
 
@@ -27,10 +28,27 @@ address and the code.
 2. Press **Server**, then **Add a server**. Type the address, then the code.
 3. LinkUp joins the top bar. Whoever was signed in when you typed the code becomes the friend.
 
-A code works once and lasts 7 days. Everyone on your console can use LinkUp after that, and each person has their
-own friends: a child sees only their own, and only the server's owner can add one.
+A code stops after 7 days if nobody uses it. Once you use it, it is your own: it works only for you, on every
+console you sign in on, until the server's owner changes it. On a second console, or after a reinstall, join with
+the same code while signed in as you, and you are there with the same friends. An invite rings the console you used
+last.
+
+Once one person on your console has joined, everyone on it can use LinkUp, and each person has their own friends: a
+child sees only their own, and only the server's owner can add one.
 
 ![The LinkUp tab before anyone has added you as a friend](../media/linkup-no-friends.webp)
+
+## A friend with no console
+
+A friend with no CabinetOS console can still play as player two, from a computer, with
+[2P Start](https://github.com/MMagTech/cabinet-linkup-guest/releases/latest). It only joins a game a console hosts,
+and never hosts one, so they need no games and no RomM server.
+
+They pair once, as a console does: the server's address, a code, and the name you will see them by. An invite
+reaches them as a notification, even with the window closed, and they play with their own controller, or a
+keyboard and mouse. It runs on a Mac with Apple silicon or a PC with Windows 10 or 11. It is not signed, so the
+computer warns the first time it opens: [its README](https://github.com/MMagTech/cabinet-linkup-guest#installing)
+says how to get past that.
 
 ## Play
 
