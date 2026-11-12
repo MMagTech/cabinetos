@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.12.2 {#v2026-11-12-2}
 
 - **Fixed:** in LinkUp, when the game was paused for both of you and either
   of you pressed **A** to resume, the console hosting the game showed its own
