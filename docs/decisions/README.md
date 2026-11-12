@@ -118,6 +118,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [one-arcade-tile](2026-10-29-one-arcade-tile.md): every arcade folder is one Library tile, Arcade, whose grid names each game's folder; everywhere else an arcade game's system is Arcade.
 - [romm-owns-management](2026-10-21-romm-owns-management.md): the console uses what RomM offers and never manages it: no gallery, list or manager of its own.
 - [game-gone-from-romm](2026-11-01-game-gone-from-romm.md): a game deleted in RomM leaves the console at the next start with the server there, a played copy or a download, with its saves, states and screenshots.
+- [one-download-or-one-game-at-a-time](2026-11-09-one-download-or-one-game-at-a-time.md): the console does one download or one game at a time, no queue, no download behind a game and none pausing for one; Stop on the row gets the console back.
 
 ### Screens and settings
 

@@ -343,7 +343,8 @@ auto App::launchById(int romId) -> bool {
             return true;
         }
         // SAID, NOT SILENT (#184): a press that did nothing looked like a
-        // broken button. One download at a time until there is a queue.
+        // broken button. One download or one game at a time, and no queue
+        // (docs/decisions/2026-11-09-one-download-or-one-game-at-a-time.md).
         menuNotice.say(launchJob.title + " is still downloading", Tone::Info);
         // THE SAME GAME, ALREADY JOINED, is a press that counts (#484), so
         // the state a second Play from a state picked goes with the launch.

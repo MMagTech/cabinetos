@@ -122,6 +122,8 @@ number-pad controllers), HDMI-CEC (shelved 2026-09-24), static IP, screen
 recording (encoding cost on integrated graphics, and clips would compete with
 the game cache), an Options level in the pause menu (2026-10-25: the
 setting rows stay on its top level, changed with Left and Right; worth another
-look only when a system has three or more), and a download queue (2026-10-28,
+look only when a system has three or more), a download queue (2026-10-28,
 #600: the console is about finding a game and enjoying it; a game is fetched
-from RomM when it is played and kept in the cache).
+from RomM when it is played and kept in the cache), and a download running
+behind a game or pausing for one (2026-11-09, #600; the decision file
+one-download-or-one-game-at-a-time).
