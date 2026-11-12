@@ -57,23 +57,21 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-3. **Words from him, one at a time, no work:** #181, "Updates and DLC as
-   separate files in RomM (Switch, PS3, Xbox 360)", and #215, "Proposal, not
-   decided: opt-in "Help improve CabinetOS" report sharing" (he is unsure of
-   both); and which of the 36 faults the PROJECT.md scan found with no issue
-   (2026-10-22) become issues, none filed until he says. That list is in the
+3. **Words from him, one at a time, no work:** which of the 36 faults the
+   PROJECT.md scan found with no issue (2026-10-22) become issues, none
+   filed until he says. That list is in the
    notes of the session that made it ("Faults recorded in PROJECT.md with no
    GitHub issue"). Ten were checked in the code and still hold; five wait on
    an emulator or library.
 
 ## Waiting, not for the next session unless MMagTech raises them
 
-- **Needs the TV or a device:** #473 (a press while an emulator of its own
-  has the screen), #290 (the
-  C1, before a release), and #575, "Sinden light guns: plug in and
+- **Needs the TV or a device:** #575, "Sinden light guns: plug in and
   play gun games (waiting on the guns)".
-- **Waiting on others:** #297 and #390 (Sunshine), #346, #353 and #362
-  (RomM's save channels; revisit mid-January 2027), #545 and PR #528 (the
+- **Waiting on others:** #297 (Sunshine), #346, #353 and #362
+  (RomM's save channels; revisit mid-January 2027), #181, "Updates and DLC
+  as separate files in RomM (Switch, PS3, Xbox 360)" (kept open on
+  2026-11-11 to wait for RomM 5.5), #545 and PR #528 (the
   RomM token revoke, rommapp/romm#5274), #534 (the Azahar patch,
   azahar-emu/azahar#2694),
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
