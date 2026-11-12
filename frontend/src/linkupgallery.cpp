@@ -527,6 +527,7 @@ const Scene kScenes[] = {
          a.linkUp.instead = linkup::kConsoleRemoved;
          a.goToDestination(App::BarLinkUp);
          a.barFocused = true;
+         a.barSlot = App::BarLinkUp;
      }},
     {"Settings: Server, with Enter a code first", [](App& a) {
          a.linkUp.instead = linkup::kConsoleRemoved;
