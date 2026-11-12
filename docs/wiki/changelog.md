@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.12 {#v2026-11-12}
 
 - **Fixed:** in LinkUp, if someone woke the TV during *Still playing?* without
   pressing **A**, or the game was left paused under a menu, the session never
