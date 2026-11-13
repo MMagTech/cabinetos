@@ -4,6 +4,24 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.13.2 {#v2026-11-13-2}
+
+- **New:** in LinkUp, **Status** follows you onto every console you sign in
+  on as the same account: choose Offline on one and the others turn Offline
+  too, and choosing Online on any brings them all back. If you chose Offline
+  before this update, choose it once more. This needs the newest version of
+  the LinkUp server; with an older one, Status stays each console's own. ([#690](https://github.com/MMagTech/cabinetos/issues/690),
+  [LinkUp](linkup.md#play))
+- **New:** a console taken off its LinkUp server, after the owner changed your
+  code or removed you, comes back with the code alone: press **A** on
+  *Removed from the LinkUp server*, or Settings, **Streaming**, **Server**,
+  **Enter a code**, and type it. Until now that took leaving the server and
+  adding it again. ([LinkUp](linkup.md#if-it-wont-connect))
+- **Fixed:** in LinkUp, *Removed from the LinkUp server* faded out and back
+  in every 25 seconds while it waited for a code. It now stays still until
+  the code is typed, and the console stays on the server afterwards.
+  ([LinkUp](linkup.md#if-it-wont-connect))
+
 ## 2026.11.12.3 {#v2026-11-12-3}
 
 - **Fixed:** in LinkUp, when the game was paused for both of you and either

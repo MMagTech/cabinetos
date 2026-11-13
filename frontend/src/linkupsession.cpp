@@ -50,6 +50,11 @@ const char* folder() {
 }
 std::string switchPath() { return std::string(folder()) + "/on"; }
 
+// Offline as the signed-in person last chose it, kept in their folder. The server holds the choice
+// for every console they are on, and this is that choice as this console last knew it: what it signs
+// in with, and all there is with a server from before PROTOCOL.md's `chosen`.
+std::string chosenOfflinePath() { return storage::userDir(storage::currentUser()) + "/linkup-offline"; }
+
 // Offline after this long with no press (#654, "Status belongs to each account"). The session's own
 // idle rule is linkuprules.h's.
 constexpr double kAwaySeconds = 15 * 60.0;
@@ -112,7 +117,7 @@ void App::linkupStart() {
         linkUp.paired = !linkUp.server.empty();
         if (o) json_object_put(o);
     }
-    linkUp.appearOffline = !cab::readBytes(storage::userDir(storage::currentUser()) + "/linkup-offline").empty();
+    linkUp.appearOffline = !cab::readBytes(chosenOfflinePath()).empty();
     if (linkUp.on && linkUp.paired) linkupWantProgram(true);
 }
 
@@ -164,7 +169,8 @@ void App::linkupFollowAccount() {
         linkupUserFor = got.id;
         linkupSignedIn = false;
         // Status belongs to each account.
-        linkUp.appearOffline = !cab::readBytes(storage::userDir(storage::currentUser()) + "/linkup-offline").empty();
+        linkUp.appearOffline = !cab::readBytes(chosenOfflinePath()).empty();
+        linkupChoiceToSend = false;
         refreshLinkUpScreen();
     }
     // Off asks RomM nothing: the first frame after LinkUp is turned on asks.
@@ -174,6 +180,31 @@ void App::linkupFollowAccount() {
         linkupUserFor = active;
         linkupUserJob.start([this](romm::User& out, std::string& e) { return liveClient.fetchCurrentUser(&out, &e); });
     }
+}
+
+// Status, pressed here or by --linkup-script: kept, and sent as the person's choice, which the server
+// holds on every console they are on (#690). It goes once the program and the sign-in are there
+// (linkupFollowStatus).
+void App::linkupChooseStatus(bool offline) {
+    linkupKeepStatus(offline);
+    linkupChoiceToSend = !linkupGallery;
+}
+
+// Chosen on another of the person's consoles, or what the sign-in found. Kept, and not sent back: the
+// console's own word follows as it always does (linkupFollowStatus). A press here not sent yet is newer.
+void App::linkupTookChosen(bool offline) {
+    if (linkupChoiceToSend || offline == linkUp.appearOffline) return;
+    std::fprintf(stderr, "[linkup] status, as the server has the person's choice: %s\n", offline ? "offline" : "online");
+    linkupKeepStatus(offline);
+}
+
+void App::linkupKeepStatus(bool offline) {
+    linkUp.appearOffline = offline;
+    if (!linkupGallery) {
+        if (offline) cab::writeBytes(chosenOfflinePath(), std::string("offline"));
+        else cab::removeFile(chosenOfflinePath());
+    }
+    refreshLinkUpScreen();
 }
 
 std::string App::linkupStatusWord() const {
@@ -195,6 +226,15 @@ void App::linkupFollowStatus() {
         linkupSend(c);
         linkupSignedIn = true;
         linkupStatusSent = word;
+    }
+    if (linkupChoiceToSend) {
+        const std::string chose = linkUp.appearOffline ? "offline" : "online";
+        json_object* c = command("status");
+        setText(c, "status", chose);
+        json_object_object_add(c, "chosen", json_object_new_boolean(true));
+        linkupSend(c);
+        linkupChoiceToSend = false;
+        linkupStatusSent = chose;
     } else if (word != linkupStatusSent) {
         json_object* c = command("status");
         setText(c, "status", word);
@@ -288,6 +328,8 @@ void App::linkupOnEvent(json_object* o) {
         linkupSignedIn = false;
         linkupWantProgram(false);
         if (here() == Screen::Settings) buildSettings();
+    } else if (ev == "chosen") {
+        linkupTookChosen(textOf(o, "status") == "offline");
     } else if (ev == "friends") {
         linkupTookFriends(json_object_object_get(o, "list"));
     } else if (ev == "invited") {
@@ -1255,8 +1297,7 @@ void App::runLinkUpScript() {
     else if (word == "quit") exitToHome();
     else if (word == "end") linkupNextDone();
     else if (word == "offline" || word == "online") {
-        linkUp.appearOffline = word == "offline";
-        refreshLinkUpScreen();
+        linkupChooseStatus(word == "offline");
     } else if (!word.empty()) std::fprintf(stderr, "[linkup] script: no step %s\n", word.c_str());
     if (!done) return;
     std::fprintf(stderr, "[linkup] script: %s\n", word.c_str());

@@ -377,8 +377,9 @@ a player and an owner use it.
     PIN when one is set, on any account but the owner's; off at once. It stays on through restarts, and
     turning it back on needs no new pairing.
   - **Server**: hidden while off. "None", or the address. Pressing it opens a panel: **Add a server** or
-    **Change server**, **Run your own** (a QR code to the server's repository), and **Leave**. Adding,
-    changing and leaving ask for the PIN. The same server at a new address needs no new code: the console
+    **Change server**, **Run your own** (a QR code to the server's repository), and **Leave**, with **Enter a
+    code** first on a console taken off its server (below). Adding, changing, entering a code and leaving
+    ask for the PIN. The same server at a new address needs no new code: the console
     remembers the server's key. Another server's address asks for that server's code on Add a server's Code
     screen, and pairing with it forgets the old server; cancelled or wrong, the old server stays as it was.
 - **Adding a server** is the address, then the 12-character code, typed on the on-screen keyboard. The account
@@ -386,11 +387,19 @@ a player and an owner use it.
   code*, too many tries *Too many tries*, nothing at that address *Can't reach that server*, and something there
   that cannot prove it holds the code *That server failed its check*, the one sign of a typo in the address or a
   fake server.
+- **A console taken off its server** (the server's owner pressed Change code or Remove on a person's page)
+  says *Removed from the LinkUp server* on LinkUp's screen, with *Press (A) to enter a code* under it, dimmed
+  while focus is in the top bar. A there, or **Enter a code** in the Server panel, asks for the PIN as Adding
+  does, then the code on Add a server's Code screen with the same address. The console keeps its key, so it
+  comes back to the same server; a code that fails says what it says when adding, and changes nothing.
 - **With LinkUp on and no server yet, nothing runs.** Once paired, LinkUp joins the top bar for everyone on
   that console: Home, Library, Search, LinkUp, Settings. It greys where the top bar says Offline.
-- **Status belongs to each account**, kept in that person's folder, and asks for no PIN. A person also shows
-  Offline after 15 minutes with no press, when the screen turns off, when the console sleeps, during a Remote
-  Play stream, and in Steam.
+- **Status belongs to each account, on every console it signs in on** (#690), and asks for no PIN. Pressed on
+  one console, it is sent to the server as the person's choice, and their other consoles turn too; each keeps
+  the last choice it knew in that person's folder. A console also says Offline for its account after 15
+  minutes with no press, when the screen turns off, when the console sleeps, during a Remote Play stream, and
+  in Steam: that stays with the console, and friends see Online while any of the person's consoles says so.
+  With a server from before this, Offline stays each console's own.
 - **One at a time with Remote Play.** While a device streams, the rows are greyed and every friend is grey with
   their real status. While a session is open, on either console, Sunshine is stopped, and comes back by itself
   with the switch unchanged.

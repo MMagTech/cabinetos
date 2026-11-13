@@ -67,8 +67,10 @@ says how to get past that.
 4. The game starts on both when they join, so you both begin at its title screen. You are player one, they are
    player two, and any other controller on your console does nothing in the game until the session ends.
 
-**Status** at the top of the list is whether your friends see you as Online. It stays where you leave it. You also
-show Offline after 15 minutes with no press, when the screen is off, while the console sleeps and in Steam.
+**Status** at the top of the list is whether your friends see you as Online. It stays where you leave it, on every
+console you sign in on: choose Offline on one, and the others turn Offline too. A console nobody is using stops
+showing you after 15 minutes with no press, when its screen is off, while it sleeps and in Steam, and friends see
+you Online while any of your consoles does.
 
 ## While you play
 
@@ -95,6 +97,10 @@ console the other's internet address, as any direct connection does. LinkUp is o
 chose, and that is one more reason.
 
 ## If it won't connect
+
+*Removed from the LinkUp server* means the server's owner changed your code or removed you. Ask them for the new
+code, or a new invite, then press **A** on that line, or Settings, **Streaming**, **Server**, **Enter a code**, and
+type it. Do it on each of your consoles.
 
 *Can't connect to the LinkUp server* means the server cannot be reached. A game already running carries on. *Can't
 connect to Alex* means the two consoles found no way through: the server's owner can turn on its relay, which sends
