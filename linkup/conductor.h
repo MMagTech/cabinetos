@@ -152,9 +152,15 @@ private:
     std::atomic<int> waitGeneration_{0};
 
     std::string connection_ = "ok";
-    // Taken off the server. Only a code typed again brings the console back (cmdPair), so nothing
-    // else may say ok until then (setConnection).
+    // Taken off the server, as an answer said. Only a code typed again brings the console back
+    // (cmdPair), so nothing else may say ok until then (setConnection).
     bool removed_ = false;
+    // The last event handled, by its number on the server, in this run. A wait from 0 brings back
+    // every event the server still holds for this console, and those are not handled twice: a choice
+    // replayed after a pairing or a retyped address could otherwise undo a later one. The numbers
+    // start again with a server restart (its epoch), and on a server that knows this console anew.
+    int seenSeq_ = 0;
+    std::string seenEpoch_;
     std::string username_;
     std::string account_;
     std::string status_;       // the account's own, as the main program last said it

@@ -248,10 +248,11 @@ void Conductor::cmdPair(json_object* o) {
     set(j, "username", str(o, "username"));
     const std::string joining = jsonutil::text(j);
     json_object_put(j);
-    work([this, address, code, joining]() {
+    const auto before = keys_.server();
+    work([this, address, code, joining, before]() {
         std::string name;
         const pairing::Result result = pairing::pair(keys_, address, code, joining, name);
-        Rtc::onMain([this, result, name]() {
+        Rtc::onMain([this, result, name, before]() {
             const char* word = "failed";
             switch (result) {
                 case pairing::Result::Paired: word = "paired"; break;
@@ -270,6 +271,13 @@ void Conductor::cmdPair(json_object* o) {
                 link_.reset();
                 paired_ = true;
                 removed_ = false;
+                // Another server numbers its events from the start. The same one, letting a
+                // console back on, keeps its numbers.
+                const auto now = keys_.server();
+                if (!before || !now || before->key != now->key) {
+                    seenSeq_ = 0;
+                    seenEpoch_.clear();
+                }
                 connection_ = "ok";
                 ++waitGeneration_;
                 sendState();
@@ -314,6 +322,8 @@ void Conductor::cmdLeave() {
         paired_ = false;
         signedIn_ = false;
         removed_ = false;
+        seenSeq_ = 0;
+        seenEpoch_.clear();
         chosenOwed_.clear();
         friends_.clear();
         connection_ = "ok";
@@ -620,7 +630,7 @@ void Conductor::waitLoop() {
         std::string events = "[]";
         if (json_object* list = get(o, "events")) events = jsonutil::text(list);
         json_object_put(o);
-        Rtc::onMain([this, events, restarted, generation]() {
+        Rtc::onMain([this, events, restarted, generation, nowEpoch]() {
             if (generation != waitGeneration_.load()) return;
             setConnection(ServerLink::Outcome::Ok);
             if (restarted) {
@@ -629,6 +639,10 @@ void Conductor::waitLoop() {
             }
             json_object* list = jsonutil::parse(events);
             if (list) {
+                if (nowEpoch != seenEpoch_) {
+                    seenEpoch_ = nowEpoch;
+                    seenSeq_ = 0;
+                }
                 onEvents(list);
                 json_object_put(list);
             }
@@ -640,6 +654,9 @@ void Conductor::onEvents(json_object* events) {
     bool refresh = false;
     for (size_t i = 0; i < json_object_array_length(events); ++i) {
         json_object* e = json_object_array_get_idx(events, i);
+        const int seq = static_cast<int>(num(e, "seq"));
+        if (seq > 0 && seq <= seenSeq_) continue;
+        seenSeq_ = std::max(seenSeq_, seq);
         const std::string type = str(e, "type");
         if (type == "friends") {
             refresh = true;
@@ -670,7 +687,9 @@ void Conductor::onEvents(json_object* events) {
                 endGame();
             }
         } else if (type == "removed") {
-            setConnection(ServerLink::Outcome::Removed);
+            // An old one comes again in a replay, after the console was let back on. An answer says
+            // whether it still holds (send, setConnection).
+            ask(requestNamed("config"), nullptr);
         } else if (type == "chosen") {
             // Chosen on another of this person's consoles. One chosen here and not yet taken is
             // newer, and a sign-in still out answers with the person's choice anyway.
