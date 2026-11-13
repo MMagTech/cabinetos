@@ -173,10 +173,11 @@ until its player updates it
 (`docs/decisions/2026-11-12-when-the-downloads-are-cut.md`). Try installer
 changes in a throwaway VM first with `tools/installer-vm.sh`. Before giving a
 run as `iso_run`, install that run's ISO in the VM
-(`tools/installer-vm.sh install`) and look at its screens: the boot menu, the drive question, the summary, Time & Date,
-installing and first run. The build stops by itself if the installer changed
-under the branding (`ci/brand-installer-iso.sh` checks what it relies on); a
-change in the look shows only on screen.
+(`tools/installer-vm.sh install`) and look at its screens: the boot menu,
+the drive question, the summary, Time & Date, installing and first run.
+The build stops by itself if the installer changed under the branding
+(`ci/brand-installer-iso.sh` checks what it relies on); a change in the look
+shows only on screen.
 
 **Repository settings the build depends on.** Settings, Actions, General,
 Workflow permissions: **Read and write**, or the push to GHCR fails with a 403.
