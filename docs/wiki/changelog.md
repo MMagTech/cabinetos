@@ -17,6 +17,10 @@ one you install, so you only ever install the newest.
   *Removed from the LinkUp server*, or Settings, **Streaming**, **Server**,
   **Enter a code**, and type it. Until now that took leaving the server and
   adding it again. ([LinkUp](linkup.md#if-it-wont-connect))
+- **Fixed:** in LinkUp, *Removed from the LinkUp server* faded out and back
+  in every 25 seconds while it waited for a code. It now stays still until
+  the code is typed, and the console stays on the server afterwards.
+  ([LinkUp](linkup.md#if-it-wont-connect))
 
 ## 2026.11.12.3 {#v2026-11-12-3}
 
