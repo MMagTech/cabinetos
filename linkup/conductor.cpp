@@ -269,6 +269,7 @@ void Conductor::cmdPair(json_object* o) {
             if (result == pairing::Result::Paired) {
                 link_.reset();
                 paired_ = true;
+                removed_ = false;
                 connection_ = "ok";
                 ++waitGeneration_;
                 sendState();
@@ -312,6 +313,7 @@ void Conductor::cmdLeave() {
         link_.reset();
         paired_ = false;
         signedIn_ = false;
+        removed_ = false;
         chosenOwed_.clear();
         friends_.clear();
         connection_ = "ok";
@@ -579,22 +581,31 @@ void Conductor::waitLoop() {
         }
         // After a miss, a short request first. The long one is held up to 25 seconds, so the server
         // would be seen back, and signed in to again, only that much later.
+        // An answer to a request sent before a pairing, a retyped address or Leave is the old
+        // link's, and is dropped, here and again on the main loop, where the generation moves:
+        // a "removed" queued before a code was typed again would take the console back off.
         if (missed) {
             std::string answer;
             const ServerLink::Outcome outcome = link_.call("{\"op\":\"config\"}", answer);
+            if (generation != waitGeneration_.load()) continue;
             if (outcome == ServerLink::Outcome::Unreachable) {
                 link_.waitBeforeRetry(stop);
                 continue;
             }
             missed = false;
-            Rtc::onMain([this, outcome]() { setConnection(outcome); });
+            Rtc::onMain([this, outcome, generation]() {
+                if (generation == waitGeneration_.load()) setConnection(outcome);
+            });
         }
         const std::string request = "{\"op\":\"wait\",\"after\":" + std::to_string(after) + "}";
         std::string answer;
         const ServerLink::Outcome outcome = link_.call(request, answer, 40);
+        if (generation != waitGeneration_.load()) continue;
         if (outcome != ServerLink::Outcome::Ok) {
             missed = outcome == ServerLink::Outcome::Unreachable;
-            Rtc::onMain([this, outcome]() { setConnection(outcome); });
+            Rtc::onMain([this, outcome, generation]() {
+                if (generation == waitGeneration_.load()) setConnection(outcome);
+            });
             link_.waitBeforeRetry(stop);
             continue;
         }
@@ -609,7 +620,8 @@ void Conductor::waitLoop() {
         std::string events = "[]";
         if (json_object* list = get(o, "events")) events = jsonutil::text(list);
         json_object_put(o);
-        Rtc::onMain([this, events, restarted]() {
+        Rtc::onMain([this, events, restarted, generation]() {
+            if (generation != waitGeneration_.load()) return;
             setConnection(ServerLink::Outcome::Ok);
             if (restarted) {
                 signInAgain();
@@ -764,6 +776,10 @@ void Conductor::sendFriends() {
 }
 
 void Conductor::setConnection(ServerLink::Outcome outcome) {
+    // The server still answers `wait` on a console it took off, with what is queued, every 25
+    // seconds. That says nothing about being back, and taken as ok it blinked the Removed screen.
+    if (outcome == ServerLink::Outcome::Removed) removed_ = true;
+    if (outcome == ServerLink::Outcome::Ok && removed_) outcome = ServerLink::Outcome::Removed;
     std::string word = "ok";
     switch (outcome) {
         case ServerLink::Outcome::Ok: word = "ok"; break;

@@ -152,6 +152,9 @@ private:
     std::atomic<int> waitGeneration_{0};
 
     std::string connection_ = "ok";
+    // Taken off the server. Only a code typed again brings the console back (cmdPair), so nothing
+    // else may say ok until then (setConnection).
+    bool removed_ = false;
     std::string username_;
     std::string account_;
     std::string status_;       // the account's own, as the main program last said it
