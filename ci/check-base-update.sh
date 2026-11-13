@@ -30,6 +30,10 @@
 #      fedora:NN`, and Sunshine's fc44 package name. A base on a newer Fedora
 #      makes the update RELEVANT and names the files that must move with it.
 #
+# The pull request ends with the step after the merge: the downloads on R2
+# are cut again from the new image
+# (docs/decisions/2026-11-12-when-the-downloads-are-cut.md).
+#
 # Writes to the working directory:
 #   base-manifest.txt   the new base's package list (committed with the bump)
 #   /tmp/pr-body.md     the pull request body
@@ -392,6 +396,11 @@ emit summary "${summary}"
     echo "is not the same as one that boots. Push this branch to \`testing\`, put"
     echo "that image on the A9, run \`tools/base-checks.sh base-update/${new_version}\`"
     echo "and do the TV checks above, per \`docs/PROJECT.md\` constraint 2."
+    echo
+    echo "- [ ] **After merging:** cut both downloads from the image the merge puts"
+    echo "  on \`latest\`. Build the ISO and the portable from it, install the ISO in"
+    echo "  the VM, then publish both from those runs"
+    echo "  (\`docs/decisions/2026-11-12-when-the-downloads-are-cut.md\`)."
 } > "${PR_BODY}"
 
 # ---------------------------------------------------------------------------

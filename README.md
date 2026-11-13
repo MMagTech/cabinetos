@@ -98,7 +98,8 @@ playing: [install](docs/wiki/install.md), [first run](docs/wiki/first-run.md),
 [your RomM server](docs/wiki/romm.md), then everything else.
 
 **[Download the installer](https://download.mmagtech.com/cabinetos.iso)**:
-one file, `cabinetos.iso`, always the newest release
+one file, `cabinetos.iso`, made again from the newest version at least
+once a month
 ([what's new](https://cabinetos.mmagtech.com/wiki/changelog.html)).
 
 **Try it without installing:** [run it from a USB drive](docs/wiki/portable.md).
