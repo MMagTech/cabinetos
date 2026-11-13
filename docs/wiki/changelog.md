@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.13.3 {#v2026-11-13-3}
+
+- **Fixed:** in LinkUp, when your friend's console went away during a game
+  without ending the session (a power cut, a crash, its network gone), your
+  console said *Reconnecting to Alex* without end, and every 15 seconds said
+  *Alex is back* for a moment. It now waits a minute, then says *Alex left*,
+  and your game carries on. ([LinkUp](linkup.md#while-you-play))
+- **Fixed:** in LinkUp, when you joined a friend's game and the connection
+  dropped and came back, your console showed the game's picture standing
+  still instead of *Waiting for Alex*, until Alex pressed **A** to resume. It
+  now says *Waiting for Alex* until the game is back.
+  ([LinkUp](linkup.md#while-you-play))
+
 ## 2026.11.13.2 {#v2026-11-13-2}
 
 - **New:** in LinkUp, **Status** follows you onto every console you sign in

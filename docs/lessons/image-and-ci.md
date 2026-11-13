@@ -552,7 +552,7 @@ Read before touching `build_files/`, `system_files/`, `ci/`, the workflows, the 
 - **A GitHub Release takes at most 2 GB per file, and the ISO is about 6.7 GB.**
   Nobody checked the size when the release was planned; it surfaced on
   release day. The installer lives in Cloudflare R2 (`download.mmagtech.com`,
-  MMagTech's account), uploaded by **Build disk images** with `publish`.
+  MMagTech's account), uploaded by **Build disk images** from a finished run (`iso_run`).
   Why R2: the comment on that workflow's publish step (#308, "At the first
   release: the download goes on a GitHub Release, and the page and wiki
   point to it", whose plan the 2 GB limit overturned).

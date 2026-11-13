@@ -856,6 +856,13 @@ Rtc::Hooks Conductor::makeHooks() {
     hooks.failed = [this]() { std::fprintf(stderr, "[linkup] the connection failed\n"); };
     hooks.control = [this](const std::string& text) { onControl(text); };
     hooks.fast = [this](const uint8_t* data, size_t len) { onFast(data, len); };
+    // On a new connection the friend's console has heard none of this, and keeps the last picture word
+    // it heard on the old one.
+    hooks.controlOpen = [this]() {
+        if (!game_ || !host_) return;
+        host_->askFullPicture();
+        if (Rtc* r = rtc()) r->sendControl(host_->pictureOn() ? "picture:1" : "picture:0");
+    };
     return hooks;
 }
 
@@ -1214,32 +1221,27 @@ void Conductor::tick() {
                      rttSamples_[rttSamples_.size() / 2], rttSamples_.back());
         rttSamples_.clear();
     }
-    if (r->everHeard()) {
-        const int64_t quiet = r->quietMs();
-        if (!game_->lost && quiet > kDropMs) {
-            game_->lost = true;
-            std::fprintf(stderr, "[linkup] nothing heard from the friend for %lld ms\n", static_cast<long long>(quiet));
-            local_.sendJson(eventNamed("peer_lost"));
-        } else if (game_->lost && quiet < 500) {
-            game_->lost = false;
-            std::fprintf(stderr, "[linkup] the friend is back\n");
-            local_.sendJson(eventNamed("peer_back"));
-            // On a new connection the friend's console has heard none of this.
-            if (host_) {
-                host_->askFullPicture();
-                r->sendControl(host_->pictureOn() ? "picture:1" : "picture:0");
-            }
-        }
-        // Only the host makes a new connection: the friend follows its generation number.
-        if (game_->lost && game_->host && quiet > kReconnectAfterMs && now - game_->lastReconnectMs > kReconnectEveryMs) {
-            game_->lastReconnectMs = now;
-            ++game_->generation;
-            std::fprintf(stderr, "[linkup] trying a new connection\n");
-            game_->connected = false;
-            game_->startedMs = 0;
-            host_->reconnect();
-            r = rtc();
-            if (r) r->heard();
-        }
+    // Heard is this connection's alone, so a new one is the friend back only once something arrives on it,
+    // and the main program's minute (kDropEndsSeconds in linkupsession.cpp) runs out while nothing does.
+    const bool heardHere = r->everHeard();
+    const int64_t quiet = r->quietMs();
+    if (heardHere && !game_->lost && quiet > kDropMs) {
+        game_->lost = true;
+        std::fprintf(stderr, "[linkup] nothing heard from the friend for %lld ms\n", static_cast<long long>(quiet));
+        local_.sendJson(eventNamed("peer_lost"));
+    } else if (heardHere && game_->lost && quiet < 500) {
+        game_->lost = false;
+        std::fprintf(stderr, "[linkup] the friend is back\n");
+        local_.sendJson(eventNamed("peer_back"));
+    }
+    // Only the host makes a new connection: the friend follows its generation number. The first comes
+    // after kReconnectAfterMs of quiet, then one each kReconnectEveryMs while nothing arrives on the last.
+    if (game_->lost && game_->host && now - game_->lastReconnectMs > kReconnectEveryMs && (!heardHere || quiet > kReconnectAfterMs)) {
+        game_->lastReconnectMs = now;
+        ++game_->generation;
+        std::fprintf(stderr, "[linkup] trying a new connection\n");
+        game_->connected = false;
+        game_->startedMs = 0;
+        host_->reconnect();
     }
 }

@@ -37,14 +37,15 @@ GameCube need Vulkan, and every system starts on the lowest picture level.
 ## Get the installer
 
 **[Download cabinetos.iso](https://download.mmagtech.com/cabinetos.iso)**
-(about 7 GB). No account needed; it is always the newest release. What
-has changed in each update: [What's new](changelog.md).
+(about 7 GB). No account needed; it is made again from the newest version
+at least once a month. What has changed in each update:
+[What's new](changelog.md).
 
 Optional: check it is whole against [its SHA-256](https://download.mmagtech.com/cabinetos.iso.sha256)
 (`shasum -a 256 cabinetos.iso`; on Windows `certutil -hashfile cabinetos.iso SHA256`).
 
-The installer only has to be new enough to install. Once installed, the
-console updates itself (see [Updates](updates.md)).
+Anything newer than the installer comes after it: once installed, Settings,
+**System**, **System update** (see [Updates](updates.md)).
 
 ## Write it to a USB stick
 
