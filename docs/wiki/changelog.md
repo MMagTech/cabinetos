@@ -11,6 +11,11 @@ one you install, so you only ever install the newest.
   console said *Reconnecting to Alex* without end, and every 15 seconds said
   *Alex is back* for a moment. It now waits a minute, then says *Alex left*,
   and your game carries on. ([LinkUp](linkup.md#while-you-play))
+- **Fixed:** in LinkUp, when you joined a friend's game and the connection
+  dropped and came back, your console showed the game's picture standing
+  still instead of *Waiting for Alex*, until Alex pressed **A** to resume. It
+  now says *Waiting for Alex* until the game is back.
+  ([LinkUp](linkup.md#while-you-play))
 
 ## 2026.11.13.2 {#v2026-11-13-2}
 
