@@ -170,7 +170,10 @@ and read the size back to check it; one dispatch can take both. Cut both once
 each month's base update has merged, and at once for a fix to the installer,
 first run or privacy: a new console stays on the image it was installed from
 until its player updates it
-(`docs/decisions/2026-11-12-when-the-downloads-are-cut.md`). Try installer
+(`docs/decisions/2026-11-12-when-the-downloads-are-cut.md`). Each cut gets a
+GitHub release page for the version the ISO installs, tagged at the commit in
+its image's `org.opencontainers.image.revision` label
+(`docs/decisions/2026-11-13-a-release-page-per-download.md`). Try installer
 changes in a throwaway VM first with `tools/installer-vm.sh`. Before giving a
 run as `iso_run`, install that run's ISO in the VM
 (`tools/installer-vm.sh install`) and look at its screens: the boot menu,
