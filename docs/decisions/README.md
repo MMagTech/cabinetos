@@ -148,6 +148,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [scheduled-checks-monthly](2026-11-10-scheduled-checks-monthly.md): the controller list and Steam's spare are checked on the 1st of each month with the Bazzite base, not every Monday.
 - [flathub-pins-held-and-watched](2026-11-10-flathub-pins-held-and-watched.md): every console ends with exactly the Flathub builds pinned, Flathub's Mesa included, and a monthly check fails while a pin is near the end of what Flathub keeps.
 - [when-the-downloads-are-cut](2026-11-12-when-the-downloads-are-cut.md): the ISO and the portable are cut again together after each month's base update, and at once for a fix to the installer, first run or privacy, each published by hand from the run that was checked.
+- [a-release-page-per-download](2026-11-13-a-release-page-per-download.md): each cut of the downloads gets a GitHub release page for the version the ISO installs, tagged at its image's commit, linking the SHA-256 rather than typing it.
 
 ### How we work
 
