@@ -423,7 +423,13 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
-    std::fclose(sink.f);
+    // ON THE DRIVE BEFORE IT TAKES ITS NAME (#559, fileio.h). The size is
+    // what "already downloaded" checks, and on an exFAT or NTFS drive a
+    // renamed file can be at its size after a power cut with its bytes never
+    // written. A body that failed is thrown away, so only a whole one waits.
+    const bool whole = !sink.aborted && rc == CURLE_OK && status < 300;
+    const bool synced = whole && std::fflush(sink.f) == 0 && ::fsync(fileno(sink.f)) == 0;
+    const bool closed = std::fclose(sink.f) == 0;
     if (hdrs) curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
 
@@ -438,6 +444,11 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
             *err = rc != CURLE_OK ? curl_easy_strerror(rc)
                                   : "HTTP " + std::to_string(status);
         }
+        return false;
+    }
+    if (!synced || !closed) {
+        std::remove(partPath.c_str());
+        if (err) *err = "cannot write " + partPath;
         return false;
     }
     if (std::rename(partPath.c_str(), destPath.c_str()) != 0) {

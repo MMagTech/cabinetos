@@ -7,6 +7,12 @@
 // or a full disk halfway through leaves the old file, never an empty or cut
 // one. The fsync matters on the console's btrfs, which commits every 30 s: a
 // renamed file whose bytes were never synced can come back empty.
+//
+// AND NOTHING IS MARKED COMPLETE BEFORE IT IS ON THE DRIVE (#559): a game's
+// download is renamed into place, an unpacked file stamped, an install's
+// note written, only after a sync. exFAT and NTFS keep no journal, so after
+// a power cut a name, a time or a note can be on the drive while the bytes
+// it vouches for never arrived, and the console would keep a damaged game.
 
 #pragma once
 
@@ -32,6 +38,11 @@ bool writeBytes(const std::string& path, const std::string& text, mode_t mode = 
 // Removes the file, and reports only whether it is gone afterwards. A file
 // that was never there is a success.
 bool removeFile(const std::string& path);
+
+// Waits until everything written to the drive holding `path` (a file or a
+// folder) is on it: syncfs, the one drive rather than every one. False when
+// `path` cannot be opened or the drive reports a write that failed.
+bool syncDrive(const std::string& path);
 
 }  // namespace cab
 

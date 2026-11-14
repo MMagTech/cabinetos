@@ -80,6 +80,14 @@ bool removeFile(const std::string& path) {
     return errno == ENOENT;
 }
 
+bool syncDrive(const std::string& path) {
+    const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return false;
+    const bool ok = ::syncfs(fd) == 0;
+    ::close(fd);
+    return ok;
+}
+
 }  // namespace cab
 
 std::string sanitisedStem(const std::string& title) {
