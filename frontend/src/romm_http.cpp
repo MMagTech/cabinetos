@@ -8,7 +8,9 @@
 
 #include "romm.h"
 
+#include "fileio.h"
 #include "romm_internal.h"
+#include "unsettled.h"
 
 #include <curl/curl.h>
 
@@ -423,12 +425,18 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     noteTransport(c, rc);
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
-    // ON THE DRIVE BEFORE IT TAKES ITS NAME (#559, fileio.h). The size is
-    // what "already downloaded" checks, and on an exFAT or NTFS drive a
-    // renamed file can be at its size after a power cut with its bytes never
-    // written. A body that failed is thrown away, so only a whole one waits.
+    // LISTED BEFORE IT TAKES ITS NAME (#559, fileio.h). The size is what
+    // "already downloaded" checks, and on an exFAT or NTFS drive a renamed
+    // file can be at its size after a power cut with its bytes never written.
+    // There it is listed first (unsettled.h), so a power cut before the
+    // drive has it means it is downloaded again; with no list to put it in,
+    // it waits for the drive. On btrfs and ext4 a cut file comes back short,
+    // so neither is needed. A body that failed is thrown away, so only a
+    // whole one is written out.
     const bool whole = !sink.aborted && rc == CURLE_OK && status < 300;
-    const bool synced = whole && std::fflush(sink.f) == 0 && ::fsync(fileno(sink.f)) == 0;
+    const bool written = whole && std::fflush(sink.f) == 0 &&
+                         (cab::keepsSizeWithBytes(partPath) || unsettled::note({destPath}) ||
+                          ::fsync(fileno(sink.f)) == 0);
     const bool closed = std::fclose(sink.f) == 0;
     if (hdrs) curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
@@ -446,7 +454,7 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
         }
         return false;
     }
-    if (!synced || !closed) {
+    if (!written || !closed) {
         std::remove(partPath.c_str());
         if (err) *err = "cannot write " + partPath;
         return false;

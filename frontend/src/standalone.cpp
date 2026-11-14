@@ -4,6 +4,7 @@
 #include "proc.h"
 #include "standalone_internal.h"
 #include "storage.h"
+#include "unsettled.h"
 #include "xtitles.h"
 
 #include <dirent.h>
@@ -263,15 +264,25 @@ bool writeFile(const std::string& path, const std::string& data) {
     return std::rename(tmp.c_str(), path.c_str()) == 0;
 }
 
-// A NOTE THAT SAYS WHAT IS BESIDE IT IS COMPLETE (what was installed into a
-// game's folder, kInstalledNote; a firmware's stamp), written only once the
-// drive holding it has every file the install wrote (#559, fileio.h). On an
-// exFAT or NTFS drive, and between two files on any drive, the note could
-// otherwise be there after a power cut with the game or the firmware never
-// written, and be trusted at every start. No note when the drive did not
-// take them, so the next start installs again.
+// A NOTE THAT SAYS WHAT IS BESIDE IT IS COMPLETE. On any drive, a note is a
+// file of its own and can be there after a power cut with the files it
+// vouches for never written, and be trusted at every start (#559, fileio.h).
+//
+// A firmware's stamp, shared by every game of its system, is written only
+// once the drive holding it has every file the install wrote; it is on the
+// console's own drive, so that is quick. No note when the drive did not take
+// them, so the next start installs again.
 bool writeDoneNote(const std::string& path, const std::string& note) {
     return cab::syncDrive(path.substr(0, path.find_last_of('/'))) && writeFile(path, note);
+}
+
+// What was installed into a game's folder (kInstalledNote), which can be on a
+// slow USB drive: listed first (unsettled.h), so a power cut before the drive
+// has the install means that game installs again at its next start. With no
+// list to put it in, it waits for the drive as writeDoneNote does.
+bool writeInstalledNote(const std::string& path, const std::string& note) {
+    return (unsettled::note({path}) || cab::syncDrive(path.substr(0, path.find_last_of('/')))) &&
+           writeFile(path, note);
 }
 
 // Copies `from` to `to` unless `to` already holds the same bytes.

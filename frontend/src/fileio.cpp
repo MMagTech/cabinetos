@@ -1,7 +1,9 @@
 #include "fileio.h"
 
 #include <fcntl.h>
+#include <linux/magic.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 #include <cctype>
@@ -86,6 +88,12 @@ bool syncDrive(const std::string& path) {
     const bool ok = ::syncfs(fd) == 0;
     ::close(fd);
     return ok;
+}
+
+bool keepsSizeWithBytes(const std::string& path) {
+    struct statfs s;
+    if (::statfs(path.c_str(), &s) != 0) return false;
+    return s.f_type == BTRFS_SUPER_MAGIC || s.f_type == EXT4_SUPER_MAGIC;
 }
 
 }  // namespace cab

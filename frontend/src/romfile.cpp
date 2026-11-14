@@ -13,6 +13,7 @@
 #include "dirsave.h"
 #include "fileio.h"
 #include "storage.h"
+#include "unsettled.h"
 
 namespace romfile {
 namespace {
@@ -329,13 +330,16 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
     }
 
     // EACH FILE WRITTEN TAKES THE ARCHIVE'S OWN TIME (#530), once every one
-    // is closed, because a buffered write at the close sets the time again,
-    // and once the drive has them all (#559, fileio.h), because on an exFAT
-    // or NTFS drive a time can be there after a power cut with the bytes
-    // never written. That time and the file's size are what alreadyUnpacked
-    // looks for. An unpacking cut off (a cancel, a failed read or write), a
-    // file whose close failed, or a drive that did not take them all leaves
-    // files unstamped, so the next start unpacks it again.
+    // is closed, because a buffered write at the close sets the time again.
+    // That time and the file's size are what alreadyUnpacked looks for. On
+    // an exFAT or NTFS drive a time can be there after a power cut with the
+    // bytes never written (#559, fileio.h), so there the files are listed
+    // first (unsettled.h) and a power cut before the drive has them means
+    // they are unpacked again; with no list to put them in, it waits for the
+    // drive. On btrfs and ext4 a cut file comes back short. An unpacking cut
+    // off (a cancel, a failed read or write), a file whose close failed, or
+    // a drive that did not take them all leaves files unstamped, so the next
+    // start unpacks it again.
     struct stat from;
     std::vector<std::string> closed;
     const std::string primary = eachMember(downloadedPath, k, outDir, validExtensions, err,
@@ -375,7 +379,8 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
             return written;
         });
     if (primary.empty()) return false;
-    if (::stat(downloadedPath.c_str(), &from) == 0 && cab::syncDrive(outDir)) {
+    if (::stat(downloadedPath.c_str(), &from) == 0 &&
+        (cab::keepsSizeWithBytes(outDir) || unsettled::note(closed) || cab::syncDrive(outDir))) {
         const struct timespec when[2] = {{0, UTIME_OMIT}, from.st_mtim};
         for (const std::string& out : closed) ::utimensat(AT_FDCWD, out.c_str(), when, 0);
     }

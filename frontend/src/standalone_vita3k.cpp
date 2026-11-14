@@ -247,7 +247,7 @@ bool installArchives(const Emulator& e, const std::string& entryPath,
                      static_cast<long long>(bytes));
     }
     // Only now: an archive is deleted once the game it became is in place.
-    writeDoneNote(entryPath + "/" + kInstalledNote, note);
+    writeInstalledNote(entryPath + "/" + kInstalledNote, note);
     for (const auto& a : archives) ::unlink((entryPath + "/" + a.second).c_str());
     return true;
 }

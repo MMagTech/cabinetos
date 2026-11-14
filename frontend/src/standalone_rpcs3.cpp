@@ -230,7 +230,7 @@ bool installPackages(const Emulator& e, const std::string& entryPath,
         return false;
     }
     // Only now: a PKG is deleted once the game it became is in place.
-    writeDoneNote(entryPath + "/" + kInstalledNote, note);
+    writeInstalledNote(entryPath + "/" + kInstalledNote, note);
     for (const auto& pkg : pkgs) ::unlink((entryPath + "/" + pkg.second).c_str());
     return true;
 }

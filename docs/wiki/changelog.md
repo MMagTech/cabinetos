@@ -6,13 +6,12 @@ one you install, so you only ever install the newest.
 
 ## Next
 
-- **Fixed:** if the power went off in the half minute after a game finished
+- **Fixed:** if the power went off in the few minutes after a game finished
   downloading, unpacking or installing, that game could fail to start every
-  time until you removed its download, most often on a drive formatted on
-  another computer. The console now counts a game as there only once all of
-  it is on the drive, so after a power cut it downloads or unpacks the game
-  again. The same goes for the system files it installs for Switch,
-  PlayStation 3 and PlayStation Vita games.
+  time until you removed its download, most often on a USB drive formatted
+  on another computer. The console now notices at the game's next start and
+  downloads, unpacks or installs it again. Games start as quickly as
+  before.
   ([#559](https://github.com/MMagTech/cabinetos/issues/559))
 
 ## 2026.11.13.3 {#v2026-11-13-3}
