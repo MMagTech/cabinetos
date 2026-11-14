@@ -30,9 +30,11 @@
 #      fedora:NN`, and Sunshine's fc44 package name. A base on a newer Fedora
 #      makes the update RELEVANT and names the files that must move with it.
 #
-# The pull request ends with the step after the merge: the downloads on R2
+# The pull request ends with the steps after the merge: the downloads on R2
 # are cut again from the new image
-# (docs/decisions/2026-11-12-when-the-downloads-are-cut.md).
+# (docs/decisions/2026-11-12-when-the-downloads-are-cut.md), and a GitHub
+# release page goes up for the version they install
+# (docs/decisions/2026-11-13-a-release-page-per-download.md).
 #
 # Writes to the working directory:
 #   base-manifest.txt   the new base's package list (committed with the bump)
@@ -401,6 +403,11 @@ emit summary "${summary}"
     echo "  on \`latest\`. Build the ISO and the portable from it, install the ISO in"
     echo "  the VM, then publish both from those runs"
     echo "  (\`docs/decisions/2026-11-12-when-the-downloads-are-cut.md\`)."
+    echo "- [ ] **After publishing:** put up a GitHub release page for the version"
+    echo "  the ISO installs, tagged at the commit in its image's"
+    echo "  \`org.opencontainers.image.revision\` label, with the last page's text and"
+    echo "  what is new since it, linking the SHA-256 file, never typing it"
+    echo "  (\`docs/decisions/2026-11-13-a-release-page-per-download.md\`)."
 } > "${PR_BODY}"
 
 # ---------------------------------------------------------------------------

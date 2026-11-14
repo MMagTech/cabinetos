@@ -964,8 +964,9 @@ from (#286). Decided with MMagTech on the A9, 2026-10-07, and Tailscale
   page is the newest entry, and the link never has to change. Made once by
   tools/make-wiki-qr.py, as How to's Wiki code is (level H, version 6). No
   notes on the first start after an update (the one-time notice was
-  dropped, 2026-10-12). The GitHub release for each update stays by hand,
-  on his go. **Built.**
+  dropped, 2026-10-12). A GitHub release page goes up with each cut of the
+  downloads, not each update
+  (docs/decisions/2026-11-13-a-release-page-per-download.md). **Built.**
 - **How to** (#314, built 2026-10-10, judged on the TV): the controls, in
   Settings' own shape, a section per row on the left and its lines as rows
   on the right, nothing to press. In a game (pause menu by both sticks, a
