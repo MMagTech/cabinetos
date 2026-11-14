@@ -25,7 +25,9 @@ player's tilt (#669)"; 2026.11.11: #695, "LinkUp: the friend's console
 draws its own letterbox glow (#692)"; on 2026-11-10, 2026.11.10.3 (#689,
 PS3 motion, #683), 2026.11.10.2 (#691, the Flathub pins) and 2026.11.10
 (#685, Game Boy Advance and 3DS tilt, #670). Open:
-#528 waits on RomM and #644 is the controller list. #590, "A
+#528 waits on RomM; #712, "The controller list is updated when a player
+reports a pad, not monthly", carries #644's list and rides the next testing
+image, with #709 if that one is still open. #590, "A
 Wii Remote turned on after a Wii game starts is ignored by the game",
 waits in Later; fix it only in the console's own code, never by patching
 Dolphin (MMagTech, 2026-10-25). What the A9 runs now is not written here:
