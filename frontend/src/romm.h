@@ -85,10 +85,14 @@ public:
     // A token read back from a file an account keeps (accounts.h). It is a
     // credential, so it does not belong anywhere near the repository.
     bool loadToken(const std::string& path);
+    // The same, held in memory: Remove's revoke runs after the file has gone
+    // (accounts::revoke).
+    void setToken(const std::string& token);
 
     // Step one of pairing. Asks for the scopes in kScopes (romm_pairing.cpp):
-    // the reads, and the three writes the console makes (its saves, states
-    // and screenshots as assets, time played and favourites).
+    // the reads, the three writes the console makes (its saves, states and
+    // screenshots as assets, time played and favourites), and me.write, to
+    // revoke its own tokens (#484).
     bool beginPairing(Pairing* out, std::string* err);
 
     // Step two, called on the pairing's own interval.
@@ -102,6 +106,20 @@ public:
     // `/api/users/me` — the id and name behind the token. Needs the `me.read`
     // scope, which pairing already asks for.
     bool fetchCurrentUser(User* out, std::string* err);
+
+    // THE CONSOLE'S TOKENS ON RomM (#484, ROMM-10), so the console can revoke
+    // the ones it is done with. RomM gives every CabinetOS console of one
+    // person ONE device (its approve keys the device on the pairing's
+    // `client_device_identifier`, "cabinetos", for that person), so the
+    // device alone does not tell two consoles apart; the newest token on it
+    // does, in the seconds after a pairing made it. `newestDeviceToken` is
+    // that one's number: GET /api/client-tokens (me.read), the highest id
+    // whose device_id is this token's device (deviceId).
+    bool newestDeviceToken(int* out, std::string* err) const;
+    // DELETE /api/client-tokens/{id}: revokes one of this person's tokens,
+    // this one included. RomM 5.4.0 lets only a token with `me.write` call
+    // it (endpoints/client_tokens.py). True only when RomM said it is gone.
+    bool revokeToken(int tokenId, std::string* err) const;
 
     bool fetchPlatforms(std::vector<Platform>* out, std::string* err);
 
