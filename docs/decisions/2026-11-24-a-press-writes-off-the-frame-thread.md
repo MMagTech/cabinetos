@@ -1,0 +1,7 @@
+# What a press leaves is written off the frame thread
+
+- **Decided:** Save state and Screenshot take from the emulator what only the frame thread can (its state, and the frame read off the graphics chip), and workers do the rest while the game runs: the files, the picture and the marker for RomM. *State saved* and *Screenshot saved* are said once the file is on the drive, never before. A state is marked owed as soon as it is written, naming the picture that follows it. Leaving the game waits for what is not done.
+- **Date:** 2026-11-24
+- **Why:** On the reference console a press stopped the game for up to 1.2 s at Quality and 25 to 143 ms at Performance, and the sound ran out on nearly every press on every system, SNES included (#726's comment of 2026-11-23, every built-in system timed). Moving only the picture's PNG would have left 60 to 98 ms a Save state on the larger systems and 10 to 50 ms a Screenshot on every system: the rest is the drive, which Picture quality does not change. The marker names the picture before it is there, rather than being written again once it is: everything that reads the marker already took a missing picture as none, so a power cut in between keeps the state and loses only its picture, and the state is owed within tens of milliseconds instead of after its picture. Load latest state waits for a state still being written, or it would load the one before.
+- **Numbers:** #726, "Screenshot and Save state stop the game while their picture is made: up to 0.9 s at Quality".
+- **Replaces:** none.

@@ -47,8 +47,12 @@ void App::dropPressesFromClosing() {
 }
 
 void App::finishExit() {
-    // THE SAVE'S PICTURE FIRST, while the game is still on screen: a save
-    // that changed since its last picture takes one now (savepicture.h).
+    // A SCREENSHOT PCSX2 STILL OWES, while its game runs to give it
+    // (presswriter.h), and before anything else asks PCSX2 for a frame.
+    pressWriter.framesTaken();
+    loadAfterSave = false;
+    // THE SAVE'S PICTURE, while the game is still on screen: a save that
+    // changed since its last picture takes one now (savepicture.h).
     savePicture.leaving(session, SDL_GetTicks());
     // TIME PLAYED (#128): the session ends as the game does, and goes to
     // RomM with the save. Game events (#716) says so, with the minutes.
@@ -141,8 +145,11 @@ void App::finishExit() {
     // Flycast writes under the disc's product number, goes back to the
     // game's own name.
     syncFileSaves(session);
-    // The save's picture finished, if it is still being made.
+    // The save's picture finished, if it is still being made, and every
+    // state and screenshot this game was asked for (presswriter.h): the push
+    // below carries the states and their pictures.
     savePicture.finish(session, SDL_GetTicks());
+    pressWriter.finish(menuNotice);
     // WHAT THE SESSION LEFT GOES UP AS ONE SNAPSHOT, ONCE, now that the game
     // has closed and every kind of save is gathered and written on this
     // console (#346, savepush.h): marked as owed here, sent on the upload
@@ -430,7 +437,7 @@ bool App::readGameInput(cab::Core& core) {
                         (fresh & bit(cab::Y))) {
                         std::fprintf(stderr,
                                      "[shortcuts] player %d: screenshot, paused\n", p + 1);
-                        screenshotNow(session, uploader, menuNotice);
+                        screenshotNow(session, pressWriter, menuNotice);
                     }
                     if (combos && !overlayOpen && !stateHold && !stateHoldWaiting) {
                         const bool save = fresh & bit(cab::R);
@@ -438,7 +445,7 @@ bool App::readGameInput(cab::Core& core) {
                         if (!save && !load && (fresh & bit(cab::Y))) {
                             std::fprintf(stderr, "[shortcuts] player %d: screenshot\n",
                                          p + 1);
-                            screenshotNow(session, uploader, menuNotice);
+                            screenshotNow(session, pressWriter, menuNotice);
                         }
                         if ((save || load) && !session.snapshots) {
                             menuNotice.say("No save states for this system",
@@ -446,12 +453,11 @@ bool App::readGameInput(cab::Core& core) {
                         } else if (save) {
                             std::fprintf(stderr, "[shortcuts] player %d: save state\n",
                                          p + 1);
-                            saveStateNow(session, menuNotice);
+                            saveStateNow(session, pressWriter, menuNotice);
                         } else if (load) {
                             std::fprintf(stderr, "[shortcuts] player %d: load newest\n",
                                          p + 1);
-                            beginLoadLatestState(stateLoad, session, liveClient,
-                                                 menuNotice);
+                            loadLatestState();
                         }
                     }
                 }
@@ -823,6 +829,7 @@ void App::leaveGameAtExit() {
 // unload. leaveGameAtExit has already ended a game whose core was running
 // when the console was asked to stop.
 void App::reportAndUnloadCore() {
+    pressWriter.finish(menuNotice);
     if (playing) {
         cab::Core& core = cab::Core::shared();
         const double realtime = core.audioFramesTotal() / core.avInfo().sampleRate;

@@ -108,7 +108,13 @@ RomM: keep test launches under a minute, or have his go.
   (`c95ad020fb`, Eden's pull request 4395) and in no release yet: move the Flathub pin
   when flathub/dev.eden_emu.eden builds a release after v0.2.1 (lessons,
   emulators, "Switch (Eden)"),
-  #203 closed until libretro/dolphin#508 moves.
+  #203 closed until libretro/dolphin#508 moves; and Flycast's fixed state
+  size (flyinghead/flycast#2561, in its code since 2026-10-20 and in no
+  release): #222, "A failed save state says "No save states for this system";
+  Flycast may refuse a state now and then", closed, waits for it by MMagTech's
+  decision of 2026-11-23. When our Flycast moves past it, check that a
+  Dreamcast or Naomi state is never refused, and that the bigger states (36,
+  76 and 108 MiB) are fine; its numbers are on #222.
 - **Filed, not scheduled:** #675, "Arcade: a Naomi or Atomiswave game with
   a plain joystick moves only on the d-pad", the fix agreed in principle on
   2026-10-28 and written on the issue.

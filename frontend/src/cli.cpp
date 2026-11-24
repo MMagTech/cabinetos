@@ -346,6 +346,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             return savepush::test();
         } else if (SDL_strcmp(argv[i], "--save-picture-test") == 0) {
             return savepicture::test();
+        } else if (SDL_strcmp(argv[i], "--press-writer-test") == 0) {
+            return presswriter::test();
         } else if (SDL_strcmp(argv[i], "--game-events-test") == 0) {
             return gameevents::test();
         } else if (SDL_strcmp(argv[i], "--battery-test") == 0) {

@@ -113,16 +113,17 @@ bool encodePNG(const std::vector<uint8_t>& rgba, unsigned width, unsigned height
     img.width = width;
     img.height = height;
     img.format = PNG_FORMAT_RGB;
-    png_alloc_size_t size = 0;
-    if (!png_image_write_to_memory(&img, nullptr, &size, 0, rgb.data(), 0, nullptr) ||
-        size == 0)
-        return false;
+    // COMPRESSED ONCE, into room for the largest it can be. Asked its size
+    // first with no buffer, libpng compresses the whole picture to answer, so
+    // every picture was made twice (#726: the same bytes in half the time).
+    png_alloc_size_t size = PNG_IMAGE_PNG_SIZE_MAX(img);
     out.resize(size);
     if (!png_image_write_to_memory(&img, out.data(), &size, 0, rgb.data(), 0, nullptr)) {
         out.clear();
         return false;
     }
     out.resize(size);
+    out.shrink_to_fit();
     return true;
 }
 

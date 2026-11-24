@@ -244,6 +244,10 @@ bool gather(const GameSession& sess, cache::OwedPush* p) {
     return !p->savePath.empty() && sizeOf(p->savePath) > 0;
 }
 
+// Held by whatever writes a game's marker (the head of savepush.h's marks): a
+// state's mark is made on a worker beside the frame thread's.
+std::mutex markLock;
+
 // THE CORE'S OWN NAME, in Sigil's spelling (catalog::SaveForm), sent beside
 // the tag the save travels under (answer 7 of 2026-11-17), so the same core
 // in another app gets the same bytes and RomM converts the save for any
@@ -270,24 +274,24 @@ std::string labelOf(const storage::User& user, int romId, const std::string& cha
 // the game still unsent is the save this session started from (savepick.h: a
 // save still owed wins), so what that one could not go on top of, this one
 // cannot either.
-void aim(const GameSession& sess, const storage::User& user, cache::OwedPush* p) {
-    p->couldNotUseNewest = sess.couldNotUseNewest;
+void aim(const AimFrom& from, const storage::User& user, cache::OwedPush* p) {
+    p->couldNotUseNewest = from.couldNotUseNewest;
     cache::OwedPush earlier;
-    if (cache::owedPush(user, sess.romId, &earlier))
+    if (cache::owedPush(user, from.romId, &earlier))
         p->couldNotUseNewest = p->couldNotUseNewest || earlier.couldNotUseNewest;
     savemirror::Held held;
-    std::string channel = sess.startChannelId;
-    int base = sess.startSnapshotId;
-    if (savemirror::getHeld(user, sess.romId, &held)) {
+    std::string channel = from.startChannelId;
+    int base = from.startSnapshotId;
+    if (savemirror::getHeld(user, from.romId, &held)) {
         channel = held.channelId;
         base = held.snapshotId;
     }
-    if (base != 0 && sess.startHardcore && channel == sess.startChannelId) {
+    if (base != 0 && from.startHardcore && channel == from.startChannelId) {
         p->label = kSoftcoreChannel;
         p->parentId = base;
     } else if (base != 0) {
         p->channelId = channel;
-        p->label = labelOf(user, sess.romId, channel);
+        p->label = labelOf(user, from.romId, channel);
         p->expectedCurrentId = base;
     } else {
         p->label = kDefaultChannel;
@@ -326,8 +330,18 @@ const romm::Channel* byId(const std::vector<romm::Channel>& channels, const std:
 
 }  // namespace
 
+AimFrom::AimFrom(const GameSession& sess)
+    : romId(sess.romId),
+      stateTag(sess.stateTag),
+      core(coreNameOf(sess)),
+      startChannelId(sess.startChannelId),
+      startSnapshotId(sess.startSnapshotId),
+      startHardcore(sess.startHardcore),
+      couldNotUseNewest(sess.couldNotUseNewest) {}
+
 bool mark(GameSession& sess, const storage::User& user) {
     if (!sess.saveChanged) return false;
+    std::lock_guard<std::mutex> lock(markLock);
     sess.saveChanged = false;
     if (sess.saveTag.empty() || sess.romId <= 0 || !user.valid()) {
         std::fprintf(stderr, "[save] game %d's save stays on this console: %s\n", sess.romId,
@@ -376,34 +390,35 @@ bool mark(GameSession& sess, const storage::User& user) {
     return true;
 }
 
-bool markState(const GameSession& sess, const storage::User& user, const StateMade& made) {
-    if (sess.stateTag.empty() || sess.romId <= 0 || !user.valid() || made.path.empty())
+bool markState(const AimFrom& from, const storage::User& user, const StateMade& made) {
+    if (from.stateTag.empty() || from.romId <= 0 || !user.valid() || made.path.empty())
         return false;
+    std::lock_guard<std::mutex> lock(markLock);
     cache::OwedPush p;
-    if (!cache::owedPush(user, sess.romId, &p)) {
+    if (!cache::owedPush(user, from.romId, &p)) {
         p = cache::OwedPush{};
-        p.romId = sess.romId;
-        p.emulator = sess.stateTag;
-        p.core = coreNameOf(sess);
+        p.romId = from.romId;
+        p.emulator = from.stateTag;
+        p.core = from.core;
     }
     // States alone are aimed from this session, where they were made; a
     // push with a save stays where its save goes.
     if (!p.hasSave) {
         cache::OwedPush aimed;
-        aim(sess, user, &aimed);
+        aim(from, user, &aimed);
         p.channelId = aimed.channelId;
         p.label = aimed.label;
         p.expectedCurrentId = aimed.expectedCurrentId;
         p.parentId = aimed.parentId;
         p.couldNotUseNewest = aimed.couldNotUseNewest;
     }
-    p.states.insert(p.states.begin(), {sess.stateTag, made.fileName, made.path, made.pictureName,
+    p.states.insert(p.states.begin(), {from.stateTag, made.fileName, made.path, made.pictureName,
                                        made.picturePath, made.madeMs});
     keepNewest(&p.states);
     if (cache::markPushOwed(user, p, owedBytes(p)).empty()) return false;
     std::fprintf(stderr, "[state] game %d: %s owed to RomM in the game's snapshot, %zu state(s) "
                          "in it%s\n",
-                 sess.romId, made.fileName.c_str(), p.states.size(),
+                 from.romId, made.fileName.c_str(), p.states.size(),
                  p.hasSave ? ", with its save" : "");
     return true;
 }
@@ -418,6 +433,7 @@ bool markOldSave(const GameSession& sess, const storage::User& user,
                  const std::vector<std::vector<uint8_t>>& bytes) {
     if (copy.rows.empty() || sess.saveTag.empty() || sess.romId <= 0 || !user.valid())
         return false;
+    std::lock_guard<std::mutex> lock(markLock);
     cache::OwedPush earlier;
     const bool hadEarlier = cache::owedPush(user, sess.romId, &earlier);
     // A save this console owes wins at a start (savepick.h), so a start that
@@ -491,6 +507,7 @@ bool markOldSave(const GameSession& sess, const storage::User& user,
 }
 
 int adoptOldSaves(const storage::User& who) {
+    std::lock_guard<std::mutex> lock(markLock);
     std::map<int, std::vector<cache::Owed>> byGame;
     for (const cache::Owed& o : cache::owed(who))
         if (!o.isState && !o.isScreenshot) byGame[o.romId].push_back(o);
@@ -570,6 +587,7 @@ int adoptOldSaves(const storage::User& who) {
 }
 
 int adoptOldStates(const storage::User& who) {
+    std::lock_guard<std::mutex> lock(markLock);
     std::map<int, std::vector<cache::Owed>> byGame;
     for (const cache::Owed& o : cache::owed(who))
         if (o.isState) byGame[o.romId].push_back(o);

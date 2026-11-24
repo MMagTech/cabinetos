@@ -9,6 +9,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <dlfcn.h>
@@ -63,7 +64,9 @@ bool gGuitar[2] = {false, false};
 
 bool gWindowed = false;
 bool gPaused = false;
-uint64_t gFramesTaken = 0;
+// Counted by whichever thread takes a frame (cab::fetchPs2Window), read by
+// report().
+std::atomic<uint64_t> gFramesTaken{0};
 
 uint64_t gFrameSerial = 0;
 

@@ -1,7 +1,7 @@
-// Save states and screenshots of a game in play: made, a state marked owed in
-// the game's snapshot (savepush.h) and a screenshot sent, and the newest
-// state loaded back off this console or RomM. Moved out of main.cpp in the
-// restructure (#398).
+// Save states and screenshots of a game in play: asked of the core and handed
+// to the worker that writes them (presswriter.h), and the newest state loaded
+// back off this console or RomM. Moved out of main.cpp in the restructure
+// (#398).
 
 #pragma once
 
@@ -13,11 +13,11 @@
 
 #include "gamesession.h"
 #include "notice.h"
+#include "presswriter.h"
 #include "romm.h"
-#include "uploader.h"
 
-void saveStateNow(GameSession& sess, MenuNotice& notice);
-void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice);
+void saveStateNow(GameSession& sess, PressWriter& files, MenuNotice& notice);
+void screenshotNow(GameSession& sess, PressWriter& files, MenuNotice& notice);
 
 // The newest state the game offers that THIS build can actually restore
 // (savepush::offeredStates: the console's own name only). A state from

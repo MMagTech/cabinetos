@@ -76,10 +76,12 @@ void App::runDiscScript() {
             done = false;
             startOverOnDisc(n);
         } else if (verb == "state") {
-            saveStateNow(session, menuNotice);
+            // Written by the worker (presswriter.h): the step ends once it is.
+            saveStateNow(session, pressWriter, menuNotice);
+            pressWriter.finish(menuNotice);
             say(menuNotice.text);
         } else if (verb == "load") {
-            beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
+            loadLatestState();
             say("");
         } else if (verb == "resume") {
             // What A does once a state has loaded and the game waits: the

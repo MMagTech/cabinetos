@@ -1043,6 +1043,12 @@ struct App {
     // One worker for every upload. Started here and drained on the way out, so
     // quitting does not discard a save someone has already made.
     Uploader uploader;
+    // What a press of Save state or Screenshot leaves, written off the frame
+    // thread (#726). After `uploader`, which its workers hand screenshots to.
+    PressWriter pressWriter{uploader};
+    // Load latest state pressed while a state was still being written
+    // (loadLatestState).
+    bool loadAfterSave = false;
     // TIME PLAYED (#128). A session a power cut left open, for anybody who
     // has played here, is owed now; it is sent when that person is.
     playtime::Clock playClock;
@@ -2447,6 +2453,8 @@ struct App {
     // states.cpp
     void playFromState(const screens::Result& res);
     void loadPendingStates();
+    void loadLatestState();
+    void loadWaitingState();
     void drawStateHold(float sc);
     // favorites.cpp
     void toggleFavorite(const screens::Result& res);

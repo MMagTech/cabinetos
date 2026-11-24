@@ -30,14 +30,15 @@ bool sendPlaySessionsAs(const romm::Client& c, const storage::User& who, std::st
 // leaves curl waiting thirty seconds with the console looking dead. That is the
 // same fault the download had and it gets the same treatment.
 //
-// THE SPLIT THAT MATTERS: the frame thread reads the core and writes the local
-// copy, and only the network goes to the worker. Reading the core has to happen
-// on the frame thread because a core is not thread-safe, and writing the local
-// copy has to happen before the upload is even queued, or "local first" stops
-// being true the moment the process dies between the two.
-//
-// Sixty kilobytes to a local disk is well under a millisecond. The network is
-// the part that can take thirty seconds, and the network is the part that moves.
+// THE SPLIT THAT MATTERS: the frame thread reads the core, the local copy is
+// written, and only then is the upload queued. Reading the core has to happen
+// on the frame thread because a core is not thread-safe, and the local copy
+// has to come before the upload, or "local first" stops being true the moment
+// the process dies between the two. A save's copy is written on the frame
+// thread as the game is left, behind the curtain; what a press of Save state
+// or Screenshot leaves is written by a worker while the game runs (#726,
+// presswriter.h), which queues a screenshot from there: push takes a job from
+// any thread.
 class Uploader {
 public:
     struct Job {
