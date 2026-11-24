@@ -74,9 +74,14 @@ bool Core::startPs2Game(const std::string& romPath, const std::string& systemDir
     frameHeight_ = 0;
     // av_ is what the rest of the frontend reads for display. PCSX2 paces
     // ITSELF, so nothing here drives the emulator; the 60 is the NTSC
-    // figure and a PAL disc simply runs at its own rate underneath.
+    // figure and a PAL disc simply runs at its own rate underneath. Its frame
+    // comes in the shape it is shown in and is never turned
+    // (CabinetPS2Host.cpp, ReadBackFrame), so the last core's shape and turn
+    // go with it.
     av_.fps = 60.0;
     av_.sampleRate = 48000.0;
+    av_.aspectRatio = 0.0f;
+    gRotation = 0;
     return true;
 }
 

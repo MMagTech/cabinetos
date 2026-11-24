@@ -3,7 +3,7 @@
 Take a picture of the game you are playing:
 
 - **Screenshot** in the [pause menu](pause-menu.md). The picture is the game
-  alone, without the menu.
+  alone, without the menu, in the shape it has on the TV.
 - With [In-game shortcuts](navigation.md#in-game-shortcuts) on: hold the
   shortcut button and press the **left face button** (X on Xbox, Square on
   PlayStation, Y on Nintendo). This works with the pause menu open too.

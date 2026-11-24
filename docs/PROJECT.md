@@ -1164,9 +1164,11 @@ never sent a failed upload again. Now, decided with MMagTech:
   1) [2026-09-26 17-20-57-651].state` (`TVPlayerView.swift`, `stateFileStem`).
 - **The picture** is the `screenshotFile` part, `image/png`, named like the
   state. It is read from the core's own frame (`Core::snapshot`), never the
-  screen, so the pause menu is not in it; at the core's resolution, as Cabinet
-  sends; and **turned upright for a vertical arcade board**, which Cabinet's
-  raw texture probably is not (not checked). Kept beside the state on disk.
+  screen, so the pause menu is not in it; **turned upright for a vertical
+  arcade board**, which Cabinet's raw texture probably is not (not checked).
+  Its shape and size: moved to
+  [decisions/2026-11-23-a-game-is-shown-in-its-emulators-shape.md](decisions/2026-11-23-a-game-is-shown-in-its-emulators-shape.md).
+  Kept beside the state on disk.
 - **Owed uploads are sent again.** The pending marker records what to send
   (kind, tag, name, file, picture); the uploader sends everything owed at
   start, after any upload that works, and every five minutes while anything is
@@ -1343,16 +1345,7 @@ mirrored.
 
 #### The declared aspect of a turned board is ALREADY turned
 
-The one trap, and Cabinet paid for it first. FBNeo reports `aspect 0.7500` for
-DoDonPachi DaiOuJou — the 3:4 of the cabinet's tube on its side — while handing
-back a **448x224** framebuffer. Inverting the declared value applies the turn
-twice; Cabinet's own comment records the result as having *"stretched every
-vertical game"*.
-
-**So a turned picture takes its shape from raw pixels and ignores the declared
-aspect.** Nothing else changes, and nothing else can: the platforms whose pixels
-are not square — Saturn is the one that is unplayable without the declared value
-— never rotate.
+Moved to [decisions/2026-11-23-a-game-is-shown-in-its-emulators-shape.md](decisions/2026-11-23-a-game-is-shown-in-its-emulators-shape.md).
 
 #### Two sizes a core reports, and neither is wrong
 
@@ -1371,9 +1364,9 @@ it to be inferred:
 **MMagTech's call, 2026-09-19**, asked because nothing makes a vertical game
 fill a horizontal screen without lying and the two honest answers differ. A
 turned picture is scaled to its true shape until it is as tall as the screen
-allows — on the A9's 3840x2160 panel that is **1080x2160, 28% of the width** —
-rather than integer-scaled. Integer scaling would give 6x and throw away 11% of
-the height on top of pillarboxing that is already unavoidable, and the
+allows, 1620x2160 of the A9's 3840x2160 for a cabinet's 3:4 screen, rather than
+integer-scaled. Integer scaling would give 6x and throw away 11% of the height
+on top of pillarboxing that is already unavoidable, and the
 deliberate-dot-grid argument that earns a Game Boy integer scaling is worth
 less than a third of the screen. **Every upright game keeps integer scaling
 exactly as before.**
@@ -1388,7 +1381,7 @@ edge falling to 0 at the panel edge. The rect is the whole interface.
 
 | | |
 |---|---|
-| DoDonPachi DaiOuJou, FBNeo, 90 CCW | upright; 540x1080 at 1080p and **1080x2160 on the A9's own Radeon at 3840x2160** |
+| DoDonPachi DaiOuJou, FBNeo, 90 CCW | upright, at 1080p and on the A9's own Radeon at 3840x2160 |
 | Arkanoid, MAME 2003-Plus, 270 CCW | upright. A different emulator and the other odd turn |
 | Metal Slug X, FBNeo | no rotation, unchanged, still integer scaled. **The control** |
 | Ikaruga on Flycast, turn forced in | turned, not mirrored, on a bottom-up hardware frame |

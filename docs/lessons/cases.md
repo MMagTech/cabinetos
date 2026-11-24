@@ -121,12 +121,12 @@ they ask for* has the whole thing. The three parts worth carrying:
   flip, they never transpose.
 - **A turned board's declared aspect is ALREADY turned.** FBNeo says 0.75 for
   DoDonPachi while handing back 448x224. Inverting it turns the picture twice;
-  Cabinet's own comment says that "stretched every vertical game". So a turned
-  picture takes its shape from raw pixels. Safe because **only arcade cores
-  ever rotate** — a console was built to output to a television — which is
-  MMagTech's point and what bounds the whole rule.
+  Cabinet's own comment says that "stretched every vertical game". It is used
+  as it comes ([decision](../decisions/2026-11-23-a-game-is-shown-in-its-emulators-shape.md)).
+  **Only arcade cores ever rotate**: a console was built to output to a
+  television, which is MMagTech's point and what bounds the whole rule.
 - **A turned picture fills the height at its true shape**, MMagTech's call:
-  1080x2160 on the A9, 28% of the width. Upright games keep integer scaling.
+  1620x2160 on the A9 for a 3:4 screen. Upright games keep integer scaling.
 
 **What has NOT been done is look at it on the television.** Every check was a
 capture, including one at 3840x2160 off the A9's own Radeon. A person with a

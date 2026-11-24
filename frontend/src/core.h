@@ -44,6 +44,29 @@ struct AVInfo {
     float aspectRatio = 0.0f;  // 0 means "derive it from the pixel dimensions"
 };
 
+// THE SHAPE A GAME IS SHOWN IN, width over height: on the screen
+// (App::drawGamePicture) and in every picture made of it (Core::snapshot), so
+// the two cannot come apart (#725). What the core declares, or its frame's own
+// pixels, turned with the picture, when it declares nothing.
+//
+// A TURNED BOARD'S DECLARED SHAPE IS ALREADY TURNED, so it is taken as it
+// comes and never inverted: FBNeo says 0.75, the cabinet's tube on its side,
+// for a 448x224 frame. The four cores that turn their picture all do (FBNeo,
+// MAME 2003-Plus, MAME 0.289 and Flycast, read at their pins, 2026-11-23).
+float shownAspect(float declared, bool quarterTurn, unsigned frameWidth, unsigned frameHeight);
+
+// THE SIZE A PICTURE OF A GAME IS MADE AT, from its frame as it is shown
+// (turned already) and the shape it is shown in: one side stretched to that
+// shape, so no pixel of a small frame is lost. Never past 1920x1080, or the
+// frame's own size where that is larger: a frame that big has pixels to
+// spare, so its longer side comes in instead, and its PNG, encoded on the
+// frame thread, does not grow. No wider than `maxWidth`, unless that is 0.
+struct PictureSize {
+    unsigned width = 0, height = 0;
+};
+PictureSize pictureSize(unsigned shownWidth, unsigned shownHeight, float aspect,
+                        unsigned maxWidth);
+
 // libretro's RetroPad, which every core speaks regardless of what the real
 // hardware had. Repeated here rather than pulling libretro.h into the UI: the
 // frontend above this layer has no business knowing what libretro is, and these
@@ -310,10 +333,12 @@ public:
 
     // True when the turn is an odd number of quarters, which is the case that
     // changes the SHAPE of the picture: a 320x240 board becomes a 240x320
-    // picture, so the aspect ratio inverts and the window on a 16:9 panel is
-    // tall rather than wide. Callers laying the picture out need this; callers
-    // drawing it just pass rotation() through.
+    // picture, tall rather than wide on a 16:9 panel. Callers laying the
+    // picture out need this; callers drawing it just pass rotation() through.
     bool rotatedQuarterTurn() const { return (rotation() & 1u) != 0u; }
+
+    // The shape the frame in hand is shown in (cab::shownAspect, above).
+    float shownAspect() const;
 
     // Whether the loaded core is rendering through GL rather than handing back
     // a buffer. For the audit and for the catalog, not for the draw path —
@@ -518,10 +543,10 @@ public:
     // picture a save state carries (#99) and a save's (#346, savepicture.h).
     // Read from the game's frame, never from the screen, so the pause menu
     // drawn over it is not in it. Rows top first, flipped and quarter-turned
-    // exactly as the player draws it, at the core's own resolution (as
-    // Cabinet sent), or no wider than `maxWidth` as shown, made that small on
-    // the graphics chip before it is read where the core draws there. False
-    // with nothing to read: no frame yet. Call on the GL thread.
+    // and in the shape the player draws it (shownAspect, #725), at
+    // pictureSize's size: made smaller on the graphics chip before it is read
+    // where the core draws there, stretched on the processor. False with
+    // nothing to read: no frame yet. Call on the GL thread.
     bool snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
                   unsigned maxWidth = 0) const;
 

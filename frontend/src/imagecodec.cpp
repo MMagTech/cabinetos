@@ -126,37 +126,52 @@ bool encodePNG(const std::vector<uint8_t>& rgba, unsigned width, unsigned height
     return true;
 }
 
-void shrinkRGBA(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
-                unsigned maxWidth) {
-    if (maxWidth == 0 || width <= maxWidth || height == 0 ||
-        rgba.size() < static_cast<size_t>(width) * height * 4)
+void resizeRGBA(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height, unsigned toWidth,
+                unsigned toHeight) {
+    if ((toWidth == width && toHeight == height) || toWidth == 0 || toHeight == 0 || width == 0 ||
+        height == 0 || rgba.size() < static_cast<size_t>(width) * height * 4)
         return;
-    const unsigned tw = maxWidth;
-    const unsigned th = std::max(1u, static_cast<unsigned>(
-                                         (static_cast<uint64_t>(height) * tw + width / 2) / width));
-    std::vector<uint8_t> out(static_cast<size_t>(tw) * th * 4);
-    for (unsigned y = 0; y < th; ++y) {
-        const unsigned y0 = static_cast<unsigned>(static_cast<uint64_t>(y) * height / th);
-        const unsigned y1 = std::max(y0 + 1, static_cast<unsigned>(
-                                                 static_cast<uint64_t>(y + 1) * height / th));
-        for (unsigned x = 0; x < tw; ++x) {
-            const unsigned x0 = static_cast<unsigned>(static_cast<uint64_t>(x) * width / tw);
-            const unsigned x1 = std::max(x0 + 1, static_cast<unsigned>(
-                                                     static_cast<uint64_t>(x + 1) * width / tw));
-            uint32_t sum[4] = {0, 0, 0, 0};
-            for (unsigned sy = y0; sy < y1; ++sy) {
-                const uint8_t* row = rgba.data() + (static_cast<size_t>(sy) * width + x0) * 4;
-                for (unsigned sx = x0; sx < x1; ++sx, row += 4)
-                    for (int c = 0; c < 4; ++c) sum[c] += row[c];
+    // WHOLE NUMBERS ALL THE WAY. Counted in a toWidth'th of an old pixel, old
+    // pixel i covers [i * toWidth, (i + 1) * toWidth) and new pixel x covers
+    // [x * width, (x + 1) * width), so what they share is exact, and a plain
+    // colour stays itself. The same down the rows; a new pixel's parts add up
+    // to width * height.
+    std::vector<uint8_t> out(static_cast<size_t>(toWidth) * toHeight * 4);
+    std::vector<uint32_t> rows(static_cast<size_t>(width) * 4);
+    const double part = 1.0 / (static_cast<double>(width) * height);
+    uint8_t* dst = out.data();
+    for (unsigned y = 0; y < toHeight; ++y) {
+        const uint64_t y0 = static_cast<uint64_t>(y) * height, y1 = y0 + height;
+        std::fill(rows.begin(), rows.end(), 0u);
+        for (uint64_t sy = y0 / toHeight; sy * toHeight < y1; ++sy) {
+            const uint32_t shared = static_cast<uint32_t>(std::min(y1, (sy + 1) * toHeight) -
+                                                          std::max(y0, sy * toHeight));
+            const uint8_t* src = rgba.data() + sy * width * 4;
+            for (size_t i = 0; i < rows.size(); ++i) rows[i] += shared * src[i];
+        }
+        for (unsigned x = 0; x < toWidth; ++x, dst += 4) {
+            const uint64_t x0 = static_cast<uint64_t>(x) * width, x1 = x0 + width;
+            int64_t sum[4] = {0, 0, 0, 0};
+            for (uint64_t sx = x0 / toWidth; sx * toWidth < x1; ++sx) {
+                const int64_t shared = static_cast<int64_t>(std::min(x1, (sx + 1) * toWidth) -
+                                                            std::max(x0, sx * toWidth));
+                for (size_t c = 0; c < 4; ++c) sum[c] += shared * rows[sx * 4 + c];
             }
-            const uint32_t n = (y1 - y0) * (x1 - x0);
-            uint8_t* dst = out.data() + (static_cast<size_t>(y) * tw + x) * 4;
-            for (int c = 0; c < 4; ++c) dst[c] = static_cast<uint8_t>(sum[c] / n);
+            for (size_t c = 0; c < 4; ++c)
+                dst[c] = static_cast<uint8_t>(static_cast<double>(sum[c]) * part + 0.5);
         }
     }
     rgba = std::move(out);
-    width = tw;
-    height = th;
+    width = toWidth;
+    height = toHeight;
+}
+
+void shrinkRGBA(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
+                unsigned maxWidth) {
+    if (maxWidth == 0 || width <= maxWidth || height == 0) return;
+    resizeRGBA(rgba, width, height, maxWidth,
+               std::max(1u, static_cast<unsigned>(
+                                (static_cast<uint64_t>(height) * maxWidth + width / 2) / width)));
 }
 
 // EVERY FORMAT RomM TAKES FOR A COVER (MMagTech, 2026-10-13: "any image format

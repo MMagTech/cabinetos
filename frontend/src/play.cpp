@@ -615,28 +615,16 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // WITH IT. Its monitor was bolted into the cabinet sideways,
         // so the board renders sideways and asks for a quarter turn.
         // After the turn the picture is TALL: the rows running down
-        // the screen are the source's columns and the aspect is the
-        // inverse of the stored one.
+        // the screen are the source's columns.
         const bool quarterTurn = core.rotatedQuarterTurn();
         //
-        // AND A TURNED PICTURE IGNORES THE CORE'S DECLARED ASPECT.
-        // This looks like throwing away the better answer and is the
-        // opposite: FBNeo reports a vertical board's aspect ALREADY
-        // turned — 0.75 for DoDonPachi DaiOuJou, which is the 3:4 of
-        // the cabinet's tube on its side, not the 448x224 sitting in
-        // the framebuffer. Inverting that would apply the turn twice
-        // and stretch the picture. Cabinet shipped it the wrong way
-        // round first and the comment in `aspectFitVertices` is the
-        // record: it "stretched every vertical game".
-        //
-        // The declared aspect is still what a picture with square
-        // pixels needs and Saturn is unplayable without it, so it
-        // keeps winning everywhere else. Nothing is lost by dropping
-        // it here, for the reason Cabinet gave: the platforms whose
-        // pixels are not square never rotate, and the boards that
-        // rotate are square-pixel.
-        const float declaredAspect = quarterTurn ? 0.0f : core.avInfo().aspectRatio;
-        const float aspect = declaredAspect > 0 ? declaredAspect : srcW / srcH;
+        // THE SHAPE IS THE CORE'S, TURNED OR NOT (cab::shownAspect,
+        // core.h), and it is the shape of every picture made of the
+        // game (Core::snapshot). A turned picture took its shape from
+        // raw pixels until #725, on the belief that the boards that
+        // turn have square ones: PGM's 448x224 and CPS-2's 384x224
+        // have not, and their games were drawn too thin.
+        const float shownAspect = core.shownAspect();
         //
         // EXCEPT for a hardware-rendered core, where integer scaling
         // is the wrong idea rather than a stricter one. A Dreamcast's
@@ -650,7 +638,6 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // Everything from here is in terms of the picture as SHOWN
         // rather than as stored, which is the only version of it the
         // screen has an opinion about.
-        const float shownAspect = quarterTurn ? 1.0f / aspect : aspect;
         const float shownRows = quarterTurn ? srcW : srcH;
         //
         // AND A TURNED PICTURE FILLS THE HEIGHT RATHER THAN INTEGER

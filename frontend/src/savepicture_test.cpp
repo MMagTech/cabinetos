@@ -3,13 +3,16 @@
 // files and save folder the test changes as a game would, and whose frame is
 // a plain colour that says when it was taken: when the picture is taken, of
 // which moment, how small, where it is kept, which the snapshot names, and
-// when it goes. Its own file, as `--save-push-test` has its own.
+// when it goes. And the shape a game is shown in, and the size and the pixels
+// of a picture in that shape (#725, core.h), which every picture the console
+// sends is made by. Its own file, as `--save-push-test` has its own.
 
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -17,6 +20,7 @@
 #include <vector>
 
 #include "cache.h"
+#include "core.h"
 #include "fileio.h"
 #include "imagecodec.h"
 #include "savepicture.h"
@@ -761,12 +765,86 @@ int test() {
                 px[(y * 4 + x) * 4] = ((x + y) % 2) ? 255 : 0;
         unsigned w = 4, h = 2;
         ui::shrinkRGBA(px, w, h, 2);
-        check(w == 2 && h == 1 && px.size() == 8 && px[0] == 127 && px[4] == 127,
+        check(w == 2 && h == 1 && px.size() == 8 && px[0] == 128 && px[4] == 128,
               "each new pixel the average of the ones it covers");
         unsigned w2 = 320, h2 = 240;
         std::vector<uint8_t> small = plain(320, 240, 5);
         ui::shrinkRGBA(small, w2, h2, 640);
         check(w2 == 320 && h2 == 240, "a picture no wider already is left as it is");
+    }
+
+    std::printf("\nthe shape a game is shown in (#725)\n");
+    {
+        // In thousandths.
+        auto shape = [](float declared, bool turned, unsigned w, unsigned h) {
+            return std::lround(cab::shownAspect(declared, turned, w, h) * 1000.0f);
+        };
+        check(shape(4.0f / 3, false, 256, 224) == 1333, "what the core declares, not its pixels");
+        check(shape(0.75f, true, 448, 224) == 750 && shape(0.75f, true, 320, 240) == 750,
+              "a turned board's is turned already, and taken as it comes");
+        check(shape(0, false, 320, 240) == 1333 && shape(0, true, 320, 240) == 750,
+              "nothing declared: the frame's pixels, turned with the picture");
+        check(shape(0, false, 0, 0) == 0, "no frame, no shape");
+    }
+
+    std::printf("\nthe size its picture is made at\n");
+    {
+        struct Case {
+            const char* what;
+            unsigned w, h;
+            float aspect;
+            unsigned maxWidth, toW, toH;
+        };
+        const Case cases[] = {
+            {"pixels taller than wide: stretched wider", 256, 224, 4.0f / 3, 0, 299, 224},
+            {"pixels wider than tall: stretched taller", 1280, 576, 4.0f / 3, 0, 1280, 960},
+            {"a vertical board's, as it is shown", 224, 448, 0.75f, 0, 336, 448},
+            {"and one whose pixels are the other way", 224, 256, 0.75f, 0, 224, 299},
+            {"square pixels: left as it is", 240, 160, 1.5f, 0, 240, 160},
+            {"at 4K as well", 3840, 2160, 16.0f / 9, 0, 3840, 2160},
+            {"and wider than 4K", 4320, 1440, 3.0f, 0, 4320, 1440},
+            {"and turned", 2160, 2880, 0.75f, 0, 2160, 2880},
+            {"no shape: left as it is", 330, 224, 0, 0, 330, 224},
+            {"a frame taller than 1080 grows no taller", 2560, 1152, 4.0f / 3, 0, 1536, 1152},
+            {"nor one wider than 1920 wider", 3840, 3168, 4.0f / 3, 0, 3840, 2880},
+            {"no wider than asked, in its shape", 2560, 1152, 4.0f / 3, 640, 640, 480},
+            {"one that wide already, in its shape", 640, 288, 4.0f / 3, 640, 640, 480},
+            {"a turned one, measured as it is shown", 2160, 2880, 0.75f, 640, 640, 853},
+            {"no frame, no size", 0, 0, 4.0f / 3, 0, 0, 0},
+        };
+        for (const Case& c : cases) {
+            const cab::PictureSize s = cab::pictureSize(c.w, c.h, c.aspect, c.maxWidth);
+            check(s.width == c.toW && s.height == c.toH, c.what);
+        }
+    }
+
+    std::printf("\nthe resize\n");
+    {
+        unsigned w = 256, h = 224;
+        std::vector<uint8_t> flat = plain(w, h, 210);
+        ui::resizeRGBA(flat, w, h, 299, 224);
+        bool same = w == 299 && h == 224 && flat.size() == 299u * 224u * 4u;
+        for (size_t i = 0; same && i < flat.size(); i += 4) same = flat[i] == 210 && flat[i + 3] == 255;
+        check(same, "a plain colour stays itself, stretched by no whole number");
+        // Two columns, black and lit, to three: the middle one is half of each.
+        std::vector<uint8_t> px = {0, 0, 0, 255, 255, 0, 0, 255};
+        w = 2, h = 1;
+        ui::resizeRGBA(px, w, h, 3, 1);
+        check(w == 3 && h == 1 && px.size() == 12 && px[0] == 0 && px[4] == 128 && px[8] == 255,
+              "wider: an edge between two pixels is shared, the rest is kept");
+        px = {0, 0, 0, 255, 255, 0, 0, 255};
+        w = 1, h = 2;
+        ui::resizeRGBA(px, w, h, 1, 3);
+        check(w == 1 && h == 3 && px.size() == 12 && px[0] == 0 && px[4] == 128 && px[8] == 255,
+              "taller: the same down the rows");
+        // Wider and shorter at once: rows 0 and 1 lit, 2 and 3 black.
+        px = plain(2, 4, 0);
+        fill(px, 2, 0, 0, 2, 2, 200);
+        w = 2, h = 4;
+        ui::resizeRGBA(px, w, h, 3, 2);
+        check(w == 3 && h == 2 && px.size() == 24 && px[0] == 200 && px[8] == 200 && px[12] == 0 &&
+                  px[20] == 0,
+              "wider and shorter at once");
     }
 
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");

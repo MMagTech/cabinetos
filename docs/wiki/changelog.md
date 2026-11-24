@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.24.3 {#v2026-11-24-3}
+
+- **Fixed:** vertical arcade games were drawn in the wrong shape on boards
+  whose pixels are not square: too thin on PGM and CPS-2, too wide on most
+  boards of the 1980s. They now have the shape of the arcade cabinet's screen.
+  ([#725](https://github.com/MMagTech/cabinetos/issues/725))
+- **Fixed:** the pictures sent to RomM (screenshots, and the pictures of save
+  states and saves) were stretched or squeezed on most systems, Nintendo 64's
+  most of all. They now have the shape the game has on the TV, in RomM and
+  under *Continue from*. Pictures already in RomM stay as they are.
+  ([Screenshots](screenshots.md),
+  [#725](https://github.com/MMagTech/cabinetos/issues/725))
+
 ## 2026.11.24.2 {#v2026-11-24-2}
 
 - **Fixed:** an original Xbox game's saves went back onto its drive with the

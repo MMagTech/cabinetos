@@ -146,7 +146,8 @@ code.
 - **A core reports TWO geometries and neither is wrong.** MAME 2003-Plus
   declares 224x256 in `av_info` for Arkanoid — the picture as SHOWN, already
   turned — and hands back 256x224 from `video_refresh` every frame. A layout
-  must use the second. The `[core] WxH` line at load prints the first.
+  must use the second for its rows. The `[core] WxH` line at load prints the
+  first.
 
 - **THE SHAPE AT LOAD IS NOT THE SHAPE OF THE GAME.** Genesis Plus GX
   declares 256x192 and aspect 1.5238 at load, then asks for 320x224 and
@@ -158,9 +159,14 @@ code.
   was found by reading the `[core] now` line the fix added. Dolphin asks
   the same way when a GameCube game turns widescreen on.
 
-- **A TURNED BOARD'S DECLARED ASPECT IS ALREADY TURNED.** FBNeo says 0.75 for
-  DoDonPachi while handing back 448x224. Inverting it turns the picture twice
-  and stretches it, which Cabinet shipped once and wrote down.
+- **A TURNED BOARD'S DECLARED ASPECT IS ALREADY TURNED: use it as it comes.**
+  FBNeo says 0.75 for DoDonPachi DaiOuJou while handing back 448x224.
+  Inverting it turns the picture twice and stretches it, which Cabinet shipped
+  once and wrote down. Leaving it out is as wrong: this console took a turned
+  picture's shape from its pixels until #725 ("Pictures sent to RomM have the
+  emulator's pixel shape: a Nintendo 64 one comes out squashed"), and drew
+  every PGM and CPS-2 vertical game too thin for two months. A capture of one
+  looks plausible on its own. Read the `[picture]` line's numbers.
 
 - **A core calling `SET_ROTATION(0)` is ordinary, not a no-op to ignore.**
   Flycast does it explicitly, which silently overwrote a rotation forced in for
