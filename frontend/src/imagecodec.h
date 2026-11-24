@@ -1,6 +1,7 @@
 // Pictures to pixels and back: decodeImage (PNG, JPEG, and through SDL3_image
 // every other format RomM accepts for a cover), encodePNG (a save state's
-// picture) and shrinkRGBA (a save's picture, made small). The image cache's
+// picture), resizeRGBA (a game's picture, in the shape it is shown in) and
+// shrinkRGBA (a save's picture, made small). The image cache's
 // workers, the screen looks (screenfx.cpp), the states' pictures, the save's
 // picture (savepicture.h) and the disc rig call them. Moved out of image.h in
 // the restructure (#398).
@@ -23,10 +24,17 @@ bool decodeImage(const std::vector<uint8_t>& encoded, std::vector<uint8_t>& rgba
 bool encodePNG(const std::vector<uint8_t>& rgba, unsigned width, unsigned height,
                std::vector<uint8_t>& pngOut);
 
-// Straight RGBA made no wider than `maxWidth`, its shape kept, each new
-// pixel the average of the ones it covers (#346, the save's picture). Left
-// as it is when it is no wider already. `width` and `height` become the new
+// Straight RGBA made `toWidth` x `toHeight`, larger or smaller along either
+// side, each new pixel the average of what it covers, a pixel partly covered
+// counting by that part: a stretch keeps its hard edges and no row or column
+// comes out twice as thick as the next. `width` and `height` become the new
 // size.
+void resizeRGBA(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height, unsigned toWidth,
+                unsigned toHeight);
+
+// Straight RGBA made no wider than `maxWidth`, its shape kept (#346, the
+// save's picture). Left as it is when it is no wider already. `width` and
+// `height` become the new size.
 void shrinkRGBA(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
                 unsigned maxWidth);
 

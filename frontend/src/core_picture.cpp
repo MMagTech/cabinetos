@@ -1,5 +1,6 @@
 // The game's picture: the video callback, the software upload, the frame
-// digest the determinism checks read, and the snapshot a save state carries.
+// digest the determinism checks read, the shape a game is shown in, and the
+// snapshot a save state carries.
 // Moved out of core.cpp in the restructure (#398); Core::uploadFrame (core.cpp)
 // takes the PlayStation 2, Vulkan and GLES cases and hands the rest to
 // uploadSoftwareFrame here.
@@ -8,6 +9,7 @@
 #include "core_state.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -86,6 +88,32 @@ void videoRefresh(const void* data, unsigned width, unsigned height, size_t pitc
 }  // namespace corestate
 
 using namespace corestate;
+
+float shownAspect(float declared, bool quarterTurn, unsigned frameWidth, unsigned frameHeight) {
+    if (declared > 0.0f) return declared;
+    if (frameWidth == 0 || frameHeight == 0) return 0.0f;
+    const float pixels = static_cast<float>(frameWidth) / static_cast<float>(frameHeight);
+    return quarterTurn ? 1.0f / pixels : pixels;
+}
+
+PictureSize pictureSize(unsigned shownWidth, unsigned shownHeight, float aspect,
+                        unsigned maxWidth) {
+    if (shownWidth == 0 || shownHeight == 0) return {};
+    double w = shownWidth, h = shownHeight;
+    if (aspect > 0.0f) {
+        if (w / h > aspect) h = w / aspect;
+        else w = h * aspect;
+    }
+    double scale = std::min({1.0, std::max(1920.0, static_cast<double>(shownWidth)) / w,
+                             std::max(1080.0, static_cast<double>(shownHeight)) / h});
+    if (maxWidth > 0) scale = std::min(scale, maxWidth / w);
+    return {std::max(1u, static_cast<unsigned>(std::lround(w * scale))),
+            std::max(1u, static_cast<unsigned>(std::lround(h * scale)))};
+}
+
+float Core::shownAspect() const {
+    return cab::shownAspect(av_.aspectRatio, rotatedQuarterTurn(), frameWidth_, frameHeight_);
+}
 
 // uploadFrame's software path: the core's own buffer, as videoRefresh copied
 // it, into texture_. Core::uploadFrame (core.cpp) takes the PlayStation 2,
@@ -234,8 +262,10 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
                     unsigned maxWidth) const {
     // PLAYSTATION 2 (#130): its frame is not the core's, it is the texture
     // uploadFrame fills from PCSX2 (ps2::takeFrame), RGBA, top row first, at
-    // the game's own resolution. So a screenshot works in every game where
-    // the shortcut button does. Not a save state's picture: PS2 has none.
+    // the game's own resolution and already in the shape it is shown in
+    // (CabinetPS2Host.cpp, ReadBackFrame). So a screenshot works in every
+    // game where the shortcut button does. Not a save state's picture: PS2
+    // has none.
     const bool ps2Frame = isPs2();
     // WITH ITS OWN WINDOW (#226) nothing is copied off the GPU each frame, so
     // the picture on screen is read back once, now, for this.
@@ -255,18 +285,20 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     unsigned h = ps2Frame ? frameHeight_ : gFrameH;
     if (w == 0 || h == 0) return false;
     if (ps2Frame && !texture_) return false;
-    // THE SIZE IT IS READ AT: whole, or no wider than `maxWidth` as it is
-    // shown, so a quarter-turned game is measured by its height (#346, the
-    // save's picture).
+    // THE SIZE IT IS MADE AT, as it is shown, so a quarter-turned game is
+    // measured by its height (#346, the save's picture): pw x ph before the
+    // turn. AND THE SIZE IT IS READ AT, rw x rh: no larger than the frame,
+    // because the graphics chip only ever makes it smaller. A blit that makes
+    // one larger reads past the picture's edge, into the rest of the core's
+    // target, so the stretch is the processor's.
     const unsigned r = gRotation & 3u;
-    const unsigned shownW = (r & 1u) ? h : w;
-    unsigned rw = w, rh = h;
-    if (maxWidth > 0 && shownW > maxWidth) {
-        rw = std::max(1u, static_cast<unsigned>(
-                              (static_cast<uint64_t>(w) * maxWidth + shownW / 2) / shownW));
-        rh = std::max(1u, static_cast<unsigned>(
-                              (static_cast<uint64_t>(h) * maxWidth + shownW / 2) / shownW));
-    }
+    const bool turned = (r & 1u) != 0u;
+    const PictureSize size =
+        pictureSize(turned ? h : w, turned ? w : h,
+                    cab::shownAspect(av_.aspectRatio, turned, w, h), maxWidth);
+    const unsigned pw = turned ? size.height : size.width;
+    const unsigned ph = turned ? size.width : size.height;
+    const unsigned rw = std::min(pw, w), rh = std::min(ph, h);
     std::vector<uint8_t> px;
 
     // Read a GL framebuffer's bottom-left fw x fh into px, top row first when
@@ -294,9 +326,9 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
 
     // MADE SMALL ON THE GRAPHICS CHIP, THEN READ, so the game does not wait
     // on a whole frame crossing to the processor (a 4K frame read whole took
-    // 8 to 23 ms on the reference console, 2026-11-19). Halved by blits while
-    // it is at least twice the size wanted, each step an even average of
-    // four pixels, and the last step to the size itself. The blits keep the
+    // 8 to 23 ms on the reference console, 2026-11-19). Each side halved by
+    // blits while it is at least twice the size wanted, so each step is an
+    // even average, and the last step to the size itself. The blits keep the
     // picture's way up, so `bottomUp` is the source's.
     auto readGL = [&](GLuint src, bool bottomUp) -> bool {
         if (rw == w && rh == h) {
@@ -313,8 +345,7 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
         unsigned cw = w, ch = h;
         bool ok = true;
         while (ok && (cw != rw || ch != rh)) {
-            const bool halve = cw / 2 >= rw && ch / 2 >= rh;
-            const unsigned nw = halve ? cw / 2 : rw, nh = halve ? ch / 2 : rh;
+            const unsigned nw = std::max(cw / 2, rw), nh = std::max(ch / 2, rh);
             GLuint tex = 0, fbo = 0;
             glGenTextures(1, &tex);
             glBindTexture(GL_TEXTURE_2D, tex);
@@ -403,10 +434,8 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
                 dst[0] = r8; dst[1] = g8; dst[2] = b8; dst[3] = 0xFF;
             }
         }
-        // A frame drawn on the processor is small already for almost every
-        // core; one that is not is made small here.
-        if (rw != w) ui::shrinkRGBA(px, w, h, rw);
     }
+    ui::resizeRGBA(px, w, h, pw, ph);
     // Opaque whatever the core left in alpha: a PNG with holes in it shows
     // the page behind.
     for (size_t i = 3; i < px.size(); i += 4) px[i] = 0xFF;

@@ -37,19 +37,19 @@
 // them: Flycast also writes a board's memory whenever a state is made, which
 // is not the game saving.
 //
-// THE PICTURE. The game's own frame, the menu never in it (Core::snapshot), no
-// wider than kMaxWidth, its shape kept: made that small on the graphics chip
-// before it is read, so the game does not wait on a whole 4K frame (8 to 23 ms
-// on the reference console). For an emulator run as a program, and for
-// PlayStation 2 in its own window (#226) while it plays, gamescope's own
-// picture of the game's plane, as Screenshot takes a program's
+// THE PICTURE. The game's own frame, the menu never in it (Core::snapshot), in
+// the shape the TV shows it (#725), no wider than kMaxWidth: made small on the
+// graphics chip before it is read, so the game does not wait on a whole 4K
+// frame (8 to 23 ms on the reference console). For an emulator run as a
+// program, and for PlayStation 2 in its own window (#226) while it plays,
+// gamescope's own picture of the game's plane, as Screenshot takes a program's
 // (App::standaloneScreenshot), asked from the worker and read back once
 // gamescope has written it, made as small: PCSX2's own read-back kept the
 // console's main loop, which feeds PS2's sound, waiting 48 ms (1 s while PCSX2
-// was not drawing yet), and gamescope's capture costs PCSX2 no frame
-// (measured 2026-11-19). As a PS2 game is left, PCSX2's read-back, since its
-// window goes the moment the game unloads. A PNG, as RomM's web player sends
-// and this console's states carry, encoded off the game's thread.
+// was not drawing yet), and gamescope's capture costs PCSX2 no frame (measured
+// 2026-11-19). As a PS2 game is left, PCSX2's read-back, since its window goes
+// the moment the game unloads. A PNG, as RomM's web player sends and this
+// console's states carry, encoded off the game's thread.
 //
 // GAMESCOPE'S PICTURE CUT TO THE GAME (cutBars). It is of the whole screen,
 // so a game narrower than the screen (a 4:3 game on a 16:9 television) comes
@@ -67,8 +67,8 @@
 // game) proves none of it and goes whole, bars and all, as it did before.
 // Only the sides are cut: no system here draws wider than the television,
 // so black above and below is the game's own (a film's letterbox), and the
-// other apps keep it too. A core's frame is the game's shape already and is
-// never cut.
+// other apps keep it too. A core's picture is made in the game's shape
+// (Core::snapshot) and is never cut.
 //
 // AS THE GAME IS LEFT, while it is still on screen (leaving): a save that
 // changed since the last picture and has not settled takes its picture then,

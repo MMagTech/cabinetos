@@ -127,8 +127,8 @@ void saveStateNow(GameSession& sess, MenuNotice& notice) {
     }
     std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
 
-    // THE PICTURE (#99): the game's own frame, the menu not in it, upright,
-    // at the core's resolution, as Cabinet sent. Kept beside the state, so a
+    // THE PICTURE (#99): the game's own frame, the menu not in it, upright
+    // and in the shape the TV shows it in (#725). Kept beside the state, so a
     // state that has to wait for the server still has it when it goes. A
     // state without one is still a state: nothing here stops the save.
     std::vector<uint8_t> png;
