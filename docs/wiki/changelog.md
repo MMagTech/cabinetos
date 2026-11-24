@@ -6,9 +6,9 @@ one you install, so you only ever install the newest.
 
 ## Next
 
-- **Fixed:** vertical arcade games on boards whose pixels are not square were
-  drawn the wrong shape: too thin on PGM and CPS-2, too wide on some boards of
-  the 1980s. They now have the shape of the arcade cabinet's screen.
+- **Fixed:** vertical arcade games were drawn in the wrong shape on boards
+  whose pixels are not square: too thin on PGM and CPS-2, too wide on most
+  boards of the 1980s. They now have the shape of the arcade cabinet's screen.
   ([#725](https://github.com/MMagTech/cabinetos/issues/725))
 - **Fixed:** the pictures sent to RomM (screenshots, and the pictures of save
   states and saves) were stretched or squeezed on most systems, Nintendo 64's
