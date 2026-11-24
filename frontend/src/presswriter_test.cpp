@@ -253,10 +253,11 @@ int test() {
               "a drive that refuses the state: said, nothing owed");
     }
     {
-        // The state is written; its picture's name is a folder.
+        // The state is written; the file its picture is written as (writeBytes'
+        // temporary) is a folder that is not empty, so it cannot be.
         PressWriter f(up);
         const GameSession s = sessionOf(706);
-        storage::makeDirs(s.stateDir + "/Game [h].png/in the way");
+        storage::makeDirs(s.stateDir + "/Game [h].png.placing/in the way");
         f.save(stateOf(s, "Game [h]", 1000, plain(5)));
         f.finish(notice);
         cache::OwedPush p;
