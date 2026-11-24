@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.24.4 {#v2026-11-24-4}
 
 - **Fixed:** taking a screenshot or saving a state stopped the game and cut its
   sound for a moment, on every system: up to a second at Quality, less at
