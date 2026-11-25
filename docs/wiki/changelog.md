@@ -4,6 +4,12 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **Fixed:** the diagnostic report now hides a PlayStation 3 game's licence
+  key. ([Reporting a problem](troubleshooting.md#reporting-a-problem),
+  [#750](https://github.com/MMagTech/cabinetos/issues/750))
+
 ## 2026.11.25.2 {#v2026-11-25-2}
 
 - **New:** arcade high scores go to your server with the game's save, so your
