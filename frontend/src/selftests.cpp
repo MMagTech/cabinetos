@@ -2055,6 +2055,52 @@ int savePickTest() {
                   !takes(answer("", nvram), true, board, nullptr, "fbneo", "fbneo") &&
                   !takes(answer("", nvram), true, board),
               "arcade: another app's save refused, even one naming FinalBurn Neo");
+        // What an arcade game's save is, by its emulator (#353): the first is
+        // the one file that travelled before, and is all a row from before
+        // save channels is.
+        auto paths = [](const char* core, const char* rom) {
+            std::string all;
+            for (const catalog::SaveFile& f : catalog::saveFiles("arcade", core, rom, true))
+                all += (all.empty() ? "" : " ") + f.path + (f.region == "srm" ? "*" : "");
+            return all;
+        };
+        check(paths("fbneo_libretro", "19xx.zip") == "fbneo/19xx.fs* fbneo/19xx.nv fbneo/19xx.hi" &&
+                  paths("mame2003_plus", "lethalen.zip") ==
+                      "mame2003-plus/nvram/lethalen.nv* mame2003-plus/hi/lethalen.hi" &&
+                  paths("flycast", "kofxi.zip") ==
+                      "reicast/kofxi.zip.nvmem* reicast/kofxi.zip.nvmem2 reicast/kofxi.zip.eeprom "
+                      "reicast/kofxi.zip.card reicast/kofxi.zip-p1.card reicast/kofxi.zip-p2.card" &&
+                  paths("mame_libretro", "roadburn.zip").empty(),
+              "arcade: each emulator's save files, the one from before first");
+        const char* mameRoot = catalog::directorySaveRoot("mame_libretro", "arcade", "");
+        auto inMame = [](const char* rel) {
+            return catalog::inDirectorySave("mame_libretro", "arcade", "", rel);
+        };
+        check(mameRoot && std::string(mameRoot) == "mame" && inMame("nvram/kinst/nvram") &&
+                  inMame("hiscore/kinst.hi") && !inMame("hiscore/plugin.cfg") &&
+                  !inMame("cfg/kinst.cfg") && !inMame("cfg/default.cfg") &&
+                  !inMame("diff/kinst.dif") && !inMame("diff/x.hi") && !inMame("hiscore") &&
+                  !inMame("nvram"),
+              "MAME 0.289: the board's memory and the scores, not settings, a disk's changes");
+        check(!catalog::directorySaveRoot("fbneo_libretro", "arcade", "") &&
+                  !catalog::directorySaveRoot("flycast", "arcade", ""),
+              "no other arcade core's save is a folder");
+        auto bare = [](const std::vector<catalog::SaveFile>& files, const char* name) {
+            const catalog::SaveFile* f = catalog::bareFile(files, name);
+            return f ? f->path : std::string("none");
+        };
+        const auto neo = catalog::saveFiles("arcade", "fbneo_libretro", "19xx.zip", true);
+        const auto cd = catalog::saveFiles("segacd", "genesis_plus_gx", "Lunar.chd", false);
+        const auto rally = catalog::saveFiles("saturn", "beetle_saturn", "Rally.chd", false);
+        check(bare(neo, "19xx [2026-11-25_18-00-00].nv") == "fbneo/19xx.nv" &&
+                  bare(neo, "19xx.hi") == "fbneo/19xx.hi" &&
+                  bare(neo, "19xx (Cabinet).srm") == "fbneo/19xx.fs" &&
+                  bare(neo, "19xx") == "fbneo/19xx.fs" && bare(neo, "") == "fbneo/19xx.fs" &&
+                  bare(cd, "Lunar.brm") == "Lunar.brm" && bare(cd, "Lunar.srm") == "Lunar.brm" &&
+                  bare(rally, "Rally.bcr") == "none" && bare(rally, "Rally.srm") == "none" &&
+                  bare({}, "x.srm") == "none",
+              "a save that is one file: the file its name ends as, else the first, never a "
+              "cartridge");
         const OwnForm opera = form("opera", "3do", "Gex.chd", false);
         const std::string label("\x01\x5a\x5a\x5a\x5a\x5a", 6);
         check(takes(answer("", marked(32768, label)), true, opera) &&

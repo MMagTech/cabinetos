@@ -55,6 +55,12 @@ namespace catalog {
 // the folder by itself the first time the folder is missing (saves.cpp,
 // restoreDirSave). The region comes from the game's code, so a game whose
 // code RomM does not know has no root and its saves stay on this console.
+//
+// MAME 0.289 TOO, from #353: `mame/` in this person's save folder for the game,
+// of which the zip takes the board's memory, `nvram/<set>/` with files the
+// board's own devices name, and the game's high scores, `hiscore/<set>.hi`
+// (mamehome.h). Model 2's and Model 3's memory travels the same way, from
+// emulators run as programs (standalone::saveRoot).
 const char* directorySaveRoot(const char* core, const std::string& platformSlug,
                               const std::string& titleId);
 
@@ -66,7 +72,8 @@ const char* directorySaveRoot(const char* core, const std::string& platformSlug,
 const char* gameCubeRegion(const std::string& titleId);
 
 // Whether a file under that root is part of the save, by its path relative
-// to the root. Everything is, for PSP. For GameCube, the `.gci` files only.
+// to the root. Everything is, for PSP. For GameCube, the `.gci` files only;
+// for MAME 0.289, the board's memory and its high scores only.
 bool inDirectorySave(const char* core, const std::string& platformSlug,
                      const std::string& titleId, const std::string& relPath);
 
@@ -204,9 +211,10 @@ struct SaveFile {
     // Which of a game's saves this file is: "srm" for the game's own save,
     // "cart" for a cartridge beside the machine's own memory (Sega CD's
     // external RAM cartridge, Saturn's backup cartridge), "ps2" for a
-    // PlayStation 2 card. It is the extension of this console's own copy
-    // (saveRowName) and of the row a save from before save channels has on
-    // RomM, one row a region, which is how a start tells them apart
+    // PlayStation 2 card, "beside" for an arcade game's file that no row from
+    // before save channels ever held. It is the extension of this console's
+    // own copy (saveRowName) and of the row a save from before save channels
+    // has on RomM, one row a region, which is how a start tells them apart
     // (savepick.h, regionOfRow). A CARTRIDGE IS NEVER A SAVE'S ONE FILE: a
     // snapshot's save that is one file is the machine's own memory, and a
     // cartridge travels only in a zip beside it.
@@ -237,11 +245,19 @@ struct SaveFile {
     // does not look at it (savepicture.h). Flycast also writes a board's
     // memory whenever a state is made, which is not the game saving.
     bool writtenAtClose = false;
-    // ITS NAME IN A ZIP BESIDE THE BATTERY (SaveForm::batteryFirst), Sigil's
-    // for the device it is: `cart.ram` for Saturn's cartridge. Empty: the
-    // file travels under `path`.
+    // ITS NAME IN A ZIP: beside the battery (SaveForm::batteryFirst) Sigil's
+    // for the device it is, `cart.ram` for Saturn's cartridge; for an arcade
+    // game's file its own, with no folder, as RomM and Sigil have a save of
+    // several files travel, and then the only one holding anything goes as it
+    // is (savepush.cpp, travelsAlone). Empty: the file travels under `path`.
     std::string unitName;
 };
+
+// WHICH OF A CORE'S FILES A SAVE THAT IS ONE FILE IS, by the name it has on
+// RomM: the first that ends as it does (`19xx.nv`), else the first, the one
+// file every such save was before #353. Never a cartridge (SaveFile::region):
+// null when the first is one, as Saturn's is.
+const SaveFile* bareFile(const std::vector<SaveFile>& files, const std::string& name);
 
 // --- Firmware a core can actually find --------------------------------------
 //

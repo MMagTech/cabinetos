@@ -372,6 +372,297 @@ int test() {
                   cab::readBytes(other + "/4Mbit_cart.brm") == two,
               "which a start on another console writes back as the two files");
         cache::clearPushOwed(u, game, p.stamp);
+        // No cartridge: still a zip, as Sega CD's always was.
+        GameSession alone = s;
+        alone.romId = ++game;
+        alone.fileSaves[1].atLaunch.clear();
+        alone.saveChanged = true;
+        in.clear();
+        check(mark(alone, u) && cache::owedPush(u, game, &p) && p.saveShape == "MULTI" &&
+                  cab::readZip(cab::readBytes(p.savePath), &in, &zerr) && in.size() == 1 &&
+                  in[0].relPath == "Lunar.brm" && in[0].bytes == one,
+              "one of the two alone: a zip of it, as before #353");
+        cache::clearPushOwed(u, game, p.stamp);
+    }
+    // ---- An arcade game's files (#353) ---------------------------------------
+    std::printf("\nan arcade game's files (#353)\n");
+    // A session of an arcade core that started with no save, and what its
+    // core left as the game closed, by the ending of the file's name.
+    using Left = std::vector<std::pair<std::string, std::vector<uint8_t>>>;
+    auto board = [&](const char* core, const char* rom, const char* tag, const Left& left) {
+        GameSession s;
+        s.romId = ++game;
+        s.title = "Arcade Game";
+        s.core = core;
+        s.platformSlug = "arcade";
+        s.arcade = true;
+        s.romFile = rom;
+        s.fsStem = s.romFile.substr(0, s.romFile.find('.'));
+        s.saveTag = tag;
+        s.saveDir = storage::savesDir(u, "arcade", game, core);
+        for (const catalog::SaveFile& spec : catalog::saveFiles("arcade", core, rom, true)) {
+            cab::FileSaveState f;
+            f.spec = spec;
+            f.path = s.saveDir + "/" + spec.path;
+            for (const auto& [end, bytes] : left)
+                if (spec.unitName == s.fsStem + end || spec.unitName == s.romFile + end)
+                    cab::writeBytes(f.path, bytes);
+            s.fileSaves.push_back(f);
+        }
+        syncFileSaves(s);
+        return s;
+    };
+    // A start on another console, which holds nothing of the game, from what
+    // was pushed, under the name RomM gives a version of it.
+    auto startFrom = [&](const GameSession& s, const std::string& romName,
+                         const std::vector<uint8_t>& save) {
+        const std::string other =
+            storage::savesDir(u, "arcade", s.romId + 5000, s.core);
+        SaveFetch fetched;
+        fetched.romId = s.romId + 5000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::Channel;
+        fetched.pick.channel.current.save.fileName = romName;
+        fetched.picked = save;
+        restoreFileSaves(catalog::saveFiles("arcade", s.core, s.romFile, true), s.fsStem, other,
+                         s.saveTag.c_str(), fetched);
+        return other;
+    };
+    auto filesIn = [](const std::string& dir) { return cab::listTree(dir).size(); };
+    const std::vector<uint8_t> scores = bytesOf("the high scores", 40);
+    const std::vector<uint8_t> eeprom = bytesOf("the board's EEPROM", 128);
+    const std::vector<uint8_t> blank(128, 0xFF);
+    {
+        // FinalBurn Neo, all three: a board's memory, its EEPROM, its scores.
+        GameSession s = board("fbneo_libretro", "19xx.zip", "fbneo-native",
+                              {{".fs", one}, {".nv", eeprom}, {".hi", scores}});
+        const bool marked = mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        const bool read = marked && cab::readZip(cab::readBytes(p.savePath), &in, &zerr);
+        check(read && p.saveName == "19xx.zip" && p.saveShape == "MULTI" && in.size() == 3 &&
+                  in[0].relPath == "19xx.fs" && in[0].bytes == one &&
+                  in[1].relPath == "19xx.nv" && in[1].bytes == eeprom &&
+                  in[2].relPath == "19xx.hi" && in[2].bytes == scores,
+              "FinalBurn Neo, three files: one zip with no folder in it, as RomM and Sigil "
+              "have several files travel");
+        const std::string other = startFrom(s, p.saveName, cab::readBytes(p.savePath));
+        check(cab::readBytes(other + "/fbneo/19xx.fs") == one &&
+                  cab::readBytes(other + "/fbneo/19xx.nv") == eeprom &&
+                  cab::readBytes(other + "/fbneo/19xx.hi") == scores && filesIn(other) == 3,
+              "which a start on another console writes back as the three files");
+        // A console still on the version before, which knows the one file.
+        const std::string before = storage::savesDir(u, "arcade", game + 7000, s.core);
+        catalog::SaveFile fs;
+        fs.path = "fbneo/19xx.fs";
+        fs.untouched = catalog::Untouched::Uniform;
+        SaveFetch fetched;
+        fetched.romId = game + 7000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::Channel;
+        fetched.pick.channel.current.save.fileName = p.saveName;
+        fetched.picked = cab::readBytes(p.savePath);
+        restoreFileSaves({fs}, "19xx", before, "fbneo-native", fetched);
+        check(cab::readBytes(before + "/fbneo/19xx.fs") == one && filesIn(before) == 1,
+              "and a console that knows only the first finds it in the zip");
+        cache::clearPushOwed(u, game, p.stamp);
+        // The scores alone changed: the rest goes with them.
+        const std::vector<uint8_t> higher = bytesOf("a higher score", 40);
+        cab::writeBytes(s.saveDir + "/fbneo/19xx.hi", higher);
+        syncFileSaves(s);
+        in.clear();
+        check(s.saveChanged && mark(s, u) && cache::owedPush(u, game, &p) &&
+                  cab::readZip(cab::readBytes(p.savePath), &in, &zerr) && in.size() == 3 &&
+                  in[0].bytes == one && in[2].bytes == higher,
+              "one of them changed: the whole save again, the ones left alone with it");
+        syncFileSaves(s);
+        cache::clearPushOwed(u, game, p.stamp);
+        check(!s.saveChanged && !mark(s, u), "none of them changed: nothing owed");
+    }
+    {
+        // One file alone goes as it is, each of the three, and comes back as
+        // the file it was, by the ending RomM keeps on its name.
+        struct { const char* end; const char* told; } kAlone[] = {
+            {".fs", "the board's memory alone, as before #353"},
+            {".nv", "the EEPROM alone"},
+            {".hi", "the high scores alone"},
+        };
+        for (const auto& a : kAlone) {
+            GameSession s = board("fbneo_libretro", "btoads.zip", "fbneo-native", {{a.end, one}});
+            const bool marked = mark(s, u) && cache::owedPush(u, game, &p);
+            const std::string other = startFrom(
+                s, std::string("btoads [2026-11-25_18-00-00]") + a.end, one);
+            check(marked && p.saveName == std::string("btoads") + a.end &&
+                      p.saveShape == "SINGLE" && cab::readBytes(p.savePath) == one &&
+                      cab::readBytes(other + "/fbneo/btoads" + a.end) == one &&
+                      filesIn(other) == 1,
+                  (std::string("FinalBurn Neo, ") + a.told + ": the file as it is, back to its "
+                   "own place").c_str());
+            cache::clearPushOwed(u, game, p.stamp);
+        }
+        // A save RomM copied in from before channels has no ending of these.
+        GameSession s = board("fbneo_libretro", "btoads.zip", "fbneo-native", {{".fs", one}});
+        mark(s, u);
+        const std::string other = startFrom(s, "btoads (Cabinet).srm", two);
+        check(cab::readBytes(other + "/fbneo/btoads.fs") == two && filesIn(other) == 1,
+              "a save from before, under a name with none of these endings: the first file");
+        cache::clearPushOwed(u, game, p.stamp);
+        // A row from before channels, which the start takes itself.
+        const std::string rows = storage::savesDir(u, "arcade", game + 8000, s.core);
+        SaveFetch fetched;
+        fetched.romId = game + 8000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::OldRows;
+        romm::Asset row;
+        row.id = 77;
+        row.fileName = "btoads (Cabinet).srm";
+        row.emulator = "fbneo-native";
+        row.updatedAt = romTime(-60);
+        fetched.rows = {row};
+        fetched.bytes[77] = two;
+        restoreFileSaves(catalog::saveFiles("arcade", s.core, s.romFile, true), s.fsStem, rows,
+                         "fbneo-native", fetched);
+        check(cab::readBytes(rows + "/fbneo/btoads.fs") == two && filesIn(rows) == 1,
+              "a row from before channels: the first file, never its neighbours too");
+    }
+    {
+        // What a core writes by starting up is left out, of the zip and of
+        // what makes one.
+        GameSession s = board("fbneo_libretro", "1942.zip", "fbneo-native",
+                              {{".nv", blank}, {".hi", scores}});
+        check(mark(s, u) && cache::owedPush(u, game, &p) && p.saveName == "1942.hi" &&
+                  p.saveShape == "SINGLE" && cab::readBytes(p.savePath) == scores,
+              "a file of one byte over and over is no save: the other one alone");
+        cache::clearPushOwed(u, game, p.stamp);
+        GameSession none = board("fbneo_libretro", "1942.zip", "fbneo-native", {{".nv", blank}});
+        check(!none.saveChanged && !mark(none, u), "and by itself it is sent by nobody");
+    }
+    {
+        GameSession s = board("mame2003_plus", "lethalen.zip", "mame2003plus-native",
+                              {{".nv", one}, {".hi", scores}});
+        const bool marked = mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        const bool read = marked && cab::readZip(cab::readBytes(p.savePath), &in, &zerr);
+        const std::string other = startFrom(s, p.saveName, cab::readBytes(p.savePath));
+        check(read && p.saveShape == "MULTI" && in.size() == 2 &&
+                  in[0].relPath == "lethalen.nv" && in[1].relPath == "lethalen.hi" &&
+                  cab::readBytes(other + "/mame2003-plus/nvram/lethalen.nv") == one &&
+                  cab::readBytes(other + "/mame2003-plus/hi/lethalen.hi") == scores,
+              "MAME 2003-Plus: its board's memory and its scores, each back in its own folder");
+        cache::clearPushOwed(u, game, p.stamp);
+    }
+    {
+        // Flycast's, named after the whole file it was handed.
+        GameSession s = board("flycast", "kofxi.zip", "flycast-native",
+                              {{".nvmem", one}, {".nvmem2", two}, {".eeprom", eeprom}});
+        const bool marked = mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        const bool read = marked && cab::readZip(cab::readBytes(p.savePath), &in, &zerr);
+        const std::string other = startFrom(s, p.saveName, cab::readBytes(p.savePath));
+        check(read && p.saveShape == "MULTI" && in.size() == 3 &&
+                  in[0].relPath == "kofxi.zip.nvmem" && in[1].relPath == "kofxi.zip.nvmem2" &&
+                  in[2].relPath == "kofxi.zip.eeprom" &&
+                  cab::readBytes(other + "/reicast/kofxi.zip.nvmem") == one &&
+                  cab::readBytes(other + "/reicast/kofxi.zip.nvmem2") == two &&
+                  cab::readBytes(other + "/reicast/kofxi.zip.eeprom") == eeprom,
+              "Flycast: a board's memory, its second and its EEPROM, each back in its place");
+        cache::clearPushOwed(u, game, p.stamp);
+        // A card for a player: the same ending as the game's one card, so it
+        // is zipped rather than mistaken for it.
+        GameSession card = board("flycast", "derby.zip", "flycast-native", {{"-p1.card", one}});
+        in.clear();
+        check(mark(card, u) && cache::owedPush(u, game, &p) && p.saveShape == "MULTI" &&
+                  cab::readZip(cab::readBytes(p.savePath), &in, &zerr) && in.size() == 1 &&
+                  in[0].relPath == "derby.zip-p1.card" &&
+                  cab::readBytes(startFrom(card, p.saveName, cab::readBytes(p.savePath)) +
+                                 "/reicast/derby.zip-p1.card") == one,
+              "Flycast: a file whose ending another has is zipped, and back in its place");
+        cache::clearPushOwed(u, game, p.stamp);
+    }
+    {
+        // MAME 0.289's folder: the board's memory and the scores, and not its
+        // settings, the plugin's or a hard disk's changes.
+        GameSession s;
+        s.romId = ++game;
+        s.title = "Road Game";
+        s.fsStem = "roadgame";
+        s.core = "mame_libretro";
+        s.platformSlug = "arcade";
+        s.arcade = true;
+        s.saveTag = "mame";
+        s.saveDir = storage::savesDir(u, "arcade", game, "mame_libretro");
+        s.dirSaveRoot = s.saveDir + "/" +
+                        catalog::directorySaveRoot("mame_libretro", "arcade", std::string());
+        s.dirSaveCore = "mame_libretro";
+        s.dirSavePlatform = "arcade";
+        cab::writeBytes(s.dirSaveRoot + "/nvram/roadgame/eeprom", eeprom);
+        cab::writeBytes(s.dirSaveRoot + "/hiscore/roadgame.hi", scores);
+        cab::writeBytes(s.dirSaveRoot + "/hiscore/plugin.cfg", one);
+        cab::writeBytes(s.dirSaveRoot + "/cfg/roadgame.cfg", one);
+        cab::writeBytes(s.dirSaveRoot + "/cfg/default.cfg", one);
+        cab::writeBytes(s.dirSaveRoot + "/diff/road game v1.dif", two);
+        syncDirSave(s);
+        const bool marked = s.saveChanged && mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        const std::vector<uint8_t> sent = marked ? cab::readBytes(p.savePath)
+                                                 : std::vector<uint8_t>();
+        const bool read = marked && cab::readZip(sent, &in, &zerr);
+        check(read && p.saveName == "Road Game.zip" && p.saveShape == "FOLDER" && in.size() == 2 &&
+                  in[0].relPath == "hiscore/roadgame.hi" && in[0].bytes == scores &&
+                  in[1].relPath == "nvram/roadgame/eeprom" && in[1].bytes == eeprom,
+              "MAME 0.289: a zip of the board's memory and the scores; no settings, no hard "
+              "disk's changes");
+        cache::clearPushOwed(u, game, p.stamp);
+        // What RomM holds comes back around the settings on another console.
+        const std::string other = storage::savesDir(u, "arcade", game + 5000, "mame_libretro");
+        cab::writeBytes(other + "/mame/cfg/roadgame.cfg", two);
+        SaveFetch fetched;
+        fetched.romId = game + 5000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::Channel;
+        fetched.pick.channel.current.save.fileName = p.saveName;
+        fetched.picked = sent;
+        restoreDirSave(fetched, "mame", other + "/mame", s.title);
+        check(cab::readBytes(other + "/mame/nvram/roadgame/eeprom") == eeprom &&
+                  cab::readBytes(other + "/mame/hiscore/roadgame.hi") == scores &&
+                  cab::readBytes(other + "/mame/cfg/roadgame.cfg") == two,
+              "which a start on another console unpacks, its own settings left");
+        // Written again as the game closed, with what it held.
+        savemirror::Held held;
+        held.channelId = kChannel;
+        held.snapshotId = 12;
+        held.saveHash = romm::contentHash(sent);
+        savemirror::putHeld(u, game, held);
+        auto closedAgain = [&](const std::vector<uint8_t>& memory) {
+            const timespec t[2] = {{now + 30, 0}, {now + 30, 0}};
+            const std::string file = s.dirSaveRoot + "/nvram/roadgame/eeprom";
+            cab::writeBytes(file, memory);
+            utimensat(AT_FDCWD, file.c_str(), t, 0);
+            s.saveChanged = false;
+            for (cab::DirEntry& e : s.dirAtLaunch) e.mtimeNs = 1;
+            syncDirSave(s);
+            return s.saveChanged;
+        };
+        check(!closedAgain(eeprom) && !mark(s, u),
+              "written again with what this console last had from RomM: no new save");
+        check(s.dirAtLaunch == listDirSave(s), "nor looked at again until it is written again");
+        check(closedAgain(bytesOf("a higher one", 128)) && mark(s, u) &&
+                  cache::owedPush(u, game, &p),
+              "written with something else: a new save");
+        check(closedAgain(eeprom),
+              "and back to what RomM has while that one is still owed: a new save, or the one "
+              "owed would go over it");
+        cache::clearPushOwed(u, game, p.stamp);
+        s.arcade = false;
+        check(closedAgain(eeprom), "a folder that is not an arcade game's is judged by its times, "
+                                   "as before");
     }
     {
         // DREAMCAST'S CARD, ONE PER GAME IN THE GAME'S SAVE FOLDER (#346,
@@ -900,6 +1191,51 @@ int test() {
         check(send(romm.server(), u, g, &why) == Sent::Landed && romm.pushes.size() == 2 &&
                   romm.pushes[1].expectedCurrentId == 0 && romm.pushes[1].parentId == 81,
               "the channel has no current any more: the kept one goes on top of nothing");
+    }
+    {   // The channel's current holds states and no save (#353): onto it.
+        romm::Snapshot statesOnly = snapshot(780, kChannel, "", romTime(-30));
+        statesOnly.hasSave = false;
+        statesOnly.save = {};
+        const int g = owe([](GameSession&) {});
+        Stand romm;
+        romm.channels = {channel(kChannel, kDefaultChannel, statesOnly)};
+        romm.answers = {made(snapshot(781, kChannel, hashOne, romTime(1)))};
+        check(send(romm.server(), u, g, &why) == Sent::Landed && romm.pushes.size() == 1 &&
+                  romm.pushes[0].channelId == kChannel &&
+                  romm.pushes[0].expectedCurrentId == 780 && romm.pushes[0].parentId == 0 &&
+                  romm.pushes[0].hasSave && romm.pushes[0].states.empty(),
+              "a save for a channel whose current holds states and no save, with nothing held: "
+              "onto it, so RomM carries the states on");
+        const int g2 = owe([&](GameSession& s) { hold(s.romId, kChannel, 779); });
+        romm.pushes.clear();
+        romm.answers = {made(snapshot(782, kChannel, hashOne, romTime(1)))};
+        check(send(romm.server(), u, g2, &why) == Sent::Landed && romm.pushes.size() == 1 &&
+                  romm.pushes[0].expectedCurrentId == 780,
+              "and when this console holds an earlier one in it");
+        const int g3 = owe([](GameSession& s) { s.couldNotUseNewest = true; });
+        romm.pushes.clear();
+        romm.answers = {made(snapshot(783, kChannel, hashOne, romTime(1)))};
+        check(send(romm.server(), u, g3, &why) == Sent::Landed &&
+                  romm.pushes[0].expectedCurrentId == 0,
+              "not for a session that could not use the newest save");
+        const int g4 = owe([&](GameSession& s) { hold(s.romId, kChannel, 784); });
+        Stand later;
+        later.answers = {movedOn(snapshot(785, kChannel, hashOne, romTime(0)), &statesOnly),
+                         made(snapshot(786, kChannel, hashOne, romTime(1)))};
+        check(send(later.server(), u, g4, &why) == Sent::Landed && later.pushes.size() == 2 &&
+                  later.pushes[1].hasSave && later.pushes[1].expectedCurrentId == 780 &&
+                  later.pushes[1].parentId == 0,
+              "the channel moved on to one that holds no save while it was sent: again onto "
+              "that one, whenever it was made");
+        // The one it moved on to holds a save: as before.
+        const int g5 = owe([&](GameSession& s) { hold(s.romId, kChannel, 787); });
+        Stand other;
+        const romm::Snapshot theirs = snapshot(788, kChannel, "ffff", romTime(-600));
+        other.answers = {movedOn(snapshot(789, kChannel, hashOne, romTime(0)), &theirs),
+                         made(snapshot(790, kChannel, hashOne, romTime(1)))};
+        check(send(other.server(), u, g5, &why) == Sent::Landed && other.pushes.size() == 2 &&
+                  other.pushes[1].parentId == 789 && !other.pushes[1].hasSave,
+              "to one that holds a save: beside it and then on top, as before");
     }
     {   // Moved on twice: the second current was made later.
         const int g = owe([&](GameSession& s) { hold(s.romId, kChannel, 83); });
@@ -2217,6 +2553,32 @@ int test() {
         noteAgo(s, 10);
         check(!finishInterruptedPlay(s.saveDir, up) && !cache::isPushOwed(u, g),
               "a save folder with nothing written after the note sends nothing");
+    }
+    {
+        // MAME 0.289: its high-score plugin writes while the game runs (#353).
+        const int g = ++game;
+        GameSession s;
+        s.romId = g;
+        s.title = "Arcade Folder";
+        s.saveTag = "mame";
+        s.core = "mame_libretro";
+        s.platformSlug = "arcade";
+        s.arcade = true;
+        s.romFile = "arcfold.zip";
+        s.saveDir = storage::savesDir(u, "arcade", g, "mame_libretro");
+        s.dirSaveRoot = s.saveDir + "/mame";
+        cab::writeBytes(s.dirSaveRoot + "/nvram/arcfold/eeprom", bytesOf("the memory", 64));
+        age(s.dirSaveRoot + "/nvram/arcfold/eeprom", 60);
+        noteAgo(s, 10);
+        cab::writeBytes(s.dirSaveRoot + "/hiscore/arcfold.hi", bytesOf("scored in play", 40));
+        Uploader up;
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        check(finishInterruptedPlay(s.saveDir, up) && cache::owedPush(u, g, &p) && p.hasSave &&
+                  cab::readZip(cab::readBytes(p.savePath), &in, &zerr) && in.size() == 2 &&
+                  in[0].relPath == "hiscore/arcfold.hi",
+              "MAME 0.289, a score written after the note goes up with the board's memory");
+        cache::clearPushOwed(u, g, p.stamp);
     }
 
     // ---- A battery with its clock or its cartridge (#346, step 11) ------------

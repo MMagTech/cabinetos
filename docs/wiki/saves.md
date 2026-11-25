@@ -29,15 +29,16 @@ app. When you leave the game, its save goes up once, if it changed.
 - If the console crashes or the power goes out during a game, a save the game
   had already made is kept and sent when the console next starts, on the
   systems whose emulator writes the save while you play: DS, Dreamcast, PS2,
-  PSP, 3DS, GameCube, Wii, a Saturn game's backup cartridge, and the systems
+  PSP, 3DS, GameCube, Wii, a Saturn game's backup cartridge, a MAME 0.289
+  game's high scores, and the systems
   run as separate programs (Switch, PS3, Wii U, Xbox, Xbox 360, Vita, Model 2,
   Model 3). The other systems keep the save inside the emulator until you
   leave, so what was saved in that session is lost.
 - The game's page shows when it was last saved: *Saved today, 8:17 PM*.
 - On RomM's website a save from the console shows a picture of the game from
-  the moment it saved. Sega CD, Neo Geo Pocket Color, 3DO, Xbox and arcade
-  games keep their save inside the emulator until you leave, so theirs show
-  RomM's own save icon instead.
+  the moment it saved. Sega CD, Neo Geo Pocket Color, 3DO, Xbox and most
+  arcade games keep their save inside the emulator until you leave, so theirs
+  show RomM's own save icon instead.
 - A Game Boy game with a clock, such as Pokémon Gold and Silver, keeps its
   clock with its save. A Saturn game saved to the backup cartridge takes the
   cartridge with its save; a cartridge with nothing on it stays on the
@@ -136,7 +137,7 @@ depends on the system, by what RomM's save library (Sigil) does for it:
 | System | With other apps |
 |---|---|
 | 3DO | Yes, the same file |
-| Arcade: FinalBurn Neo, MAME 2003-Plus, Naomi, Atomiswave, Model 2, Model 3 | No |
+| Arcade | No |
 | Atari 2600 | Yes, the same file |
 | Atari 7800 | Yes, the same file |
 | Dreamcast | Yes, RomM converts it |
@@ -187,7 +188,7 @@ depends on the system, by what RomM's save library (Sigil) does for it:
   keep different files.
 - **Arcade:** a board's memory carries nothing that says which emulator, or
   which version of it, wrote it, so a save from another app is never used.
-  MAME keeps its saves on the console.
+  What an arcade game's save holds is on [Arcade](arcade.md).
 - **Save states:** a state loads only in the emulator that made it, so states
   made in other apps stay on RomM as they are.
 

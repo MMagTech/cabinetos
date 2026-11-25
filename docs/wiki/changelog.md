@@ -4,6 +4,21 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.25.2 {#v2026-11-25-2}
+
+- **New:** arcade high scores go to your server with the game's save, so your
+  other CabinetOS consoles, or this one after a reinstall, have them. So does
+  everything else the game's board remembers. It covers every arcade game:
+  FinalBurn Neo, MAME 2003-Plus and MAME 0.289, Naomi, Naomi 2, Naomi GD-ROM
+  and Atomiswave (Model 2 and Model 3 games already did this). There is nothing
+  to turn on: leave a game and its scores go up, start it and they are there.
+  Scores already on a console go up the next time that game changes them. If
+  two consoles each hold their own scores for a game, the first to send its
+  scores wins, and the other keeps its old ones aside on its drive. What stays
+  on a console: settings made in MAME's own menu, and what a MAME game writes
+  to its hard disk. Update all your consoles. ([Arcade](arcade.md),
+  [#353](https://github.com/MMagTech/cabinetos/issues/353))
+
 ## 2026.11.25 {#v2026-11-25}
 
 - **Fixed:** arcade games FinalBurn Neo plays (CPS1, CPS2 and most other
