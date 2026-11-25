@@ -14,10 +14,12 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-11-24.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.24.4: #747, "Screenshot and Save state no
-longer stop the game (#726)", which closed #726. Read the newest image from the
-registry, not from here. Before it, on 2026-11-23: #746, "Vertical arcade games,
+**2026-11-25.** The newest release is 2026.11.13.2. The last image with a
+change a player can see is 2026.11.25: #751, "FinalBurn Neo games keep high
+scores, and CPS3 save states load clean (#608)", which closed #608. Read the
+newest image from the registry, not from here. Before it, on 2026-11-24: #747,
+"Screenshot and Save state no longer stop the game (#726)" (2026.11.24.4), which
+closed #726; and on 2026-11-23: #746, "Vertical arcade games,
 and the pictures sent to RomM, get the game's own shape (#725)" (2026.11.24.3),
 which closed #725; #745, "Xbox saves go back onto the drive with the right time
 (#728)" (2026.11.24.2), which closed #728; #744, "Home and the Library keep up with
