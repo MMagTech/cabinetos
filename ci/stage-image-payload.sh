@@ -46,6 +46,8 @@
 #   bin/cabinetos-wii-bridge      the Wii Remotes' bridge (#200, wiibridge/)
 #   bin/cabinetos-linkup          LinkUp's own program (#654, linkup/)
 #   cores/<core>_libretro.so      x23
+#                                 and, in a folder of its own beside them,
+#                                 FinalBurn Neo's list of high scores
 #   mame/{mame_libretro.so, .catalogue, plugins/}   MAME 0.289, beside the
 #                                 cores in the image, in a layer of its own
 #   system/PPSSPP/...             PPSSPP's fonts and lookup tables
@@ -181,6 +183,14 @@ for cat in flycast_libretro.catalogue fbneo_libretro.catalogue mame2003_plus_lib
     }
     install -m 0644 "$CORES/$cat" "$OUT/cores/$cat"
 done
+
+# FinalBurn Neo's list of where each game keeps its high scores, from the
+# core's own commit (#608). Without it none of its games keeps any.
+[ -s "$CORES/fbneo/hiscore.dat" ] || {
+    echo "fbneo/hiscore.dat is not in $CORES; cores/build-core.sh fbneo_libretro puts it there" >&2
+    exit 1
+}
+install -D -m 0644 "$CORES/fbneo/hiscore.dat" "$OUT/cores/fbneo/hiscore.dat"
 
 # Anything in the source directory that is NOT one of the twenty-three. Not an
 # error — a stale .so from a rename would be — but it does not go in the image,

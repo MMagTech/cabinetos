@@ -5,6 +5,8 @@
 # name                 repository                          revision                                  path[#Lfirst-last]
 #
 # --- the non-commercial cores ---
+# FinalBurn Neo's covers its high-score list too (metadata/hiscore.dat), which
+# carries its own credits and states no other licence.
 fbneo                  libretro/FBNeo                      2444fbe3ddab193b6c0e6f2d39b6dde041fbee4c  src/license.txt
 mame2003-plus          libretro/mame2003-plus-libretro     21256d24120b04916c5197d95b757635ca880fd9  LICENSE.md
 snes9x                 libretro/snes9x                     890b5d445538fe790aa3add3d5702c80f551e0ae  LICENSE

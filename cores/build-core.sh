@@ -964,6 +964,38 @@ if [ "$CORE" = fbneo_libretro ]; then
         exit 1
     fi
     echo "checked: FBNeo's combination buttons are the only \"Buttons ...\""
+
+    # ITS HIGH SCORES (#608), not a patch either. FBNeo keeps a game's scores
+    # only with its own list of where the game has them, hiscore.dat from the
+    # same commit, which goes beside the core and which a launch links into
+    # the system folder's `fbneo/` (frontend/src/launch.cpp). A pin that reads
+    # the list or writes the scores somewhere else, or that asks what a state
+    # is for another way (core_memory.cpp, environmentMemory), stops here:
+    # each would only show as scores quietly not kept.
+    FBN_HI="$SRC/src/burn/hiscore.cpp"
+    FBN_LR="$SRC/src/burner/libretro/libretro.cpp"
+    FBN_ST="$SRC/src/burner/libretro/retro_memory.cpp"
+    if ! grep -qF '_T("%shiscore.dat"), szAppHiscorePath)' "$FBN_HI" ||
+        ! grep -qF 'szAppHiscorePath, sizeof(szAppHiscorePath), "%s%cfbneo%c", g_system_dir,' "$FBN_LR"; then
+        echo "fbneo_libretro: it no longer reads <system>/fbneo/hiscore.dat; check launch.cpp, restoreBeforeLoad" >&2
+        exit 1
+    fi
+    if [ "$(grep -cF '_T("%s%s.hi"), szAppEEPROMPath,' "$FBN_HI")" != 2 ] ||
+        ! grep -qF 'szAppEEPROMPath, sizeof(szAppEEPROMPath), "%s%cfbneo%c", g_save_dir,' "$FBN_LR"; then
+        echo "fbneo_libretro: its high scores are no longer <save folder>/fbneo/<set>.hi; check launch.cpp, restoreBeforeLoad" >&2
+        exit 1
+    fi
+    if ! grep -qF 'bLibretroSupportsSavestateContext = environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, NULL);' "$FBN_LR" ||
+        ! grep -qF 'environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &nSavestateContext);' "$FBN_ST"; then
+        echo "fbneo_libretro: it no longer asks what a state is for the way it did; check core_memory.cpp, environmentMemory" >&2
+        exit 1
+    fi
+    [ -s "$SRC/metadata/hiscore.dat" ] || {
+        echo "fbneo_libretro: no metadata/hiscore.dat in the source tree at $COMMIT" >&2
+        exit 1
+    }
+    install -D -m 0644 "$SRC/metadata/hiscore.dat" "$OUT/fbneo/hiscore.dat"
+    echo "scores      $OUT/fbneo/hiscore.dat ($(grep -cE '^[a-z0-9_]+:' "$OUT/fbneo/hiscore.dat") games)"
 fi
 
 if [ "$CORE" = flycast ]; then

@@ -249,6 +249,24 @@ std::string imageAssetsDir() {
     return "/usr/share/cabinetos/system";
 }
 
+bool pointAt(const std::string& link, const std::string& target) {
+    struct stat st;
+    if (::lstat(link.c_str(), &st) == 0) {
+        if (!S_ISLNK(st.st_mode)) {
+            std::fprintf(stderr, "[storage] %s is not a link, left as it is\n", link.c_str());
+            return false;
+        }
+        char was[4096];
+        const ssize_t n = ::readlink(link.c_str(), was, sizeof was - 1);
+        if (n > 0 && std::string(was, static_cast<size_t>(n)) == target) return true;
+        ::unlink(link.c_str());
+    }
+    if (::symlink(target.c_str(), link.c_str()) == 0) return true;
+    std::fprintf(stderr, "[storage] could not link %s to %s: %s\n", link.c_str(), target.c_str(),
+                 std::strerror(errno));
+    return false;
+}
+
 std::string safeSegment(const std::string& s) {
     std::string out;
     out.reserve(s.size());

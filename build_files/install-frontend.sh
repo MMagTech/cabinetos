@@ -26,7 +26,8 @@
 #                                      frontend falls back to this path when
 #                                      there is no cores/build beside it — see
 #                                      resolveCoresAndServer in cli.cpp — and
-#                                      --core-dir still overrides both.
+#                                      --core-dir still overrides both. The
+#                                      arcade emulators' lists are beside them.
 #
 #   /usr/share/cabinetos/system/       PPSSPP's fonts, VFPU tables and per-game
 #                                      compatibility list. DECIDED in
@@ -214,6 +215,16 @@ log "installed the Wii controller list ($(grep -vc '^#' /usr/share/cabinetos/wii
 # takes a Pro or a Classic Controller (wiiu.h; docs/PROJECT.md open question 36).
 install -D -m 0644 /ctx/frontend-data/wiiu-controls.txt /usr/share/cabinetos/wiiu-controls.txt
 log "installed the Wii U controller list ($(grep -vc '^#' /usr/share/cabinetos/wiiu-controls.txt) games)"
+# FinalBurn Neo's list of where each game keeps its high scores (#608), beside
+# its core, where a launch links it from (frontend/src/launch.cpp). In this
+# small layer and not the cores': adding it there would have every console
+# download all 115 MB of them again for 0.3 MB.
+if [[ ! -s "${PAYLOAD}/cores/fbneo/hiscore.dat" ]]; then
+    log "ERROR: FinalBurn Neo's hiscore.dat is not in the payload; its games would keep no high scores"
+    exit 1
+fi
+install -D -m 0644 "${PAYLOAD}/cores/fbneo/hiscore.dat" /usr/lib/cabinetos/cores/fbneo/hiscore.dat
+log "installed FinalBurn Neo's high-score list ($(grep -cE '^[a-z0-9_]+:' /usr/lib/cabinetos/cores/fbneo/hiscore.dat) games)"
 # The screen looks (#122): RetroArch's own GLSL shaders, unchanged, where
 # screenfx::shaderDir looks for them. Read at run time, never compiled in.
 # Checked by the preset each default names, so a list that lost one fails here
@@ -331,6 +342,7 @@ for expected in \
     /usr/libexec/cabinetos-wii-bridge \
     /usr/libexec/cabinetos-linkup \
     /usr/lib/cabinetos/cores/cabinetos-ps2.so \
+    /usr/lib/cabinetos/cores/fbneo/hiscore.dat \
     /usr/share/cabinetos/system/PPSSPP/compat.ini \
     /usr/share/cabinetos/system/pcsx2/resources/GameIndex.yaml
 do

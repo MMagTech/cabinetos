@@ -4,6 +4,20 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.25 {#v2026-11-25}
+
+- **Fixed:** arcade games FinalBurn Neo plays (CPS1, CPS2 and most other
+  boards) forgot their high scores when you left the game, unless the board
+  kept them itself, as Neo Geo boards do. They are now kept on this console,
+  each person's own, for every game FinalBurn Neo has in its own list of
+  high scores: nearly all of CPS1 and CPS2, half of CPS3, and most others.
+  ([Arcade](arcade.md), [#608](https://github.com/MMagTech/cabinetos/issues/608))
+- **Fixed:** a save state of a CPS3 game loaded at another start came back
+  with a scrambled picture. A state made from now on loads as it was saved.
+  A CPS3 state made before this update cannot be used any more: the console
+  says *Couldn't load that state*.
+  ([#608](https://github.com/MMagTech/cabinetos/issues/608))
+
 ## 2026.11.24.4 {#v2026-11-24-4}
 
 - **Fixed:** taking a screenshot or saving a state stopped the game and cut its

@@ -303,6 +303,11 @@ jobs:
           if [ -n "$(ls -A cores/system 2>/dev/null)" ]; then
             cp -R cores/system/. artifact/system/
           fi
+          # FinalBurn Neo's list of where each game keeps its high scores,
+          # out of the core's own checkout (#608). No other core has one.
+          if [ -d cores/build/fbneo ]; then
+            cp -R cores/build/fbneo artifact/cores/
+          fi
           # An arcade emulator's catalogue, from its own list at the pinned
           # commit (frontend/src/arcadematch.h). Every other core writes
           # nothing. Run on a cache hit too, since it is not in the cache.

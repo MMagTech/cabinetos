@@ -142,6 +142,12 @@ std::string emulatorsDir();
 // system directory, and leaves alone any name that is already a real file.
 std::string imageAssetsDir();
 
+// `link` made a link to `target`, unless it is one already. A link elsewhere
+// is replaced; a real file or folder there is nobody's link, and is left as
+// it is rather than lose what is in it. False when it is not that link
+// afterwards.
+bool pointAt(const std::string& link, const std::string& target);
+
 // WHAT THE CONSOLE KNOWS ABOUT EACH GAME ON ITS DRIVE (#88): one record per
 // game, `games/<romId>.json`, in RomM's own field names, written whenever a
 // game is played or downloaded. It is what lets Home, the Library and Search

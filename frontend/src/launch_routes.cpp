@@ -116,21 +116,6 @@ static void fetchLaunchSaves(LaunchJob& job, romm::Client& client, const storage
     job.miiSaves.title = miiTitle;
 }
 
-// A link at `link` to `target` (relative to the link's folder), made unless
-// one is already there. A file already at `link` is left as it is.
-static void linkInto(const std::string& link, const std::string& target) {
-    struct stat st;
-    if (::lstat(link.c_str(), &st) == 0) {
-        if (!S_ISLNK(st.st_mode)) return;
-        char was[4096];
-        const ssize_t n = ::readlink(link.c_str(), was, sizeof was - 1);
-        if (n > 0 && std::string(was, static_cast<size_t>(n)) == target) return;
-        ::unlink(link.c_str());
-    }
-    if (::symlink(target.c_str(), link.c_str()) != 0)
-        std::fprintf(stderr, "[launch] could not link %s\n", link.c_str());
-}
-
 static std::string baseName(const std::string& path) {
     const size_t slash = path.find_last_of('/');
     return slash == std::string::npos ? path : path.substr(slash + 1);
@@ -317,7 +302,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 const std::string name = baseName(f);
                 if (!arcadematch::flycastBios(name) || ::stat(f.c_str(), &st) != 0) continue;
                 storage::makeDirs(dc);
-                linkInto(dc + "/" + name, "../" + name);
+                storage::pointAt(dc + "/" + name, "../" + name);
             }
         }
 
@@ -796,7 +781,7 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 for (const auto& [n, size] : mine) {
                     if (!endsWithNoCase(n, ".chd")) continue;
                     storage::makeDirs(entry + "/" + set);
-                    linkInto(entry + "/" + set + "/" + n, "../" + n);
+                    storage::pointAt(entry + "/" + set + "/" + n, "../" + n);
                 }
             }
         }

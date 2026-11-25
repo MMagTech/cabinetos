@@ -837,12 +837,24 @@ void App::restoreBeforeLoad(LaunchContext& c) {
         copyMiisInto(launchJob.miiSaves, launchJob.platformFsSlug, launchJob.coreName,
                      c.saveDir);
     if (launchJob.coreName == "dolphin") shareDolphinCache(c.saveDir);
+    const std::string cores = launchJob.corePath.substr(0, launchJob.corePath.find_last_of('/'));
     // MAME 0.289's plugins, the ini that starts its high scores, and this
     // person's scores for the game (mamehome.h).
     if (launchJob.coreName == "mame_libretro")
-        mamehome::prepare(c.saveDir,
-                          launchJob.corePath.substr(0, launchJob.corePath.find_last_of('/')),
-                          storage::biosDir());
+        mamehome::prepare(c.saveDir, cores, storage::biosDir());
+    // FinalBurn Neo's list of where each game keeps its high scores (#608),
+    // which it looks for in `fbneo/` of the system folder as the game loads.
+    // The image's is beside the core (cores/build-core.sh), and the folder,
+    // everybody's, only says where. The scores need no link: FinalBurn Neo
+    // writes them in the save folder, this person's and this game's, as
+    // `fbneo/<set>.hi`.
+    if (launchJob.coreName == "fbneo_libretro") {
+        const std::string list = cores + "/fbneo/hiscore.dat";
+        if (!storage::exists(list))
+            std::fprintf(stderr, "[fbneo] no high-score list at %s\n", list.c_str());
+        storage::makeDirs(storage::biosDir() + "/fbneo");
+        storage::pointAt(storage::biosDir() + "/fbneo/hiscore.dat", list);
+    }
     // What each player's port holds. A joypad, but on two systems. Wii: a
     // Classic Controller, or a GameCube pad for a game that takes only
     // that, in the pads' ports; and, while a Wii Remote is paired, a real
