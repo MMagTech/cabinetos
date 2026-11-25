@@ -43,6 +43,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [ps3-filtering-as-the-game-asked](2026-11-06-ps3-filtering-as-the-game-asked.md): on PS3 the anisotropic filter is the game's own, not the forced 16x, and buffers up to 320 pixels stay unscaled, so Unreal Engine 3 games draw without red.
 - [rpcs3-settings-database-snapshot](2026-11-06-rpcs3-settings-database-snapshot.md): the RPCS3 team's per-game settings ride in the image as a committed snapshot, refreshed by a tool only when RPCS3's pin moves, held to that pin by the build and CI, never fetched by the console or the build.
 - [a-game-is-shown-in-its-emulators-shape](2026-11-23-a-game-is-shown-in-its-emulators-shape.md): a game is drawn, and every picture of it made, in the shape its emulator declares, a vertical arcade game's too.
+- [a-state-is-a-whole-one](2026-11-25-a-state-is-a-whole-one.md): every core is told a state is a whole one, whatever it is for, and CPS3 states from before that are refused.
 - [no-core-file-for-emulators](2026-11-22-no-core-file-for-emulators.md): an emulator run as a program leaves no core file when it crashes, so a crash as it closes sends the console straight back to Home.
 
 ### Controls

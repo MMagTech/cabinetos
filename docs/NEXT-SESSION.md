@@ -56,29 +56,35 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **After save channels, small, each on his word:**
+1. **#353, "Arcade high scores and extra save files never reach RomM
+   (FinalBurn Neo, MAME 2003-Plus)", is the next piece** (2026-11-25). Its
+   plan first, put to him before anything is built: what goes is the list in
+   the issue's text. Checked before the plan: a game's files as one bundle
+   against the write-test RomM, whether another app on the same emulator uses
+   today's single file as it is (a bundle could stop that), a single-file save
+   already on RomM still loading, and the trip between two consoles. Arcade
+   saves go between CabinetOS consoles only
+   (docs/decisions/2026-11-20-arcade-saves-cabinetos-only.md), and Sigil
+   collects none; the brief in his research notes has the rest.
+2. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
      the Switch check, what changed only.
    - When a RomM release carries rommapp/romm#5719 and the console needs
      that release: ask him whether aa2dcea0's rule stays (a state RomM
      refuses no longer holds the save back).
-   - #353, "Three kinds of save never reach RomM": the Saturn cartridge
-     and the cartridge clocks shipped with save channels (step 11); only
-     the arcade high scores remain. The issue's title and a comment saying
-     so, on his word.
    - The diagnostic report's privacy filter turns every "LinkUp" into
      `<linkup server name>` when a person's LinkUp server is named
      "LinkUp" (since #654). It errs safe; only the report reads worse.
    - The clean-up review: what future testing keeps of the save channels
      kits, sessions and branches; the audited list is in his research
      notes. Nothing is deleted before his yes.
-2. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
+3. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
    #654, passed twice: his console and his friend's, two servers linking up
    and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
    `docs/` into the server's build stage, and the relay's block list lacks
    3fff::/20.
-3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -86,7 +92,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-4. **Words from him, one at a time, no work:** which of the 36 faults the
+5. **Words from him, one at a time, no work:** which of the 36 faults the
    PROJECT.md scan found with no issue (2026-10-22) become issues, none
    filed until he says. That list is in the
    notes of the session that made it ("Faults recorded in PROJECT.md with no
@@ -97,10 +103,8 @@ RomM: keep test launches under a minute, or have his go.
 
 - **Needs the TV or a device:** #575, "Sinden light guns: plug in and
   play gun games (waiting on the guns)".
-- **Waiting on others:** #297 (Sunshine), the arcade high scores of #353,
-  "Three kinds of save never reach RomM: Saturn cartridge, arcade high
-  scores, cartridge clocks", and #362, "Discuss later: sharing a save with
-  another person on the server" (revisit mid-January 2027), #181, "Updates and DLC
+- **Waiting on others:** #297 (Sunshine), #362, "Discuss later: sharing a save
+  with another person on the server", #181, "Updates and DLC
   as separate files in RomM (Switch, PS3, Xbox 360)" (kept open on
   2026-11-11 to wait for RomM 5.5), #534 (the Azahar patch,
   azahar-emu/azahar#2694),

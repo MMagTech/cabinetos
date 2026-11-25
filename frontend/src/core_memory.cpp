@@ -1,6 +1,7 @@
-// The emulated machine's memory: save states, the battery save, the memory
-// regions, and the memory map a core hands over for RetroAchievements
-// (environmentMemory). Moved out of core.cpp in the restructure (#398).
+// The emulated machine's memory: save states and what a core is told one is
+// for, the battery save, the memory regions, and the memory map a core hands
+// over for RetroAchievements (environmentMemory). Moved out of core.cpp in the
+// restructure (#398).
 // Core::loadGame (core.cpp) clears the map before retro_load_game, because a
 // core hands its map over inside it.
 
@@ -52,12 +53,25 @@ void keepMemoryMap(const retro_memory_map* mm) {
     gMemMap.num_descriptors = static_cast<unsigned>(gMemDescs.size());
 }
 
-// The memory-map call of the environment callback. core.cpp's environment
-// asks here before its own switch; nothing for any other call.
+// The environment callback's calls about memory: the map, and what a state is
+// for. core.cpp's environment asks here before its own switch; nothing for
+// any other call.
 std::optional<bool> environmentMemory(unsigned cmd, void* data) {
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
             keepMemoryMap(static_cast<const retro_memory_map*>(data));
+            return true;
+
+        // WHAT A STATE IS FOR: A WHOLE ONE, ALWAYS (#608). The console keeps
+        // states and rewinds through them; it runs nothing ahead and plays
+        // no rollback netplay, the only other answers. A core asks with no
+        // data first, to learn whether it will be answered at all.
+        // FinalBurn Neo, unanswered, takes the answer to be netplay: it then
+        // keeps no high scores, leaves 8 MB of graphics out of a CPS3 state,
+        // which loads scrambled, and tells a game it is 2018
+        // (TweakScanFlags, src/burner/libretro/retro_memory.cpp at our pin).
+        case RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT:
+            if (data) *static_cast<int*>(data) = RETRO_SAVESTATE_CONTEXT_NORMAL;
             return true;
 
         default:
