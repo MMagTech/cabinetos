@@ -374,6 +374,8 @@ struct App {
     bool discTestMode = false;
     // --files-test: what survives a full disk, through cab::writeBytes (#482).
     bool filesTestMode = false;
+    // --ps3-install-test: a PS3 game's folder after its packages go in (#748).
+    bool ps3InstallTestMode = false;
     // --vectrex-sheets-test: which Vectrex game takes which sheet (#224).
     bool vectrexSheetsTestMode = false;
     // --gpu-choice-test: which GPU the games draw on, with two (#659).

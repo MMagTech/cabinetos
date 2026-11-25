@@ -1,9 +1,10 @@
 // The worker a launch runs, off the frame thread: the firmware step every
 // launch runs first, then one of four routes in a fixed order: a game on
-// several discs, a game installed before it runs (PS3, Vita), a folder of files,
-// one file. The disc route falls through to the others below two discs; the
-// other three always end the worker, by fetching the game's saves from RomM
-// (finish) before the job is Ready. beginLaunch (launch.cpp) starts it.
+// several discs, a game installed before it runs (PS3, Vita, original Xbox), a
+// folder of files, one file. The disc route falls through to the others below
+// two discs; the other three always end the worker, by fetching the game's
+// saves from RomM (finish) before the job is Ready. beginLaunch (launch.cpp)
+// starts it.
 // Moved out of main.cpp in the restructure (#398).
 
 #include "launch.h"
@@ -49,6 +50,26 @@ static int countEntries(const std::string& dir) {
     }
     ::closedir(d);
     return n;
+}
+
+// WHAT IS HERE AND IS NOT THE GAME: a file RomM lists for it that is not one of
+// the game's own (disc::plan), an update, DLC or the rest, downloaded before
+// the console left those on the server. Removed by its name in RomM's own list,
+// and only when no file of the game's shares the name. What was installed from
+// one is a folder, and stays.
+static void removeNotTheGame(const std::string& entry, const std::vector<romm::RomFile>& files,
+                             const std::vector<romm::RomFile>& game) {
+    for (const romm::RomFile& f : files) {
+        const std::string n = storage::safeSegment(f.fileName);
+        bool mine = false;
+        for (const romm::RomFile& g : game) mine = mine || storage::safeSegment(g.fileName) == n;
+        struct stat st;
+        const std::string d = entry + "/" + n;
+        if (!mine && ::lstat(d.c_str(), &st) == 0 && S_ISREG(st.st_mode) &&
+            ::unlink(d.c_str()) == 0)
+            std::fprintf(stderr, "[launch] removed %s, not the game (%s)\n", d.c_str(),
+                         f.category.empty() ? "no category" : f.category.c_str());
+    }
 }
 
 // A CANCEL IS ANSWERED AT EVERY STEP, not only inside a transfer (#472):
@@ -521,6 +542,9 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     // 19). The folder is never collapsed to one file, because the
     // emulator keeps its compile cache in it, so removing the game
     // removes both.
+    // Only the game's own files, the top of the folder (disc::plan), as on
+    // every other system: an update or DLC beside it stays on the server
+    // (#749; using them is #181). An unlock key is one of the game's own.
     if (emu && emu->installs) {
         storage::makeDirs(entryPath);
         std::vector<romm::RomFile> files;
@@ -538,15 +562,17 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 return;
             }
         }
+        const disc::Plan plan = disc::plan(files);
+        removeNotTheGame(entryPath, files, plan.fetch);
         // What is missing, and what the install will need on top: each
         // file not yet installed may cost its size again while it goes
         // in. Counted for every large file rather than by a `.pkg` name,
         // which a PKG does not always have (standalone_rpcs3.cpp, isPkg).
         std::vector<std::pair<const romm::RomFile*, std::string>> fetch;
         int64_t fetchBytes = 0, installBytes = 0;
-        for (const romm::RomFile& f : files) {
+        for (const romm::RomFile& f : plan.fetch) {
             const std::string name = storage::safeSegment(f.fileName);
-            if (cab::standalone::installedFile(entryPath, name, f.sizeBytes)) continue;
+            if (cab::standalone::installedFile(*emu, entryPath, name, f.sizeBytes)) continue;
             const bool iso = name.size() > 4 &&
                              strcasecmp(name.c_str() + name.size() - 4, ".iso") == 0;
             if (!iso) installBytes += f.sizeBytes;
@@ -725,22 +751,9 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 ::unlink(old.c_str()) == 0)
                 std::fprintf(stderr, "[launch] removed %s, the folder's zip from before\n",
                              old.c_str());
-            // AND WHAT CAME OUT OF IT that is not the game: the zip route
-            // unpacked `update/`, `dlc/` and the rest flat into the
-            // folder. Each is removed by its name in RomM's own list,
-            // and only when no game file shares the name.
-            for (const romm::RomFile& f : files) {
-                const std::string n = storage::safeSegment(f.fileName);
-                bool game = false;
-                for (const auto& m : mine) game = game || m.first == n;
-                struct stat st;
-                const std::string d = entry + "/" + n;
-                if (!game && ::lstat(d.c_str(), &st) == 0 && S_ISREG(st.st_mode) &&
-                    ::unlink(d.c_str()) == 0)
-                    std::fprintf(stderr, "[launch] removed %s, unpacked from the folder's "
-                                         "zip before (%s)\n", d.c_str(),
-                                 f.category.empty() ? "not the game" : f.category.c_str());
-            }
+            // And what came out of it that is not the game: the zip route
+            // unpacked `update/`, `dlc/` and the rest flat into the folder.
+            removeNotTheGame(entry, files, plan.fetch);
         } else {
             // OFFLINE, OR THE SERVER SAID NOTHING: the files already here.
             std::fprintf(stderr, "[launch] files of %d: %s\n", id, lerr.c_str());

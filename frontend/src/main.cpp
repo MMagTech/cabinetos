@@ -71,6 +71,7 @@ int App::run(int argc, char** argv) {
                                                   .playtimeTestMode = playtimeTestMode,
                                                   .discTestMode = discTestMode,
                                                   .filesTestMode = filesTestMode,
+                                                  .ps3InstallTestMode = ps3InstallTestMode,
                                                   .vectrexSheetsTestMode = vectrexSheetsTestMode,
                                                   .gpuChoiceTestMode = gpuChoiceTestMode,
                                                   .tailscaleSwitchTestMode =
