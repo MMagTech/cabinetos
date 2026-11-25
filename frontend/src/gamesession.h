@@ -110,7 +110,7 @@ struct GameSession {
     std::string standaloneCore;
     std::string entryPath;
 
-    // --- Directory saves, which is PSP and nothing else -------------------
+    // --- Directory saves (catalog::directorySaveRoot) -----------------------
     //
     // Where the tree lives, and what was in it before the game ran. The
     // baseline is how a save is attributed to the game that wrote it: this
@@ -129,7 +129,7 @@ struct GameSession {
     // it is sent (syncDirSave). It is kept because it still answers a second
     // question the layout does not: whether this game wrote anything at all
     // this run, which is what decides between an upload and a no-op.
-    std::string dirSaveRoot;                  // empty but for PPSSPP and Wii
+    std::string dirSaveRoot;                  // empty for a game with none
     std::vector<cab::DirEntry> dirAtLaunch;
     // Which files under the root are the save (catalog::inDirectorySave):
     // all of them for PSP, only the games' `data/` folders for Wii.

@@ -937,6 +937,21 @@ if [ "$CORE" = mame2003_plus ]; then
         exit 1
     }
     echo "checked: MAME's menu opens on Tab, and the left stick click is its other key"
+
+    # ITS SAVE (#353), a check too: the board's memory and the high scores,
+    # `mame2003-plus/nvram/<set>.nv` and `mame2003-plus/hi/<set>.hi` in the save
+    # folder (frontend/src/savetable.cpp). Anywhere else, saves stop travelling
+    # with no error.
+    FILEIO_C="$SRC/src/fileio.c"
+    if ! grep -qF '"%s%c%s", options.libretro_save_path, PATH_DEFAULT_SLASH_C(), APPNAME);' "$FILEIO_C" ||
+        ! grep -qF '"%s%c%s", save_path_buffer, PATH_DEFAULT_SLASH_C(), "nvram");' "$FILEIO_C" ||
+        ! grep -qF '"%s%c%s", save_path_buffer, PATH_DEFAULT_SLASH_C(), "hi");' "$FILEIO_C" ||
+        ! sed -n '/case FILETYPE_NVRAM:.*NVRAM files/,/break;/p' "$FILEIO_C" | grep -qF 'extension = "nv";' ||
+        ! sed -n '/case FILETYPE_HIGHSCORE:.*high score files/,/break;/p' "$FILEIO_C" | grep -qF 'extension = "hi";'; then
+        echo "mame2003_plus: its board memory or high scores moved; check savetable.cpp, saveFiles" >&2
+        exit 1
+    fi
+    echo "checked: its board memory and high scores"
 fi
 
 if [ "$CORE" = fbneo_libretro ]; then
@@ -985,6 +1000,13 @@ if [ "$CORE" = fbneo_libretro ]; then
         echo "fbneo_libretro: its high scores are no longer <save folder>/fbneo/<set>.hi; check launch.cpp, restoreBeforeLoad" >&2
         exit 1
     fi
+    # The rest of its save (#353), beside them: the board's memory and its
+    # EEPROM (frontend/src/savetable.cpp).
+    if ! grep -qF '"%s%cfbneo%c%s.fs", g_save_dir,' "$FBN_LR" ||
+        [ "$(grep -cF '_T("%s%s.nv"), szAppEEPROMPath,' "$SRC/src/burn/devices/eeprom.cpp")" != 2 ]; then
+        echo "fbneo_libretro: its board memory is no longer <save folder>/fbneo/<set>.fs, or its EEPROM .nv; check savetable.cpp, saveFiles" >&2
+        exit 1
+    fi
     if ! grep -qF 'bLibretroSupportsSavestateContext = environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, NULL);' "$FBN_LR" ||
         ! grep -qF 'environ_cb(RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT, &nSavestateContext);' "$FBN_ST"; then
         echo "fbneo_libretro: it no longer asks what a state is for the way it did; check core_memory.cpp, environmentMemory" >&2
@@ -1000,9 +1022,10 @@ fi
 
 if [ "$CORE" = flycast ]; then
     # NOT A PATCH, A CHECK. Naomi and Atomiswave games lean on three things
-    # here: the board memory Flycast writes, `reicast/<the zip's own
-    # name>.nvmem` in the save folder (frontend/src/savetable.cpp, the one
-    # arcade file of Flycast's that reaches RomM); its RetroPad order for a
+    # here: the files Flycast writes for a board, `reicast/<the zip's own
+    # name>` in the save folder with `.nvmem`, `.nvmem2`, `.eeprom`, `.card` or
+    # `-p<player>.card` after it (frontend/src/savetable.cpp, saveFiles); its
+    # RetroPad order for a
     # board's buttons, B A Y X R L R2 L2 on Naomi and B A Y X R on Atomiswave,
     # which it declares the game's buttons in (frontend/src/fightstick.cpp);
     # and the board's Test and Service on L3 and R3, which the console keeps
@@ -1013,8 +1036,12 @@ if [ "$CORE" = flycast ]; then
     if ! { grep -q 'snprintf(save_dir, sizeof(save_dir), "%s%creicast%c", dir, slash, slash);' "$FLY_LR" &&
         grep -q 'arcadeFlashPath = std::string(save_dir) + g_base_name;' "$FLY_LR" &&
         grep -q 'sys_nvmem->Save(getArcadeFlashPath());' "$SRC/core/hw/flashrom/nvmem.cpp" &&
-        grep -q 'suffix = ".nvmem";' "$SRC/core/hw/flashrom/nvmem.cpp"; }; then
-        echo "flycast: its arcade board memory is no longer reicast/<file>.nvmem in the save folder; check savetable.cpp" >&2
+        grep -q 'suffix = ".nvmem";' "$SRC/core/hw/flashrom/nvmem.cpp" &&
+        grep -qF 'Save(hostfs::getArcadeFlashPath() + ".nvmem2");' "$SRC/core/hw/flashrom/nvmem.cpp" &&
+        grep -qF 'return hostfs::getArcadeFlashPath() + ".eeprom";' "$SRC/core/hw/maple/maple_jvs.cpp" &&
+        grep -qF 'return hostfs::getArcadeFlashPath() + "-p" + std::to_string(playerNum) + ".card";' "$SRC/core/hw/maple/maple_jvs.cpp" &&
+        [ "$(grep -cF 'std::string path = hostfs::getArcadeFlashPath() + ".card";' "$SRC/core/hw/naomi/card_reader.cpp")" = 2 ]; }; then
+        echo "flycast: a board's files are no longer reicast/<file> and an ending savetable.cpp has; check saveFiles" >&2
         exit 1
     fi
     for MAP in nao_joymap aw_joymap; do

@@ -59,15 +59,10 @@ RomM: keep test launches under a minute, or have his go.
 ## Next
 
 1. **#353, "Arcade high scores and extra save files never reach RomM
-   (FinalBurn Neo, MAME 2003-Plus)", is the next piece** (2026-11-25). Its
-   plan first, put to him before anything is built: what goes is the list in
-   the issue's text. Checked before the plan: a game's files as one bundle
-   against the write-test RomM, whether another app on the same emulator uses
-   today's single file as it is (a bundle could stop that), a single-file save
-   already on RomM still loading, and the trip between two consoles. Arcade
-   saves go between CabinetOS consoles only
-   (docs/decisions/2026-11-20-arcade-saves-cabinetos-only.md), and Sigil
-   collects none; the brief in his research notes has the rest.
+   (FinalBurn Neo, MAME 2003-Plus)", is built** (2026-11-25), in RomM's form
+   (docs/decisions/2026-11-25-arcade-saves-in-romms-form.md) and run between
+   scratch consoles against the write-test RomM. On `testing`; his judging on
+   the TV and the merge are left.
 2. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun

@@ -132,6 +132,13 @@ grep -qF "return manager.machine.options.entries.homepath:value():match('([^;]+)
     echo "mame: the high-score plugin no longer writes to its homepath's hiscore; check mamehome.h" >&2
     exit 1
 }
+# The scores' ending, which tells them from the plugin's own settings beside
+# them (frontend/src/savetable.cpp, inDirectorySave; #353).
+grep -qF "r = get_data_path() .. '/' .. emu.romname() .. \".hi\";" \
+    "${src}/plugins/hiscore/init.lua" || {
+    echo "mame: the high-score plugin no longer names a game's scores <set>.hi; check savetable.cpp" >&2
+    exit 1
+}
 # Its joypad (fightstick.cpp, kMame): buttons 1 to 6 on B A Y X L R with its
 # per-game profiles off, 7 and 8 on L3 and R3, and no button that opens its
 # menu, which only Tab does (arcadesettings.h).

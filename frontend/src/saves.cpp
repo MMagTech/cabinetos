@@ -957,6 +957,24 @@ void syncDirSave(GameSession& sess) {
         std::fprintf(stderr, "[save] could not archive the save folder: %s\n", zerr.c_str());
         return;
     }
+    // AN ARCADE GAME'S FOLDER WRITTEN AGAIN WITH WHAT IT HELD (#353): MAME
+    // 0.289 writes its board's memory as every game closes, changed or not, so
+    // a file's time says nothing. A folder that is the save this console last
+    // had from RomM, with none still owed, is no new save: one only looked at
+    // while RomM was away would later go on top of what another console saved
+    // meanwhile. The files a core writes compare their bytes (syncFileSaves).
+    if (const storage::User who = storage::currentUser(); sess.arcade && who.valid()) {
+        savemirror::Held held;
+        cache::OwedPush owed;
+        if (savemirror::getHeld(who, sess.romId, &held) &&
+            held.saveHash == romm::contentHash(zip) &&
+            !(cache::owedPush(who, sess.romId, &owed) && owed.hasSave)) {
+            std::fprintf(stderr, "[save] %zu file(s) written again with what they held; no new "
+                                 "save\n", paths.size());
+            sess.dirAtLaunch = now;
+            return;
+        }
+    }
     // Local first, always. The network is the part that can fail, and a save
     // that only exists in a pending upload is a save that can be lost.
     const std::string path = sess.saveDir + "/" + dirSaveZipName(sess.title);
@@ -1149,9 +1167,10 @@ std::string saveRowName(const std::string& fsStem, const std::string& region) {
 // aside first (keepAside). Failing both, whatever is on this disk plays.
 //
 // A SNAPSHOT'S SAVE, FOR THESE CORES (saves.h): one file as it is, which is
-// the first of the core's save files and never a cartridge (Saturn's one
-// file is its battery, restoreBatterySave's); or a zip, each of the core's
-// files in it under its path in the save folder (or under its name alone).
+// the core's file its name ends as, else the first, and never a cartridge
+// (catalog::bareFile; Saturn's one file is its battery, restoreBatterySave's);
+// or a zip, each of the core's files in it under its path in the save folder
+// (or under its name alone).
 //
 // RomM's saves are what the launch worker fetched (fetchSaves); nothing is
 // asked here.
@@ -1214,7 +1233,7 @@ std::vector<cab::FileSaveState> restoreFileSaves(
         } else if (usesPicked(source)) {
             incomingName = pickedName(fetched);
             if (!pickedIsZip) {
-                if (&spec == &specs.front() && spec.region != "cart") incoming = &fetched.picked;
+                if (catalog::bareFile(specs, incomingName) == &spec) incoming = &fetched.picked;
             } else {
                 const std::string base = spec.path.substr(spec.path.find_last_of('/') + 1);
                 for (const cab::ZipFile& z : pickedFiles)

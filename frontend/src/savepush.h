@@ -10,7 +10,9 @@
 // cartridge's clock (Game Boy) or the cartridge (Saturn) beside it (#346,
 // step 11), a cartridge with no save on it never sent and a change to the
 // clock alone no new save; the one file a core writes as it is; several
-// files as a zip, each under the path its core reads it from; a save folder
+// files as a zip, each under the path its core reads it from, or an arcade
+// game's under their own names with no folder, the only one that holds
+// anything as it is (#353); a save folder
 // as the zip syncDirSave makes. Under the tag the core's
 // saves travel under (catalog::saveTag), which is what lets another console
 // use it as stored (savepick.h), with the core's own name in Sigil's spelling
@@ -82,6 +84,10 @@
 // they are aimed as a save is, and stay where RomM keeps them, beside. The
 // note of the snapshot held keeps the save this console last had, so its next
 // start still says "Continuing from another device" (savepick.h).
+//
+// A SAVE GOES ONTO A CURRENT THAT HOLDS NONE (#353), whoever made it: the
+// game's states went up before its save did, as an arcade game's did, so there
+// is no save to keep beside it, and RomM carries the states on.
 //
 // A PUSH OF STATES ALONE NEEDS A SNAPSHOT TO BUILD ON when the game has a
 // save anywhere else: one this console owes from before save channels, or

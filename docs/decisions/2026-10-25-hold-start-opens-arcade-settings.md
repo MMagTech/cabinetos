@@ -10,8 +10,10 @@
   programs of their own (sm2-emu, Supermodel), get nothing either: holding
   Start does nothing there, and Supermodel's Test and Service stay off.
   MAME's menu no longer opens on player 1's
-  left stick click. A changed setting stays on the console where it was set,
-  for that player, until RomM's save channels.
+  left stick click. A setting changed in a MAME's menu stays on the console
+  where it was set, for that player; one changed in a board's test menu is in
+  the board's memory, which is the game's save and goes to RomM
+  ([arcade-saves-in-romms-form](2026-11-25-arcade-saves-in-romms-form.md)).
 - **Date:** 2026-10-24, the rest settled 2026-10-25; Model 2 and Model 3
   on 2026-10-30.
 - **Why:** Start is on every pad and on the stick, and in arcade games it is
@@ -20,8 +22,8 @@
   growing; FinalBurn Neo already does it this way. On 2026-10-25 a screen of
   the console's own for FinalBurn Neo's switches, which it keeps as emulator
   settings with no menu (Final Fight's among them), was put to MMagTech and
-  refused: the game's own menu is the rule. MAME's settings file waits with
-  the other arcade files for save channels, as decided on #353. Model 2 and
+  refused: the game's own menu is the rule. A MAME's settings file is no part
+  of a save as RomM and Sigil have one (2026-11-25, #353). Model 2 and
   Model 3 keep a game's settings in its save, which goes to RomM, so a wrong
   one set in a test menu would follow the player to every console; left
   out until a player asks (MMagTech, 2026-10-30).
