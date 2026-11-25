@@ -386,6 +386,7 @@ const char* directorySaveRoot(const char* core, const std::string& platformSlug,
     if (!core) return nullptr;
     if (manifestName(core) == "ppsspp") return "PSP/SAVEDATA";
     if (manifestName(core) == "azahar") return "Azahar/sdmc/Nintendo 3DS";
+    if (manifestName(core) == "mame_libretro") return "mame";
     if (manifestName(core) == "dolphin" && platformSlug == "wii")
         return wii::isMiiChannel(titleId) ? "User/Wii" : "User/Wii/title";
     if (manifestName(core) == "dolphin" && platformSlug == "ngc") {
@@ -408,6 +409,15 @@ bool inDirectorySave(const char* core, const std::string& platformSlug,
         return relPath.find('/') == std::string::npos && relPath.size() > ext.size() &&
                relPath.compare(relPath.size() - ext.size(), ext.size(), ext) == 0;
     }
+    // MAME 0.289: the board's memory and the game's high scores. Not `cfg/`,
+    // its own settings; not `diff/`, a hard disk's changes; not the high-score
+    // plugin's own settings beside the scores (savetable.h).
+    if (core && manifestName(core) == "mame_libretro") {
+        const std::string hi = ".hi";
+        return relPath.compare(0, 6, "nvram/") == 0 ||
+               (relPath.compare(0, 8, "hiscore/") == 0 && relPath.size() > hi.size() &&
+                relPath.compare(relPath.size() - hi.size(), hi.size(), hi) == 0);
+    }
     if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
     // The Mii Channel's root is `User/Wii`: its Mii list, and under `title/`
     // the same rule as every other game.
@@ -426,6 +436,18 @@ bool inDirectorySave(const char* core, const std::string& platformSlug,
     };
     return hex8(0) && hex8(9) && rel.compare(0, 9, "00000001/") != 0 &&
            rel.compare(18, 5, "data/") == 0;
+}
+
+const SaveFile* bareFile(const std::vector<SaveFile>& files, const std::string& name) {
+    auto ending = [](const std::string& path) {
+        const std::string file = path.substr(path.find_last_of('/') + 1);
+        const size_t dot = file.find_last_of('.');
+        return dot == std::string::npos ? std::string() : file.substr(dot);
+    };
+    const std::string end = ending(name);
+    for (const SaveFile& f : files)
+        if (!end.empty() && f.region != "cart" && ending(f.path) == end) return &f;
+    return files.empty() || files.front().region == "cart" ? nullptr : &files.front();
 }
 
 bool needsBios(const std::string& slug) {
@@ -499,13 +521,30 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
     // BY THE EMULATOR THE GAME'S ZIP PICKED (arcadematch.h), not by its
     // folder, which says nothing about which file a game writes. First, so a
     // Naomi zip in Dreamcast's folder is a board's save, not a VMU.
+    //
+    // EVERY FILE OF THE BOARD'S THAT IS THE GAME'S SAVE (#353): its memory, its
+    // high scores and a player's card, which is what Sigil's arcade page counts
+    // as one, with Sigil's files for FinalBurn Neo and MAME 2003-Plus. An
+    // emulator's own settings (`cfg/`) and a hard disk's changes (`diff/`) are
+    // not. They travel as RomM has an arcade save travel, the emulator's own
+    // files under their own names (docs/decisions/
+    // 2026-11-25-arcade-saves-in-romms-form.md). THE FIRST IS THE ONE THAT
+    // TRAVELLED ALONE BEFORE, so a save from then is still read as it, and the
+    // rest are no row's from before save channels (SaveFile::region).
     if (arcade) {
-        SaveFile f;
-        f.untouched = Untouched::Uniform;
-        // Every arcade board's memory is written as the game closes: MAME
-        // 2003-Plus in mame_done, FinalBurn Neo in retro_unload_game,
-        // Flycast in Emulator::stop (and whenever a state is made).
-        f.writtenAtClose = true;
+        std::vector<SaveFile> out;
+        auto add = [&out](const std::string& path) {
+            SaveFile f;
+            f.path = path;
+            f.unitName = path.substr(path.find_last_of('/') + 1);
+            if (!out.empty()) f.region = "beside";
+            f.untouched = Untouched::Uniform;
+            // Every arcade board's files are written as the game closes: MAME
+            // 2003-Plus in mame_done, FinalBurn Neo in retro_unload_game,
+            // Flycast in Emulator::stop (and whenever a state is made).
+            f.writtenAtClose = true;
+            out.push_back(std::move(f));
+        };
         if (core == "mame2003_plus") {
             // ONE DIRECTORY DEEPER THAN THE REFERENCE IMPLEMENTATION SAYS, and
             // this was measured rather than carried across. Cabinet wrote
@@ -522,33 +561,26 @@ std::vector<SaveFile> saveFiles(const std::string& slug, const std::string& core
             // writes that — so the restore silently does nothing and a
             // capture aimed at the same wrong path finds nothing either. That
             // is what the first run of this did.
-            f.path = "mame2003-plus/nvram/" + stem + ".nv";
-            return {f};
+            add("mame2003-plus/nvram/" + stem + ".nv");
+            add("mame2003-plus/hi/" + stem + ".hi");
+        } else if (core == "fbneo_libretro") {
+            // The board's memory, its EEPROM where the board keeps one, and
+            // the high scores FinalBurn Neo itself keeps (launch.cpp).
+            add("fbneo/" + stem + ".fs");
+            add("fbneo/" + stem + ".nv");
+            add("fbneo/" + stem + ".hi");
+        } else if (core == "flycast") {
+            // `reicast/<the zip's own name>` and an ending, named after the
+            // whole file it was handed (hostfs::getArcadeFlashPath at our pin;
+            // cores/build-core.sh stops when one moves): the board's memory,
+            // Atomiswave's second, the I/O board's EEPROM, and a player's card
+            // in a game with a card reader or one a player.
+            for (const char* end : {".nvmem", ".nvmem2", ".eeprom", ".card", "-p1.card", "-p2.card"})
+                add("reicast/" + fileName + end);
         }
-        // FinalBurn Neo's board memory is the one file of its that reaches
-        // RomM: a board's EEPROM (`.nv`) and its high scores (`.hi`, launch.cpp)
-        // stay on the console with the other arcade extras (#353).
-        if (core == "fbneo_libretro") {
-            f.path = "fbneo/" + stem + ".fs";
-            return {f};
-        }
-        // MAME 0.289 WRITES SEVERAL FILES A GAME, all in this person's save
-        // folder for it: `mame/nvram/<set>/`, `mame/cfg/<set>.cfg`, a hard
-        // disk game's `mame/diff/<set>.dif`, and the high scores
-        // (mamehome.h). None reaches RomM: they stay on the console with the
-        // other arcade extras (#353), never in cache/.
-        if (core == "mame_libretro") return {};
-        // FLYCAST'S BOARD MEMORY, `reicast/<the zip's own name>.nvmem`, named
-        // after the whole file it was handed (hostfs::getArcadeFlashPath at
-        // our pin; cores/build-core.sh stops when it moves). The one file of
-        // a game's that reaches RomM, as FinalBurn Neo and 2003-Plus send one:
-        // a board's `.eeprom` and Atomiswave's `.nvmem2` stay on the console
-        // with the other arcade extras (#353), as MAME 0.289's do above.
-        if (core == "flycast") {
-            f.path = "reicast/" + fileName + ".nvmem";
-            return {f};
-        }
-        return {};
+        // MAME 0.289's names are the board's to choose, so its save is a
+        // folder (directorySaveRoot).
+        return out;
     }
 
     // Dreamcast. Flycast never answers RETRO_MEMORY_SAVE_RAM (its own

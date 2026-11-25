@@ -160,7 +160,9 @@ struct StartNotes {
 // as `backup.ram` with the core's files beside it under Sigil's names
 // (Saturn's cartridge, `cart.ram`; SaveForm::batteryFirst);
 // a core that writes one save file, that file as it is; a core that writes
-// several, a zip holding each under its path in the save folder; a folder
+// several, a zip holding each under its path in the save folder, or an arcade
+// game's under their own names with no folder, the only one that holds
+// anything as it is (#353); a folder
 // save, the zip syncDirSave makes. A restore that cannot read the picked
 // save that way leaves the console's own in place.
 // A ZIP IN SIGIL'S SHAPE (dirsave.h, ZipShape) is put back in the folder's
@@ -191,7 +193,7 @@ void finishInterruptedSave(const cab::standalone::Emulator& emu, const std::stri
                            Uploader& up);
 // A GAME IN A CORE THAT NEVER ENDED (#346, step 9; MMagTech, 2026-11-20): a
 // core that writes its save as files while the game runs (DS, Dreamcast,
-// PlayStation 2, PSP, 3DS, GameCube, Wii) leaves the progress a crash or a
+// PlayStation 2, PSP, 3DS, GameCube, Wii, MAME 0.289's high scores) leaves the progress a crash or a
 // power cut interrupted on this console, as an emulator run as a program
 // does. notePlaying writes the session's note in its save folder once the
 // restores are done (the game's own files, or a save folder, and a tag its

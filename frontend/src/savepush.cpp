@@ -186,6 +186,26 @@ std::string nameWithExtensionOf(const std::string& fsStem, const std::string& co
     return sanitisedStem(fsStem) + file.substr(dot);
 }
 
+// THE ONE FILE A SAVE OF A CORE'S FILES GOES UP AS, as it is: the only file
+// there can be, or of an arcade game's (catalog::SaveFile::unitName) the only
+// one that holds anything, when a start would put it back where it came from
+// by its name alone (catalog::bareFile). RomM's and Sigil's form: one file is
+// sent as it is, several as a zip. Null: a zip.
+const cab::FileSaveState* travelsAlone(const GameSession& sess) {
+    if (sess.fileSaves.size() == 1) return &sess.fileSaves.front();
+    const cab::FileSaveState* only = nullptr;
+    std::vector<catalog::SaveFile> specs;
+    for (const cab::FileSaveState& f : sess.fileSaves) {
+        specs.push_back(f.spec);
+        if (f.atLaunch.empty()) continue;
+        if (only) return nullptr;
+        only = &f;
+    }
+    if (!only || only->spec.unitName.empty() || only->kept.empty()) return nullptr;
+    const catalog::SaveFile* named = catalog::bareFile(specs, only->spec.path);
+    return named && named->path == only->spec.path ? only : nullptr;
+}
+
 // THE SAVE THE SESSION LEFT, in the form a start reads a snapshot's save
 // (saves.h), named after the game with the extension its emulator gives it:
 // where the bytes are on this console, the name they go up under and how
@@ -193,7 +213,8 @@ std::string nameWithExtensionOf(const std::string& fsStem, const std::string& co
 // kind of save. By what the session was set up with, a save folder first,
 // then the files a core writes, then the battery, which is the order the
 // restores look in. Several files are zipped here, each under the path its
-// core reads it from whatever name it was left under, and the zip is written
+// core reads it from whatever name it was left under, or under its own name
+// with no folder (catalog::SaveFile::unitName), and the zip is written
 // beside them so a push tried again after a restart sends the same bytes.
 // A BATTERY WITH ITS CLOCK OR ITS CARTRIDGE (#346, step 11; SaveForm::clock,
 // SaveForm::batteryFirst) goes the same way, from this console's copies:
@@ -207,15 +228,17 @@ bool gather(const GameSession& sess, cache::OwedPush* p) {
         p->saveName = dirSaveZipName(sess.title);
         p->savePath = sess.saveDir + "/" + p->saveName;
         p->saveShape = kFolder;
-    } else if (!form.batteryFirst && sess.fileSaves.size() == 1) {
-        const cab::FileSaveState& f = sess.fileSaves.front();
-        p->saveName = nameWithExtensionOf(sess.fsStem, f.spec.path);
-        p->savePath = f.kept;
+    } else if (const cab::FileSaveState* alone =
+                   form.batteryFirst ? nullptr : travelsAlone(sess)) {
+        p->saveName = nameWithExtensionOf(sess.fsStem, alone->spec.path);
+        p->savePath = alone->kept;
         p->saveShape = kSingle;
     } else if (!form.batteryFirst && !sess.fileSaves.empty()) {
         std::vector<cab::ZipFile> files;
         for (const cab::FileSaveState& f : sess.fileSaves)
-            if (!f.atLaunch.empty()) files.push_back({f.spec.path, f.atLaunch});
+            if (!f.atLaunch.empty())
+                files.push_back(
+                    {f.spec.unitName.empty() ? f.spec.path : f.spec.unitName, f.atLaunch});
         if (!zipBeside(sess, files, p)) return false;
     } else {
         const std::string stem = sanitisedStem(sess.fsStem);
@@ -932,11 +955,17 @@ Sent sendOne(const Server& server, const storage::User& who, int romId, std::str
     // now, carrying that snapshot's save, whoever made it (the head of
     // savepush.h); not when the session could not use the newest save, nor
     // onto a save of another emulator's, and then it is aimed as a save is.
+    // A SAVE GOES ONTO A CURRENT THAT HOLDS NONE (#353): the game's states went
+    // up before it had a save RomM takes, as an arcade game's did. Nothing is
+    // there for it to go beside, and RomM carries the states into the new
+    // snapshot; beside it, they would leave the game's newest, and RomM with
+    // its history.
     auto onTopOf = [&](const romm::Snapshot& current) {
-        return !owed.hasSave && !owed.couldNotUseNewest && !current.hardcore &&
-               (!current.hasSave || savepick::ownForm(current, owed.emulator));
+        return !owed.couldNotUseNewest && !current.hardcore &&
+               (!current.hasSave ||
+                (!owed.hasSave && savepick::ownForm(current, owed.emulator)));
     };
-    if (!owed.hasSave) {
+    if (!owed.hasSave || push.parentId == 0) {
         const romm::Channel* target = push.channelId.empty() ? named(channels, push.label)
                                                              : byId(channels, push.channelId);
         if (target && !target->hardcore && target->currentId != 0 && onTopOf(target->current)) {
@@ -1172,6 +1201,16 @@ Sent sendOne(const Server& server, const storage::User& who, int romId, std::str
                     s.file.pictureName.clear();
                     s.file.picture.clear();
                 }
+                continue;
+            }
+            // Onto a current that holds no save, as onto the one it listed.
+            if (push.hasSave && answer.hasCurrent && onTopOf(answer.current)) {
+                std::fprintf(stderr, "[save] game %d: RomM's channel had moved on to snapshot %d, "
+                                     "which holds no save; it goes again onto that one\n",
+                             romId, answer.current.id);
+                push.channelId = held.channelId.empty() ? push.channelId : held.channelId;
+                push.expectedCurrentId = answer.current.id;
+                push.parentId = 0;
                 continue;
             }
             // The current's save dated by its own row (savepick::savedAt): a
