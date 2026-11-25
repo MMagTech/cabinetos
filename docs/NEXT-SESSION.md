@@ -98,9 +98,7 @@ RomM: keep test launches under a minute, or have his go.
 - **Needs the TV or a device:** #575, "Sinden light guns: plug in and
   play gun games (waiting on the guns)".
 - **Waiting on others:** #297 (Sunshine), #362, "Discuss later: sharing a save
-  with another person on the server", #181, "Updates and DLC
-  as separate files in RomM (Switch, PS3, Xbox 360)" (kept open on
-  2026-11-11 to wait for RomM 5.5), #534 (the Azahar patch,
+  with another person on the server", #534 (the Azahar patch,
   azahar-emu/azahar#2694),
   eden-emulator/Issue-Reports#739 (a Switch controller connected mid-game),
   Eden's close crash and hang, fixed in its development code on 2026-09-11
@@ -116,7 +114,12 @@ RomM: keep test launches under a minute, or have his go.
   76 and 108 MiB) are fine; its numbers are on #222.
 - **Filed, not scheduled:** #675, "Arcade: a Naomi or Atomiswave game with
   a plain joystick moves only on the d-pad", the fix agreed in principle on
-  2026-10-28 and written on the issue.
+  2026-10-28 and written on the issue. #181, "Updates and DLC as separate
+  files in RomM (Switch, PS3, Xbox 360)": RomM 5.5, which it waited for, is
+  what the console needs now, and the early test of 2026-11-24 found all
+  three systems can work (results on the issue); no build go. #750, "A
+  problem report can include a PS3 game's licence key": a change of its own,
+  apart from #748 and #749.
 - **With the next real core change:** the comments #490, "Code comments
   that say what the code no longer does, and machine details left in
   comments", left in the core and PCSX2 build files and `core*.cpp`, kept
