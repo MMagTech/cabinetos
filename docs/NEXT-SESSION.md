@@ -61,8 +61,8 @@ RomM: keep test launches under a minute, or have his go.
 1. **#353, "Arcade high scores and extra save files never reach RomM
    (FinalBurn Neo, MAME 2003-Plus)", is built** (2026-11-25), in RomM's form
    (docs/decisions/2026-11-25-arcade-saves-in-romms-form.md) and run between
-   scratch consoles against the write-test RomM. On `testing`; his judging on
-   the TV and the merge are left.
+   scratch consoles against the write-test RomM. On `testing` as
+   2026.11.25.2 (#752); his judging on the TV and the merge are left.
 2. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
