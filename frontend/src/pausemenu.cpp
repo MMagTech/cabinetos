@@ -123,15 +123,15 @@ void App::overlayActivate() {
             overlayOpen = false;
             overlayFade.retarget(0.0f, overlayFadeSeconds);
             break;
-        case OvSaveState: saveStateNow(session, menuNotice); break;
-        case OvLoadState: beginLoadLatestState(stateLoad, session, liveClient, menuNotice); break;
+        case OvSaveState: saveStateNow(session, pressWriter, menuNotice); break;
+        case OvLoadState: loadLatestState(); break;
         // THE PAUSED MOMENT, the menu not in it: a screenshot reads the
         // game's frame, not the screen. MMagTech's idea, 2026-09-27: pause
         // in an intense scene and take it without letting go of the game.
         // The menu stays open, saying "Screenshot saved".
         case OvScreenshot:
             if (standaloneRun.active()) standaloneScreenshot();
-            else screenshotNow(session, uploader, menuNotice);
+            else screenshotNow(session, pressWriter, menuNotice);
             break;
         case OvChoice: stepChoice(overlaySlot, +1, /*wrap=*/true); break;
         case OvDisc:

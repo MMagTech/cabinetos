@@ -1,6 +1,6 @@
 // The game's picture: the video callback, the software upload, the frame
 // digest the determinism checks read, the shape a game is shown in, and the
-// snapshot a save state carries.
+// game's frame read (Core::readFrame) and made into a picture (finishFrame).
 // Moved out of core.cpp in the restructure (#398); Core::uploadFrame (core.cpp)
 // takes the PlayStation 2, Vulkan and GLES cases and hands the rest to
 // uploadSoftwareFrame here.
@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <vector>
 
 #include "libretro.h"
@@ -258,8 +259,8 @@ uint64_t Core::frameDigest() const {
     return h;
 }
 
-bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
-                    unsigned maxWidth) const {
+bool Core::readFrame(FrameRead& out, unsigned maxWidth) const {
+    out = FrameRead{};
     // PLAYSTATION 2 (#130): its frame is not the core's, it is the texture
     // uploadFrame fills from PCSX2 (ps2::takeFrame), RGBA, top row first, at
     // the game's own resolution and already in the shape it is shown in
@@ -268,60 +269,44 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     // has none.
     const bool ps2Frame = isPs2();
     // WITH ITS OWN WINDOW (#226) nothing is copied off the GPU each frame, so
-    // the picture on screen is read back once, now, for this.
+    // the picture on screen is read back once, for this, and PCSX2 is waited
+    // for (fetchPs2Window).
     if (ps2Frame && ps2::windowed()) {
-        const uint32_t* pixels = nullptr;
-        unsigned pw = 0, ph = 0;
-        if (!ps2::captureFrame(1000) || !ps2::takeFrame(&pixels, pw, ph) || pw == 0 || ph == 0)
-            return false;
-        rgba.assign(reinterpret_cast<const uint8_t*>(pixels),
-                    reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(pw) * ph * 4);
-        width = pw;
-        height = ph;
-        ui::shrinkRGBA(rgba, width, height, maxWidth);
+        out.ps2Window = true;
+        out.maxWidth = maxWidth;
         return true;
     }
-    unsigned w = ps2Frame ? frameWidth_ : gFrameW;
-    unsigned h = ps2Frame ? frameHeight_ : gFrameH;
+    const unsigned w = ps2Frame ? frameWidth_ : gFrameW;
+    const unsigned h = ps2Frame ? frameHeight_ : gFrameH;
     if (w == 0 || h == 0) return false;
     if (ps2Frame && !texture_) return false;
     // THE SIZE IT IS MADE AT, as it is shown, so a quarter-turned game is
-    // measured by its height (#346, the save's picture): pw x ph before the
-    // turn. AND THE SIZE IT IS READ AT, rw x rh: no larger than the frame,
-    // because the graphics chip only ever makes it smaller. A blit that makes
-    // one larger reads past the picture's edge, into the rest of the core's
-    // target, so the stretch is the processor's.
-    const unsigned r = gRotation & 3u;
-    const bool turned = (r & 1u) != 0u;
+    // measured by its height (#346, the save's picture): pictureWidth x
+    // pictureHeight before the turn. AND THE SIZE IT IS READ AT, rw x rh: no
+    // larger than the frame, because the graphics chip only ever makes it
+    // smaller. A blit that makes one larger reads past the picture's edge,
+    // into the rest of the core's target, so the stretch is the processor's.
+    out.quarterTurns = gRotation & 3u;
+    const bool turned = (out.quarterTurns & 1u) != 0u;
     const PictureSize size =
         pictureSize(turned ? h : w, turned ? w : h,
                     cab::shownAspect(av_.aspectRatio, turned, w, h), maxWidth);
-    const unsigned pw = turned ? size.height : size.width;
-    const unsigned ph = turned ? size.width : size.height;
-    const unsigned rw = std::min(pw, w), rh = std::min(ph, h);
-    std::vector<uint8_t> px;
+    out.pictureWidth = turned ? size.height : size.width;
+    out.pictureHeight = turned ? size.width : size.height;
+    const unsigned rw = std::min(out.pictureWidth, w), rh = std::min(out.pictureHeight, h);
 
-    // Read a GL framebuffer's bottom-left fw x fh into px, top row first when
-    // `bottomUp` says row zero is the picture's bottom.
-    auto readFBO = [&](GLuint fbo, bool bottomUp, unsigned fw, unsigned fh) {
-        px.assign(static_cast<size_t>(fw) * fh * 4, 0);
+    // A GL framebuffer's bottom-left fw x fh, as it lies.
+    auto readFBO = [&](GLuint fbo, unsigned fw, unsigned fh) {
+        out.px = std::make_unique_for_overwrite<uint8_t[]>(static_cast<size_t>(fw) * fh * 4);
+        out.width = fw;
+        out.height = fh;
         GLint bound = 0;
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &bound);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glReadPixels(0, 0, static_cast<GLsizei>(fw), static_cast<GLsizei>(fh), GL_RGBA,
-                     GL_UNSIGNED_BYTE, px.data());
+                     GL_UNSIGNED_BYTE, out.px.get());
         glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(bound));
-        if (!bottomUp) return;
-        const size_t row = static_cast<size_t>(fw) * 4;
-        std::vector<uint8_t> tmp(row);
-        for (unsigned y = 0; y < fh / 2; ++y) {
-            uint8_t* a = px.data() + y * row;
-            uint8_t* b = px.data() + (fh - 1 - y) * row;
-            std::memcpy(tmp.data(), a, row);
-            std::memcpy(a, b, row);
-            std::memcpy(b, tmp.data(), row);
-        }
     };
 
     // MADE SMALL ON THE GRAPHICS CHIP, THEN READ, so the game does not wait
@@ -330,9 +315,9 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     // blits while it is at least twice the size wanted, so each step is an
     // even average, and the last step to the size itself. The blits keep the
     // picture's way up, so `bottomUp` is the source's.
-    auto readGL = [&](GLuint src, bool bottomUp) -> bool {
+    auto readGL = [&](GLuint src) -> bool {
         if (rw == w && rh == h) {
-            readFBO(src, bottomUp, w, h);
+            readFBO(src, w, h);
             return true;
         }
         GLint readBound = 0, drawBound = 0, texBound = 0;
@@ -375,7 +360,7 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(drawBound));
         glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(texBound));
         if (scissor) glEnable(GL_SCISSOR_TEST);
-        if (ok) readFBO(curFbo, bottomUp, rw, rh);
+        if (ok) readFBO(curFbo, rw, rh);
         if (curTex) {
             glDeleteFramebuffers(1, &curFbo);
             glDeleteTextures(1, &curTex);
@@ -398,44 +383,70 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
         bool ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
         glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(bound));
-        if (ok) ok = readGL(fbo, /*bottomUp=*/false);
+        if (ok) ok = readGL(fbo);
         glDeleteFramebuffers(1, &fbo);
-        if (!ok) return false;
-        w = rw;
-        h = rh;
-    } else if (gHWFrame) {
+        return ok;
+    }
+    if (gHWFrame) {
         // glReadPixels hands back row zero = the framebuffer's y = 0, which
         // is the picture's bottom exactly when the core says so.
-        if (!gHWFBO) return false;
-        if (!readGL(gHWFBO, gHW.bottom_left_origin)) return false;
-        w = rw;
-        h = rh;
-    } else {
-        if (gFrame.size() < gFramePitch * h) return false;
-        px.assign(static_cast<size_t>(w) * h * 4, 0);
-        for (unsigned y = 0; y < h; ++y) {
-            const uint8_t* src = gFrame.data() + static_cast<size_t>(y) * gFramePitch;
-            uint8_t* dst = px.data() + static_cast<size_t>(y) * w * 4;
-            for (unsigned x = 0; x < w; ++x, dst += 4) {
-                uint8_t r8, g8, b8;
-                if (gPixelFormat == RETRO_PIXEL_FORMAT_XRGB8888) {
-                    uint32_t p;
-                    std::memcpy(&p, src + x * 4, 4);
-                    r8 = (p >> 16) & 0xFF; g8 = (p >> 8) & 0xFF; b8 = p & 0xFF;
+        out.bottomUp = gHW.bottom_left_origin;
+        return gHWFBO && readGL(gHWFBO);
+    }
+    if (gFrame.size() < gFramePitch * h) return false;
+    out.px = std::make_unique_for_overwrite<uint8_t[]>(static_cast<size_t>(w) * h * 4);
+    out.width = w;
+    out.height = h;
+    for (unsigned y = 0; y < h; ++y) {
+        const uint8_t* src = gFrame.data() + static_cast<size_t>(y) * gFramePitch;
+        uint8_t* dst = out.px.get() + static_cast<size_t>(y) * w * 4;
+        for (unsigned x = 0; x < w; ++x, dst += 4) {
+            uint8_t r8, g8, b8;
+            if (gPixelFormat == RETRO_PIXEL_FORMAT_XRGB8888) {
+                uint32_t p;
+                std::memcpy(&p, src + x * 4, 4);
+                r8 = (p >> 16) & 0xFF; g8 = (p >> 8) & 0xFF; b8 = p & 0xFF;
+            } else {
+                uint16_t p;
+                std::memcpy(&p, src + x * 2, 2);
+                if (gPixelFormat == RETRO_PIXEL_FORMAT_RGB565) {
+                    r8 = ((p >> 11) & 0x1F) << 3; g8 = ((p >> 5) & 0x3F) << 2; b8 = (p & 0x1F) << 3;
                 } else {
-                    uint16_t p;
-                    std::memcpy(&p, src + x * 2, 2);
-                    if (gPixelFormat == RETRO_PIXEL_FORMAT_RGB565) {
-                        r8 = ((p >> 11) & 0x1F) << 3; g8 = ((p >> 5) & 0x3F) << 2; b8 = (p & 0x1F) << 3;
-                    } else {
-                        r8 = ((p >> 10) & 0x1F) << 3; g8 = ((p >> 5) & 0x1F) << 3; b8 = (p & 0x1F) << 3;
-                    }
+                    r8 = ((p >> 10) & 0x1F) << 3; g8 = ((p >> 5) & 0x1F) << 3; b8 = (p & 0x1F) << 3;
                 }
-                dst[0] = r8; dst[1] = g8; dst[2] = b8; dst[3] = 0xFF;
             }
+            dst[0] = r8; dst[1] = g8; dst[2] = b8; dst[3] = 0xFF;
         }
     }
-    ui::resizeRGBA(px, w, h, pw, ph);
+    return true;
+}
+
+bool fetchPs2Window(FrameRead& frame) {
+    const uint32_t* pixels = nullptr;
+    unsigned pw = 0, ph = 0;
+    if (!ps2::captureFrame(1000) || !ps2::takeFrame(&pixels, pw, ph) || pw == 0 || ph == 0)
+        return false;
+    const size_t bytes = static_cast<size_t>(pw) * ph * 4;
+    frame.px = std::make_unique_for_overwrite<uint8_t[]>(bytes);
+    std::memcpy(frame.px.get(), pixels, bytes);
+    frame.width = pw;
+    frame.height = ph;
+    return true;
+}
+
+bool finishFrame(FrameRead& frame, std::vector<uint8_t>& rgba, unsigned& width,
+                 unsigned& height) {
+    if (!frame.px || frame.width == 0 || frame.height == 0) return false;
+    unsigned w = frame.width, h = frame.height;
+    const size_t row = static_cast<size_t>(w) * 4;
+    std::vector<uint8_t> px(row * h);
+    for (unsigned y = 0; y < h; ++y)
+        std::memcpy(px.data() + y * row,
+                    frame.px.get() + static_cast<size_t>(frame.bottomUp ? h - 1 - y : y) * row,
+                    row);
+    frame.px.reset();
+    if (frame.ps2Window) ui::shrinkRGBA(px, w, h, frame.maxWidth);
+    else ui::resizeRGBA(px, w, h, frame.pictureWidth, frame.pictureHeight);
     // Opaque whatever the core left in alpha: a PNG with holes in it shows
     // the page behind.
     for (size_t i = 3; i < px.size(); i += 4) px[i] = 0xFF;
@@ -443,6 +454,7 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     // THE QUARTER TURN, as the player's vertex shader turns it (ui.cpp, uRot:
     // the destination's corner reads the source at (1 - y, x) for one step
     // anticlockwise), so a vertical arcade game's picture stands upright.
+    const unsigned r = frame.quarterTurns & 3u;
     if (r == 0) {
         rgba = std::move(px);
         width = w;
@@ -464,6 +476,14 @@ bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& heigh
     width = ow;
     height = oh;
     return true;
+}
+
+bool Core::snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
+                    unsigned maxWidth) const {
+    FrameRead frame;
+    if (!readFrame(frame, maxWidth)) return false;
+    if (frame.ps2Window && !fetchPs2Window(frame)) return false;
+    return finishFrame(frame, rgba, width, height);
 }
 
 }  // namespace cab

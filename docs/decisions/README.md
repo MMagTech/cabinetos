@@ -134,6 +134,7 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [other-apps-saves-outside-channels](2026-11-20-other-apps-saves-outside-channels.md): another app's save in no channel stays on RomM as it is; the console copies nothing into a channel.
 - [tokens-owed-a-revoke](2026-11-22-tokens-owed-a-revoke.md): a token the console is done with is owed a revoke on the disk and revokes itself once nothing uses it; Sign out gives each one try.
 - [channels-on-every-file](2026-11-20-channels-on-every-file.md): a game's channels are listed on every one of its files in one request, a push names its channel's own file, and RomM's file for new channels is used only for a new one.
+- [a-press-writes-off-the-frame-thread](2026-11-24-a-press-writes-off-the-frame-thread.md): Save state and Screenshot take the state and the frame, and workers write the files, the picture and the marker while the game runs; said once on the drive, finished as the game is left.
 
 ### Screens and settings
 

@@ -14,12 +14,13 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-11-23.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.24.3: #746, "Vertical arcade games, and the
-pictures sent to RomM, get the game's own shape (#725)", which closed #725.
-Read the newest image from the registry, not from here. Before it, the same
-day: #745, "Xbox saves go back onto the drive with the right time (#728)"
-(2026.11.24.2), which closed #728; #744, "Home and the Library keep up with
+**2026-11-24.** The newest release is 2026.11.13.2. The last image with a
+change a player can see is 2026.11.24.4: #747, "Screenshot and Save state no
+longer stop the game (#726)", which closed #726. Read the newest image from the
+registry, not from here. Before it, on 2026-11-23: #746, "Vertical arcade games,
+and the pictures sent to RomM, get the game's own shape (#725)" (2026.11.24.3),
+which closed #725; #745, "Xbox saves go back onto the drive with the right time
+(#728)" (2026.11.24.2), which closed #728; #744, "Home and the Library keep up with
 RomM without a restart (#730)" (2026.11.24), which closed #730; and #528, "Revoke the console's RomM token on re-pair, Remove account
 and Sign out (#545; waiting on RomM)" (2026.11.23.3), which closed #545 and
 carried #743, "Checks from RomM and Sigil: a new test is seen failing, a memory
@@ -108,7 +109,13 @@ RomM: keep test launches under a minute, or have his go.
   (`c95ad020fb`, Eden's pull request 4395) and in no release yet: move the Flathub pin
   when flathub/dev.eden_emu.eden builds a release after v0.2.1 (lessons,
   emulators, "Switch (Eden)"),
-  #203 closed until libretro/dolphin#508 moves.
+  #203 closed until libretro/dolphin#508 moves; and Flycast's fixed state
+  size (flyinghead/flycast#2561, in its code since 2026-10-20 and in no
+  release): #222, "A failed save state says "No save states for this system";
+  Flycast may refuse a state now and then", closed, waits for it by MMagTech's
+  decision of 2026-11-23. When our Flycast moves past it, check that a
+  Dreamcast or Naomi state is never refused, and that the bigger states (36,
+  76 and 108 MiB) are fine; its numbers are on #222.
 - **Filed, not scheduled:** #675, "Arcade: a Naomi or Atomiswave game with
   a plain joystick moves only on the d-pad", the fix agreed in principle on
   2026-10-28 and written on the issue.

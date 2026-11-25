@@ -4,6 +4,17 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.24.4 {#v2026-11-24-4}
+
+- **Fixed:** taking a screenshot or saving a state stopped the game and cut its
+  sound for a moment, on every system: up to a second at Quality, less at
+  Performance. The game now plays on while the picture is made, and *State
+  saved* or *Screenshot saved* appears once it is on the drive. Saving a state
+  on 3DS still stops the game for about half a second, the time its emulator
+  takes to make one. ([Screenshots](screenshots.md),
+  [Save states](saves.md#save-states),
+  [#726](https://github.com/MMagTech/cabinetos/issues/726))
+
 ## 2026.11.24.3 {#v2026-11-24-3}
 
 - **Fixed:** vertical arcade games were drawn in the wrong shape on boards

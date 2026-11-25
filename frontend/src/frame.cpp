@@ -119,6 +119,10 @@ void App::runFrameLoop() {
         pumpArrive();
         pumpExit();
         watchPs2Start();
+        // What a press left, written by its workers: said, and the next
+        // started; then a load that waited for a state (presswriter.h).
+        pressWriter.pump(menuNotice);
+        loadWaitingState();
         pumpStateLoad(stateLoad, session, menuNotice);
         pumpDetailStates();
         loadPendingStates();

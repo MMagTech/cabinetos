@@ -81,6 +81,7 @@ TESTS=(
     --save-pick-test
     --save-push-test
     --save-picture-test
+    --press-writer-test
     --gpu-choice-test
     --tailscale-switch-test
     --update-romm-test

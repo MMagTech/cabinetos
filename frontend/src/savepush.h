@@ -23,9 +23,9 @@
 // tile. A push of states alone sends none: the save it carries keeps its own.
 //
 // AND THE STATES (#346, step 6; decisions 1 and 8 of 2026-11-15). A state is
-// written on this console with its picture when it is made, and marked owed
-// in the game's push at once (markState), so a power cut cannot strand it; it
-// goes up inside the snapshot when the game is left. THE GAME OFFERS THE THREE
+// written on this console as it is made, and marked owed in the game's push
+// at once (markState), so a power cut cannot strand it, its picture written
+// after (presswriter.h); it goes up inside the snapshot when the game is left. THE GAME OFFERS THE THREE
 // NEWEST OF ITS OWN STATES, WHEREVER THEY ARE ON RomM (MMagTech, 2026-11-19,
 // as RomM's own web player chooses): of RomM's list of the game's states,
 // every snapshot's (a channel's current, its history, a branch) and the ones
@@ -157,7 +157,11 @@ inline constexpr char kSoftcoreChannel[] = "softcore";
 // newest, as it always kept (docs/wiki/saves.md, "Save states").
 inline constexpr size_t kStatesKept = 3;
 
-// --- The frame thread's half ---------------------------------------------------
+// --- What marks what is owed ----------------------------------------------------
+//
+// The frame thread's, but for a state's mark (markState), which is the
+// worker's that wrote its files (#726, presswriter.h). One lock over them all,
+// so a marker read by one is never written over by another.
 
 // WHAT THE SESSION LEFT, MARKED AS OWED: when one of the gatherings found
 // the save changed (GameSession::saveChanged), the game's owed push is
@@ -169,13 +173,29 @@ inline constexpr size_t kStatesKept = 3;
 // nothing of the network.
 bool mark(GameSession& sess, const storage::User& user);
 
+// WHAT OF A SESSION A MARK IS AIMED BY, copied as a state is asked for, so
+// its mark can be made on a worker while the session goes on changing.
+struct AimFrom {
+    // From a session wherever one is asked for.
+    AimFrom(const GameSession& sess);   // NOLINT: implicit on purpose
+    int romId = 0;
+    std::string stateTag;
+    std::string core;             // the core's own name, in Sigil's spelling
+    std::string startChannelId;
+    int startSnapshotId = 0;
+    bool startHardcore = false;
+    bool couldNotUseNewest = false;
+};
+
 // A STATE JUST MADE, MARKED AS OWED (the head of this file): the game's owed
 // push gains it, newest first, and keeps the newest kStatesKept; one pushed
 // out of them is never sent. A push already owed keeps where it was aimed
 // when it carries a save, and is aimed again from this session when it
 // carries states alone. False when it could not be marked: no state tag,
 // nobody signed in, or the marker could not be written. Asks nothing of the
-// network.
+// network. Any thread. ITS PICTURE MAY NOT BE THERE YET (presswriter.h): a
+// push, the game's page and the list of states each take a picture that is
+// not there as none.
 struct StateMade {
     std::string fileName;      // the name it travels under
     std::string path;          // its bytes on this console
@@ -183,7 +203,7 @@ struct StateMade {
     std::string picturePath;
     int64_t madeMs = 0;        // when it was made, milliseconds since 1970
 };
-bool markState(const GameSession& sess, const storage::User& user, const StateMade& made);
+bool markState(const AimFrom& from, const storage::User& user, const StateMade& made);
 
 // mark, then the push queued (Uploader::pushSnapshot) when the game owes one:
 // a save just marked, or states. Called once a game has closed and its saves

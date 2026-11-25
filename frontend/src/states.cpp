@@ -12,7 +12,6 @@
 #include "discs.h"
 #include "fileio.h"
 #include "app.h"
-#include "imagecodec.h"
 #include "proc.h"
 #include "savepush.h"
 #include "screenparts.h"
@@ -65,19 +64,43 @@ std::string stateRefusedText() {
                             : std::string("Couldn't load that state");
 }
 
-void saveStateNow(GameSession& sess, MenuNotice& notice) {
+// The moment a press is named by: the UTC time to the millisecond with its
+// separators dashed, "2026-09-26 17-45-12-345", and the same in milliseconds
+// since 1970.
+static std::string pressStamp(int64_t* ms = nullptr) {
+    struct timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm utc{};
+    gmtime_r(&ts.tv_sec, &utc);
+    char stamp[48];
+    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
+    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+    if (ms) *ms = static_cast<int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000;
+    return stamp;
+}
+
+// The game's own frame as a press has it, null when there is none to read.
+static std::shared_ptr<cab::FrameRead> frameNow() {
+    auto frame = std::make_shared<cab::FrameRead>();
+    if (!cab::Core::shared().readFrame(*frame)) return nullptr;
+    return frame;
+}
+
+// WHAT THE PRESS LEAVES IS WRITTEN BY A WORKER (#726, presswriter.h), which
+// says so once it is on the drive. Here only what needs the core: its state,
+// and its frame.
+void saveStateNow(GameSession& sess, PressWriter& files, MenuNotice& notice) {
     cab::Core& core = cab::Core::shared();
     if (sess.discInserting) {
         notice.say("Not while the disc is changing", Tone::Info);
         return;
     }
+    PressWriter::State st{{}, {}, sess.stateDir, "", 0, sess, storage::currentUser(), nullptr};
     // A REFUSAL IS A FAILURE, NOT A SYSTEM WITHOUT STATES (#222). A core
     // with no states at all says a size of 0 (Game & Watch, VeMUlator), and
     // that is still "No save states". One that has them and would not make
-    // this one (Flycast's "Serializer overflow", seen once off-screen)
-    // failed, and says so.
-    std::vector<uint8_t> st;
-    if (!core.saveState(st) || st.empty()) {
+    // this one (Flycast's "Serializer overflow", #222) failed, and says so.
+    if (!core.saveState(st.core) || st.core.empty()) {
         if (core.stateSize() == 0) {
             std::fprintf(stderr, "[state] this core cannot serialize\n");
             notice.say("No save states for this system", Tone::Info);
@@ -90,24 +113,18 @@ void saveStateNow(GameSession& sess, MenuNotice& notice) {
     // WITH THE ACHIEVEMENT PROGRESS (#279), as RetroArch's states carry it,
     // so a state resumed here or on another console goes on counting where
     // it stopped. None to carry, and the core's bytes go alone, as before.
-    st = statefile::join(st, ra::progress());
+    st.progress = ra::progress();
     // Named with a timestamp because states accumulate on purpose; a save
     // overwrites, a state does not.
     //
     // CABINET'S NAME, TO THE CHARACTER (#99, MMagTech 2026-09-26): the game's
-    // file name without its extension, then the UTC time to the millisecond
-    // with its separators dashed, "Super Mario World (USA) [2026-09-26
-    // 17-45-12-345]" (TVPlayerView.swift, stateFileStem). It was the title
-    // and local time to the second, so a list of states read differently
-    // depending on where each was made. Nothing here reads the name back:
-    // the newest local state is found by date.
-    struct timespec ts{};
-    clock_gettime(CLOCK_REALTIME, &ts);
-    struct tm utc{};
-    gmtime_r(&ts.tv_sec, &utc);
-    char stamp[48];
-    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
-    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
+    // file name without its extension, then the moment (pressStamp), "Super
+    // Mario World (USA) [2026-09-26 17-45-12-345]" (TVPlayerView.swift,
+    // stateFileStem). It was the title and local time to the second, so a
+    // list of states read differently depending on where each was made.
+    // Nothing here reads the name back: the newest local state is found by
+    // date.
+    //
     // RomM's own rewrite of the name, so the state on the drive and on RomM
     // have one name (#484, ROMM-02).
     std::string base =
@@ -115,57 +132,14 @@ void saveStateNow(GameSession& sess, MenuNotice& notice) {
     // AND ITS DISC, on a game with several (#162): "Panzer Dragoon (Disc 2)
     // [...]". It travels with the state, so loading it puts that disc in.
     if (!sess.discs.empty()) base += disc::stateNamePart(sess.disc);
-    const std::string stem = base + " [" + stamp + "]";
-    const std::string name = stem + ".state";
-
-    storage::makeDirs(sess.stateDir);
-    const std::string path = sess.stateDir + "/" + name;
-    if (!cab::writeBytes(path, st)) {
-        std::fprintf(stderr, "[state] could not write locally\n");
-        notice.say("Couldn't save the state", Tone::Problem);
-        return;
-    }
-    std::fprintf(stderr, "[state] %zu bytes saved locally\n", st.size());
-
+    st.stem = base + " [" + pressStamp(&st.madeMs) + "]";
     // THE PICTURE (#99): the game's own frame, the menu not in it, upright
     // and in the shape the TV shows it in (#725). Kept beside the state, so a
     // state that has to wait for the server still has it when it goes. A
     // state without one is still a state: nothing here stops the save.
-    std::vector<uint8_t> png;
-    std::string shotName, shotPath;
-    {
-        std::vector<uint8_t> rgba;
-        unsigned w = 0, h = 0;
-        if (core.snapshot(rgba, w, h) && ui::encodePNG(rgba, w, h, png)) {
-            shotName = stem + ".png";
-            shotPath = sess.stateDir + "/" + shotName;
-            if (!cab::writeBytes(shotPath, png)) shotPath.clear();
-            std::fprintf(stderr, "[state] picture %ux%u, %zu bytes\n", w, h, png.size());
-        } else {
-            png.clear();
-            std::fprintf(stderr, "[state] no picture for this state\n");
-        }
-    }
-
-    if (sess.stateTag.empty()) {
-        std::fprintf(stderr, "[state] no settled tag for this core: it stays on this console\n");
-        // SAVED, and honest about the half that did not happen. A state this
-        // console cannot tag is one no other device will be offered, which is
-        // worth knowing before somebody relies on it being there.
-        notice.say("Saved on this console only", Tone::Info);
-        return;
-    }
-    // OWED AT ONCE, in the game's push (savepush.h, markState), so a power
-    // cut cannot strand it: it goes up inside the snapshot when the game is
-    // left, and Load latest state finds it here until then. "State saved"
-    // and nothing about RomM (decision 8 of 2026-11-15): reaching RomM is
-    // taken for granted, and offline it waits on the console like a save.
-    if (!savepush::markState(sess, storage::currentUser(),
-                             {name, path, shotPath.empty() ? std::string() : shotName, shotPath,
-                              static_cast<int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000}))
-        std::fprintf(stderr, "[state] could not mark %s owed; it stays on this console\n",
-                     name.c_str());
-    notice.say("State saved", Tone::Done);
+    st.frame = frameNow();
+    if (!st.frame) std::fprintf(stderr, "[state] no picture for this state\n");
+    files.save(std::move(st));
 }
 
 // A SCREENSHOT (#79): the shortcut button and Y. The game's own frame, as a
@@ -174,45 +148,39 @@ void saveStateNow(GameSession& sess, MenuNotice& notice) {
 // RomM is away. Named as a state is, the game's file name and the UTC time,
 // so two never collide. No gallery on the console: they are seen and
 // deleted in RomM (decided 2026-09-27).
-void screenshotNow(GameSession& sess, Uploader& up, MenuNotice& notice) {
-    cab::Core& core = cab::Core::shared();
-    std::vector<uint8_t> rgba, png;
-    unsigned w = 0, h = 0;
-    if (!core.snapshot(rgba, w, h) || !ui::encodePNG(rgba, w, h, png)) {
+void screenshotNow(GameSession& sess, PressWriter& files, MenuNotice& notice) {
+    std::shared_ptr<cab::FrameRead> frame = frameNow();
+    if (!frame) {
         std::fprintf(stderr, "[screenshot] no picture to take\n");
         notice.say("No screenshots for this system", Tone::Info);
         return;
     }
-    struct timespec ts{};
-    clock_gettime(CLOCK_REALTIME, &ts);
-    struct tm utc{};
-    gmtime_r(&ts.tv_sec, &utc);
-    char stamp[48];
-    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
-    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
     // RomM's own rewrite of the name, so the screenshot on the drive and on
     // RomM have one name (#484, ROMM-02).
-    std::string base =
+    const std::string base =
         rommKeptStem(sess.fsStem.empty() ? sanitisedStem(sess.title) : sess.fsStem);
-    const std::string name = base + " [" + stamp + "].png";
-    const std::string dir =
-        storage::screenshotsDir(storage::currentUser()) + "/" + std::to_string(sess.romId);
-    storage::makeDirs(dir);
-    const std::string path = dir + "/" + name;
-    if (!cab::writeBytes(path, png)) {
-        notice.say("Couldn't save the screenshot", Tone::Problem);
+    const storage::User who = storage::currentUser();
+    files.take({storage::screenshotsDir(who) + "/" + std::to_string(sess.romId),
+                base + " [" + pressStamp() + "].png", sess.romId, who, std::move(frame)});
+}
+
+// Load latest state, from the pause menu or a shortcut. NOT BEFORE A STATE
+// STILL BEING WRITTEN IS ON THE DRIVE (#726): the newest there is that one,
+// and a load begun now would take the one before it. Begun by
+// loadWaitingState, a frame after it is marked.
+void App::loadLatestState() {
+    if (!pressWriter.saving()) {
+        beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
         return;
     }
-    std::fprintf(stderr, "[screenshot] %ux%u, %zu bytes, %s\n", w, h, png.size(), name.c_str());
-    notice.say("Screenshot saved", Tone::Done);
-    Uploader::Job job;
-    job.romId = sess.romId;
-    job.emulator = "screenshot";
-    job.fileName = name;
-    job.data = std::move(png);
-    job.localPath = path;
-    job.isScreenshot = true;
-    up.push(std::move(job));
+    loadAfterSave = true;
+    menuNotice.say("Loading\xE2\x80\xA6", Tone::Busy);
+}
+
+void App::loadWaitingState() {
+    if (!loadAfterSave || pressWriter.saving()) return;
+    loadAfterSave = false;
+    if (playing) beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
 }
 
 static std::string newestLocalState(const GameSession& sess);
@@ -435,19 +403,12 @@ void App::playFromState(const screens::Result& res) {
 // travels to RomM's gallery the way every other screenshot does.
 void App::standaloneScreenshot() {
     if (!standaloneShot.path.empty()) return;   // one at a time
-    struct timespec ts{};
-    clock_gettime(CLOCK_REALTIME, &ts);
-    struct tm utc{};
-    gmtime_r(&ts.tv_sec, &utc);
-    char stamp[48];
-    const size_t n = std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H-%M-%S", &utc);
-    std::snprintf(stamp + n, sizeof stamp - n, "-%03ld", ts.tv_nsec / 1000000L);
-    std::string base =
+    const std::string base =
         rommKeptStem(session.fsStem.empty() ? sanitisedStem(session.title) : session.fsStem);
     const std::string dir = storage::screenshotsDir(storage::currentUser()) + "/" +
                             std::to_string(session.romId);
     storage::makeDirs(dir);
-    standaloneShot.name = base + " [" + stamp + "].png";
+    standaloneShot.name = base + " [" + pressStamp() + "].png";
     standaloneShot.path = dir + "/" + standaloneShot.name;
     standaloneShot.romId = session.romId;
     standaloneShot.size = -1;

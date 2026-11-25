@@ -28,6 +28,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -59,13 +60,33 @@ float shownAspect(float declared, bool quarterTurn, unsigned frameWidth, unsigne
 // (turned already) and the shape it is shown in: one side stretched to that
 // shape, so no pixel of a small frame is lost. Never past 1920x1080, or the
 // frame's own size where that is larger: a frame that big has pixels to
-// spare, so its longer side comes in instead, and its PNG, encoded on the
-// frame thread, does not grow. No wider than `maxWidth`, unless that is 0.
+// spare, so its longer side comes in instead, and its PNG does not grow. No
+// wider than `maxWidth`, unless that is 0.
 struct PictureSize {
     unsigned width = 0, height = 0;
 };
 PictureSize pictureSize(unsigned shownWidth, unsigned shownHeight, float aspect,
                         unsigned maxWidth);
+
+// A GAME'S FRAME AS IT WAS READ (#726; Core::readFrame), not yet a picture:
+// finishFrame, on any thread, makes it one. Never copied: the pixels are as
+// many as 48 MB, and are not cleared before they are read into.
+struct FrameRead {
+    std::unique_ptr<uint8_t[]> px;               // RGBA
+    unsigned width = 0, height = 0;              // as read
+    unsigned pictureWidth = 0, pictureHeight = 0;   // the picture's, before its turn
+    unsigned quarterTurns = 0;                   // anticlockwise, 0 to 3
+    bool bottomUp = false;                       // the first row is the picture's last
+    bool ps2Window = false;                      // PCSX2 has it, fetchPs2Window gets it
+    unsigned maxWidth = 0;                       // PS2's window only
+};
+// PCSX2's copy of the picture in its own window (#226), waited for up to a
+// second, into `frame`. Any thread, one at a time. False when PCSX2 gave none.
+bool fetchPs2Window(FrameRead& frame);
+// The picture of a frame, as Core::snapshot describes it: the rows top first,
+// in the game's shape, turned upright, opaque. Any thread. The frame's pixels
+// are gone after it. False for a frame with none.
+bool finishFrame(FrameRead& frame, std::vector<uint8_t>& rgba, unsigned& width, unsigned& height);
 
 // libretro's RetroPad, which every core speaks regardless of what the real
 // hardware had. Repeated here rather than pulling libretro.h into the UI: the
@@ -546,9 +567,16 @@ public:
     // and in the shape the player draws it (shownAspect, #725), at
     // pictureSize's size: made smaller on the graphics chip before it is read
     // where the core draws there, stretched on the processor. False with
-    // nothing to read: no frame yet. Call on the GL thread.
+    // nothing to read: no frame yet. Call on the GL thread. readFrame and
+    // finishFrame in one, for a picture small enough to make at once.
     bool snapshot(std::vector<uint8_t>& rgba, unsigned& width, unsigned& height,
                   unsigned maxWidth = 0) const;
+    // THE FRAME READ ALONE (#726), for a picture made on a worker
+    // (presswriter.h): the pixels copied off the graphics chip, or out of the
+    // core's own buffer, and nothing more done to them. False with nothing to
+    // read. Call on the GL thread. PlayStation 2 in its own window reads
+    // nothing here: fetchPs2Window does, on the worker.
+    bool readFrame(FrameRead& out, unsigned maxWidth = 0) const;
 
     // Emulated frames run since the game loaded, and audio frames produced.
     // Audio against the core's own sample rate is the only direct read on

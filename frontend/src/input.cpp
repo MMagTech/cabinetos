@@ -309,10 +309,11 @@ void App::handleEvent(const SDL_Event& e) {
             // the next Resume would start there. The shortcut path refuses
             // the same way (play.cpp).
             if (playing && session.snapshots && !stateHoldWaiting && e.key.key == SDLK_F5)
-                saveStateNow(session, menuNotice);
+                saveStateNow(session, pressWriter, menuNotice);
             if (playing && session.snapshots && !stateHoldWaiting && e.key.key == SDLK_F8)
-                beginLoadLatestState(stateLoad, session, liveClient, menuNotice);
+                loadLatestState();
             if (playing && e.key.key == SDLK_F6) {
+                pressWriter.finish(menuNotice);
                 syncSave(session);
                 savepush::leave(session, storage::currentUser(), uploader);
             }
