@@ -125,8 +125,9 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     starting.platformSlug = launchJob.platformSlug;
     // AN ARCADE BOARD'S SAVE FOLDER WRITTEN AGAIN WITH WHAT IT HELD is no new
     // save (syncDirSave, #353), here as in a core: sm2-emu and Supermodel
-    // write the board's memory as every game closes, and xemu-chihiro its
-    // backup 8 s into every start, changed or not.
+    // write the board's memory as every game closes, xemu-chihiro its
+    // backup 8 s into every start, and Linux Loader the board's two files at
+    // every start, changed or not.
     starting.arcade = launchJob.arcade;
     if (tag) starting.saveTag = tag;
     bool bringsOldSave = false;

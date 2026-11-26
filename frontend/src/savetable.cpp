@@ -174,10 +174,10 @@ bool snapshotsAllowed(const char* core) {
     // emulator run as a program of its own, sm2-emu's Model 2, Supermodel's
     // Model 3 and xemu-chihiro's Chihiro among them, whose pause menu has
     // no Save state or Load latest state (MMagTech, 2026-10-29; Chihiro
-    // 2026-11-25, #619).
+    // 2026-11-25, #619), and Linux Loader's Lindbergh (2026-11-26, #620).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
                                                "xenia", "cemu", "vita3k", "sm2emu",
-                                               "supermodel", "xemu-chihiro"};
+                                               "supermodel", "xemu-chihiro", "linuxloader"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -281,6 +281,15 @@ const char* saveTag(const char* core) {
         // a card into its cards folder. No Cabinet app plays Chihiro, and
         // Sigil has no row for it. The emulator's own name, as Batocera's.
         {"xemu-chihiro", "xemu-chihiro"},
+        // Sega Lindbergh, in Linux Loader: the board's `eeprom.bin` (its
+        // settings and coin counts) and `sram.bin` (scores and rankings), and
+        // a player's card files where a game uses them, under the loader's
+        // own names, in RomM's arcade form as Chihiro's (#620). The loader
+        // writes both of the board's files at every start, so the save is
+        // always a zip with no folders. They drop into any Linux Loader's
+        // folder for them. Sigil has no row for Lindbergh. The loader's own
+        // name, as Batocera's.
+        {"linuxloader", "linuxloader"},
         //
         // Nintendo 3DS has states, so its save tag comes from emulatorTag
         // above: a zip of the emulated SD card's `Nintendo 3DS` folder
@@ -334,8 +343,9 @@ SaveForm saveForm(const char* core, const std::string& slug) {
     if (name == "vita3k") f.profile = "00";
     if (name == "rpcs3") f.profile = "00000001";
 
-    // Chihiro's save folder: one file as it is (SaveForm::aloneAsItIs).
-    if (name == "xemu-chihiro") f.aloneAsItIs = true;
+    // Chihiro's and Lindbergh's save folders: one file as it is, several as
+    // a zip with no folders (SaveForm::aloneAsItIs).
+    if (name == "xemu-chihiro" || name == "linuxloader") f.aloneAsItIs = true;
 
     // A folder save's place in Sigil's answer (its restore targets) against
     // this console's root for the same folder.
@@ -442,6 +452,10 @@ bool inDirectorySave(const char* core, const std::string& platformSlug,
         return relPath.find('/') == std::string::npos && (ends(".sav") || ends(".dimm") ||
                                                           ends(".bin"));
     }
+    // Lindbergh: what the loader writes into the person's folder for the
+    // game, the board's two files and a player's cards, all at its top
+    // (standalone_lindbergh.cpp).
+    if (core && manifestName(core) == "linuxloader") return relPath.find('/') == std::string::npos;
     if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
     // The Mii Channel's root is `User/Wii`: its Mii list, and under `title/`
     // the same rule as every other game.

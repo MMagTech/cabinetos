@@ -62,10 +62,12 @@
 #                                 and which sets it plays
 #   sunshine/Sunshine-*.rpm       Remote Play's streaming host, with our patch (#304)
 #
-# This starts image_payload/ afresh. Two more folders go in after it, from
+# This starts image_payload/ afresh. Three more folders go in after it, from
 # build.yml's later steps (by hand, run them after this): downloads/, the
-# pinned outside files (ci/fetch-pinned.sh), and vectrex/, the Vectrex
-# screen sheets (tools/fetch-vectrex-overlays.py image_payload/vectrex).
+# pinned outside files (ci/fetch-pinned.sh), linuxloader/, Linux Loader's
+# catalogue (cores/arcade-sets.sh linuxloader image_payload/linuxloader), and
+# vectrex/, the Vectrex screen sheets (tools/fetch-vectrex-overlays.py
+# image_payload/vectrex).
 #
 # image_payload/ is gitignored, which also keeps `git status -s` clean — the
 # Justfile reads that to decide whether to stamp the image with a revision, so

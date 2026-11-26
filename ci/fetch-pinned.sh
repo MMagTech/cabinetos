@@ -5,8 +5,8 @@
 # a GitHub 500 on RPCS3's release failed a build).
 #
 # THE PINS ARE THE INSTALL SCRIPTS' OWN, read out of them here, so there is no
-# second copy to drift: each script names its file by a `readonly *_URL=` and
-# a `readonly *_SHA256=` line. Moving a pin changes the cache key, and the new
+# second copy to drift: each script names each file by a `readonly <NAME>_URL=`
+# and a `readonly <NAME>_SHA256=` line (install-linuxloader.sh has two). Moving a pin changes the cache key, and the new
 # file is fetched.
 #
 #   ci/fetch-pinned.sh key                    the cache key: a hash of every
@@ -24,7 +24,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPTS=(install-rpcs3.sh install-xenia.sh install-vita3k.sh install-xemu-drive.sh)
+SCRIPTS=(install-rpcs3.sh install-xenia.sh install-vita3k.sh install-xemu-drive.sh
+         install-linuxloader.sh)
 
 # "<sha256> <url> <script>" per pin. Only the `readonly NAME=...` lines are
 # evaluated, in a subshell, since a URL is built from a version line above it.
@@ -34,20 +35,25 @@ pins() {
         (
             lines="$(grep -E '^readonly [A-Z][A-Z0-9_]*=' "${ROOT}/build_files/${s}")"
             eval "${lines}"
-            url="" sha=""
+            found=0
             # The script's own names only: the runner's environment has
             # GITHUB_SERVER_URL and others that end in _URL too.
             while read -r v; do
-                case "$v" in
-                    *_URL) url="${!v}" ;;
-                    *_SHA256) sha="${!v}" ;;
-                esac
+                [[ "${v}" == *_URL ]] || continue
+                url="${!v}"
+                shavar="${v%_URL}_SHA256"
+                sha="${!shavar:-}"
+                if [[ -z "${url}" || ! "${sha}" =~ ^[0-9a-f]{64}$ ]]; then
+                    echo "${s}: ${v} has no ${shavar} pin beside it" >&2
+                    exit 1
+                fi
+                echo "${sha} ${url} ${s}"
+                found=1
             done < <(sed -E 's/^readonly ([A-Z][A-Z0-9_]*)=.*/\1/' <<<"${lines}")
-            if [[ -z "${url}" || ! "${sha}" =~ ^[0-9a-f]{64}$ ]]; then
+            if [[ ${found} -eq 0 ]]; then
                 echo "${s}: no readonly *_URL and *_SHA256 pin found" >&2
                 exit 1
             fi
-            echo "${sha} ${url} ${s}"
         ) || return 1
     done
 }

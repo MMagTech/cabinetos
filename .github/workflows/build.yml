@@ -362,6 +362,14 @@ jobs:
       - name: Pinned downloads, into the payload
         run: ci/fetch-pinned.sh fetch .downloads image_payload/downloads
 
+      # LINUX LOADER'S CATALOGUE (#620): which Lindbergh games it plays, made
+      # from its source at the commit of the release
+      # build_files/install-linuxloader.sh pins, which puts it beside the
+      # cores. The loader itself is that release's AppImage, a pinned download
+      # above, so no job builds it.
+      - name: Linux Loader's catalogue, into the payload
+        run: cores/arcade-sets.sh linuxloader image_payload/linuxloader
+
       # THE VECTREX GAMES' SCREEN SHEETS (#224): libretro/overlay-borders'
       # Game Overlay folder at a pinned commit, each file checked by its
       # sha256 (tools/fetch-vectrex-overlays.py, which holds both), kept in

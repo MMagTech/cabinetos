@@ -95,17 +95,21 @@ FROM ghcr.io/ublue-os/bazzite:44.20261026@sha256:ee82a885dbb77cd4604a5ffa8278a0e
 #                                with its catalogue (Chihiro). Not yet in an
 #                                image: 25.8 MB on disk stripped, as built
 #                                on the A9 on 2026-11-25.
-#   10. xemu's drive       1 MB  pinned.
-#   11. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
-#   12. the frontend       4 MB  the frontend, the Wii bridge, the
+#   10. Linux Loader     22 MB  pinned, with its catalogue (Lindbergh).
+#                                Not yet in an image: 57 MB on disk, 21.5
+#                                MB gzipped, as unpacked on the test VM on
+#                                2026-11-26.
+#   11. xemu's drive       1 MB  pinned.
+#   12. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#   13. the frontend       4 MB  the frontend, the Wii bridge, the
 #                                controller lists and the shaders. Moves
 #                                with nearly every change.
-#   13. the boot splash  254 MB  the initramfs. Moves with the OS layer.
-#   14. the version       1 kB  every image.
-#   15. the lint               (nothing in it)
+#   14. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   15. the version       1 kB  every image.
+#   16. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
-# ships layer 12, PROVIDED the other layers rebuild to identical bytes. CI
+# ships layer 13, PROVIDED the other layers rebuild to identical bytes. CI
 # builds from nothing every time, so that rests on `podman build --timestamp`
 # in the Justfile, on build.sh stamping the packages it installs with a fixed
 # time (#511), and on there being NO RECHUNK, which throws this order away
@@ -179,6 +183,16 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-xemu-chihiro.sh
+
+# Sega Lindbergh: Linux Loader, its developers' own AppImage pinned by
+# checksum, unpacked with the image's own libraries taken out, 57 MB,
+# and its catalogue, from the payload. A layer of its own beside
+# xemu-chihiro's, moving only when its pin does; the 32-bit packages it uses
+# are installed with the OS (build.sh). build_files/install-linuxloader.sh
+# says why.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-linuxloader.sh
 
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak

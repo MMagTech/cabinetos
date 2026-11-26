@@ -1,5 +1,6 @@
 #include "catalog.h"
 #include "arcadematch.h"
+#include "lindberghprograms.h"
 #include "catalog_internal.h"
 #include "ncch.h"
 #include "players.h"
@@ -60,6 +61,10 @@ const Entry kTable[] = {
     // game, each a converted image (docs/decisions/
     // 2026-11-26-chihiro-in-the-xemu-fork.md).
     {"arcade",               Support::Playable, "xemu-chihiro",    nullptr},
+    // Linux Loader, a program of its own (standalone.cpp), for every
+    // Lindbergh game, each its hard drive's folder, known by its program
+    // (docs/decisions/2026-11-26-lindbergh-in-linux-loader.md).
+    {"arcade",               Support::Playable, "linuxloader",     nullptr},
     // MAME 0.289, libretro's own build, for what nothing else plays
     // (docs/decisions/2026-10-28-prebuilt-mame-core.md).
     {"arcade",               Support::Playable, "mame_libretro",   nullptr},
@@ -274,6 +279,27 @@ Coverage answer(const Entry* e) {
 // launch read) is asked of its files when they fit, so a game offline names
 // the emulator it plays on, and the save tags it is mirrored under.
 Coverage arcadeGame(const romm::Game& g, bool dreamcast) {
+    // A LINDBERGH GAME by the program its files name, as RomM listed them
+    // once (lindberghprograms.h), never by its folder's name. One not asked
+    // yet plays in Linux Loader as far as anything here knows: Play asks
+    // before anything is downloaded (launch_routes.cpp).
+    if (g.platformSlug == "lindbergh") {
+        std::string program;
+        if (!lindberghprograms::known(g.id, g.sizeBytes, &program)) {
+            Coverage c = answer(arcadeRow("linuxloader"));
+            c.arcade = true;
+            return c;
+        }
+        const arcadematch::Answer l = arcadematch::byProgram(program);
+        if (l.verdict == arcadematch::Verdict::Plays) {
+            Coverage c = answer(arcadeRow(l.core));
+            c.arcade = true;
+            return c;
+        }
+        if (l.verdict == arcadematch::Verdict::NeedsGun)
+            return {Support::NeedsController, nullptr, "Needs a light gun"};
+        return {Support::UnsupportedGame, nullptr, "Not supported"};
+    }
     arcadematch::Answer a = arcadematch::byName(g.fsName, dreamcast);
     if (a.verdict == arcadematch::Verdict::Plays && !g.members.empty() &&
         g.membersFile == g.fsName && g.membersSize == g.sizeBytes) {

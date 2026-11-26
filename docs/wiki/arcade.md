@@ -12,6 +12,7 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
   | `stv` | Sega ST-V |
   | `model2`, `model3` | Sega Model 2 and Model 3 |
   | `chihiro` | Sega Chihiro |
+  | `lindbergh` | Sega Lindbergh |
   | `fbneo` | FinalBurn Neo sets |
   | `gaelco` | Gaelco |
   | `arcade` or `mame` | everything else |
@@ -24,8 +25,8 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
 - **Greyed:** a game no emulator here plays, one its emulator marks as not working, or one made for anything but a controller (a touchscreen, a mahjong or hanafuda panel, a gambling, medal or electromechanical machine) shows *Not supported*. Light-gun games show *Needs a light gun*. A zip whose files do not match its set says so when you press Play.
 - **Hold Start for a second for the game's own settings.** In a MAME game this opens MAME's menu, where **Dip Switches** has the difficulty, the lives and the rest. Up and down move, left and right change a setting. If the menu ends with **Return to Game**, **B** chooses and **A** goes back; if it ends with **Close Menu**, **A** chooses and **B** goes back. Hold Start again, or choose that last row, to play on. In a FinalBurn Neo, Naomi or Atomiswave game it opens the board's own test menu, where the board has one. Some games have none, Final Fight among them: holding Start does nothing there. What you change in a MAME's menu is kept on this console, for you; in a board's test menu it is part of the game's save.
 - **Buttons:** the 8BitDo Arcade Stick plays arcade games with the cabinet's layout ([Fight sticks](controllers.md#fight-sticks)), and **Controls** in the pause menu moves a game's buttons for any controller ([Controls](pause-menu.md#controls)).
-- **Model 2, Model 3 and Chihiro games** run in emulators of their own, so they have less: their pause menu has no save states and holding Start does nothing. A button moved in **Controls** in a Model 2 or Model 3 game works from the game's next start.
-- **High scores are part of the game's save**, yours alone, and go to RomM with it when you leave, so your other consoles have them too. So does all a board remembers, and a player's card in a Naomi or Chihiro game that uses one. A FinalBurn Neo game keeps its scores when FinalBurn Neo's own list has the game, as it has nearly all of CPS1 and CPS2 and most others, or when its board keeps them, as Neo Geo boards do. Two things stay on the console: what you set in a MAME's menu, and what a MAME game writes to its hard disk, so a game that keeps its scores there keeps them on that console.
+- **Model 2, Model 3, Chihiro and Lindbergh games** run in emulators of their own, so they have less: their pause menu has no save states and holding Start does nothing. A button moved in **Controls** in a Model 2 or Model 3 game works from the game's next start.
+- **High scores are part of the game's save**, yours alone, and go to RomM with it when you leave, so your other consoles have them too. So does all a board remembers, and a player's card in a Naomi, Chihiro or Lindbergh game that uses one. A FinalBurn Neo game keeps its scores when FinalBurn Neo's own list has the game, as it has nearly all of CPS1 and CPS2 and most others, or when its board keeps them, as Neo Geo boards do. Two things stay on the console: what you set in a MAME's menu, and what a MAME game writes to its hard disk, so a game that keeps its scores there keeps them on that console.
 
 ## Chihiro
 
@@ -34,3 +35,13 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
 - **What plays:** OutRun 2, OutRun 2 Special Tours, Crazy Taxi High Roller, Wangan Midnight Maximum Tune 1 and 2, Ollie King and Gundam Battle Operating Simulator, each in all its versions. The House of the Dead III, Virtua Cop 3 and Ghost Squad show *Needs a light gun*; the mahjong, golf and card-terminal games, and the update discs, show *Not supported*.
 - **Controls:** steer with the left stick or the d-pad; the right trigger accelerates and the left brakes; the right and left shoulders change gear up and down (Crazy Taxi: Drive and Reverse; Maximum Tune moves its lever a gear at a time); **A** jumps in Crazy Taxi; **X** changes the view; **Y** puts in a card in Maximum Tune and Gundam. Ollie King's board is the left stick, its grabs the shoulders. Gundam's two sticks are the pad's two, their triggers the triggers, their buttons the shoulders, the pedal **A**. Select puts in a coin, Start starts; some games take two coins, OutRun 2 among them.
 - **A player's card** is made the first time you put one in, and is part of your save from then on.
+
+## Lindbergh
+
+Sega Lindbergh games play in Linux Loader, as an experiment: some games may run into problems.
+
+- **Put each game in your `lindbergh` folder as a zip or 7z of its folder.** Take `drv/nvidia` out of a TeknoParrot copy first. A DVD image (`.iso`, `.chd`) does not play.
+- **What plays:** pad games such as Hummer, OutRun 2 SP SDX, Initial D, Virtua Fighter 5 and After Burner Climax. Gun games show *Needs a light gun*. Mahjong and quiz games, and versions Linux Loader doesn't know, show *Not supported*.
+- **Controls:** Select puts in a coin. Driving: the left stick steers, the triggers accelerate and brake, **A** boosts, the shoulders change gear, **Y** changes the view. After Burner: the left stick flies, the triggers set the speed, **A** fires the gun, **B** the missiles, **Y** the Climax.
+- **The first start is slow:** the whole game downloads and unpacks, and needs room for it twice over.
+- **If a game stops on an error** (Hummer's *Error 1011*), choose Exit to Home and start it again.

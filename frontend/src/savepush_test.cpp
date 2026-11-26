@@ -727,6 +727,54 @@ int test() {
         cache::clearPushOwed(u, game, p.stamp);
     }
     {
+        // LINDBERGH'S FOLDER (Linux Loader, #620): the board's `eeprom.bin` and
+        // `sram.bin`, which the loader writes at every start, go up as one zip
+        // of the two with no folder, under the game's name, MULTI, as RomM
+        // takes an arcade save; and a start on another console puts both back
+        // under the loader's names (SaveForm::aloneAsItIs).
+        GameSession s;
+        s.romId = ++game;
+        s.title = "Hummer Extreme Edition";
+        s.fsStem = "Hummer Extreme Edition";
+        s.core = "linuxloader";
+        s.platformSlug = "lindbergh";
+        s.arcade = true;
+        s.saveTag = "linuxloader";
+        s.saveDir = storage::savesDir(u, "lindbergh", game, "linuxloader");
+        s.dirSaveRoot = s.saveDir + "/saves";
+        s.dirSaveCore = "linuxloader";
+        s.dirSavePlatform = "lindbergh";
+        cab::writeBytes(s.dirSaveRoot + "/eeprom.bin", eeprom);
+        cab::writeBytes(s.dirSaveRoot + "/sram.bin", scores);
+        syncDirSave(s);
+        const bool marked = s.saveChanged && mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        const std::vector<uint8_t> zip = marked ? cab::readBytes(p.savePath)
+                                                : std::vector<uint8_t>();
+        check(marked && p.saveName == "Hummer Extreme Edition.zip" && p.saveShape == "MULTI" &&
+                  cab::readZip(zip, &in, &zerr) && in.size() == 2 &&
+                  in[0].relPath == "eeprom.bin" && in[0].bytes == eeprom &&
+                  in[1].relPath == "sram.bin" && in[1].bytes == scores,
+              "Lindbergh: the board's two files go up as one zip of the two with no folder");
+        cache::clearPushOwed(u, game, p.stamp);
+        const std::string other =
+            storage::savesDir(u, "lindbergh", game + 5000, "linuxloader") + "/saves";
+        SaveFetch fetched;
+        fetched.romId = game + 5000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::Channel;
+        fetched.pick.channel.current.save.fileName =
+            "Hummer Extreme Edition [2026-11-26_19-14-02-114].zip";
+        fetched.picked = zip;
+        restoreDirSave(fetched, "linuxloader", other, s.title, std::string(), nullptr,
+                       cab::ZipShape::Folder, std::string(), std::string());
+        check(cab::readBytes(other + "/eeprom.bin") == eeprom &&
+                  cab::readBytes(other + "/sram.bin") == scores,
+              "which a start on another console puts back under the loader's names");
+    }
+    {
         // DREAMCAST'S CARD, ONE PER GAME IN THE GAME'S SAVE FOLDER (#346,
         // step 8): a start copies the person's card from before once to the
         // name Flycast reads, the old file left, and takes away a card under

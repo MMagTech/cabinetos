@@ -248,6 +248,11 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 # What LinkUp needs (#654), for the same reason.
 /ctx/install-linkup.sh
 
+# The 32-bit packages Linux Loader uses for Lindbergh (#620), named so they
+# stay whatever brought them, and the 32-bit half of pipewire-alsa. The loader
+# itself is a layer of its own (Containerfile).
+/ctx/install-linuxloader.sh packages
+
 # ---------------------------------------------------------------------------
 # Enable SSH.
 # ---------------------------------------------------------------------------

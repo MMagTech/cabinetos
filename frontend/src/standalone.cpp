@@ -5,6 +5,7 @@
 #include "standalone_internal.h"
 #include "storage.h"
 #include "unsettled.h"
+#include "vpad.h"
 #include "xtitles.h"
 
 #include <dirent.h>
@@ -28,8 +29,8 @@ namespace cab::standalone {
 namespace {
 
 // Eden and xemu are pinned in system_files/usr/share/cabinetos/flatpaks.list.
-// RPCS3, Xenia, Cemu, Vita3K, sm2-emu, Supermodel and xemu-chihiro are in the
-// image (build_files/install-*.sh).
+// RPCS3, Xenia, Cemu, Vita3K, sm2-emu, Supermodel, xemu-chihiro and Linux
+// Loader are in the image (build_files/install-*.sh).
 const Emulator kEmulators[] = {
     // Eden's words for a game it cannot load (yuzu/main_window.cpp, before its
     // "Error while loading ROM!" box).
@@ -49,7 +50,7 @@ const Emulator kEmulators[] = {
      // folder (user/save/), as Xenia and Cemu do, so a session cut off by a
      // crash, a power cut or an app restart is sent at the next start or
      // launch instead of being overwritten by the older copy on RomM.
-     "nsp|xci", "keys", false, false, false, false, false, true, false, false, true, false, false, false},
+     "nsp|xci", "keys", false, false, false, false, false, true, false, false, true, false, false, false, false, false},
 
     // PLAYSTATION 3. Its log sits beside its cache, in the game's folder
     // (XDG_CACHE_HOME, rpcs3/ appended: Utilities/File.cpp, get_cache_dir).
@@ -67,7 +68,7 @@ const Emulator kEmulators[] = {
      // notesPlaying (#213): its savedata is in the person's folder too
      // (hdd0/home/<user>/savedata), the same case as Eden's. guitars: a
      // guitar plays as a PS3 guitar (guitar.h).
-     "iso|pkg", "firmware", true, true, true, false, false, true, false, true, false, false, true, false},
+     "iso|pkg", "firmware", true, true, true, false, false, true, false, true, false, false, true, false, false, false},
 
     // ORIGINAL XBOX. xemu keeps no log of its own; what it prints is it. A
     // game is a folder, as a PS3 game is, because its hard drive lives beside
@@ -80,7 +81,7 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr, nullptr, nullptr},
      nullptr, nullptr,
      nullptr, 0, nullptr,
-     "iso|xiso", "BIOS", true, false, false, true, true, false, false, false, false, false, false, false},
+     "iso|xiso", "BIOS", true, false, false, true, true, false, false, false, false, false, false, false, false, false},
 
     // XBOX 360. Xenia Edge's own Linux build, in the image
     // (build_files/install-xenia.sh). Its log is where the console tells it
@@ -99,7 +100,7 @@ const Emulator kEmulators[] = {
      nullptr,
      "x> ",
      "Xenia-edge", 2, nullptr,
-     "iso|xex|zar", "", false, false, true, false, false, true, false, false, false, false, false, false},
+     "iso|xex|zar", "", false, false, true, false, false, true, false, false, false, false, false, false, false, false},
 
     // WII U. Cemu main, built from source at a pin (cores/build-cemu.sh) and in
     // the image at /usr/lib/cabinetos/cemu. Its log is under its home
@@ -120,7 +121,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, "Error",
      // dualsense (#669): Cemu reads a pad's own sensors, as SDL pairs them;
      // onlyPlayerOneTilts: the GamePad, the one Wii U controller with a gyro.
-     "wua", "", false, false, true, false, false, true, false, false, true, true, false, false},
+     "wua", "", false, false, true, false, false, true, false, false, true, true, false, false, false, false},
 
     // PLAYSTATION VITA. Vita3K's own build, in the image
     // (build_files/install-vita3k.sh), started through its SDL frontend: a
@@ -143,7 +144,7 @@ const Emulator kEmulators[] = {
      // folder, through the link standalone_vita3k.cpp makes, as Xenia does.
      // dualsense (#669): Vita3K reads a pad's own sensors, as SDL pairs them;
      // onlyPlayerOneTilts: the Vita is one handheld, held by player 1.
-     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true, true, false, false},
+     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true, true, false, false, false, false},
 
     // SEGA MODEL 2. sm2-emu, built from source at a pin (cores/build-sm2emu.sh)
     // and in the image at /usr/lib/cabinetos/sm2emu, for the Model 2 games
@@ -162,7 +163,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: it writes the board's NVRAM straight into the person's
      // folder, as Cemu writes its saves.
-     "zip|7z", "", false, false, false, false, false, true, false, false, false, false, false, false},
+     "zip|7z", "", false, false, false, false, false, true, false, false, false, false, false, false, false, false},
 
     // SEGA MODEL 3. Supermodel, built from source at a pin
     // (cores/build-supermodel.sh) and in the image at
@@ -183,7 +184,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: its NVRAM is written straight into the person's folder,
      // through the link standalone_supermodel.cpp makes, as Vita3K's saves are.
-     "zip", "", false, false, false, false, false, true, false, false, false, false, false, false},
+     "zip", "", false, false, false, false, false, true, false, false, false, false, false, false, false, false},
 
     // SEGA CHIHIRO. xemu-chihiro, Tovarichtch's xemu fork, built from source
     // at a pin (cores/build-xemu-chihiro.sh) and in the image at
@@ -208,7 +209,34 @@ const Emulator kEmulators[] = {
      // notesPlaying: it writes the board's backup straight into the person's
      // folder, as sm2-emu its NVRAM. dpadOnStick: it takes one input for each
      // control, and steering is on the stick and the d-pad both.
-     "bin", "BIOS", false, false, false, true, false, true, false, false, false, false, false, true},
+     "bin", "BIOS", false, false, false, true, false, true, false, false, false, false, false, true, false, false},
+
+    // SEGA LINDBERGH. Linux Loader, its own AppImage unpacked into the image at
+    // /usr/lib/cabinetos/linuxloader with the image's own libraries taken out
+    // (build_files/install-linuxloader.sh), for the Lindbergh games the arcade
+    // match gives it (arcadematch.h): each one its hard drive's folder. It is
+    // started on the folder holding the game's program, finds the program
+    // there and starts it as a child of its own through the shell, the game
+    // drawing in its own window; it keeps no log but what it prints, and a
+    // folder with no program it knows is one of these two lines, after which
+    // it exits by itself. Its quit is its own, ExitGame, on player 1's Guide
+    // (quitsOnGuide): it writes the board's memory and exits 0 in 0.3 s
+    // (measured on the A9, 2026-11-26). It has no SIGTERM handler, so SIGTERM
+    // skips that clean exit, three of seven games ignore it, and one to the
+    // loader leaves the game running; so a pause and a kill reach the whole
+    // process group (gameIsChild). docs/decisions/
+    // 2026-11-26-lindbergh-in-linux-loader.md.
+    {"linuxloader", nullptr, "/usr/lib/cabinetos/linuxloader/usr/bin/linuxloader", "linuxloader",
+     nullptr,
+     {"No known game file found", "Directory does not exist"},
+     {nullptr, nullptr, nullptr, nullptr},
+     nullptr,
+     nullptr,
+     nullptr, 0, nullptr,
+     // notesPlaying: it writes the board's memory straight into the person's
+     // folder, as xemu-chihiro its backup.
+     "", "", false, false, false, false, false, true, false, false, false, false, false, false,
+     true, true},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -586,6 +614,8 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
         return prepareSupermodel(e, romPath, saveDir, players, level, err);
     if (std::strcmp(e.core, "xemu-chihiro") == 0)
         return prepareChihiro(e, saveDir, players, level, missingKeys, err);
+    if (std::strcmp(e.core, "linuxloader") == 0)
+        return prepareLindbergh(e, saveDir, players, level, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -611,6 +641,9 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
     // Chihiro: the board's backup, the media board's, and a player's card,
     // as xemu-chihiro names them (standalone_chihiro.cpp).
     if (std::strcmp(e.core, "xemu-chihiro") == 0) return chihiroSaves(saveDir);
+    // Lindbergh: the board's `eeprom.bin` and `sram.bin` and a player's
+    // cards, as Linux Loader is told to name them (standalone_lindbergh.cpp).
+    if (std::strcmp(e.core, "linuxloader") == 0) return lindberghSaves(saveDir);
     return {};
 }
 
@@ -762,6 +795,8 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
             supermodelArgs(full, e, dir, romPath);
         } else if (std::strcmp(e.core, "xemu-chihiro") == 0) {
             chihiroArgs(full, saveDir, romPath);
+        } else if (std::strcmp(e.core, "linuxloader") == 0) {
+            lindberghArgs(full, e, romPath);
         } else {
             full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
         }
@@ -821,14 +856,19 @@ void Run::freeze() {
     if (!active() || frozen_ || stopping()) return;
     if (program_ <= 0) program_ = findProgram();
     if (program_ <= 0) return;
-    ::kill(program_, SIGSTOP);
+    // A GAME THE EMULATOR STARTS AS A CHILD (`gameIsChild`) stops with it:
+    // the whole process group, which the sandbox, the emulator and the game
+    // share (proc::spawn).
+    if (emu_->gameIsChild) ::kill(-root_, SIGSTOP);
+    else ::kill(program_, SIGSTOP);
     frozen_ = true;
     std::fprintf(stderr, "[standalone] %s frozen\n", emu_->program);
 }
 
 void Run::thaw() {
     if (!frozen_) return;
-    if (program_ > 0) ::kill(program_, SIGCONT);
+    if (emu_->gameIsChild) ::kill(-root_, SIGCONT);
+    else if (program_ > 0) ::kill(program_, SIGCONT);
     frozen_ = false;
     std::fprintf(stderr, "[standalone] %s thawed\n", emu_->program);
 }
@@ -838,7 +878,15 @@ void Run::stop() {
     thaw();
     stopAtMs_ = nowMs();
     if (program_ <= 0) program_ = findProgram();
-    if (program_ > 0 && emu_->closesByWindow && gTitles.closeWindowsOf(program_) > 0) {
+    if (program_ > 0 && emu_->quitsOnGuide) {
+        // ITS OWN QUIT, on player 1's Guide (`quitsOnGuide`), held until it
+        // has gone: it reads the button once a frame, and a press let go in
+        // the same frame is never seen. Let go with the controllers
+        // (vpad::close, finishStandalone).
+        cab::vpad::button(0, SDL_GAMEPAD_BUTTON_GUIDE, true);
+        std::fprintf(stderr, "[standalone] pressed Guide on player 1's controller to close %s "
+                     "(pid %d)\n", emu_->program, program_);
+    } else if (program_ > 0 && emu_->closesByWindow && gTitles.closeWindowsOf(program_) > 0) {
         std::fprintf(stderr, "[standalone] asked %s's window (pid %d) to close\n",
                      emu_->program, program_);
     } else if (program_ > 0) {

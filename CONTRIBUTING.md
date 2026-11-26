@@ -40,12 +40,12 @@ downloads a whole new image and boots into it.
   layer of its own, no toolkit). It draws every screen, and it hosts the
   emulators: 24 libretro cores and PCSX2 (PlayStation 2, built as a library)
   run inside its process.
-- **Nine emulators run as separate programs**, started and stopped by the
+- **Ten emulators run as separate programs**, started and stopped by the
   frontend like a game: Eden (Switch) and xemu (Xbox) from Flathub, and RPCS3
   (PlayStation 3), Xenia Edge (Xbox 360), Cemu (Wii U), Vita3K (PlayStation
-  Vita), sm2-emu (Sega Model 2), Supermodel (Sega Model 3) and xemu-chihiro
-  (Sega Chihiro) built into the image. Steam's Big Picture is a tenth,
-  an optional entry that hands the screen over and comes back.
+  Vita), sm2-emu (Sega Model 2), Supermodel (Sega Model 3), xemu-chihiro
+  (Sega Chihiro) and Linux Loader (Sega Lindbergh) built into the image.
+  Steam's Big Picture is an eleventh, an optional entry that hands the screen over and comes back.
 - **Everything comes from RomM:** games, covers, firmware, saves and save
   states. The console keeps a cache of downloaded games and its own
   settings, and nothing else the server does not know. Updates come from the
@@ -129,8 +129,12 @@ own container from
 `cores/<name>-builder/` the first time. **MAME 0.289** is
 the one core not built: `cores/fetch-mame.sh cores/build` fetches
 libretro's own build, checks it against its pins, and adds its plugins and
-its catalogue (docs/decisions/2026-10-28-prebuilt-mame-core.md). Each
-script's header says how to run it.
+its catalogue (docs/decisions/2026-10-28-prebuilt-mame-core.md). **Linux
+Loader** is not built either: the image build unpacks its developers' own
+AppImage at a pinned release (`build_files/install-linuxloader.sh`), and its
+catalogue comes from its source at that release
+(`cores/arcade-sets.sh linuxloader <dir>`). Each script's header says how to
+run it.
 
 **The whole image** is normally built only by CI (`build.yml`). On a Linux
 box it is `ci/stage-image-payload.sh` with no arguments, which collects and
@@ -139,9 +143,10 @@ every piece built first: the frontend, the Wii bridge, LinkUp's program, all 23 
 MAME 0.289, PCSX2, Cemu, sm2-emu, Supermodel, xemu-chihiro and Sunshine under
 `cores/build/`, the arcade emulators' catalogues (`cores/arcade-sets.sh`,
 sm2-emu's into `cores/build/sm2emu/`, Supermodel's into
-`cores/build/supermodel/` and xemu-chihiro's into `cores/build/xemu-chihiro/`) and
+`cores/build/supermodel/` and xemu-chihiro's into `cores/build/xemu-chihiro/`),
 PPSSPP's and Dolphin's files in
-`cores/system/`. That path is not walked
+`cores/system/`, and, after the staging, Linux Loader's catalogue in
+`image_payload/linuxloader/` (`cores/arcade-sets.sh linuxloader`). That path is not walked
 through here; read the Justfile's `build` recipe first.
 
 ## Running and testing
@@ -239,7 +244,7 @@ with 0 when it passes, and CI runs every one ("What CI checks"):
 | `--fightstick-test` | which fight sticks are known, and where a game's buttons go on one: every count of buttons in the arcade cores' orders, a Naomi board's in Flycast, MAME 0.289's from its catalogue's count with its 7th and 8th on the stick clicks, and no layout for any other pad or a Dreamcast game |
 | `--guitar-test` | which controllers are guitars, by name, by the XInput subtype in their USB descriptors and by the rows measured on a console, and that an ordinary pad is not one; a guitar's whammy and tilt as PCSX2's guitar takes them and in a PS3 guitar's shape, the tilt held through a flicker, and the lines RPCS3 is given for its Guitar Hero and Rock Band guitars |
 | `--arcade-settings-test` | holding Start in an arcade game: a hold of about a second presses a MAME's menu key once, in MAME 2003-Plus or MAME 0.289, or a Naomi or Atomiswave board's Test button in Flycast, a tap or a shorter hold presses nothing, a second hold closes MAME's menu, player 1's left stick click never reaches MAME 2003-Plus and does reach MAME 0.289 (its button 7), no player's stick clicks reach a board, and nothing changes on FinalBurn Neo, a Dreamcast game or any other core |
-| `--arcade-match-test` | which emulator plays an arcade game (`arcadematch.cpp`), on catalogues written in the test: by the zip's name for a grid, by its files and CHDs at Play, an emulator that marks the set not working skipped, MAME 2003-Plus before MAME 0.289 and never for a 7z, a disc going to the MAME its CHD was made for, a disc name with spaces, a light-gun game greyed for a light gun, one any list marks as made for anything but a controller not supported, a Dreamcast zip only Flycast's, the reason when no emulator's files fit, and a converted Chihiro image (`<set>.bin`) only xemu-chihiro's, played when the ID its boot.id carries is its set's, a revision by its parent's, and its ID read from a FATX image and none from any other file |
+| `--arcade-match-test` | which emulator plays an arcade game (`arcadematch.cpp`), on catalogues written in the test: by the zip's name for a grid, by its files and CHDs at Play, an emulator that marks the set not working skipped, MAME 2003-Plus before MAME 0.289 and never for a 7z, a disc going to the MAME its CHD was made for, a disc name with spaces, a light-gun game greyed for a light gun, one any list marks as made for anything but a controller not supported, a Dreamcast zip only Flycast's, the reason when no emulator's files fit, and a converted Chihiro image (`<set>.bin`) only xemu-chihiro's, played when the ID its boot.id carries is its set's, a revision by its parent's, and its ID read from a FATX image and none from any other file; a Lindbergh game by its program for a grid and by Linux Loader's fingerprint at Play, a gun game's greyed and a mahjong panel's not supported, never a zip of that name, and its program found in a folder made in the test as the loader finds it, at the top, one folder down or two, by the loader's own order, a data file named as one passed over |
 | `--arcade-tile-test` | the Library's one Arcade tile (`library.cpp`, `tileGroups`): every arcade label, RomM's and the boards', in it and none left a tile of its own, one folder alone the Arcade tile too, its query naming each folder once in id order, every arcade folder called Arcade and every other platform keeping RomM's name, and an arcade game's card saying Arcade with its folder kept for the tile's line |
 | `--library-refresh-test` | Home and the Library keeping up with RomM (`libraryrefresh.h`, `library.h`), with no server and no screen: when a read may start (Home or the Library coming into view, a press after a minute with none, RomM answering again with somebody there, never while it is away, and a minute from the end of the last); where Home's highlight goes (first on Resume whatever becomes first, else with its game, the nearest when it is gone, the other row when its own is empty, and when A there is held); and what building the library changes, part by part: Recent by the later of RomM's time and the console's, a game never sent to RomM kept until RomM no longer has it, one taken off Continue Playing gone; a name, a cover, a manual and a system's name; which games are favourites and a heart pressed meanwhile; systems and collections made, renamed, shared, emptied and removed; a line a collection learned, a read grid and a cover kept; the Arcade tile itself with another folder; a system that hides some games; a part that did not come keeping what was there; the download dot on a game listed later; and the Library's highlight |
 | `--screen-view-test` | a DS or 3DS game's screens: player 1's L3 shows the top screen alone, the bottom alone, then both, once per press however long it is held, and never reaches the emulator; on the DS, R2 is the lid (melonDS's L3) and never its swap, and the microphone and the touch go through; on the 3DS, the touch, ZL and ZR go through; both is the layout a 3DS game starts with; a new game starts with both; and nothing changes in any other game |
