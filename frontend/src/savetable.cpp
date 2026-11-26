@@ -276,8 +276,8 @@ const char* saveTag(const char* core) {
         // board's `<game>.dimm` and a player's card, under the emulator's own
         // names, the only one alone as it is and several as a zip with no
         // folders, as RomM takes an arcade save (docs/decisions/
-        // 2026-11-25-arcade-saves-in-romms-form.md; dirsave.h,
-        // ZipShape::Arcade). They drop into any xemu-chihiro's saves folder,
+        // 2026-11-25-arcade-saves-in-romms-form.md;
+        // SaveForm::aloneAsItIs). They drop into any xemu-chihiro's saves folder,
         // a card into its cards folder. No Cabinet app plays Chihiro, and
         // Sigil has no row for it. The emulator's own name, as Batocera's.
         {"xemu-chihiro", "xemu-chihiro"},

@@ -186,7 +186,7 @@ need hw/xbox/chihiro/chihiro.c 'snprintf(out, out_len, "%.*s.dimm", (int)(len - 
 need hw/xbox/chihiro/chihiro.c 'chihiro_data_dir("cards", dir, sizeof(dir))' "its cards moved"
 # A card it makes is named `<game>[_p1|_p2]_<date>[_<n>].bin`, the game as its
 # cabinet table names it, and the slot that holds it is the setting below for
-# that game (standalone_chihiro.cpp, cardSlots).
+# that game (standalone_chihiro.cpp, kCardSlots).
 need hw/xbox/chihiro/chihiro.c 'snprintf(name, sizeof(name), "%s%s_%s%s.bin", c->cards, who, day, more);' \
     "a new card is named another way"
 need hw/xbox/chihiro/chihiro.c 'snprintf(who, sizeof(who), "_p1");' "player 1's card is named another way"

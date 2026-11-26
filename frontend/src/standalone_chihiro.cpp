@@ -48,7 +48,7 @@ namespace cab::standalone::detail {
 // its EEPROM, snapshot store and session logs, which are no part of a save.
 // `cards` is a link to `saves`, so the save is one folder of the emulator's
 // own files under their own names, which is how it travels to RomM
-// (saveRoot; dirsave.h, ZipShape::Arcade). Its shader caches,
+// (saveRoot; catalog::SaveForm::aloneAsItIs). Its shader caches,
 // `vk_shader_cache/` and `shader_seeds/`, are links to one folder in its home
 // that every game and person shares, as the driver's own is; its pipeline
 // cache is a file it replaces whole, so it stays beside the save, a few MB.

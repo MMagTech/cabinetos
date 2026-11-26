@@ -244,7 +244,7 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
 // `<set>.eeprom`; for Supermodel, `nvram`, the board's `<set>.nv`; for
 // xemu-chihiro, `xemu/xemu/saves`, the board's `<game>.sav`, the media
 // board's `<game>.dimm` and a player's card, with no folders, which travels
-// as RomM takes an arcade save (dirsave.h, ZipShape::Arcade).
+// as RomM takes an arcade save (catalog::SaveForm::aloneAsItIs).
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
 
 // The name a save folder's one file is put back under, for an emulator whose
