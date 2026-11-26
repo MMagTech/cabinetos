@@ -779,7 +779,8 @@ uint32_t consoleFor(const std::string& s) {
 }
 
 bool coreReadable(const std::string& manifestCore, bool arcade) {
-    return arcade ? manifestCore == "fbneo_libretro" : manifestCore != "mame2003_plus";
+    if (arcade) return manifestCore == "fbneo_libretro" || manifestCore == "flycast";
+    return manifestCore != "mame2003_plus";
 }
 
 void beginGame(const std::string& raHash, const std::string& platformSlug, bool ps2) {

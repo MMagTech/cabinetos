@@ -2,10 +2,11 @@
 
 CabinetOS earns [RetroAchievements](https://retroachievements.org) in the
 built-in emulators: every system from the Atari 2600 to the Dreamcast, PS1,
-PSP, DS, GameCube, Wii and PS2. In arcade games, only where FinalBurn Neo
-plays the game, since RetroAchievements' arcade sets are written for it. Not
-in the 3DS, and not in the separate emulators (Switch, PS3, Xbox, Xbox 360,
-Wii U, PS Vita, Model 2 and Model 3).
+PSP, DS, GameCube, Wii and PS2. In arcade games, where FinalBurn Neo or
+Flycast plays the game (Flycast plays Naomi, Naomi 2 and Atomiswave), the two
+arcade emulators RetroAchievements supports. Not in the 3DS, and not in the
+separate emulators (Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita, Model 2 and
+Model 3).
 
 ## Sign in
 
