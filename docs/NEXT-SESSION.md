@@ -15,11 +15,13 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-11-25.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.26: #754, "Reports hide a PS3 game's
-licence key and save data keys (#750)", which closed #750. Read the newest
-image from the registry, not from here. Before it, the same day, #753, "PS3
-trials play as the full game, and installed games download only the game
-(#748, #749)" (2026.11.25.3), which closed #748 and #749; #752, "Arcade high
+change a player can see is 2026.11.26.2: #755, "Naomi, Naomi 2 and
+Atomiswave games earn RetroAchievements (#740)", which closed #740. Read the
+newest image from the registry, not from here. Before it, the same day, #754,
+"Reports hide a PS3 game's licence key and save data keys (#750)"
+(2026.11.26), which closed #750; #753, "PS3 trials play as the full game, and
+installed games download only the game (#748, #749)" (2026.11.25.3), which
+closed #748 and #749; #752, "Arcade high
 scores and every file of a board's save go to RomM (#353)" (2026.11.25.2),
 which closed #353; and #751,
 "FinalBurn Neo games keep high scores, and CPS3 save states load clean (#608)"
@@ -115,7 +117,11 @@ RomM: keep test launches under a minute, or have his go.
   Flycast may refuse a state now and then", closed, waits for it by MMagTech's
   decision of 2026-11-23. When our Flycast moves past it, check that a
   Dreamcast or Naomi state is never refused, and that the bigger states (36,
-  76 and 108 MiB) are fine; its numbers are on #222.
+  76 and 108 MiB) are fine; its numbers are on #222. And RomM's first
+  release after 5.5.0-beta.1, which carries rommapp/romm#5746 and #5747: then
+  Recalculate hashes on the Naomi2 and NaomiGD folders, and the five Naomi
+  games with a CHD gain their achievements (#740); nothing changes on the
+  console.
 - **Filed, not scheduled:** #675, "Arcade: a Naomi or Atomiswave game with
   a plain joystick moves only on the d-pad", the fix agreed in principle on
   2026-10-28 and written on the issue. #181, "Updates and DLC as separate

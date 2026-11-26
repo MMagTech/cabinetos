@@ -1169,8 +1169,8 @@ void App::startPlaying(cab::Core& core) {
     controls::beginGame(session.arcadeCore(), session.romId, session.title);
     // RetroAchievements, when this person signed in (achievements.h):
     // after the battery save and before the first frame it checks. Not for
-    // an arcade game in any emulator but FinalBurn Neo, whose memory
-    // RetroAchievements' arcade sets are written for.
+    // an arcade game in any emulator but FinalBurn Neo and Flycast, the two
+    // RetroAchievements lists for arcade.
     if (ra::coreReadable(session.core, session.arcade))
         ra::beginGame(session.raHash, session.platformSlug, core.isPs2());
     if (session.romId > 0) {

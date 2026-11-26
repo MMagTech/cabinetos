@@ -79,10 +79,13 @@ uint32_t consoleFor(const std::string& platformSlug);
 // nothing from retro_get_memory_data and sends no map, so a game it runs can
 // earn nothing even when RetroAchievements has a set: its page says "None"
 // rather than a count that could never move. Measured on the A9 with
-// CABINETOS_RA_PROBE, 2026-10-06; every other core gives memory. AND AN ARCADE
-// GAME (`arcade`, catalog::Coverage::arcade) earns only in FinalBurn Neo:
-// RetroAchievements' Arcade sets are written for its memory, so one Flycast
-// plays as a Naomi board has none to read.
+// CABINETOS_RA_PROBE, 2026-10-06; every other core gives memory. AN ARCADE
+// GAME (`arcade`, catalog::Coverage::arcade) earns only in FinalBurn Neo and
+// Flycast, the two arcade emulators RetroAchievements lists (its "Emulator
+// Support and Issues" page; Flycast for Naomi, Naomi 2 and Atomiswave).
+// Flycast's own RetroAchievements code reads the main RAM its libretro build
+// hands over (`clientReadMemory` in core/achievements/achievements.cpp), so a
+// set made in Flycast reads the same memory here (#740).
 bool coreReadable(const std::string& manifestCore, bool arcade);
 
 // After the core has loaded the game. Does nothing unless somebody is signed

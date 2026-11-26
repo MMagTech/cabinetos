@@ -173,7 +173,7 @@ downloads anything new into the console's shared BIOS folder.
 | PS2 | No | No | Yes |
 | GameCube, Wii | No | No | Yes |
 | 3DS | States and fast forward; no rewind | No | No |
-| Arcade, in the built-in emulators | Yes | Yes | Only where FinalBurn Neo plays the game |
+| Arcade, in the built-in emulators | Yes | Yes | Where FinalBurn Neo or Flycast plays the game |
 | Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita, Model 2 and Model 3 | No | No | No |
 
 Saves sync for every system. See [Saves, states and sync](saves.md).

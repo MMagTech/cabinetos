@@ -4,6 +4,17 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.26.2 {#v2026-11-26-2}
+
+- **Fixed:** Naomi, Naomi 2 and Atomiswave games said they had no
+  achievements and earned none, though RetroAchievements has sets for many of
+  them. They show and earn them now. Your server has to give each game its
+  achievement hash: RomM 5.5.0-beta.1 gives none to a game it files as Naomi,
+  Naomi 2, Naomi GD-ROM or Atomiswave rather than Arcade, or to one with a
+  CHD. RomM's next release fixes both; then run Recalculate hashes on those
+  folders. ([Achievements](achievements.md),
+  [#740](https://github.com/MMagTech/cabinetos/issues/740))
+
 ## 2026.11.26 {#v2026-11-26}
 
 - **Fixed:** the diagnostic report now hides a PlayStation 3 game's licence
