@@ -41,8 +41,9 @@
 #   2. A safety net by pattern for what no list knows: email addresses,
 #      network addresses, MAC and Bluetooth addresses (the maker's half is
 #      kept, it says what the device is), serial numbers, Tailscale names and
-#      sign-in links, Steam IDs, tokens and passwords in key=value form, and
-#      the text the on-screen keyboard logged before it stopped.
+#      sign-in links, Steam IDs, a PS3 game's licence key and save data keys
+#      as RPCS3 logs them, tokens and passwords in key=value form, and the
+#      text the on-screen keyboard logged before it stopped.
 # Each distinct value gets its own stable placeholder (<profile 1>, <wifi 2>,
 # <lan ip 3>), so the log still reads. Measured on the A9, 2026-10-10, before
 # this existed: Tailscale writes the account's email into the log in plain
@@ -594,6 +595,17 @@ class Scrubber:
                       lambda m: self.placeholder(m.group(0).lower(), "tailscale name"), text)
         # Steam IDs.
         text = re.sub(r"\b7656119\d{10}\b", lambda m: self.placeholder(m.group(0), "steam id"), text)
+        # A PS3 game's keys (#750), in whichever log they are. RPCS3 logs a
+        # downloaded game's licence key when the game checks its licence
+        # ("npDrmIsAvailable(): KLicense key or KLIC=0x..."), and the key of
+        # each protected file of its save data ("cellSaveData: SECUREFILE:
+        # <file> -> 0x..."), both 128 bits written as 0x and 32 hex digits,
+        # or a bare 0 when the key is zero (RPCS3's Utilities/StrFmt.cpp),
+        # which is nobody's and stays.
+        text = re.sub(r"(\bKLIC=)0x([0-9A-Fa-f]+)",
+                      lambda m: m.group(1) + self.placeholder(m.group(2).lower(), "licence key"), text)
+        text = re.sub(r"(\bSECUREFILE: [^\n]* -> )0x([0-9A-Fa-f]+)",
+                      lambda m: m.group(1) + self.placeholder(m.group(2).lower(), "save data key"), text)
         # MAC and Bluetooth addresses, with :, - or _ between the bytes.
         # Not part of a longer run of hex: BlueZ's "dev_AA_BB_.." is caught,
         # a longer colon-separated hex string is not a MAC.

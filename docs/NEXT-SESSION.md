@@ -15,11 +15,13 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-11-25.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.25.3: #753, "PS3 trials play as the full
-game, and installed games download only the game (#748, #749)", which closed
-#748 and #749. Read the newest image from the registry, not from here. Before
-it, the same day, #752, "Arcade high scores and every file of a board's save go
-to RomM (#353)" (2026.11.25.2), which closed #353, and #751,
+change a player can see is 2026.11.26: #754, "Reports hide a PS3 game's
+licence key and save data keys (#750)", which closed #750. Read the newest
+image from the registry, not from here. Before it, the same day, #753, "PS3
+trials play as the full game, and installed games download only the game
+(#748, #749)" (2026.11.25.3), which closed #748 and #749; #752, "Arcade high
+scores and every file of a board's save go to RomM (#353)" (2026.11.25.2),
+which closed #353; and #751,
 "FinalBurn Neo games keep high scores, and CPS3 save states load clean (#608)"
 (2026.11.25), which closed #608; on 2026-11-24: #747,
 "Screenshot and Save state no longer stop the game (#726)" (2026.11.24.4), which
@@ -119,9 +121,7 @@ RomM: keep test launches under a minute, or have his go.
   2026-10-28 and written on the issue. #181, "Updates and DLC as separate
   files in RomM (Switch, PS3, Xbox 360)": RomM 5.5, which it waited for, is
   what the console needs now, and the early test of 2026-11-24 found all
-  three systems can work (results on the issue); no build go. #750, "A
-  problem report can include a PS3 game's licence key": a change of its own,
-  apart from #748 and #749.
+  three systems can work (results on the issue); no build go.
 - **With the next real core change:** the comments #490, "Code comments
   that say what the code no longer does, and machine details left in
   comments", left in the core and PCSX2 build files and `core*.cpp`, kept
