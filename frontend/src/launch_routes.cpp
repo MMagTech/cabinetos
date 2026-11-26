@@ -167,15 +167,13 @@ static std::vector<arcadematch::Disc> topLevelDiscs(const std::string& dir) {
 }
 
 // AN ARCADE GAME'S EMULATOR, FROM ITS FILES (arcadematch.h): what its archive
-// holds and the CHDs beside it. The press named one by the zip's name; when
-// the files name another, the job carries that one and the frame thread
-// loads it behind the curtain (pumpLaunch). A set whose files fit none ends
-// the job with the reason, which the game's page shows.
-static bool pickArcade(LaunchJob& job, const std::string& fileName,
-                       const std::vector<romm::ArchiveMember>& members,
-                       const std::vector<arcadematch::Disc>& discs) {
-    const arcadematch::Answer a =
-        arcadematch::byFiles(fileName, members, discs, job.platformSlug == "dc");
+// holds and the CHDs beside it, or the ID a converted Chihiro image carries.
+// The press named one by the file's name; when the files name another, the
+// job carries that one and the frame thread loads it behind the curtain
+// (pumpLaunch). A set whose files fit none ends the job with the reason, which
+// the game's page shows.
+static bool pickArcade(LaunchJob& job, const std::string& fileName, const arcadematch::Answer& a,
+                       const std::string& by) {
     if (a.verdict != arcadematch::Verdict::Plays) {
         std::fprintf(stderr, "[arcade] %s: %s\n", fileName.c_str(), a.why.c_str());
         job.message = a.why;
@@ -183,8 +181,7 @@ static bool pickArcade(LaunchJob& job, const std::string& fileName,
         return false;
     }
     job.arcadePicked = true;
-    std::fprintf(stderr, "[arcade] %s: %s, by its %zu files and %zu discs\n", fileName.c_str(),
-                 a.core, members.size(), discs.size());
+    std::fprintf(stderr, "[arcade] %s: %s, by %s\n", fileName.c_str(), a.core, by.c_str());
     if (job.coreName != a.core) {
         job.coreName = a.core;
         job.corePath = job.corePath.substr(0, job.corePath.find_last_of('/') + 1) +
@@ -204,10 +201,23 @@ static bool pickArcade(LaunchJob& job, const std::string& fileName,
 // AN ARCADE GAME NOT YET PICKED BY ITS FILES is picked here, from the archive
 // on the disk: one inside a folder game, which RomM does not open, or a loose
 // one RomM listed nothing for. Its list is kept in the game's record, so a 7z
-// is decompressed once (rememberArchive).
+// is decompressed once (rememberArchive). A CONVERTED CHIHIRO IMAGE, which
+// RomM lists nothing inside, by the ID its boot.id carries; one with none is
+// no image at all.
 static void finish(LaunchJob& job, romm::Client& client, const storage::User& user) {
     if (cancelled(job)) return;
-    if (job.arcade && !job.arcadePicked) {
+    if (job.arcade && !job.arcadePicked && endsWithNoCase(job.romPath, ".bin")) {
+        const std::string file = baseName(job.romPath);
+        const std::string id = arcadematch::chihiroId(job.romPath);
+        if (id.empty()) {
+            std::fprintf(stderr, "[arcade] %s: no boot.id, not a converted Chihiro image\n",
+                         job.romPath.c_str());
+            job.message = "Couldn't open this game's file";
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+        if (!pickArcade(job, file, arcadematch::byImage(file, id), "its ID, " + id)) return;
+    } else if (job.arcade && !job.arcadePicked) {
         const std::string file = baseName(job.romPath);
         struct stat st;
         const int64_t size = ::stat(job.romPath.c_str(), &st) == 0 ? st.st_size : 0;
@@ -223,9 +233,12 @@ static void finish(LaunchJob& job, romm::Client& client, const storage::User& us
             rememberArchive(job.romId, file, size, members);
         }
         const size_t slash = job.romPath.find_last_of('/');
-        if (!pickArcade(job, file, members,
-                        topLevelDiscs(job.romPath.substr(0, slash == std::string::npos ? 0
-                                                                                      : slash))))
+        const std::vector<arcadematch::Disc> discs =
+            topLevelDiscs(job.romPath.substr(0, slash == std::string::npos ? 0 : slash));
+        if (!pickArcade(job, file,
+                        arcadematch::byFiles(file, members, discs, job.platformSlug == "dc"),
+                        "its " + std::to_string(members.size()) + " files and " +
+                            std::to_string(discs.size()) + " discs"))
             return;
     }
     if (job.coreName == "azahar") {
@@ -773,14 +786,17 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // WHAT TO START: a disc's sheet (.cue, .gdi) over its tracks, then
         // a file the emulator lists, then the largest. AN ARCADE GAME STARTS
         // ITS ZIP, never the largest file, which is its CHD: the archive named
-        // after the game first, then the first by name.
+        // after the game first, then the first by name; or a Chihiro game's
+        // converted image, which is all of it.
         std::string boot;
         int rank = -1;
         int64_t bootSize = -1;
         if (job.arcade) {
             std::string first;
             for (const auto& [n, size] : mine) {
-                if (!endsWithNoCase(n, ".zip") && !endsWithNoCase(n, ".7z")) continue;
+                if (!endsWithNoCase(n, ".zip") && !endsWithNoCase(n, ".7z") &&
+                    !endsWithNoCase(n, ".bin"))
+                    continue;
                 const std::string stem = n.substr(0, n.find_last_of('.'));
                 if (strcasecmp(stem.c_str(), fsName.c_str()) == 0) boot = entry + "/" + n;
                 if (first.empty() || n < first) first = n;
@@ -854,7 +870,11 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         } else {
             members = rememberedArchive(id, fsName, expectedSize);
         }
-        if (!members.empty() && !pickArcade(job, fsName, members, {})) return;
+        if (!members.empty() &&
+            !pickArcade(job, fsName,
+                        arcadematch::byFiles(fsName, members, {}, job.platformSlug == "dc"),
+                        "its " + std::to_string(members.size()) + " files"))
+            return;
     }
 
     // A GAME IS ONE ENTRY, AND THE ENTRY IS A FILE WHEN THE GAME IS ONE

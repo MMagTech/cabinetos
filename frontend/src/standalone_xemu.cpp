@@ -117,16 +117,6 @@ std::string findXboxFile(bool bootRom) {
     return {};
 }
 
-// A TOML basic string: a game's folder can hold an apostrophe.
-std::string tomlQuote(const std::string& v) {
-    std::string out = "\"";
-    for (const char c : v) {
-        if (c == '"' || c == '\\') out += '\\';
-        out += c;
-    }
-    return out + "\"";
-}
-
 }  // namespace
 
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,

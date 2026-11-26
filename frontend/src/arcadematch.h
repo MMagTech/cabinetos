@@ -5,11 +5,17 @@
 // emulator finds a game by the zip's name, so the name finds the set in each
 // emulator's catalogue, and the files (each by CRC32 and size) say whether the
 // zip is that emulator's version of it. Emulators are tried in a fixed order,
-// Flycast, FinalBurn Neo, MAME 2003-Plus, sm2-emu, Supermodel, MAME 0.289,
-// and the first whose catalogue has the set, marks it working, and whose
-// files the zip holds plays it: sm2-emu, made for Model 2, plays every Model 2
-// game its list marks working, Supermodel every Model 3 game, and MAME 0.289
-// gets only what nothing else plays. A set with a disc needs its CHD too, at
+// Flycast, FinalBurn Neo, MAME 2003-Plus, sm2-emu, Supermodel, xemu-chihiro,
+// MAME 0.289, and the first whose catalogue has the set, marks it working, and
+// whose files the zip holds plays it: sm2-emu, made for Model 2, plays every
+// Model 2 game its list marks working, Supermodel every Model 3 game, and MAME
+// 0.289 gets only what nothing else plays.
+//
+// A CHIHIRO GAME IS ONE CONVERTED IMAGE, `<set>.bin`, made once by the
+// library's owner from the game's disc and key (chihiro-netboot): its name is
+// the set, and the game's own ID inside it, at boot.id 0x30 where the emulator
+// reads it, confirms it (byImage, chihiroId). Only xemu-chihiro is asked about
+// a `.bin`, and it is asked about nothing else. A set with a disc needs its CHD too, at
 // the top of the game's folder
 // (docs/decisions/2026-10-28-arcade-discs-one-folder.md), with the SHA1 the
 // catalogue gives where it gives one. MAME 2003-Plus and Supermodel cannot
@@ -26,7 +32,7 @@
 //
 // THE CATALOGUES are `<core file stem>.catalogue` beside the cores, or for a
 // program of its own `<its name>.catalogue` (sm2emu.catalogue,
-// supermodel.catalogue), made in CI
+// supermodel.catalogue, xemu-chihiro.catalogue), made in CI
 // from each emulator's own list at its pin (cores/arcade-sets.sh, which says
 // what a line holds). Read once, the first time a game asks. A missing one is
 // said once in the log and reads as empty: that emulator plays nothing.
@@ -46,9 +52,9 @@ namespace arcadematch {
 // `model3`, and the labels RomM gives each emulator's folder from
 // rommapp/romm#5273 on: `mame`, `mame-advmame`, `fbneo`, `fba`, `naomi`,
 // `naomi2`, `naomigd` and `atomiswave` (RomM 5.4 called them all `arcade`),
-// and `gaelco`, whose games FinalBurn Neo and MAME play. RomM's other new
-// boards (Triforce, Chihiro, Lindbergh, Hikaru and the like) have no emulator
-// here, so get no tile.
+// `gaelco`, whose games FinalBurn Neo and MAME play, and `chihiro`, whose
+// games xemu-chihiro plays. RomM's other new boards (Triforce, Lindbergh,
+// Hikaru and the like) have no emulator here, so get no tile.
 // Dreamcast's folder is not one, though a zip in it is asked about Flycast.
 bool isArcadeSlug(const std::string& slug);
 
@@ -98,6 +104,20 @@ Answer byName(const std::string& fileName, bool dreamcast);
 // By the files: what the archive holds, and the CHDs beside it.
 Answer byFiles(const std::string& fileName, const std::vector<Member>& members,
                const std::vector<Disc>& discs, bool dreamcast);
+
+// By a converted Chihiro image's ID (chihiroId): the set its name gives,
+// which plays when the image carries that set's ID, and otherwise "<file>
+// doesn't match its set".
+Answer byImage(const std::string& fileName, const std::string& id);
+
+// The ID a converted Chihiro image's boot.id carries, four letters or digits
+// (`SBFZ`), or empty when the file is no such image.
+std::string chihiroId(const std::string& path);
+
+// The name an emulator gives a set's saves, where its catalogue says one:
+// xemu-chihiro's, its parent's for a revision (`outr2st` for `outr2sto`).
+// Empty otherwise.
+std::string gameName(const char* core, const std::string& fileName);
 
 // What an archive on the disk holds: a zip's own directory, or for a 7z
 // every file decompressed once (libarchive gives a 7z's names and sizes, not

@@ -175,7 +175,8 @@ Level forGame(int romId) {
 bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
-                          "eden", "rpcs3", "xemu", "vita3k", "sm2emu", "supermodel"})
+                          "eden", "rpcs3", "xemu", "vita3k", "sm2emu", "supermodel",
+                          "xemu-chihiro"})
         if (core == c) return true;
     return false;
 }
@@ -398,6 +399,18 @@ int sm2emu(Level l) {
     // 8. Nothing else in it moves with the level: its texture filtering, 2D
     // upscaling and translucency stay at its faithful defaults.
     static const int kScale[] = {1, 3, 6};
+    return pick(l, kScale);
+}
+
+int chihiro(Level l) {
+    // SEGA CHIHIRO, an Xbox inside, 640x480: 1x, 2x and 4x, as Xbox's
+    // (MMagTech, 2026-11-25, #619). Measured on the A9 at 4x (2560x1920),
+    // Vulkan, 2026-11-25: OutRun 2, OutRun 2 Special Tours, Crazy Taxi High
+    // Roller and the three light-gun games all at a median of 60 frames a
+    // second, the graphics chip 18 to 42% busy on average; the brief dips fall
+    // on the same moments at 1x, so they are the games' and the processor's,
+    // not the picture's.
+    static const int kScale[] = {1, 2, 4};
     return pick(l, kScale);
 }
 

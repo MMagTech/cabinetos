@@ -33,13 +33,14 @@ One line per file, under the area it belongs to, in the form `- [name](file.md):
 - [when-an-emulator-pin-moves](2026-10-23-when-an-emulator-pin-moves.md): a pin moves only for a major feature, a bug or slowness we have seen, more games playing, a patch fixed upstream, or a move we do not choose, a security fix for any hole outside data can reach among them.
 - [3ds-games-get-no-network](2026-10-20-3ds-games-get-no-network.md): a 3DS game never reaches a server named in the game; by a patch to Azahar until 2026-10-26, by the block for every emulator since.
 - [emulators-get-no-network](2026-10-26-emulators-get-no-network.md): one block keeps every emulator off the network, inside the console's program by who asked and outside it by starting each with no network.
-- [arcade-emulator-from-the-zip](2026-10-28-arcade-emulator-from-the-zip.md): an arcade game's emulator comes from its zip's name and files, in a fixed order, never from its folder.
+- [arcade-emulator-from-the-zip](2026-10-28-arcade-emulator-from-the-zip.md): an arcade game's emulator comes from its zip's name and files, in a fixed order, never from its folder; a Chihiro game's from its converted image's name and ID.
 - [emulator-updates-and-saves](2026-10-28-emulator-updates-and-saves.md): every emulator update is taken to break saves and states, so it needs a reason, a run first and a changelog warning.
 - [prebuilt-mame-core](2026-10-28-prebuilt-mame-core.md): MAME 0.289 is libretro's own build, the one core we do not build.
 - [model-2-and-model-3](2026-10-28-model-2-and-model-3.md): Model 2 plays in sm2-emu and Model 3 in Supermodel, both built into the image.
 - [model-3-net-board-linked-to-itself](2026-10-29-model-3-net-board-linked-to-itself.md): Model 3's net board is on, linked to itself, inside the empty network every emulator gets.
 - [xbox-360-unreal-engine-3-fix](2026-11-01-xbox-360-unreal-engine-3-fix.md): every Xbox 360 game draws at the Xenos sample positions with the window offset in the viewport, so Unreal Engine 3 games lose their black patches.
 - [dirt-devils-supermodel-patch](2026-11-01-dirt-devils-supermodel-patch.md): a patch to Supermodel runs a machine linked to itself as the only cabinet, so Dirt Devils plays.
+- [chihiro-in-the-xemu-fork](2026-11-26-chihiro-in-the-xemu-fork.md): Chihiro plays in Tovarichtch's xemu fork, built here at a pin, one converted image per game, both BIOS zips for every game.
 - [ps3-filtering-as-the-game-asked](2026-11-06-ps3-filtering-as-the-game-asked.md): on PS3 the anisotropic filter is the game's own, not the forced 16x, and buffers up to 320 pixels stay unscaled, so Unreal Engine 3 games draw without red.
 - [rpcs3-settings-database-snapshot](2026-11-06-rpcs3-settings-database-snapshot.md): the RPCS3 team's per-game settings ride in the image as a committed snapshot, refreshed by a tool only when RPCS3's pin moves, held to that pin by the build and CI, never fetched by the console or the build.
 - [a-game-is-shown-in-its-emulators-shape](2026-11-23-a-game-is-shown-in-its-emulators-shape.md): a game is drawn, and every picture of it made, in the shape its emulator declares, a vertical arcade game's too.

@@ -89,6 +89,11 @@ int gCount = 0;
 // The d-pad is four buttons to SDL and one hat to evdev, so each pad's four
 // are remembered to work out the hat.
 bool gDpad[kMaxPlayers][4] = {};
+// THE D-PAD ON THE LEFT STICK TOO, for an emulator whose row asks
+// (standalone.h, `dpadOnStick`): each pad's left stick as it really is, so
+// letting go of the d-pad gives the game the stick back where it is.
+bool gDpadOnStick = false;
+int gStick[kMaxPlayers][2] = {};
 
 // THE MOTION DEVICES (#683), one beside each pad whose player has a sensor,
 // or -1; and what each was last told, so a sample that changes nothing is
@@ -342,6 +347,17 @@ void plainAxis(int player, SDL_GamepadAxis a, int value) {
     }
 }
 
+// THE LEFT STICK A PLAYER'S GAME IS SENT while the d-pad moves it too
+// (gDpadOnStick): full travel along a direction the d-pad holds, the stick
+// itself along one it does not. The caller sends the report.
+void stickWithDpad(int player) {
+    const bool* d = gDpad[player];
+    const int x = d[2] != d[3] ? (d[2] ? -32768 : 32767) : gStick[player][0];
+    const int y = d[0] != d[1] ? (d[0] ? -32768 : 32767) : gStick[player][1];
+    emit(gFd[player], EV_ABS, ABS_X, x);
+    emit(gFd[player], EV_ABS, ABS_Y, y);
+}
+
 // What a guitar's shape says its seat's plain controller is sent.
 void send(int player, const std::vector<::guitar::Change>& changes) {
     for (const ::guitar::Change& c : changes) {
@@ -354,7 +370,8 @@ void send(int player, const std::vector<::guitar::Change>& changes) {
 
 }  // namespace
 
-bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, bool guitars) {
+bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, bool guitars,
+          bool dpadOnStick) {
     close();
     if (players < 1) players = 1;
     if (players > kMaxPlayers) players = kMaxPlayers;
@@ -393,6 +410,9 @@ bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, boo
         ++gCount;
     }
     std::memset(gDpad, 0, sizeof gDpad);
+    std::memset(gStick, 0, sizeof gStick);
+    gDpadOnStick = dpadOnStick;
+    if (dpadOnStick) std::fprintf(stderr, "[vpad] the d-pad moves the left stick too\n");
     for (auto& pad : gEffects)
         for (Effect& e : pad) e = Effect{};
     for (int& p : gPlaying) p = -1;
@@ -410,6 +430,7 @@ bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, boo
 
 void close() {
     if (gCount > 0) rumble::reset();
+    gDpadOnStick = false;
     for (::guitar::Ps3Shape& g : gGuitar) g.reset(nullptr);
     if (gDualSense) {
         vdualsense::closeAll();
@@ -468,6 +489,7 @@ void button(int player, SDL_GamepadButton b, bool down) {
         d[dpad] = down;
         emit(fd, EV_ABS, ABS_HAT0Y, d[0] == d[1] ? 0 : d[0] ? -1 : 1);
         emit(fd, EV_ABS, ABS_HAT0X, d[2] == d[3] ? 0 : d[2] ? -1 : 1);
+        if (gDpadOnStick) stickWithDpad(player);
         sync(fd);
         return;
     }
@@ -491,6 +513,12 @@ void axis(int player, SDL_GamepadAxis a, int16_t value) {
         send(player, out);
         return;
     }
+    if (gDpadOnStick && (a == SDL_GAMEPAD_AXIS_LEFTX || a == SDL_GAMEPAD_AXIS_LEFTY)) {
+        gStick[player][a == SDL_GAMEPAD_AXIS_LEFTX ? 0 : 1] = value;
+        stickWithDpad(player);
+        sync(gFd[player]);
+        return;
+    }
     plainAxis(player, a, value);
 }
 
@@ -507,6 +535,7 @@ void releaseAll() {
         emit(fd, EV_ABS, ABS_HAT0Y, 0);
         sync(fd);
         std::memset(gDpad[p], 0, sizeof gDpad[p]);
+        std::memset(gStick[p], 0, sizeof gStick[p]);
         gGuitar[p].release();
     }
 }
@@ -650,19 +679,24 @@ int axisIndex(SDL_GamepadAxis a) {
 
 namespace {
 
-// Where player `p`'s motion device is in sysfs (`/sys/class/input/inputN`),
+// Where the uinput device `fd` made is in sysfs (`/sys/class/input/inputN`),
 // or empty.
-std::string motionSysPath(int p) {
+std::string sysPathOf(int fd) {
     char sys[64] = {};
-    if (gMotionFd[p] < 0 || ioctl(gMotionFd[p], UI_GET_SYSNAME(sizeof sys - 1), sys) < 0) return "";
+    if (fd < 0 || ioctl(fd, UI_GET_SYSNAME(sizeof sys - 1), sys) < 0) return "";
     return std::string("/sys/class/input/") + sys;
 }
 
-// Its event node, opened read-only as RPCS3 opens it once udev has given the
-// console's user access (up to three seconds), or -1.
-int openMotionNode(int p) {
+// Player `p`'s motion device's, and plain controller's.
+std::string motionSysPath(int p) { return sysPathOf(gMotionFd[p]); }
+std::string padSysPath(int p) { return sysPathOf(gFd[p]); }
+
+// The event node of the device at `sys`, opened read-only as RPCS3 opens a
+// motion device once udev has given the console's user access (up to three
+// seconds), or -1.
+int openNode(const std::string& sys) {
     std::string node;
-    if (DIR* d = opendir(motionSysPath(p).c_str())) {
+    if (DIR* d = opendir(sys.c_str())) {
         while (const dirent* e = readdir(d))
             if (std::strncmp(e->d_name, "event", 5) == 0) node = std::string("/dev/input/") + e->d_name;
         closedir(d);
@@ -737,7 +771,8 @@ int motionTest() {
           "three test pads seated: players 1 and 2 with both sensors, player 3 with none");
 
     // AN EMULATOR THAT READS NO MOTION DEVICE.
-    if (!open(3, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false, /*guitars=*/false)) {
+    if (!open(3, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false, /*guitars=*/false,
+              /*dpadOnStick=*/false)) {
         std::printf("  FAIL  no virtual controllers: /dev/uinput cannot be opened\n");
         players::setInGame(false);
         SDL_Quit();
@@ -748,7 +783,8 @@ int motionTest() {
     close();
 
     // RPCS3.
-    check(open(3, /*motion=*/true, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false, /*guitars=*/false),
+    check(open(3, /*motion=*/true, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false, /*guitars=*/false,
+               /*dpadOnStick=*/false),
           "three virtual controllers, motion asked");
     check(motionName(0) == "CabinetOS player 1 motion" && motionName(1) == "CabinetOS player 2 motion" &&
               motionName(2).empty(),
@@ -756,7 +792,7 @@ int motionTest() {
     check(sensorsOn(one, true) && sensorsOn(two, true),
           "players 1's and 2's accelerometers and gyroscopes are on");
     const std::string sys1 = motionSysPath(0), sys2 = motionSysPath(1);
-    const int n1 = openMotionNode(0), n2 = openMotionNode(1);
+    const int n1 = openNode(motionSysPath(0)), n2 = openNode(motionSysPath(1));
     check(n1 >= 0 && n2 >= 0,
           "the console's user can open both motion devices, as RPCS3 must (the udev rule)");
     check(n1 >= 0 && n2 >= 0 && shapedForRpcs3(n1, motionName(0)) && shapedForRpcs3(n2, motionName(1)),
@@ -810,6 +846,41 @@ int motionTest() {
     check(!sys1.empty() && !sys2.empty() && ::access(sys1.c_str(), F_OK) != 0 &&
               ::access(sys2.c_str(), F_OK) != 0 && motionName(0).empty(),
           "and both motion devices are gone with their pads");
+
+    // THE D-PAD ON THE LEFT STICK TOO (xemu-chihiro's row, standalone.h): read
+    // back through the plain controller's own node.
+    check(open(1, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false,
+               /*guitars=*/false, /*dpadOnStick=*/true),
+          "one virtual controller whose d-pad moves the left stick too");
+    const int pad = openNode(padSysPath(0));
+    auto stickAt = [&](int x, int y) {
+        input_absinfo a{}, b{};
+        return pad >= 0 && ioctl(pad, EVIOCGABS(ABS_X), &a) == 0 &&
+               ioctl(pad, EVIOCGABS(ABS_Y), &b) == 0 && a.value == x && b.value == y;
+    };
+    axis(0, SDL_GAMEPAD_AXIS_LEFTX, 1000);
+    check(stickAt(1000, 0), "the stick alone moves the stick");
+    button(0, SDL_GAMEPAD_BUTTON_DPAD_LEFT, true);
+    check(stickAt(-32768, 0), "the d-pad held left puts the stick fully left");
+    axis(0, SDL_GAMEPAD_AXIS_LEFTX, 2000);
+    check(stickAt(-32768, 0), "the stick moved meanwhile does not move it while the d-pad holds it");
+    button(0, SDL_GAMEPAD_BUTTON_DPAD_UP, true);
+    check(stickAt(-32768, -32768), "up too puts it fully up as well");
+    button(0, SDL_GAMEPAD_BUTTON_DPAD_LEFT, false);
+    button(0, SDL_GAMEPAD_BUTTON_DPAD_UP, false);
+    check(stickAt(2000, 0), "let go, it is where the stick is");
+    if (pad >= 0) ::close(pad);
+    close();
+    check(open(1, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false,
+               /*guitars=*/false, /*dpadOnStick=*/false),
+          "one virtual controller as every other emulator has it");
+    const int plainPad = openNode(padSysPath(0));
+    button(0, SDL_GAMEPAD_BUTTON_DPAD_LEFT, true);
+    input_absinfo x{};
+    check(plainPad >= 0 && ioctl(plainPad, EVIOCGABS(ABS_X), &x) == 0 && x.value == 0,
+          "and there the d-pad leaves the stick alone");
+    if (plainPad >= 0) ::close(plainPad);
+    close();
 
     tilt::testUnplug(one);
     tilt::testUnplug(plain);

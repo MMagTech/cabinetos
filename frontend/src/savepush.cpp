@@ -225,9 +225,13 @@ const cab::FileSaveState* travelsAlone(const GameSession& sess) {
 bool gather(const GameSession& sess, cache::OwedPush* p) {
     const catalog::SaveForm form = catalog::saveForm(sess.core.c_str(), sess.platformSlug);
     if (!sess.dirSaveRoot.empty()) {
-        p->saveName = dirSaveZipName(sess.title);
+        // One file as it is, where the folder's form says (saves.h,
+        // aloneInFolder), under the emulator's own name for it; and then
+        // several are a zip of files with no folder, as a core's several are.
+        const std::string alone = aloneInFolder(sess);
+        p->saveName = alone.empty() ? dirSaveZipName(sess.title) : alone;
         p->savePath = sess.saveDir + "/" + p->saveName;
-        p->saveShape = kFolder;
+        p->saveShape = !alone.empty() ? kSingle : form.aloneAsItIs ? kMulti : kFolder;
     } else if (const cab::FileSaveState* alone =
                    form.batteryFirst ? nullptr : travelsAlone(sess)) {
         p->saveName = nameWithExtensionOf(sess.fsStem, alone->spec.path);

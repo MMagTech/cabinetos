@@ -1,17 +1,19 @@
 // Emulators that are whole applications, played as games.
 //
 // WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu), Xbox 360 (Xenia
-// Edge), Wii U (Cemu), PlayStation Vita (Vita3K), Sega Model 2 (sm2-emu) and
-// Sega Model 3 (Supermodel) are not libretro cores and cannot be loaded into
-// this process the way the other systems are (PS2 included). Eden and xemu come from Flathub, pinned in
+// Edge), Wii U (Cemu), PlayStation Vita (Vita3K), Sega Model 2 (sm2-emu), Sega
+// Model 3 (Supermodel) and Sega Chihiro (xemu-chihiro) are not libretro cores
+// and cannot be loaded into this process the way the other systems are (PS2
+// included). Eden and xemu come from Flathub, pinned in
 // flatpaks.list; RPCS3 is the RPCS3 team's own build, in the image
 // (build_files/install-rpcs3.sh), because its Flatpak shows a warning box on
 // every start; Xenia Edge and Vita3K are their developers' own builds, in the
 // image too (build_files/install-xenia.sh, install-vita3k.sh), because neither
-// is on Flathub; Cemu, sm2-emu and Supermodel are built here at a pin
-// (cores/build-cemu.sh, cores/build-sm2emu.sh, cores/build-supermodel.sh).
-// sm2-emu and Supermodel play the Model 2 and Model 3 games the arcade match
-// gives them (arcadematch.h), from any arcade folder.
+// is on Flathub; Cemu, sm2-emu, Supermodel and xemu-chihiro are built here at
+// a pin (cores/build-cemu.sh, cores/build-sm2emu.sh, cores/build-supermodel.sh,
+// cores/build-xemu-chihiro.sh). sm2-emu, Supermodel and xemu-chihiro play the
+// Model 2, Model 3 and Chihiro games the arcade match gives them
+// (arcadematch.h), from any arcade folder.
 // Each one opens its own window and draws its own picture.
 // So the console starts the emulator as a separate program, hands it the
 // television, and takes the screen back when it ends. docs/PROJECT.md, open
@@ -27,8 +29,9 @@
 // WHERE THE CODE IS. standalone.cpp is the mechanism and the table; each
 // emulator's own setup is in its file (standalone_eden.cpp,
 // standalone_rpcs3.cpp, standalone_xemu.cpp, standalone_xenia.cpp,
-// standalone_cemu.cpp, standalone_vita3k.cpp, standalone_sm2emu.cpp and
-// standalone_supermodel.cpp), and what they share is standalone_internal.h.
+// standalone_cemu.cpp, standalone_vita3k.cpp, standalone_sm2emu.cpp,
+// standalone_supermodel.cpp and standalone_chihiro.cpp), and what they share
+// is standalone_internal.h.
 // Since the restructure (#398).
 //
 // WHERE ITS STATE LIVES. Each emulator gets `emulators/<core>/` under the
@@ -162,6 +165,11 @@ struct Emulator {
     // IT IS TOLD A GUITAR'S SEAT HOLDS A GUITAR (guitar.h): that seat's virtual
     // controller carries a guitar's shape and its controls say so. RPCS3.
     bool guitars;
+    // IT TAKES ONE INPUT FOR EACH OF A GAME'S CONTROLS, and the arcade layout
+    // steers on the left stick and the d-pad both, so each player's d-pad
+    // moves their virtual controller's left stick too (vpad.h): xemu-chihiro,
+    // whose bindings name one input apiece (#619).
+    bool dpadOnStick;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
@@ -204,6 +212,9 @@ bool installGame(const Emulator& e, const std::string& entryPath,
 // on (sm2-emu's and Supermodel's settings name the game's buttons, which its
 // set says).
 //
+// `*missingKeys` for xemu-chihiro: chihiro.zip or seganetw.zip, the board's
+// files, is not in `bios/` (standalone_chihiro.cpp).
+//
 // `saveDir` is this person's folder for this game (storage::savesDir), and
 // the emulator writes the game's save inside it, so two people and two games
 // never share one. `player` is the name a game shows for the person playing,
@@ -230,8 +241,18 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
 // save; the zip is Sigil's unit for them (dirsave.h, ZipShape::Switch). For RPCS3,
 // `hdd0/home/00000001/savedata`, whose folders are named by the game too.
 // For sm2-emu, `nvram`, the board's NVRAM and EEPROM, `<set>.nv` and
-// `<set>.eeprom`; for Supermodel, `nvram`, the board's `<set>.nv`.
+// `<set>.eeprom`; for Supermodel, `nvram`, the board's `<set>.nv`; for
+// xemu-chihiro, `xemu/xemu/saves`, the board's `<game>.sav`, the media
+// board's `<game>.dimm` and a player's card, with no folders, which travels
+// as RomM takes an arcade save (dirsave.h, ZipShape::Arcade).
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
+
+// The name a save folder's one file is put back under, for an emulator whose
+// folder travels as that file when it holds only that
+// (catalog::SaveForm::aloneAsItIs): xemu-chihiro's `<game>.sav`, the board's
+// backup, named after the game's parent set (arcadematch::gameName). Empty
+// for every other emulator.
+std::string aloneSave(const Emulator& e, const std::string& romPath);
 
 // The profile's folder under saveRoot, whose saves are the person's own, for
 // an emulator that keeps them per profile beside the device's: Eden's first
@@ -258,7 +279,8 @@ std::string switchKeys();
 // the way the next paragraph's do, and the game starts. Only saves the drive
 // will not give up keep the game from starting.
 //
-// Xenia, Cemu, Eden, RPCS3, Vita3K, sm2-emu and Supermodel (`notesPlaying`): the note goes in the PERSON's folder for
+// Xenia, Cemu, Eden, RPCS3, Vita3K, sm2-emu, Supermodel and xemu-chihiro
+// (`notesPlaying`): the note goes in the PERSON's folder for
 // the game (`saveDir`), where the emulator writes the saves itself. A note
 // still there at the next start or the next launch of that game means the
 // last one never got its saves zipped, and the whole folder is sent then.

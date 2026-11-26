@@ -43,7 +43,8 @@
 // motion device of its own, made though the guitar has no sensors. Every
 // other seat, and every other emulator, is sent its pad as it is.
 //
-// Xbox, Xbox 360, Model 2 and Model 3 keep the plain controller. Rumble comes
+// Xbox, Xbox 360, Model 2, Model 3 and Chihiro keep the plain controller,
+// Chihiro's with its d-pad on the left stick too (open). Rumble comes
 // back the other way from both kinds: each virtual controller takes the
 // emulator's force-feedback the way a real pad does, and pump() hands it to
 // rumble.h, which drives the player's real pad under the console's Rumble
@@ -103,7 +104,14 @@ constexpr int kMaxPlayers = 4;
 // whose controller is a guitar now (guitar::seated) is sent the guitar's
 // shape until close(), and, with `motion`, gets a motion device carrying its
 // tilt. Only with the plain controllers.
-bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, bool guitars);
+//
+// With `dpadOnStick` (an emulator that takes one input for each of a game's
+// controls, xemu-chihiro, where the arcade layout steers on the stick and the
+// d-pad both), the d-pad also moves its player's left stick: fully along a
+// direction it holds, the stick itself along one it does not. Only with the
+// plain controllers.
+bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, bool guitars,
+          bool dpadOnStick);
 void close();
 int count();
 // True while player `player`'s controller is a stand-in DualSense carrying

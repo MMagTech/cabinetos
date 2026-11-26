@@ -91,17 +91,21 @@ FROM ghcr.io/ublue-os/bazzite:44.20261026@sha256:ee82a885dbb77cd4604a5ffa8278a0e
 #                                SDL2_net and its catalogue (Model 3). Not
 #                                yet in an image: 4.3 MB on disk, 1.6 MB
 #                                gzipped, as built on the A9 on 2026-10-29.
-#    9. xemu's drive       1 MB  pinned.
-#   10. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
-#   11. the frontend       4 MB  the frontend, the Wii bridge, the
+#    9. xemu-chihiro      10 MB  built at a pin by build-xemu-chihiro.yml,
+#                                with its catalogue (Chihiro). Not yet in an
+#                                image: 25.8 MB on disk stripped, as built
+#                                on the A9 on 2026-11-25.
+#   10. xemu's drive       1 MB  pinned.
+#   11. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#   12. the frontend       4 MB  the frontend, the Wii bridge, the
 #                                controller lists and the shaders. Moves
 #                                with nearly every change.
-#   12. the boot splash  254 MB  the initramfs. Moves with the OS layer.
-#   13. the version       1 kB  every image.
-#   14. the lint               (nothing in it)
+#   13. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   14. the version       1 kB  every image.
+#   15. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
-# ships layer 11, PROVIDED the other layers rebuild to identical bytes. CI
+# ships layer 12, PROVIDED the other layers rebuild to identical bytes. CI
 # builds from nothing every time, so that rests on `podman build --timestamp`
 # in the Justfile, on build.sh stamping the packages it installs with a fixed
 # time (#511), and on there being NO RECHUNK, which throws this order away
@@ -168,6 +172,13 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-supermodel.sh
+
+# Sega Chihiro: xemu-chihiro, Tovarichtch's xemu fork, built from source at a
+# pin by build-xemu-chihiro.yml, and its catalogue, from the payload. A layer
+# of its own beside Supermodel's, moving only when its pin does.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-xemu-chihiro.sh
 
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak

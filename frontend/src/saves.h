@@ -168,10 +168,14 @@ struct StartNotes {
 // A ZIP IN SIGIL'S SHAPE (dirsave.h, ZipShape) is put back in the folder's
 // own; `shape` from zipShapeOf, `place` from wiiKindOf for a Wii game and
 // standalone::saveProfile for a Switch game.
+// A SAVE THAT IS ONE FILE AS IT IS, for a folder that travels that way
+// (SaveForm::aloneAsItIs), goes back under `alone`, the name the emulator
+// gives it (Chihiro's `<game>.sav`), when RomM's name for it ends the same.
 void restoreDirSave(const SaveFetch& fetched, const char* tag, const std::string& root,
                     const std::string& title, const std::string& oldCard = std::string(),
                     StartNotes* notes = nullptr, cab::ZipShape shape = cab::ZipShape::Folder,
-                    const std::string& place = std::string());
+                    const std::string& place = std::string(),
+                    const std::string& alone = std::string());
 // RomM's shape for this core's folder save (dirsave.h): Sigil's for a Wii
 // game (the Mii Channel's stays the folder's), a 3DS game and a Switch game.
 cab::ZipShape zipShapeOf(const std::string& core, const std::string& platform,
@@ -189,6 +193,11 @@ std::vector<cab::DirEntry> listDirSave(const GameSession& sess);
 // once the game has closed (savepush.h, leave).
 void syncDirSave(GameSession& sess);
 std::string dirSaveZipName(const std::string& title);
+// The one file a folder save travels as, where its form says one goes as it
+// is (SaveForm::aloneAsItIs) and the folder holds only that; empty for a zip.
+// syncDirSave writes it beside the folder under that name, and the push sends
+// it from there (savepush.h, gather).
+std::string aloneInFolder(const GameSession& sess);
 void finishInterruptedSave(const cab::standalone::Emulator& emu, const std::string& saveDir,
                            Uploader& up);
 // A GAME IN A CORE THAT NEVER ENDED (#346, step 9; MMagTech, 2026-11-20): a

@@ -32,7 +32,7 @@ app. When you leave the game, its save goes up once, if it changed.
   PSP, 3DS, GameCube, Wii, a Saturn game's backup cartridge, a MAME 0.289
   game's high scores, and the systems
   run as separate programs (Switch, PS3, Wii U, Xbox, Xbox 360, Vita, Model 2,
-  Model 3). The other systems keep the save inside the emulator until you
+  Model 3, Chihiro). The other systems keep the save inside the emulator until you
   leave, so what was saved in that session is lost.
 - The game's page shows when it was last saved: *Saved today, 8:17 PM*.
 - On RomM's website a save from the console shows a picture of the game from

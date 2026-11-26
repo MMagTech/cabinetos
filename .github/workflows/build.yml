@@ -261,6 +261,15 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     uses: ./.github/workflows/build-supermodel.yml
 
+  # SEGA CHIHIRO, xemu-chihiro built from source at a pin
+  # (build-xemu-chihiro.yml), with its catalogue, and the same refusal:
+  # ci/stage-image-payload.sh will not build an image without it.
+  chihiro:
+    name: Chihiro
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/build-xemu-chihiro.yml
+
   # REMOTE PLAY, Sunshine built at its pin with our patch (build-sunshine.yml,
   # #304), with the same refusal: ci/stage-image-payload.sh will not build an
   # image without it.
@@ -284,7 +293,7 @@ jobs:
 
   build_push:
     name: Build and push image
-    needs: [lint, promote, frontend, cores, playstation2, wiiu, model2, model3, sunshine, mame]
+    needs: [lint, promote, frontend, cores, playstation2, wiiu, model2, model3, chihiro, sunshine, mame]
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
 
@@ -304,14 +313,15 @@ jobs:
           remove-codeql: true
 
       # The frontend and the Wii bridge, the cores, PlayStation 2, MAME 0.289,
-      # Wii U, Model 2, Model 3 and Sunshine, from the jobs above. Merged into
-      # one directory, which works because each artifact was staged into the
-      # payload's own folders (bin/, cores/, system/, mame/, cemu/, sm2emu/,
-      # supermodel/, sunshine/) and no two of them hold a file of the same
-      # name: bin/ comes from the frontend, cores/ has one .so per core plus
-      # the PS2 emulator and its libraries, system/ has PPSSPP's, Dolphin's
-      # and PCSX2's files under different directories, mame/, cemu/, sm2emu/,
-      # supermodel/ and sunshine/ one emulator each.
+      # Wii U, Model 2, Model 3, Chihiro and Sunshine, from the jobs above.
+      # Merged into one directory, which works because each artifact was
+      # staged into the payload's own folders (bin/, cores/, system/, mame/,
+      # cemu/, sm2emu/, supermodel/, xemu-chihiro/, sunshine/) and no two of
+      # them hold a file of the same name: bin/ comes from the frontend,
+      # cores/ has one .so per core plus the PS2 emulator and its libraries,
+      # system/ has PPSSPP's, Dolphin's and PCSX2's files under different
+      # directories, mame/, cemu/, sm2emu/, supermodel/, xemu-chihiro/ and
+      # sunshine/ one emulator each.
       - name: Fetch the frontend and the cores
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:

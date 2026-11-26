@@ -2,8 +2,8 @@
 // standalone.cpp, and each emulator's own entry points, defined in its file.
 // Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
 // standalone_xenia.cpp, standalone_cemu.cpp, standalone_xemu.cpp,
-// standalone_vita3k.cpp, standalone_sm2emu.cpp and standalone_supermodel.cpp
-// include it.
+// standalone_vita3k.cpp, standalone_sm2emu.cpp, standalone_supermodel.cpp and
+// standalone_chihiro.cpp include it.
 // Moved out of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
@@ -61,6 +61,7 @@ bool removeTree(const std::string& path);
 std::vector<std::string> listDir(const std::string& dir);
 bool endsWithNoCase(const std::string& s, const char* suffix);
 std::string yamlQuote(const std::string& v);
+std::string tomlQuote(const std::string& v);
 bool placeLink(const std::string& target, const std::string& link);
 std::string arcadeSet(const std::string& romPath);
 
@@ -123,6 +124,17 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
 // its working folder, bwrap's --chdir after "bwrap".
 void supermodelArgs(std::vector<std::string>& full, const Emulator& e, const std::string& dir,
                     const std::string& romPath);
+
+// Sega Chihiro (standalone_chihiro.cpp).
+std::string chihiroData(const std::string& saveDir);
+std::string chihiroSaves(const std::string& saveDir);
+std::string chihiroAloneSave(const Emulator& e, const std::string& romPath);
+bool prepareChihiro(const Emulator& e, const std::string& saveDir, int players,
+                    quality::Level level, bool* missing, std::string* err);
+// Run::start's arguments for xemu-chihiro, as for xeniaArgs: the environment
+// entries before the program, then its settings and the game.
+void chihiroArgs(std::vector<std::string>& full, const std::string& saveDir,
+                 const std::string& romPath);
 
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,

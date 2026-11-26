@@ -64,7 +64,7 @@ unasked.
 
 1. **Find the pin and when it was set.** A core: `REPO` and `COMMIT` in its
    `case` arm in `cores/build-core.sh`. Others: the other `cores/build-*.sh`
-   (PCSX2, Cemu, sm2-emu, Supermodel, Sunshine), MAME's `MAME_COMMIT` in
+   (PCSX2, Cemu, sm2-emu, Supermodel, xemu-chihiro, Sunshine), MAME's `MAME_COMMIT` in
    `cores/fetch-mame.sh` (a libretro/mame commit, built once and downloaded),
    `build_files/install-*.sh` and
    `system_files/usr/share/cabinetos/flatpaks.list`. Date it with

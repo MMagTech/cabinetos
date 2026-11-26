@@ -41,9 +41,23 @@
 #                   same set (its -listxml, as for mame_libretro): The Lost
 #                   World is a light gun there, L.A. Machineguns and The Ocean
 #                   Hunter are not
+#   xemu-chihiro    MAME 0.289's -listxml for the Chihiro sets and their
+#                   parents (sega/chihiro.cpp; it marks every one preliminary
+#                   and gives them all the same controls, so it marks nothing
+#                   here), and the fork's own hw/xbox/chihiro/chihiro.c and
+#                   config_spec.yml, at the commit cores/build-xemu-chihiro.sh
+#                   pins: a set's ID, the four letters at boot.id 0x30 its
+#                   converted image carries, and the name the fork gives its
+#                   saves, both its parent's, from chihiro_game_names; it works
+#                   when the fork has controls for it, one of its JVS profiles
+#                   (chihiro.jvs.profile), and is a light-gun game when that
+#                   profile has a trigger. Which parent set each profile is
+#                   for is the table below (PROFILE_SETS), checked against the
+#                   fork's profiles and names, since the fork names its
+#                   profiles after its cabinets, not after MAME's sets
 #
 # THE FILE, <core file stem>.catalogue, one set a line:
-#   <set> <w|n> <-|g|x> [b<buttons>] <crc>:<size> ... @<disc>:<sha1> ...
+#   <set> <w|n> <-|g|x> [b<buttons>] <crc>:<size> ... @<disc>:<sha1> ... [=<id>:<name>]
 # w works and n does not, by the emulator's own word (FBNeo "preliminary",
 # 2003-Plus "preliminary" or "protection", MAME 0.289 "preliminary"); g a
 # light-gun game; x a game made
@@ -60,7 +74,10 @@
 # and size (size 0 where the list gives none, Flycast's, sm2-emu's and
 # Supermodel's); each disc by the CHD's
 # name and the SHA1 the list gives (none for Flycast), a space in its name
-# written %20. Left out of the files:
+# written %20. A Chihiro game's =<id>:<name> is the ID its converted image's
+# boot.id carries and the name its saves take (xemu-chihiro's alone; it has
+# no files to check, the image being one file the library's owner made). Left
+# out of the files:
 # the BIOS files the emulator does not ask for (FBNeo's that its drivers mark
 # BRF_OPT, Neo Geo's choices of BIOS among them; for 2003-Plus and MAME
 # 0.289, the BIOS choices other than the default, the files with a `bios=`
@@ -74,8 +91,9 @@
 # for MAME 0.289, which is not built there, from cores/fetch-mame.sh (its
 # LISTXML_URL and LISTXML_SHA256; $CABINETOS_LISTXML may name a copy already
 # fetched, which is checked the same), and for sm2-emu and Supermodel,
-# programs of their own, from cores/build-sm2emu.sh and
-# cores/build-supermodel.sh (their REPO= and COMMIT=). Not a mode of build-core.sh on
+# programs of their own, from cores/build-sm2emu.sh,
+# cores/build-supermodel.sh and cores/build-xemu-chihiro.sh (their REPO= and
+# COMMIT=). Not a mode of build-core.sh on
 # purpose: every core's CI cache key covers its shared lines
 # (ci/core-cache-key.sh), so editing a mode there would rebuild every core.
 #
@@ -84,8 +102,8 @@
 #
 # Usage: cores/arcade-sets.sh <core> <out dir>
 #   writes <out dir>/<core file stem>.catalogue, e.g. fbneo_libretro.catalogue,
-#   or for a program of its own its name's, sm2emu.catalogue or
-#   supermodel.catalogue
+#   or for a program of its own its name's, sm2emu.catalogue,
+#   supermodel.catalogue or xemu-chihiro.catalogue
 
 set -euo pipefail
 
@@ -119,6 +137,10 @@ sm2emu)
 supermodel)
     FILES=("Config/Games.xml")
     LEAST=55
+    ;;
+xemu-chihiro)
+    FILES=("hw/xbox/chihiro/chihiro.c" "config_spec.yml")
+    LEAST=40
     ;;
 *)
     exit 0
@@ -157,6 +179,7 @@ else
 case "${CORE}" in
 sm2emu) arm=$(cat "${ROOT}/cores/build-sm2emu.sh") ;;
 supermodel) arm=$(cat "${ROOT}/cores/build-supermodel.sh") ;;
+xemu-chihiro) arm=$(cat "${ROOT}/cores/build-xemu-chihiro.sh") ;;
 *) arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh") ;;
 esac
 REPO=$(sed -n 's/^ *REPO=//p' <<<"${arm}")
@@ -187,8 +210,9 @@ if [[ "${CORE}" == fbneo_libretro ]]; then
     git -C "${tmp}/fbneo" checkout -q FETCH_HEAD
     src+=("${tmp}/fbneo/src/burn/drv")
 fi
-# Supermodel's marks are MAME 0.289's for the same set (above).
-if [[ "${CORE}" == supermodel ]]; then
+# Supermodel's marks are MAME 0.289's for the same set (above), and
+# xemu-chihiro's sets are MAME 0.289's.
+if [[ "${CORE}" == supermodel || "${CORE}" == xemu-chihiro ]]; then
     listxml "${tmp}/mame0289lx.zip"
     src+=("${tmp}/mame0289lx.zip")
     FILES+=("${LISTXML_URL}")
@@ -197,7 +221,8 @@ fi
 mkdir -p "${OUT}"
 file="${OUT}/${CORE%_libretro}_libretro.catalogue"
 # A program of its own is named for itself (arcadematch.cpp, loadFrom).
-[[ "${CORE}" == sm2emu || "${CORE}" == supermodel ]] && file="${OUT}/${CORE}.catalogue"
+[[ "${CORE}" == sm2emu || "${CORE}" == supermodel || "${CORE}" == xemu-chihiro ]] &&
+    file="${OUT}/${CORE}.catalogue"
 {
     echo "# ${CORE} @ ${COMMIT}, from ${FILES[*]}"
     python3 - "${CORE}" "${src[@]}" <<'PY'
@@ -243,7 +268,7 @@ def mame_flag(m):
 printed = set()
 
 
-def line(name, works, flag, files, discs, buttons=0):
+def line(name, works, flag, files, discs, buttons=0, image=None):
     # A name listed twice is the first one: the emulator finds a set by name
     # and takes the first it lists (Flycast's shors2k2).
     if name.lower() in printed:
@@ -256,6 +281,8 @@ def line(name, works, flag, files, discs, buttons=0):
     # A disc's name may hold spaces (MAME 0.289's "road burners v1.04"),
     # which the line separates by: written %20, and % as %25.
     parts += ["@%s:%s" % (d.replace("%", "%25").replace(" ", "%20"), s) for d, s in discs]
+    if image:
+        parts.append("=%s:%s" % image)
     print(" ".join(parts))
 
 
@@ -601,6 +628,68 @@ elif core == "supermodel":
     if "g" not in marks.values():
         sys.exit("supermodel: MAME 0.289 marks none of its sets a light-gun game; "
                  "a list changed shape")
+elif core == "xemu-chihiro":
+    # WHICH MAME SET EACH OF THE FORK'S JVS PROFILES IS FOR: it names its
+    # profiles after its cabinets (hw/xbox/chihiro/chihiro.c, chihiro_cabinets)
+    # and its game names after MAME's parent sets (chihiro_game_names). Checked
+    # below against both, so a profile or a game added at a new pin stops the
+    # build until it is placed here.
+    PROFILE_SETS = {
+        "hotd3": ["hotd3"], "vc3": ["vcop3"], "gs": ["ghostsqu"], "ctx": ["crtaxihr"],
+        "or2": ["outr2", "outr2st"], "ok": ["ollie"], "wmmt2": ["wangmid", "wangmid2"],
+        "gundam": ["gundamos"],
+    }
+    src = open(paths[0], encoding="utf-8").read()
+    table = re.search(r"\} chihiro_game_names\[\] = \{(.*?)\n\};", src, re.S)
+    if not table:
+        sys.exit("xemu-chihiro: no chihiro_game_names table in chihiro.c")
+    ids = {n: i for i, n in re.findall(r'\{\s*"([A-Z0-9]{4})",\s*"([a-z0-9_]+)"\s*\}',
+                                       table.group(1))}
+    if len(ids) < 14:
+        sys.exit("xemu-chihiro: only %d games in chihiro_game_names" % len(ids))
+
+    # config_spec.yml's keys by their indentation, enough to read the
+    # profiles and which have a trigger, with no YAML reader on the runner.
+    def keys_under(path):
+        stack, out = [], []
+        for l in open(paths[1], encoding="utf-8"):
+            m = re.match(r"^( *)([A-Za-z0-9_]+):", l)
+            if not m:
+                continue
+            stack = stack[:len(m.group(1)) // 2] + [m.group(2)]
+            if stack[:-1] == path:
+                out.append(m.group(2))
+        return out
+
+    spec = open(paths[1], encoding="utf-8").read()
+    profiles = re.search(r"\n    profile:\n      type: enum\n      values: \[([a-z0-9_, ]+)\]", spec)
+    if not profiles:
+        sys.exit("xemu-chihiro: no chihiro.jvs.profile enum in config_spec.yml")
+    profiles = [p.strip() for p in profiles.group(1).split(",")]
+    if sorted(profiles) != sorted(PROFILE_SETS):
+        sys.exit("xemu-chihiro: its profiles are %s, the table here %s"
+                 % (sorted(profiles), sorted(PROFILE_SETS)))
+    guns = set()
+    for p, sets in PROFILE_SETS.items():
+        for s in sets:
+            if s not in ids:
+                sys.exit("xemu-chihiro: %s, %s's set here, is not in chihiro_game_names" % (s, p))
+        if "trigger" in keys_under(["chihiro", "jvs", p]):
+            guns.update(sets)
+    if guns != {"hotd3", "vcop3", "ghostsqu"}:
+        sys.exit("xemu-chihiro: its light-gun profiles give %s" % sorted(guns))
+    played = {s for sets in PROFILE_SETS.values() for s in sets}
+    count = 0
+    for m in mame_machines(paths[2]):
+        if m.get("sourcefile") != "sega/chihiro.cpp":
+            continue
+        parent = m.get("cloneof") or m.get("name")
+        image = (ids[parent], parent) if parent in ids else None
+        line(m.get("name"), parent in played, "g" if parent in guns else "-", [], [],
+             image=image)
+        count += 1
+    if count < 40:
+        sys.exit("xemu-chihiro: MAME 0.289 gave only %d Chihiro sets" % count)
 PY
 } > "${file}"
 
@@ -610,7 +699,7 @@ count=$(grep -vc '^[#!]' "${file}")
 (( count >= LEAST )) ||
     { echo "${CORE}: only ${count} sets read, fewer than ${LEAST}" >&2; exit 1; }
 bad=$(grep -v '^[#!]' "${file}" |
-    grep -vcE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*$' || true)
+    grep -vcE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*( =[A-Z0-9]{4}:[a-z0-9_]+)?$' || true)
 (( bad == 0 )) || { echo "${CORE}: ${bad} lines are not in the catalogue's form" >&2; exit 1; }
 empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?$' || true)
 echo "${CORE}: ${count} sets (${empty} with nothing to check) at ${COMMIT} -> ${file}"
