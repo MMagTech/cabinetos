@@ -1258,8 +1258,7 @@ struct App {
     int pauseRedrawFrames = 0;
     // The pause menu's items for THIS game, built each time it opens: the two
     // state items only where the system has snapshots. PlayStation 2 and
-    // GameCube get Resume, Screenshot and Exit to Home, and nothing to press
-    // that says no.
+    // GameCube get neither, and nothing to press that says no.
     std::vector<OverlayItem> pauseItems{OvResume, OvSaveState, OvLoadState, OvExit};
     PauseChoice* choiceAt(int slot);
     // THE PAD THAT OPENED THE PAUSE MENU, 0 when no pad's press did (Escape,

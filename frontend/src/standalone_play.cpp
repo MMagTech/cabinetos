@@ -177,8 +177,8 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // The newest save on RomM was one this console could not use (#346,
     // step 8; saves.cpp, fetchSaves).
     else if (starting.couldNotUseNewest) menuNotice.say(kCouldNotUseNewest, Tone::Problem);
-    // No save states: the pause menu is Resume, Screenshot and Exit to
-    // Home (open question 25; Switch fails its rule).
+    // No save states: the pause menu has no Save state or Load latest state
+    // (open question 25; Switch fails its rule).
     session.snapshots = catalog::snapshotsAllowed(launchJob.coreName.c_str());
     // The baseline: what changes between here and the end is what the
     // game saved. See GameSession.

@@ -23,8 +23,8 @@ namespace cab::standalone::detail {
 // not in it, never patched, drawing with Vulkan, and run with no network like
 // every emulator (Run::start's sandbox). No save states, as for every program
 // of its own (docs/PROJECT.md question 25): its own state keys and Guide
-// shortcuts are turned off below, and the pause menu is Resume, Screenshot and
-// Exit to Home. Its overlay menu and game list never show.
+// shortcuts are turned off below, and the pause menu has no Save state or
+// Load latest state. Its overlay menu and game list never show.
 //
 // WHERE THINGS ARE. Everything it keeps for a game is in this person's folder
 // for it (`saveDir`): its settings, `config/sm2-emu.ini` (`--config`), and the

@@ -29,9 +29,9 @@ namespace cab::standalone::detail {
 // empty network ever sees (MMagTech, 2026-10-29,
 // docs/decisions/2026-10-29-model-3-net-board-linked-to-itself.md). No save
 // states, as for every program of its own (docs/PROJECT.md question 25): its
-// state keys are off below, and the pause menu is Resume, Screenshot and Exit
-// to Home. Its own settings window shows only when it is started with no game,
-// which the console never does.
+// state keys are off below, and the pause menu has no Save state or Load
+// latest state. Its own settings window shows only when it is started with no
+// game, which the console never does.
 //
 // WHERE THINGS ARE. Supermodel keeps everything beside a `Config` folder in
 // the folder it is started in (Src/OSD/Unix/FileSystemPath.cpp), so it runs in

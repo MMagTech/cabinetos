@@ -172,8 +172,8 @@ bool snapshotsAllowed(const char* core) {
     // Not the 3DS, a handheld, by MMagTech's decision of 2026-10-20, though
     // its states may not survive an emulator update (emulatorTag). And every
     // emulator run as a program of its own, sm2-emu's Model 2, Supermodel's
-    // Model 3 and xemu-chihiro's Chihiro among them, whose pause menu is
-    // Resume, Screenshot and Exit to Home (MMagTech, 2026-10-29; Chihiro
+    // Model 3 and xemu-chihiro's Chihiro among them, whose pause menu has
+    // no Save state or Load latest state (MMagTech, 2026-10-29; Chihiro
     // 2026-11-25, #619).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
                                                "xenia", "cemu", "vita3k", "sm2emu",

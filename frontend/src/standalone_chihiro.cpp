@@ -32,8 +32,8 @@ namespace cab::standalone::detail {
 // (cores/build-xemu-chihiro.sh), drawing with Vulkan, and run with no network
 // like every emulator (Run::start's sandbox), its own network and linked
 // cabinets off besides. No save states, as for every program of its own: its
-// state keys are off below, and the pause menu is Resume, Screenshot and Exit
-// to Home. No free play, Test and Service off, region Export, as every arcade
+// state keys are off below, and the pause menu has no Save state or Load
+// latest state. No free play, Test and Service off, region Export, as every arcade
 // game here. The light-gun games are greyed until #575 (arcadematch.h), so
 // nothing here aims.
 //
