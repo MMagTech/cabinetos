@@ -24,7 +24,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPTS=(install-rpcs3.sh install-xenia.sh install-vita3k.sh install-xemu-drive.sh)
+SCRIPTS=(install-rpcs3.sh install-xenia.sh install-vita3k.sh install-xemu-drive.sh
+         install-linuxloader.sh)
 
 # "<sha256> <url> <script>" per pin. Only the `readonly NAME=...` lines are
 # evaluated, in a subshell, since a URL is built from a version line above it.

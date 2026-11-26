@@ -21,6 +21,15 @@
 // catalogue gives where it gives one. MAME 2003-Plus and Supermodel cannot
 // open a 7z and are skipped for one. A folder's name never chooses.
 //
+// A LINDBERGH GAME IS ITS HARD DRIVE'S FOLDER, played by Linux Loader, and
+// known as the loader knows it: by its program inside, never by the folder's
+// name. A grid asks by the program's name (byProgram), the first of the
+// loader's own names, in its order, that the game's files hold (the game's
+// record keeps it, lindberghProgramNamed); Play confirms by the loader's
+// fingerprint of the program on the disk (lindberghProgram,
+// lindberghFingerprint, byFingerprint). Only Linux Loader is asked about a
+// Lindbergh game, and it is asked about nothing else.
+//
 // TWO QUESTIONS, ASKED AT DIFFERENT TIMES. A grid asks by the name alone
 // (byName), since a list carries no file's contents: a set no emulator here
 // has, or every one that has it marks not working, is greyed, and so is one
@@ -32,7 +41,7 @@
 //
 // THE CATALOGUES are `<core file stem>.catalogue` beside the cores, or for a
 // program of its own `<its name>.catalogue` (sm2emu.catalogue,
-// supermodel.catalogue, xemu-chihiro.catalogue), made in CI
+// supermodel.catalogue, xemu-chihiro.catalogue, linuxloader.catalogue), made in CI
 // from each emulator's own list at its pin (cores/arcade-sets.sh, which says
 // what a line holds). Read once, the first time a game asks. A missing one is
 // said once in the log and reads as empty: that emulator plays nothing.
@@ -52,9 +61,10 @@ namespace arcadematch {
 // `model3`, and the labels RomM gives each emulator's folder from
 // rommapp/romm#5273 on: `mame`, `mame-advmame`, `fbneo`, `fba`, `naomi`,
 // `naomi2`, `naomigd` and `atomiswave` (RomM 5.4 called them all `arcade`),
-// `gaelco`, whose games FinalBurn Neo and MAME play, and `chihiro`, whose
-// games xemu-chihiro plays. RomM's other new boards (Triforce, Lindbergh,
-// Hikaru and the like) have no emulator here, so get no tile.
+// `gaelco`, whose games FinalBurn Neo and MAME play, `chihiro`, whose
+// games xemu-chihiro plays, and `lindbergh` (RomM 5.5.0-alpha.1 on;
+// rommapp/romm#5273), whose games Linux Loader plays. RomM's other new boards
+// (Triforce, Hikaru and the like) have no emulator here, so get no tile.
 // Dreamcast's folder is not one, though a zip in it is asked about Flycast.
 bool isArcadeSlug(const std::string& slug);
 
@@ -114,6 +124,30 @@ Answer byImage(const std::string& fileName, const std::string& id);
 // (`SBFZ`), or empty when the file is no such image.
 std::string chihiroId(const std::string& path);
 
+// A Lindbergh game by its program's name (`hummer_Master.elf`): plays in
+// Linux Loader when the loader's table gives that program a game played on a
+// controller (driving, flying, fighting, sports); "Needs a light gun" for a
+// gun game's; "Not supported" for a mahjong or quiz panel's, or a name the
+// loader does not start.
+Answer byProgram(const std::string& programName);
+// The same by the loader's fingerprint of the program (lindberghFingerprint),
+// against its table of game versions (gameData.c); "Not supported" for one it
+// does not know, a test menu, a server box or Segaboot.
+Answer byFingerprint(uint32_t crc);
+// The program Linux Loader starts in a game's folder on the disk, as it finds
+// it: the first of its names, in its order, at the top of the folder, then in
+// each folder one down by name (TeknoParrot's copies keep it in `elf/` or a
+// folder named for the game), then two down (a zip or 7z that held the game's
+// own folder), that is a program. Empty when there is none.
+std::string lindberghProgram(const std::string& folder);
+// The first of the loader's program names, in its order, among a game's file
+// names (RomM's list of its files). Empty when none.
+std::string lindberghProgramNamed(const std::vector<std::string>& fileNames);
+// The loader's fingerprint of a program on the disk (mainL.c): CRC32 of
+// 0x4000 bytes from 10 into its third program header's segment, when that is
+// its code. False for a file that is no such program.
+bool lindberghFingerprint(const std::string& path, uint32_t* crc);
+
 // The name an emulator gives a set's saves, where its catalogue says one:
 // xemu-chihiro's, its parent's for a revision (`outr2st` for `outr2sto`).
 // Empty otherwise.
@@ -139,7 +173,8 @@ bool flycastBios(const std::string& fileName);
 int buttons(const char* core, const std::string& fileName);
 
 // --arcade-match-test: the rule, every case, on catalogues written in the
-// test. 0 when all pass.
+// test, a Lindbergh folder and program made in the test among them. 0 when all
+// pass.
 int test();
 
 // --arcade-changes <old dir> <new dir>: every set whose emulator, by its

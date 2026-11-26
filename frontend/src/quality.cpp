@@ -176,7 +176,7 @@ bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
                           "eden", "rpcs3", "xemu", "vita3k", "sm2emu", "supermodel",
-                          "xemu-chihiro"})
+                          "xemu-chihiro", "linuxloader"})
         if (core == c) return true;
     return false;
 }
@@ -421,6 +421,18 @@ int supermodelLines(Level l) {
     // all 17 games in the reference library ran at 60 frames a second, the
     // median frame 16.7 ms.
     static const int kLines[] = {720, 1080, 2160};
+    return pick(l, kLines);
+}
+
+int lindberghLines(Level l) {
+    // SEGA LINDBERGH, each game at its own size, 640x480 to 1360x768: the
+    // game's own size, 1080 lines and 2160 lines, the loader working out the
+    // width in the game's shape, and its render boost drawing the 3D inside
+    // higher in the games it knows (#620, the plan of 2026-11-26). Measured on
+    // the A9 at 2160 lines, 2026-11-26: all seven games tried at full speed
+    // (Hummer Extreme's own 30, the others 60, Ghost Squad Evolution a steady
+    // 56 at every size), the graphics chip under a third busy.
+    static const int kLines[] = {0, 1080, 2160};
     return pick(l, kLines);
 }
 

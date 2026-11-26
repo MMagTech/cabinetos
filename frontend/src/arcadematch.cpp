@@ -5,7 +5,9 @@
 
 #include <archive.h>
 #include <archive_entry.h>
+#include <dirent.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <zlib.h>
 
@@ -41,15 +43,21 @@ struct Entry {
 struct Catalogue {
     std::unordered_map<std::string, Entry> sets;
     std::set<std::string> bios;   // Flycast's !bios line, in lower case
+    // Linux Loader's !programs line: the names of the programs it starts, in
+    // the order it looks for them (mainShared.c, games[]), as they are spelt.
+    std::vector<std::string> programs;
 };
 
 // THE ORDER, and it is the decision (arcadematch.h).
-// sm2-emu, Supermodel and xemu-chihiro are programs of their own
+// sm2-emu, Supermodel, xemu-chihiro and Linux Loader are programs of their own
 // (standalone.h), named as their catalog rows name them.
-constexpr const char* kOrder[] = {"flycast",    "fbneo_libretro", "mame2003_plus", "sm2emu",
-                                  "supermodel", "xemu-chihiro",   "mame_libretro"};
+constexpr const char* kOrder[] = {"flycast",      "fbneo_libretro", "mame2003_plus",
+                                  "sm2emu",       "supermodel",     "xemu-chihiro",
+                                  "linuxloader",  "mame_libretro"};
 // The one that plays a converted image, `<set>.bin`, and nothing else.
 constexpr const char* kImages = "xemu-chihiro";
+// The one that plays a Lindbergh game's folder, by its program, and no zip.
+constexpr const char* kFolders = "linuxloader";
 constexpr size_t kCores = sizeof kOrder / sizeof kOrder[0];
 
 std::string gDir = "cores/build";
@@ -90,6 +98,10 @@ Catalogue parse(const std::string& text) {
         if (words.empty()) continue;
         if (words[0] == "!bios") {
             for (size_t i = 1; i < words.size(); ++i) c.bios.insert(lower(words[i]));
+            continue;
+        }
+        if (words[0] == "!programs") {
+            c.programs.assign(words.begin() + 1, words.end());
             continue;
         }
         if (words.size() < 3) continue;
@@ -181,6 +193,10 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
         // A CONVERTED IMAGE IS A CHIHIRO GAME, and a Chihiro game is one: no
         // other emulator opens a `.bin`, and xemu-chihiro opens nothing else.
         if ((ext == "bin") != (core == kImages)) continue;
+        // A LINDBERGH GAME IS ITS FOLDER, asked by its program (byProgram,
+        // byFingerprint), never by a file's name: `abc` is After Burner
+        // Climax's program and a MAME set.
+        if (core == kFolders) continue;
         const auto it = cats[i].sets.find(set);
         if (it == cats[i].sets.end() || !it->second.works) continue;
         // NOTHING LEFT TO CHECK is never a fit: an empty list fits any zip.
@@ -262,6 +278,72 @@ Answer byFilesIn(const Catalogue* cats, const std::string& fileName,
         return {Verdict::Plays, k.core, {}};
     }
     return first;
+}
+
+// A Lindbergh game by a key of Linux Loader's catalogue: a program's name in
+// lower case, or a fingerprint as eight hex digits.
+Answer byLoaderKey(const Catalogue* cats, const std::string& key) {
+    const Catalogue& c = cats[std::find_if(std::begin(kOrder), std::end(kOrder), [](const char* k) {
+                                  return std::strcmp(k, kFolders) == 0;
+                              }) - std::begin(kOrder)];
+    const auto it = c.sets.find(key);
+    if (it == c.sets.end() || !it->second.works || it->second.flag == 'x') return notSupported();
+    if (it->second.flag == 'g') return {Verdict::NeedsGun, kFolders, "Needs a light gun"};
+    return {Verdict::Plays, kFolders, {}};
+}
+
+std::string fingerprintKey(uint32_t crc) {
+    char k[9];
+    std::snprintf(k, sizeof k, "%08x", crc);
+    return k;
+}
+
+// Whether a file starts as a program does (ELF), which a data file named as a
+// program does not.
+bool isElf(const std::string& path) {
+    unsigned char m[4] = {};
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    const bool ok = std::fread(m, 1, 4, f) == 4 && std::memcmp(m, "\x7f" "ELF", 4) == 0;
+    std::fclose(f);
+    return ok;
+}
+
+// The folders in `dir`, by name, none hidden.
+std::vector<std::string> foldersIn(const std::string& dir) {
+    std::vector<std::string> out;
+    if (DIR* d = ::opendir(dir.c_str())) {
+        while (dirent* e = ::readdir(d)) {
+            if (e->d_name[0] == '.') continue;
+            struct stat st;
+            const std::string p = dir + "/" + e->d_name;
+            if (::stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) out.push_back(p);
+        }
+        ::closedir(d);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+// The program Linux Loader would start in `folder` by `programs`, its order:
+// in the folder itself first, then in each folder one down by name, then two
+// down (a zip that holds the game's own folder), the first of its names there
+// that is a program.
+std::string programIn(const std::vector<std::string>& programs, const std::string& folder) {
+    std::vector<std::string> dirs = {folder};
+    const std::vector<std::string> one = foldersIn(folder);
+    dirs.insert(dirs.end(), one.begin(), one.end());
+    for (const std::string& d : one) {
+        const std::vector<std::string> two = foldersIn(d);
+        dirs.insert(dirs.end(), two.begin(), two.end());
+    }
+    for (const std::string& dir : dirs)
+        for (const std::string& name : programs) {
+            struct stat st;
+            const std::string p = dir + "/" + name;
+            if (::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode) && isElf(p)) return p;
+        }
+    return {};
 }
 
 Answer byImageIn(const Catalogue* cats, const std::string& fileName, const std::string& id) {
@@ -394,7 +476,7 @@ bool sevenZipMembers(const std::string& path, std::vector<Member>* out, std::str
 bool isArcadeSlug(const std::string& slug) {
     for (const char* s : {"arcade", "mame", "mame-advmame", "fbneo", "fba", "naomi", "naomi2",
                           "naomigd", "atomiswave", "gaelco", "cps1", "cps2", "cps3", "neogeomvs",
-                          "neogeoaes", "stv", "model2", "model3", "chihiro"})
+                          "neogeoaes", "stv", "model2", "model3", "chihiro", "lindbergh"})
         if (slug == s) return true;
     return false;
 }
@@ -421,6 +503,65 @@ Answer byFiles(const std::string& fileName, const std::vector<Member>& members,
 Answer byImage(const std::string& fileName, const std::string& id) {
     load();
     return byImageIn(gCat, fileName, id);
+}
+
+Answer byProgram(const std::string& programName) {
+    load();
+    return byLoaderKey(gCat, lower(programName));
+}
+
+Answer byFingerprint(uint32_t crc) {
+    load();
+    return byLoaderKey(gCat, fingerprintKey(crc));
+}
+
+std::string lindberghProgram(const std::string& folder) {
+    load();
+    for (size_t i = 0; i < kCores; ++i)
+        if (std::strcmp(kOrder[i], kFolders) == 0) return programIn(gCat[i].programs, folder);
+    return {};
+}
+
+std::string lindberghProgramNamed(const std::vector<std::string>& fileNames) {
+    load();
+    for (size_t i = 0; i < kCores; ++i) {
+        if (std::strcmp(kOrder[i], kFolders) != 0) continue;
+        for (const std::string& p : gCat[i].programs)
+            if (std::find(fileNames.begin(), fileNames.end(), p) != fileNames.end()) return p;
+    }
+    return {};
+}
+
+bool lindberghFingerprint(const std::string& path, uint32_t* crc) {
+    // As the loader reads it once the program is loaded (mainL.c, callback):
+    // its third program header, when that is a loaded segment readable and
+    // executable and nothing else (the code), 0x4000 bytes from 10 in. The
+    // file holds those bytes at the segment's offset, as the program's
+    // memory does; past the file's part of it, memory is zero.
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    std::vector<unsigned char> h;
+    bool ok = readAt(f, 0, 52, &h) && std::memcmp(h.data(), "\x7f" "ELF", 4) == 0 && h[4] == 1 &&
+              h[5] == 1;
+    std::vector<unsigned char> ph;
+    if (ok) {
+        const uint32_t phoff = le32(&h[0x1c]);
+        const uint16_t phentsize = le16(&h[0x2a]), phnum = le16(&h[0x2c]);
+        ok = phnum >= 3 && phentsize >= 32 && readAt(f, phoff + 2 * phentsize, 32, &ph) &&
+             le32(&ph[0]) == 1 && le32(&ph[24]) == 5;
+    }
+    std::vector<unsigned char> code(0x4000, 0);
+    if (ok) {
+        const uint32_t offset = le32(&ph[4]), filesz = le32(&ph[16]);
+        const uint32_t have = filesz > 10 ? std::min<uint32_t>(filesz - 10, 0x4000) : 0;
+        std::vector<unsigned char> part;
+        ok = have == 0 || readAt(f, static_cast<int64_t>(offset) + 10, have, &part);
+        if (ok) std::copy(part.begin(), part.end(), code.begin());
+    }
+    std::fclose(f);
+    if (!ok) return false;
+    *crc = static_cast<uint32_t>(::crc32(0L, code.data(), static_cast<uInt>(code.size())));
+    return true;
 }
 
 bool readMembers(const std::string& path, std::vector<Member>* out, std::string* err) {
@@ -591,8 +732,8 @@ int test() {
         std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
         if (!ok) ++failures;
     };
-    // Seven catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
-    // sm2-emu, Supermodel, xemu-chihiro, MAME 0.289.
+    // Eight catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
+    // sm2-emu, Supermodel, xemu-chihiro, Linux Loader, MAME 0.289.
     Catalogue cats[kCores] = {
         parse("# flycast\n!bios naomi awbios\n"
               "azumanga w - b71ede16:0 @gdl-0018:\n"
@@ -632,6 +773,19 @@ int test() {
               "vcop3 w g =SBFZ:vcop3\n"
               "mj2 n - =SBHC:mj2\n"
               "questofd n -\n"),
+        parse("# linuxloader\n"
+              "!programs a.elf abc gsevo hod4M.elf hummer_Master.elf mj4 vsg\n"
+              "a.elf w -\n"
+              "abc w -\n"
+              "gsevo w g\n"
+              "hod4m.elf w g\n"
+              "hummer_master.elf w -\n"
+              "mj4 w x\n"
+              "vsg w g\n"
+              "7129c32b w -\n"
+              "e213414d w g\n"
+              "057813a7 w x\n"
+              "00000abc n -\n"),
         parse("# mame_libretro\n"
               "sf2 w - b6 00000001:100 00000003:300\n"
               "gollygho w - b2 00000009:10\n"
@@ -689,7 +843,7 @@ int test() {
           "plays it");
     check(name("megat.zip").verdict == Verdict::NotSupported,
           "a touchscreen machine in MAME 0.289's list is not supported");
-    check(cats[6].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
+    check(cats[7].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
           "MAME 0.289's catalogue says how many buttons a game has; the others say none");
     check(core(name("daytona.zip")) == "sm2emu",
           "sm2-emu comes before MAME 0.289, where both have a Model 2 game working");
@@ -781,7 +935,7 @@ int test() {
           "a set FinalBurn Neo has with no disc plays there");
     {
         Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3],
-                                  cats[4], cats[5],    cats[6]};
+                                  cats[4], cats[5],    cats[6], cats[7]};
         check(core(byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"KINST", "AAAA"}}, false)) ==
                   "mame2003_plus",
               "a disc of the listed name and SHA1 fits, in any case");
@@ -815,8 +969,92 @@ int test() {
               isArcadeSlug("naomigd") && isArcadeSlug("atomiswave") && isArcadeSlug("gaelco"),
           "and so are the labels RomM gives each emulator's folder after rommapp/romm#5273");
     check(isArcadeSlug("chihiro"), "and RomM's own label for Chihiro's folder");
-    check(!isArcadeSlug("triforce") && !isArcadeSlug("lindbergh") && !isArcadeSlug("dc"),
+    check(isArcadeSlug("lindbergh"), "and RomM's own label for Lindbergh's folder");
+    check(!isArcadeSlug("triforce") && !isArcadeSlug("dc"),
           "a board no emulator here plays is not, nor is Dreamcast");
+
+    // LINDBERGH: a game's folder, known by its program, never by a name.
+    auto program = [&](const char* p) { return byLoaderKey(cats, lower(p)); };
+    auto print = [&](uint32_t crc) { return byLoaderKey(cats, fingerprintKey(crc)); };
+    check(program("hummer_Master.elf").verdict == Verdict::Plays &&
+              core(program("hummer_Master.elf")) == "linuxloader",
+          "Lindbergh, for a grid: Hummer Extreme's program plays in Linux Loader");
+    check(program("hod4M.elf").verdict == Verdict::NeedsGun,
+          "a light-gun game's program needs a light gun");
+    check(program("mj4").verdict == Verdict::NotSupported,
+          "a mahjong panel's program is not supported");
+    check(program("segaboot").verdict == Verdict::NotSupported,
+          "and a program the loader does not list is not supported");
+    check(print(0x7129c32b).verdict == Verdict::Plays && core(print(0x7129c32b)) == "linuxloader",
+          "at Play, by the loader's fingerprint: Hummer Extreme plays");
+    check(print(0xe213414d).verdict == Verdict::NeedsGun && print(0x057813a7).verdict ==
+              Verdict::NotSupported,
+          "a light-gun game's fingerprint needs a light gun, a mahjong panel's is not supported");
+    check(print(0xabc).verdict == Verdict::NotSupported &&
+              print(0x12345678).verdict == Verdict::NotSupported,
+          "a fingerprint the loader marks not working, or does not know, is not supported");
+    check(core(name("abc.zip")) != "linuxloader",
+          "a zip named as a Lindbergh program is never Linux Loader's");
+    {
+        // A folder as TeknoParrot lays one out: the program one folder down.
+        char tmpl[] = "/tmp/cabinetos-lindbergh-XXXXXX";
+        const bool made = ::mkdtemp(tmpl) != nullptr;
+        const std::string top = tmpl;
+        ::mkdir((top + "/elf").c_str(), 0755);
+        ::mkdir((top + "/data").c_str(), 0755);
+        auto touch = [&](const std::string& p, const std::vector<unsigned char>& b) {
+            FILE* f = std::fopen(p.c_str(), "wb");
+            if (!f) return false;
+            const bool w = std::fwrite(b.data(), 1, b.size(), f) == b.size();
+            std::fclose(f);
+            return w;
+        };
+        // A 32-bit program whose third header is its code, at 0x1000, with
+        // 0x5000 bytes of it in the file.
+        std::vector<unsigned char> elf(0x6000, 0);
+        std::memcpy(elf.data(), "\x7f" "ELF", 4);
+        elf[4] = 1;
+        elf[5] = 1;
+        elf[0x1c] = 52;                    // e_phoff
+        elf[0x2a] = 32;                    // e_phentsize
+        elf[0x2c] = 3;                     // e_phnum
+        const size_t third = 52 + 2 * 32;
+        elf[third] = 1;                    // PT_LOAD
+        elf[third + 5] = 0x10;             // p_offset 0x1000
+        elf[third + 17] = 0x50;            // p_filesz 0x5000
+        elf[third + 24] = 5;               // read and execute
+        for (size_t i = 0x1000; i < 0x6000; ++i) elf[i] = static_cast<unsigned char>(i * 7);
+        const bool wrote = made && touch(top + "/elf/hummer_Master.elf", elf) &&
+                           touch(top + "/data/abc", {1, 2, 3});
+        const uint32_t want =
+            static_cast<uint32_t>(::crc32(0L, &elf[0x100a], static_cast<uInt>(0x4000)));
+        uint32_t got = 0;
+        check(wrote && programIn(cats[6].programs, top) == top + "/elf/hummer_Master.elf",
+              "the program is found one folder down, by the loader's names, and a data file "
+              "named as one is not it");
+        check(wrote && lindberghFingerprint(top + "/elf/hummer_Master.elf", &got) && got == want,
+              "and its fingerprint is CRC32 of 0x4000 bytes at its code's offset plus 10");
+        check(!lindberghFingerprint(top + "/data/abc", &got),
+              "a file that is no such program has none");
+        const bool both = touch(top + "/elf/a.elf", elf);
+        check(both && programIn(cats[6].programs, top) == top + "/elf/a.elf",
+              "two programs in one folder: the first in the loader's own order");
+        const bool upper = touch(top + "/vsg", elf);
+        check(upper && programIn(cats[6].programs, top) == top + "/vsg",
+              "and a program at the top is found before one below it");
+        for (const char* f : {"/vsg", "/elf/a.elf", "/elf/hummer_Master.elf"})
+            ::unlink((top + f).c_str());
+        // A zip that held the game's own folder: the program two folders down.
+        ::mkdir((top + "/Hummer").c_str(), 0755);
+        ::mkdir((top + "/Hummer/elf").c_str(), 0755);
+        const bool deep = touch(top + "/Hummer/elf/hummer_Master.elf", elf);
+        check(deep && programIn(cats[6].programs, top) == top + "/Hummer/elf/hummer_Master.elf",
+              "and one two folders down, in a zip that held the game's own folder");
+        ::unlink((top + "/Hummer/elf/hummer_Master.elf").c_str());
+        ::unlink((top + "/data/abc").c_str());
+        for (const char* d : {"/Hummer/elf", "/Hummer", "/elf", "/data", ""})
+            ::rmdir((top + d).c_str());
+    }
 
     std::printf("%s\n", failures ? "arcade match test: FAILED" : "arcade match test: passed");
     return failures ? 1 : 0;

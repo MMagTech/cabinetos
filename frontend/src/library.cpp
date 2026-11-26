@@ -1,5 +1,7 @@
 #include "library.h"
 
+#include "lindberghprograms.h"
+
 #include <SDL3/SDL.h>
 #include <json-c/json.h>
 
@@ -671,6 +673,18 @@ LibraryRead readLibrary(romm::Client& client, const LibraryAsk& ask, const std::
         for (const romm::Game& g : games)
             if (catalog::coverageFor(g).support != catalog::Support::Hidden) ++c.shown;
         r.counted[p.id] = c;
+    }
+
+    // EACH LINDBERGH GAME'S PROGRAM, asked of RomM once per game, so a grid
+    // can tell a gun game before anything is downloaded (lindberghprograms.h).
+    // RomM's list is asked again each read; only a game not yet known costs
+    // its entry.
+    for (const romm::Platform& p : r.platforms) {
+        if (p.slug != "lindbergh" || p.romCount <= 0) continue;
+        if (over()) return r;
+        std::vector<romm::Game> games;
+        if (!client.fetchGames(p.id, &games, &err)) { failed("Lindbergh's games"); continue; }
+        lindberghprograms::learnAll(client, games, over);
     }
 
     if (over()) return r;

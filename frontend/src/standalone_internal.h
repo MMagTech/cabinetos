@@ -2,8 +2,8 @@
 // standalone.cpp, and each emulator's own entry points, defined in its file.
 // Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
 // standalone_xenia.cpp, standalone_cemu.cpp, standalone_xemu.cpp,
-// standalone_vita3k.cpp, standalone_sm2emu.cpp, standalone_supermodel.cpp and
-// standalone_chihiro.cpp include it.
+// standalone_vita3k.cpp, standalone_sm2emu.cpp, standalone_supermodel.cpp,
+// standalone_chihiro.cpp and standalone_lindbergh.cpp include it.
 // Moved out of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
@@ -135,6 +135,18 @@ bool prepareChihiro(const Emulator& e, const std::string& saveDir, int players,
 // entries before the program, then its settings and the game.
 void chihiroArgs(std::vector<std::string>& full, const std::string& saveDir,
                  const std::string& romPath);
+
+// Sega Lindbergh (standalone_lindbergh.cpp).
+std::string lindberghSaves(const std::string& saveDir);
+bool prepareLindbergh(const Emulator& e, const std::string& saveDir, int players,
+                      quality::Level level, std::string* err);
+// Run::start's arguments for Linux Loader, as for xeniaArgs: the sandbox's
+// own /var/tmp and the two folders in it before bwrap's "--", the
+// environment entries before the program, then the folder holding the game's
+// program (`romPath`) and its three files.
+void lindberghArgs(std::vector<std::string>& full, const Emulator& e,
+                   const std::string& entryPath, const std::string& saveDir,
+                   const std::string& romPath);
 
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,

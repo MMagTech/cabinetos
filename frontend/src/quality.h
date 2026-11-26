@@ -114,6 +114,10 @@ int chihiro(Level l);
 // Supermodel's picture height, which standalone_supermodel.cpp caps at the
 // screen's and writes into its settings with the width in the screen's shape.
 int supermodelLines(Level l);
+// Linux Loader's HEIGHT, which standalone_lindbergh.cpp writes into its
+// settings with WIDTH AUTO, so the loader works the width out from the game's
+// own shape; 0 is AUTO for both, the game's own size.
+int lindberghLines(Level l);
 
 // One line on stderr saying what was applied, so a log shows the level a game
 // actually ran at.

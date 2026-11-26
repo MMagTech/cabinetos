@@ -28,6 +28,7 @@
 #include "disc.h"
 #include "fileio.h"
 #include "library.h"
+#include "lindberghprograms.h"
 #include "ncch.h"
 #include "romfile.h"
 #include "romm.h"
@@ -251,6 +252,153 @@ static void finish(LaunchJob& job, romm::Client& client, const storage::User& us
     fetchLaunchSaves(job, client, user);
     if (cancelled(job)) return;
     job.stage = LaunchJob::Stage::Ready;
+}
+
+// A LINDBERGH GAME, FETCHED WHOLE (#620): its hard drive's folder, subfolders
+// and all, kept in RomM as that folder, or as a zip or 7z of it. Either way
+// one file comes down, the zip RomM makes of a folder game or the archive
+// it keeps, unpacked here in the folders it gives (romfile::prepareFile) and
+// then deleted. Not file by file,
+// as other folder games come: RomM lists every file of the folder, and Hummer
+// Extreme's TeknoParrot copy holds 124,777, which made its entry from RomM
+// 104 MB and 25 s on the write-test server (2026-11-26), against one zip of
+// 3.04 GB in 116 s. Once it is all on the drive, a note in the folder says so
+// with the size RomM gave the game, and a start with that note asks RomM
+// nothing about the folder; one RomM gives a new size comes down again. The
+// program Linux Loader will start in it is then found as the loader finds it,
+// checked by the loader's fingerprint (arcadematch.h), and made executable
+// with every program beside it, a bit a zip does not carry.
+//
+// What the loader and the games write into the folder later (converted
+// shaders, the games' own files) stays in it and goes when the cache evicts
+// it (cache.h).
+static constexpr const char* kWholeNote = ".cabinetos-whole";
+
+static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
+                            const std::string& fsName, const std::string& entryPath,
+                            const std::string& location, const int64_t expectedSize,
+                            const storage::User& user) {
+    struct stat est;
+    if (::lstat(entryPath.c_str(), &est) == 0 && !S_ISDIR(est.st_mode))
+        storage::removeEntry(entryPath);
+    storage::makeDirs(entryPath);
+    // A GUN GAME OR A PANEL'S IS SAID BEFORE ANY DOWNLOAD, by the program
+    // RomM's list of its files names (lindberghprograms.h), asked here when
+    // no read has asked yet; the fingerprint below confirms it once here.
+    {
+        std::string program, lerr;
+        bool knownNow = lindberghprograms::known(id, expectedSize, &program);
+        if (!knownNow && !romm::serverAway())
+            knownNow = lindberghprograms::learn(client, id, expectedSize, &program, &lerr);
+        if (knownNow) {
+            const arcadematch::Answer a = arcadematch::byProgram(program);
+            if (!pickArcade(job, fsName, a, "its program, " + (program.empty() ? "none" : program)))
+                return;
+            job.arcadePicked = false;
+        }
+    }
+    const std::string note = entryPath + "/" + kWholeNote;
+    const std::vector<uint8_t> had = cab::readBytes(note);
+    const std::string size = std::to_string(expectedSize);
+    const bool whole = !had.empty() && std::string(had.begin(), had.end()) == size + "\n";
+    if (whole) {
+        std::fprintf(stderr, "[launch] already here whole, %s bytes on RomM\n", size.c_str());
+    } else if (romm::serverAway() || expectedSize <= 0) {
+        std::fprintf(stderr, "[launch] %s is not here whole and RomM cannot be asked\n",
+                     entryPath.c_str());
+        job.message = "Couldn't download this game";
+        job.stage = LaunchJob::Stage::Failed;
+        return;
+    } else {
+        ::unlink(note.c_str());
+        // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks.
+        const int64_t need =
+            2 * expectedSize +
+            static_cast<int64_t>(static_cast<double>(expectedSize) * cache::kOverheadFraction);
+        if (cache::freeBytes(location) < need) {
+            cache::evictUntilFree(location, need, id);
+            if (cache::freeBytes(location) < need) {
+                job.message = "Not enough space";
+                job.stage = LaunchJob::Stage::Failed;
+                return;
+            }
+        }
+        if (cancelled(job)) return;
+        // The folder as RomM zips it, or the zip or 7z RomM keeps: one file
+        // either way, unpacked by what it is (romfile.h).
+        const std::string zip = entryPath + "/.cabinetos-download";
+        std::string err;
+        job.stage = LaunchJob::Stage::Downloading;
+        if (!client.fetchToFile(
+                "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName), zip,
+                [&job](int64_t got, int64_t total) {
+                    job.got = got;
+                    job.total = total;
+                    return !job.cancel.load();
+                },
+                &err)) {
+            std::fprintf(stderr, "[launch] download %s: %s\n", fsName.c_str(), err.c_str());
+            ::unlink(zip.c_str());
+            job.message = "Couldn't download this game";
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+        job.got = 0;
+        job.total = 0;
+        if (cancelled(job)) return;
+        job.stage = LaunchJob::Stage::Unpacking;
+        std::string primary;
+        romfile::Kind kind = romfile::Kind::Plain;
+        const bool unpacked = romfile::prepareFile(zip, entryPath, "", false, &primary, &kind,
+                                                   &err, job.cancel);
+        ::unlink(zip.c_str());
+        if (!unpacked) {
+            std::fprintf(stderr, "[launch] unpack %s: %s\n", fsName.c_str(), err.c_str());
+            job.message = "Couldn't open this game's file";
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+        // THE NOTE ONLY ONCE THE DRIVE HAS IT ALL, so a power cut before
+        // that unpacks it again at the next start (unsettled.h).
+        const std::string text = size + "\n";
+        if (!cab::syncDrive(entryPath) ||
+            !cab::writeBytes(note, std::vector<uint8_t>(text.begin(), text.end()))) {
+            std::fprintf(stderr, "[launch] could not note %s as whole\n", entryPath.c_str());
+        }
+        std::fprintf(stderr, "[launch] fetched and unpacked %s whole\n", fsName.c_str());
+    }
+    if (cancelled(job)) return;
+    const std::string program = arcadematch::lindberghProgram(entryPath);
+    uint32_t crc = 0;
+    if (program.empty() || !arcadematch::lindberghFingerprint(program, &crc)) {
+        std::fprintf(stderr, "[arcade] %s: no program Linux Loader starts\n", entryPath.c_str());
+        job.message = "Not supported";
+        job.stage = LaunchJob::Stage::Failed;
+        return;
+    }
+    char print[9];
+    std::snprintf(print, sizeof print, "%08x", crc);
+    if (!pickArcade(job, baseName(program), arcadematch::byFingerprint(crc),
+                    std::string("its fingerprint, ") + print))
+        return;
+    // EVERY PROGRAM BESIDE IT EXECUTABLE: a zip carries no such bit.
+    const std::string dir = program.substr(0, program.find_last_of('/'));
+    if (DIR* d = ::opendir(dir.c_str())) {
+        while (struct dirent* e = ::readdir(d)) {
+            const std::string p = dir + "/" + e->d_name;
+            struct stat st;
+            unsigned char magic[4] = {};
+            FILE* f = e->d_name[0] == '.' ? nullptr : std::fopen(p.c_str(), "rb");
+            if (!f) continue;
+            const bool elf = std::fread(magic, 1, 4, f) == 4 && std::memcmp(magic, "\x7f" "ELF", 4) == 0;
+            std::fclose(f);
+            if (elf && ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode) && !(st.st_mode & S_IXUSR))
+                ::chmod(p.c_str(), st.st_mode | S_IXUSR | S_IXGRP | S_IXOTH);
+        }
+        ::closedir(d);
+    }
+    job.romPath = program;
+    finish(job, client, user);
 }
 
 // The copies are const, as the lambda's were.
@@ -639,6 +787,12 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         }
         job.romPath = rom;
         finish(job, client, user);
+        return;
+    }
+
+    // A LINDBERGH GAME (Linux Loader's), its whole folder (lindberghFolder).
+    if (emu && std::strcmp(emu->core, "linuxloader") == 0) {
+        lindberghFolder(job, client, id, fsName, entryPath, location, expectedSize, user);
         return;
     }
 

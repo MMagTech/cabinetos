@@ -2,18 +2,19 @@
 //
 // WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu), Xbox 360 (Xenia
 // Edge), Wii U (Cemu), PlayStation Vita (Vita3K), Sega Model 2 (sm2-emu), Sega
-// Model 3 (Supermodel) and Sega Chihiro (xemu-chihiro) are not libretro cores
-// and cannot be loaded into this process the way the other systems are (PS2
-// included). Eden and xemu come from Flathub, pinned in
-// flatpaks.list; RPCS3 is the RPCS3 team's own build, in the image
+// Model 3 (Supermodel), Sega Chihiro (xemu-chihiro) and Sega Lindbergh (Linux
+// Loader) are not libretro cores and cannot be loaded into this process the
+// way the other systems are (PS2 included). Eden and xemu come from Flathub,
+// pinned in flatpaks.list; RPCS3 is the RPCS3 team's own build, in the image
 // (build_files/install-rpcs3.sh), because its Flatpak shows a warning box on
-// every start; Xenia Edge and Vita3K are their developers' own builds, in the
-// image too (build_files/install-xenia.sh, install-vita3k.sh), because neither
-// is on Flathub; Cemu, sm2-emu, Supermodel and xemu-chihiro are built here at
-// a pin (cores/build-cemu.sh, cores/build-sm2emu.sh, cores/build-supermodel.sh,
-// cores/build-xemu-chihiro.sh). sm2-emu, Supermodel and xemu-chihiro play the
-// Model 2, Model 3 and Chihiro games the arcade match gives them
-// (arcadematch.h), from any arcade folder.
+// every start; Xenia Edge, Vita3K and Linux Loader are their developers' own
+// builds, in the image too (build_files/install-xenia.sh, install-vita3k.sh,
+// install-linuxloader.sh), because none is on Flathub; Cemu, sm2-emu,
+// Supermodel and xemu-chihiro are built here at a pin (cores/build-cemu.sh,
+// cores/build-sm2emu.sh, cores/build-supermodel.sh,
+// cores/build-xemu-chihiro.sh). sm2-emu, Supermodel, xemu-chihiro and Linux
+// Loader play the Model 2, Model 3, Chihiro and Lindbergh games the arcade
+// match gives them (arcadematch.h), from any arcade folder.
 // Each one opens its own window and draws its own picture.
 // So the console starts the emulator as a separate program, hands it the
 // television, and takes the screen back when it ends. docs/PROJECT.md, open
@@ -30,7 +31,8 @@
 // emulator's own setup is in its file (standalone_eden.cpp,
 // standalone_rpcs3.cpp, standalone_xemu.cpp, standalone_xenia.cpp,
 // standalone_cemu.cpp, standalone_vita3k.cpp, standalone_sm2emu.cpp,
-// standalone_supermodel.cpp and standalone_chihiro.cpp), and what they share
+// standalone_supermodel.cpp, standalone_chihiro.cpp and
+// standalone_lindbergh.cpp), and what they share
 // is standalone_internal.h.
 // Since the restructure (#398).
 //
@@ -170,6 +172,17 @@ struct Emulator {
     // moves their virtual controller's left stick too (vpad.h): xemu-chihiro,
     // whose bindings name one input apiece (#619).
     bool dpadOnStick;
+    // IT STARTS THE GAME AS A CHILD OF ITS OWN, which then plays apart from
+    // it: Linux Loader starts the game's program through the shell (#620). So
+    // the pause menu's pause, and a kill, reach the whole process group the
+    // sandbox, the emulator and the game share, not the emulator alone.
+    bool gameIsChild;
+    // IT IS ASKED TO CLOSE BY ITS OWN QUIT ON PLAYER 1'S GUIDE, which the
+    // console presses on that virtual controller and a player's Guide never
+    // reaches (it opens the pause menu): Linux Loader, whose ExitGame writes
+    // the board's memory and exits cleanly where SIGTERM, which it has no
+    // handler for, does neither (#620). Not with `closesByWindow`.
+    bool quitsOnGuide;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
@@ -244,7 +257,9 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
 // `<set>.eeprom`; for Supermodel, `nvram`, the board's `<set>.nv`; for
 // xemu-chihiro, `xemu/xemu/saves`, the board's `<game>.sav`, the media
 // board's `<game>.dimm` and a player's card, with no folders, which travels
-// as RomM takes an arcade save (catalog::SaveForm::aloneAsItIs).
+// as RomM takes an arcade save (catalog::SaveForm::aloneAsItIs); for Linux
+// Loader, `saves`, the board's `eeprom.bin` and `sram.bin` and a player's
+// cards, in the same form.
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
 
 // The name a save folder's one file is put back under, for an emulator whose
@@ -279,8 +294,8 @@ std::string switchKeys();
 // the way the next paragraph's do, and the game starts. Only saves the drive
 // will not give up keep the game from starting.
 //
-// Xenia, Cemu, Eden, RPCS3, Vita3K, sm2-emu, Supermodel and xemu-chihiro
-// (`notesPlaying`): the note goes in the PERSON's folder for
+// Xenia, Cemu, Eden, RPCS3, Vita3K, sm2-emu, Supermodel, xemu-chihiro and
+// Linux Loader (`notesPlaying`): the note goes in the PERSON's folder for
 // the game (`saveDir`), where the emulator writes the saves itself. A note
 // still there at the next start or the next launch of that game means the
 // last one never got its saves zipped, and the whole folder is sent then.
@@ -312,7 +327,8 @@ public:
     // ended, after which `ended()` says how.
     bool poll();
     // Asks it to close the way its own window close would: SIGTERM to the
-    // program, or the close itself (`closesByWindow`). `poll` forces it after
+    // program, the close itself (`closesByWindow`), or its own quit on player
+    // 1's Guide (`quitsOnGuide`). `poll` forces it after
     // a deadline if it does not. A frozen
     // program is thawed first, or it never hears the request (measured: Eden
     // asked while frozen had to be forced after the full grace).

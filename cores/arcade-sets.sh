@@ -55,8 +55,25 @@
 #                   for is the table below (PROFILE_SETS), checked against the
 #                   fork's profiles and names, since the fork names its
 #                   profiles after its cabinets, not after MAME's sets
+#   linuxloader     Linux Loader's own source, at the commit
+#                   build_files/install-linuxloader.sh pins (the AppImage it
+#                   puts in the image is that release's): its list of the
+#                   programs it starts, in its order (mainShared.c, games[]),
+#                   its table of game versions by fingerprint (gameData.c, the
+#                   fingerprints in config.h) with each one's kind (DRIVING,
+#                   FLYING, DIGITAL are played on a controller, SHOOTING with a
+#                   light gun, MAHJONG on a panel) and whether it works. Which
+#                   program each game is is the table below (PROGRAM_GAMES),
+#                   checked against the loader's programs, its games and its
+#                   own list of original programs (cleanElfCRC32's "| name"),
+#                   since the loader names a game's version, not its program.
+#                   A test menu, a server box and Segaboot are no game and
+#                   have no line
 #
-# THE FILE, <core file stem>.catalogue, one set a line:
+# THE FILE, <core file stem>.catalogue, one set a line (Linux Loader's: one
+# program a line, by its name in lower case, then one game version a line,
+# by its fingerprint as eight hex digits, each with only its marks, and a
+# `!programs` line of the program names in the loader's order, as spelt):
 #   <set> <w|n> <-|g|x> [b<buttons>] <crc>:<size> ... @<disc>:<sha1> ... [=<id>:<name>]
 # w works and n does not, by the emulator's own word (FBNeo "preliminary",
 # 2003-Plus "preliminary" or "protection", MAME 0.289 "preliminary"); g a
@@ -93,7 +110,9 @@
 # fetched, which is checked the same), and for sm2-emu and Supermodel,
 # programs of their own, from cores/build-sm2emu.sh,
 # cores/build-supermodel.sh and cores/build-xemu-chihiro.sh (their REPO= and
-# COMMIT=). Not a mode of build-core.sh on
+# COMMIT=), and for Linux Loader, which is not built here, from
+# build_files/install-linuxloader.sh (its LINUXLOADER_REPO= and
+# LINUXLOADER_COMMIT=). Not a mode of build-core.sh on
 # purpose: every core's CI cache key covers its shared lines
 # (ci/core-cache-key.sh), so editing a mode there would rebuild every core.
 #
@@ -103,7 +122,7 @@
 # Usage: cores/arcade-sets.sh <core> <out dir>
 #   writes <out dir>/<core file stem>.catalogue, e.g. fbneo_libretro.catalogue,
 #   or for a program of its own its name's, sm2emu.catalogue,
-#   supermodel.catalogue or xemu-chihiro.catalogue
+#   supermodel.catalogue, xemu-chihiro.catalogue or linuxloader.catalogue
 
 set -euo pipefail
 
@@ -141,6 +160,11 @@ supermodel)
 xemu-chihiro)
     FILES=("hw/xbox/chihiro/chihiro.c" "config_spec.yml")
     LEAST=40
+    ;;
+linuxloader)
+    FILES=("src/loader/mainShared.c" "src/loader/config/gameData.c" "src/loader/config/config.h"
+           "src/loader/mainL.c" "src/loader/linuxExe.c" "src/loader/graphics/gpuVendor.c")
+    LEAST=80
     ;;
 *)
     exit 0
@@ -180,6 +204,7 @@ case "${CORE}" in
 sm2emu) arm=$(cat "${ROOT}/cores/build-sm2emu.sh") ;;
 supermodel) arm=$(cat "${ROOT}/cores/build-supermodel.sh") ;;
 xemu-chihiro) arm=$(cat "${ROOT}/cores/build-xemu-chihiro.sh") ;;
+linuxloader) arm=$(sed -n 's/^readonly LINUXLOADER_//p' "${ROOT}/build_files/install-linuxloader.sh") ;;
 *) arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh") ;;
 esac
 REPO=$(sed -n 's/^ *REPO=//p' <<<"${arm}")
@@ -221,7 +246,8 @@ fi
 mkdir -p "${OUT}"
 file="${OUT}/${CORE%_libretro}_libretro.catalogue"
 # A program of its own is named for itself (arcadematch.cpp, loadFrom).
-[[ "${CORE}" == sm2emu || "${CORE}" == supermodel || "${CORE}" == xemu-chihiro ]] &&
+[[ "${CORE}" == sm2emu || "${CORE}" == supermodel || "${CORE}" == xemu-chihiro ||
+   "${CORE}" == linuxloader ]] &&
     file="${OUT}/${CORE}.catalogue"
 {
     echo "# ${CORE} @ ${COMMIT}, from ${FILES[*]}"
@@ -690,6 +716,92 @@ elif core == "xemu-chihiro":
         count += 1
     if count < 40:
         sys.exit("xemu-chihiro: MAME 0.289 gave only %d Chihiro sets" % count)
+elif core == "linuxloader":
+    # WHICH GAMES EACH PROGRAM IS, by the start of their names in the loader's
+    # table (config.h's defines, gameData.c's rows): the loader names a game's
+    # version, not the program it runs. Checked below against its programs,
+    # its games and its list of original programs, so a program or a game
+    # added at a new pin stops the build until it is placed here.
+    PROGRAM_GAMES = {
+        "a.elf": ["HUMMER_SBQN"], "abc": ["AFTER_BURNER_CLIMAX_"],
+        "apacheM.elf": ["TOO_SPICY_"], "chopperM.elf": ["HARLEY_DAVIDSON_"],
+        "drive.elf": ["SEGA_RACE_TV_"], "dsr": ["R_TUNED_"],
+        "gsevo": ["GHOST_SQUAD_EVOLUTION_"], "hod4M.elf": ["THE_HOUSE_OF_THE_DEAD_4_"],
+        "hodexRI.elf": ["THE_HOUSE_OF_THE_DEAD_EX_"], "hummer_Master.elf": ["HUMMER_EXTREME_"],
+        "id4.elf": ["INITIALD_4_"], "id5.elf": ["INITIALD_5_"], "Jennifer": ["OUTRUN_2_SP_SDX_"],
+        "lgj_final": ["LETS_GO_JUNGLE_SBLU"], "lgjsp_app": ["LETS_GO_JUNGLE_SBNR_SPECIAL"],
+        "main.exe": ["PRIMEVAL_HUNT_"], "mj4": ["MJ4_"], "q2satl_lind": ["QUIZ_AXA_"],
+        "ramboM.elf": ["RAMBO_"], "vf5": ["VIRTUA_FIGHTER_5_"],
+        "vsg": ["GHOST_SQUAD_EVOLUTION_"], "vt3": ["VIRTUA_TENNIS_3_"],
+        "vt3_Lindbergh": ["VIRTUA_TENNIS_3_"],
+    }
+    # NO GAME TO PLAY: Segaboot, the board's own menu, and the groups of the
+    # test menus and of Initial D's server boxes.
+    NOT_A_GAME = ("SEGABOOT_",)
+    NOT_A_GAME_GROUPS = {"GROUP_ID_SERVERBOX"}
+    KINDS = {"DRIVING": "-", "FLYING": "-", "DIGITAL": "-", "SHOOTING": "g", "MAHJONG": "x"}
+    main, data, header, hook, exe, gpu = (open(p, encoding="utf-8").read() for p in paths)
+    # WHAT THE CONSOLE LEANS ON, besides the tables (docs/ARCHITECTURE.md,
+    # "What leans on other projects"): the fingerprint as the console takes
+    # it (arcadematch.cpp, lindberghFingerprint), the game started through
+    # the shell as the loader's child (standalone_lindbergh.cpp), and the
+    # graphics chip's maker read from OpenGL, which the image's Mesa answers
+    # "AMD" on the reference console.
+    for what, text, needle in (
+            ("mainL.c", hook, "info->dlpi_phdr[2].p_type == PT_LOAD"),
+            ("mainL.c", hook, "info->dlpi_phdr[2].p_flags == 5"),
+            ("mainL.c", hook, "info->dlpi_phdr[2].p_vaddr + 10), 0x4000)"),
+            ("linuxExe.c", exe, "int sysCmd = system(command);"),
+            ("gpuVendor.c", gpu, "glad_glGetString(GL_VENDOR)"),
+            ("gpuVendor.c", gpu, 'strstr(config->GPUVendorString, "AMD")')):
+        if needle not in text:
+            sys.exit("linuxloader: %s no longer has '%s'" % (what, needle))
+    games = re.search(r"char \*games\[\] = \{(.*?)\};", main, re.S)
+    if not games:
+        sys.exit("linuxloader: no games[] in mainShared.c")
+    programs = re.findall(r'"([^"]+)"', games.group(1))
+    if programs[-1] != "END":
+        sys.exit("linuxloader: games[] does not end with END")
+    programs = programs[:-1]
+    if sorted(programs) != sorted(PROGRAM_GAMES):
+        sys.exit("linuxloader: its programs are %s, the table here %s"
+                 % (sorted(programs), sorted(PROGRAM_GAMES)))
+    crcs = {n: int(v, 16) for n, v in re.findall(r"#define (\w+) (0x[0-9a-fA-F]+)", header)}
+    rows = re.findall(r"\{(\w+), \"([^\"]*)\", \"([^\"]*)\", \"([^\"]*)\", [^{}]*?\b(WORKING|NOT_WORKING), "
+                      r"\w+, (\w+), \d+, \d+, (-1|\w+),", data)
+    if len(rows) < 80:
+        sys.exit("linuxloader: only %d rows in gameData.c" % len(rows))
+    print("!programs " + " ".join(programs))
+    owner, kind_of = {}, {}
+    for name, _title, _short, dvp, status, kind, group in rows:
+        if name not in crcs:
+            sys.exit("linuxloader: %s is in gameData.c and not in config.h" % name)
+        if kind not in KINDS:
+            sys.exit("linuxloader: %s is a %s game, a kind the table here does not know"
+                     % (name, kind))
+        if name.startswith(NOT_A_GAME) or group in NOT_A_GAME_GROUPS or group.endswith("_TEST"):
+            continue
+        mine = [p for p, starts in PROGRAM_GAMES.items()
+                if any(name.startswith(s) for s in starts)]
+        if not mine:
+            sys.exit("linuxloader: %s is no program's game in the table here" % name)
+        for p in mine:
+            owner.setdefault(p, set()).add(dvp)
+            kind_of.setdefault(p, set()).add(KINDS[kind])
+        line("%08x" % crcs[name], status == "WORKING", KINDS[kind], [], [])
+    # The loader's own list of original programs names each one's version:
+    # every one of those its table of games also names must be that
+    # program's here.
+    named = {dvp for ds in owner.values() for dvp in ds}
+    for dvp, prog in re.findall(r"// (DVP-\w+)\s*\|\s*([\w.]+)", main):
+        if prog in PROGRAM_GAMES and dvp in named and dvp not in owner.get(prog, set()):
+            sys.exit("linuxloader: its originals list %s as %s, which the table here does "
+                     "not give that program" % (dvp, prog))
+    for p in programs:
+        kinds = kind_of.get(p, set())
+        if len(kinds) != 1:
+            sys.exit("linuxloader: %s's games are of %s kinds" % (p, sorted(kinds) or "no"))
+        line(p, True, kinds.pop(), [], [])
 PY
 } > "${file}"
 
@@ -699,7 +811,7 @@ count=$(grep -vc '^[#!]' "${file}")
 (( count >= LEAST )) ||
     { echo "${CORE}: only ${count} sets read, fewer than ${LEAST}" >&2; exit 1; }
 bad=$(grep -v '^[#!]' "${file}" |
-    grep -vcE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*( =[A-Z0-9]{4}:[a-z0-9_]+)?$' || true)
+    grep -vcE '^[a-z0-9_.]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*( =[A-Z0-9]{4}:[a-z0-9_]+)?$' || true)
 (( bad == 0 )) || { echo "${CORE}: ${bad} lines are not in the catalogue's form" >&2; exit 1; }
 empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?$' || true)
 echo "${CORE}: ${count} sets (${empty} with nothing to check) at ${COMMIT} -> ${file}"
