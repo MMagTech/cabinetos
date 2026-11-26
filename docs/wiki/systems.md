@@ -57,7 +57,7 @@ downloads anything new into the console's shared BIOS folder.
 | 3DO | `3do` | Opera | iso, bin, chd, cue | **Required:** `panafz10.bin` (1 MB, any name) |
 | Arcade | `arcade`, `mame`, `mame-advmame`, `fbneo`, `fba`, `cps1`, `cps2`, `cps3`, `neogeomvs`, `neogeoaes`, `naomi`, `naomi2`, `naomigd`, `atomiswave`, `gaelco`, `stv`, `model2`, `model3` | FinalBurn Neo, MAME 2003-Plus, MAME 0.289, Flycast, sm2-emu, Supermodel | zip, 7z | Naomi and Atomiswave: their BIOS zips. See [Arcade](arcade.md) |
 | Arcade: Sega Chihiro | `chihiro`, or any arcade folder above | xemu-chihiro | bin, one converted file per game | **Required:** `chihiro.zip` and `seganetw.zip`. See [Arcade](arcade.md#chihiro) |
-| Arcade: Sega Lindbergh (experimental) | `lindbergh` | Linux Loader | each game's hard drive as a folder, or a zip or 7z of it | None. See [Arcade](arcade.md#lindbergh) |
+| Arcade: Sega Lindbergh (experimental) | `lindbergh` | Linux Loader | each game's hard drive folder as a zip or 7z (or as the folder) | None. See [Arcade](arcade.md#lindbergh) |
 | Atari 2600 | `atari2600` | Stella 2014 | a26, bin | None |
 | Atari 7800 | `atari7800` | ProSystem | a78, bin | None |
 | Dreamcast | `dc` | Flycast | chd, cdi, gdi, cue, m3u | Optional: `dc_boot.bin` (2 MB, any name). Without it Flycast uses its own. |
