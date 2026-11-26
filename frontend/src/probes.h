@@ -24,6 +24,7 @@ struct EarlyProbeOptions {
     bool playtimeTestMode = false;
     bool discTestMode = false;
     bool filesTestMode = false;
+    bool ps3InstallTestMode = false;
     bool vectrexSheetsTestMode = false;
     bool gpuChoiceTestMode = false;
     bool tailscaleSwitchTestMode = false;

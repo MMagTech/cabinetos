@@ -18,6 +18,12 @@ namespace cab::standalone::detail {
 
 // Where a game's folder records what was installed into it and deleted.
 constexpr const char* kInstalledNote = ".cabinetos-installed";
+// A line of that note, beside the packages': whatever PS3 unlock keys were
+// among them are in the game's folder (installPackages). A note without it was
+// written before the keys were kept (#748), and installedFile has each package
+// small enough to be one fetched once more.
+constexpr const char* kKeysKept = "unlock keys kept";
+constexpr int64_t kKeyPackageMax = 1024 * 1024;
 // The note a folder holds from the start of a game until its saves are sent
 // (beforeStart): a game's folder for xemu, a person's for the others, and a
 // person's for Xbox saves another person's start brought off the drive for
@@ -41,6 +47,7 @@ std::string readFile(const std::string& path);
 bool writeFile(const std::string& path, const std::string& data);
 bool writeDoneNote(const std::string& path, const std::string& note);
 bool writeInstalledNote(const std::string& path, const std::string& note);
+bool noteHas(const std::string& note, const std::string& line);
 bool placeFile(const std::string& from, const std::string& to);
 struct IniSet {
     const char* section;

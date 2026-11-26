@@ -181,12 +181,13 @@ std::string home(const Emulator& e);
 //
 // Whether `fileName` (as it is named on the disk), of `sizeBytes`, was already
 // installed into the game at `entryPath` and deleted, so it is not fetched
-// again.
-bool installedFile(const std::string& entryPath, const std::string& fileName,
+// again. No for a PS3 package that may be an unlock key installed before the
+// console kept them (#748): it is fetched once more.
+bool installedFile(const Emulator& e, const std::string& entryPath, const std::string& fileName,
                    int64_t sizeBytes);
-// What to start in a game's folder, or empty when there is nothing: the
-// installed PS3 game's EBOOT.BIN, an installed Vita game's folder, or a disc
-// image.
+// What to start in a game's folder, or empty when there is nothing: a disc
+// image, the installed PS3 game's EBOOT.BIN, or an installed Vita game's
+// folder.
 std::string bootPath(const std::string& entryPath);
 // Runs on the download worker, after the files are in `entryPath`: whatever
 // the console must install once (PS3 firmware, from `bios/`), then every

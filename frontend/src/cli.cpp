@@ -233,6 +233,8 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             discTestMode = true;
         } else if (SDL_strcmp(argv[i], "--files-test") == 0) {
             filesTestMode = true;
+        } else if (SDL_strcmp(argv[i], "--ps3-install-test") == 0) {
+            ps3InstallTestMode = true;
         } else if (SDL_strcmp(argv[i], "--vectrex-sheets-test") == 0) {
             vectrexSheetsTestMode = true;
         } else if (SDL_strcmp(argv[i], "--gpu-choice-test") == 0) {

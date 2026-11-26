@@ -4,6 +4,22 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.25.3 {#v2026-11-25-3}
+
+- **Fixed:** a PlayStation 3 game that comes as a trial with a small unlock
+  key played as the trial, even with the key and its licence on your server.
+  It is now the full game. One already on your console fetches its key the
+  next time you start it, and nothing else downloads again. Keep the key, the
+  game's `.pkg` and the `.rap` together in the game's folder.
+  ([Systems](systems.md), [#748](https://github.com/MMagTech/cabinetos/issues/748))
+- **Fixed:** PlayStation 3, PlayStation Vita and original Xbox games also
+  downloaded the updates and DLC kept in a game's `update` and `dlc` folders
+  on your server, and a PlayStation 3 game installed them. A disc game could
+  stop starting. They now download only the game itself, as on every other
+  system, until updates and DLC are supported. A PlayStation 3 game you
+  already have keeps an update it installed.
+  ([#749](https://github.com/MMagTech/cabinetos/issues/749))
+
 ## 2026.11.25.2 {#v2026-11-25-2}
 
 - **New:** arcade high scores go to your server with the game's save, so your
