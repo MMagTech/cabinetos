@@ -665,6 +665,68 @@ int test() {
                                    "as before");
     }
     {
+        // CHIHIRO'S FOLDER (xemu-chihiro, #619): the board's backup alone goes
+        // up as it is, under the emulator's own name, its temporary file left;
+        // with the media board's beside it, a zip of the two with no folder;
+        // and a start on another console puts the one file back under the
+        // emulator's name, whatever RomM called it (SaveForm::aloneAsItIs).
+        GameSession s;
+        s.romId = ++game;
+        s.title = "OutRun 2 Special Tours";
+        s.fsStem = "outr2sto";
+        s.core = "xemu-chihiro";
+        s.platformSlug = "chihiro";
+        s.arcade = true;
+        s.saveTag = "xemu-chihiro";
+        s.saveDir = storage::savesDir(u, "chihiro", game, "xemu-chihiro");
+        s.dirSaveRoot = s.saveDir + "/xemu/xemu/saves";
+        s.dirSaveCore = "xemu-chihiro";
+        s.dirSavePlatform = "chihiro";
+        cab::writeBytes(s.dirSaveRoot + "/outr2st.sav", scores);
+        cab::writeBytes(s.dirSaveRoot + "/outr2st.sav.tmp", one);
+        syncDirSave(s);
+        bool marked = s.saveChanged && mark(s, u) && cache::owedPush(u, game, &p);
+        const std::vector<uint8_t> alone = marked ? cab::readBytes(p.savePath)
+                                                  : std::vector<uint8_t>();
+        check(marked && p.saveName == "outr2st.sav" && p.saveShape == "SINGLE" && alone == scores,
+              "Chihiro: the board's backup alone goes up as it is, under the emulator's name, "
+              "without the file it writes it through");
+        cache::clearPushOwed(u, game, p.stamp);
+        const std::string other =
+            storage::savesDir(u, "chihiro", game + 5000, "xemu-chihiro") + "/xemu/xemu/saves";
+        SaveFetch fetched;
+        fetched.romId = game + 5000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::Channel;
+        fetched.pick.channel.current.save.fileName = "outr2st [2026-11-26_04-53-54-293].sav";
+        fetched.picked = alone;
+        restoreDirSave(fetched, "xemu-chihiro", other, s.title, std::string(), nullptr,
+                       cab::ZipShape::Folder, std::string(), "outr2st.sav");
+        check(cab::readBytes(other + "/outr2st.sav") == scores,
+              "which a start on another console puts back under the emulator's name, whatever "
+              "RomM called it");
+        fetched.pick.channel.current.save.fileName = "outr2st.dimm";
+        fetched.picked = eeprom;
+        restoreDirSave(fetched, "xemu-chihiro", other, s.title, std::string(), nullptr,
+                       cab::ZipShape::Folder, std::string(), "outr2st.sav");
+        check(cab::readBytes(other + "/outr2st.sav") == scores &&
+                  !storage::exists(other + "/outr2st.dimm"),
+              "and a file of another ending is not taken for the backup");
+        cab::writeBytes(s.dirSaveRoot + "/outr2st.dimm", eeprom);
+        s.saveChanged = false;
+        syncDirSave(s);
+        marked = s.saveChanged && mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        check(marked && p.saveName == "OutRun 2 Special Tours.zip" && p.saveShape == "MULTI" &&
+                  cab::readZip(cab::readBytes(p.savePath), &in, &zerr) && in.size() == 2 &&
+                  in[0].relPath == "outr2st.dimm" && in[0].bytes == eeprom &&
+                  in[1].relPath == "outr2st.sav" && in[1].bytes == scores,
+              "with the media board's beside it, a zip of the two with no folder");
+        cache::clearPushOwed(u, game, p.stamp);
+    }
+    {
         // DREAMCAST'S CARD, ONE PER GAME IN THE GAME'S SAVE FOLDER (#346,
         // step 8): a start copies the person's card from before once to the
         // name Flycast reads, the old file left, and takes away a card under

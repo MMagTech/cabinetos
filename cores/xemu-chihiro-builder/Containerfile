@@ -1,0 +1,41 @@
+# The build environment for xemu-chihiro, Tovarichtch's xemu fork that plays
+# Sega Chihiro games, on Linux x86-64.
+#
+# SEPARATE FROM frontend/Containerfile, for the reason sm2emu-builder gives:
+# every libretro core's CI cache key covers frontend/Containerfile
+# (ci/core-cache-key.sh), so adding a toolchain there would rebuild all of
+# them for one program that needs it.
+#
+# Fedora 44 for the same reason as the others: it is what Bazzite 44 is built
+# from, so every library the finished program still asks the system for is the
+# one the image has. Move it when the base moves.
+#
+# WHAT IT TAKES FROM THE SYSTEM: the libraries the program links, each one the
+# image has (cores/build-xemu-chihiro.sh lists them with ldd and checks every
+# one resolves): SDL 3, epoxy, GLib, pixman, slirp, libsamplerate, libpcap,
+# libusb, libcurl, OpenSSL, zlib and keyutils; and the Vulkan headers and
+# loader, which its renderer is compiled against and loads at run time. The
+# rest it builds from the subprojects its .wrap files pin (imgui, implot,
+# genconfig, tomlplusplus, glslang, volk, SPIRV-Reflect,
+# VulkanMemoryAllocator, keycodemapdb, nv2a_vsh_cpu, softfloat, xxhash), which
+# meson fetches at those revisions. Python with PyYAML runs its genconfig,
+# which turns config_spec.yml into the settings code, and the build script's
+# check of the console's keys against that same file.
+#
+# libcurl IS LINKED WHATEVER --disable-curl SAYS: the fork's meson.build has
+# no switch for its update check and compatibility report (util/http.c). The
+# console turns the update check off and starts it with no network, as every
+# emulator (cores/build-xemu-chihiro.sh).
+FROM registry.fedoraproject.org/fedora:44
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        gcc gcc-c++ make cmake ninja-build git pkgconf-pkg-config \
+        python3 python3-pyyaml python3-tomli \
+        bzip2 flex bison diffutils findutils perl which tar xz binutils \
+        glib2-devel pixman-devel zlib-ng-compat-devel \
+        SDL3-devel libepoxy-devel libsamplerate-devel libslirp-devel \
+        openssl-devel libpcap-devel libcurl-devel libusb1-devel keyutils-libs-devel \
+        vulkan-headers vulkan-loader-devel \
+    && dnf clean all
+
+WORKDIR /src

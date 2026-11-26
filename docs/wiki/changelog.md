@@ -4,6 +4,17 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.26.3 {#v2026-11-26-3}
+
+- **New:** Sega Chihiro arcade games play: OutRun 2, Crazy Taxi High Roller
+  and more. Put each game, converted to one `.bin` file, in your Chihiro
+  folder, and `chihiro.zip` and `seganetw.zip` in its bios folder. The gun
+  games wait for light guns. Steer with the left stick or the d-pad, the
+  right trigger accelerates and the left brakes, the shoulders change gear,
+  Select puts in a coin and **Y** puts in a card. See
+  [Arcade](arcade.md#chihiro).
+  ([#619](https://github.com/MMagTech/cabinetos/issues/619))
+
 ## 2026.11.26.2 {#v2026-11-26-2}
 
 - **Fixed:** Naomi, Naomi 2 and Atomiswave games said they had no

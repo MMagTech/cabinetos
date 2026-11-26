@@ -26,6 +26,7 @@
 #   Cemu           .github/workflows/build-cemu.yml
 #   sm2-emu        .github/workflows/build-sm2emu.yml (and its catalogue)
 #   Supermodel     .github/workflows/build-supermodel.yml (and its catalogue)
+#   xemu-chihiro   .github/workflows/build-xemu-chihiro.yml (and its catalogue)
 #   Sunshine       .github/workflows/build-sunshine.yml
 #
 # So this only ever COLLECTS and CHECKS. It builds nothing, and it fails before
@@ -57,6 +58,8 @@
 #                                 which sets it plays
 #   supermodel/{bin,lib,share/supermodel}/..., supermodel.catalogue   Model 3's
 #                                 emulator, SDL2_net, and which sets it plays
+#   xemu-chihiro/bin/xemu-chihiro, xemu-chihiro.catalogue   Chihiro's emulator
+#                                 and which sets it plays
 #   sunshine/Sunshine-*.rpm       Remote Play's streaming host, with our patch (#304)
 #
 # This starts image_payload/ afresh. Two more folders go in after it, from
@@ -84,6 +87,7 @@ if [ $# -ge 1 ]; then
     CEMUSRC="$SRC/cemu"
     SM2SRC="$SRC/sm2emu"
     SUPERMODELSRC="$SRC/supermodel"
+    CHIHIROSRC="$SRC/xemu-chihiro"
     SUNSHINESRC="$SRC/sunshine"
     MAMESRC="$SRC/mame"
 else
@@ -95,6 +99,7 @@ else
     CEMUSRC="$ROOT/cores/build/cemu"
     SM2SRC="$ROOT/cores/build/sm2emu"
     SUPERMODELSRC="$ROOT/cores/build/supermodel"
+    CHIHIROSRC="$ROOT/cores/build/xemu-chihiro"
     SUNSHINESRC="$ROOT/cores/build/sunshine"
     MAMESRC="$ROOT/cores/build/mame"
 fi
@@ -366,6 +371,22 @@ done
 rm -rf "$OUT/supermodel"
 cp -R "$SUPERMODELSRC" "$OUT/supermodel"
 
+# --- Sega Chihiro -------------------------------------------------------------
+# xemu-chihiro, built by cores/build-xemu-chihiro.sh at its pin, and its
+# catalogue (cores/arcade-sets.sh xemu-chihiro, run into the same folder).
+# REQUIRED, for PlayStation 2's reason: without it every Chihiro game greys,
+# since nothing else plays one. build_files/install-xemu-chihiro.sh puts it at
+# /usr/lib/cabinetos/xemu-chihiro and the catalogue beside the cores.
+for f in bin/xemu-chihiro VERSION xemu-chihiro.catalogue; do
+    [ -s "$CHIHIROSRC/$f" ] || {
+        echo "xemu-chihiro's $f is not in $CHIHIROSRC, so the image would lose Chihiro" >&2
+        echo "Build it with cores/build-xemu-chihiro.sh, then cores/arcade-sets.sh xemu-chihiro $CHIHIROSRC." >&2
+        exit 1
+    }
+done
+rm -rf "$OUT/xemu-chihiro"
+cp -R "$CHIHIROSRC" "$OUT/xemu-chihiro"
+
 # --- Remote Play ------------------------------------------------------------
 # Sunshine, built by cores/build-sunshine.sh at its pin with our patch (#304).
 # REQUIRED: build_files/install-sunshine.sh installs this package and nothing
@@ -397,6 +418,7 @@ printf '  mame      0.289 (%s), %s\n' "$(cut -c1-8 "$OUT/mame/VERSION")" "$(du -
 printf '  wii u     Cemu %s, %s\n' "$(cut -c1-10 "$OUT/cemu/VERSION")" "$(du -sh "$OUT/cemu" | cut -f1)"
 printf '  model 2   sm2-emu %s, %s\n' "$(cut -c1-10 "$OUT/sm2emu/VERSION")" "$(du -sh "$OUT/sm2emu" | cut -f1)"
 printf '  model 3   Supermodel %s, %s\n' "$(cut -c1-10 "$OUT/supermodel/VERSION")" "$(du -sh "$OUT/supermodel" | cut -f1)"
+printf '  chihiro   xemu-chihiro %s, %s\n' "$(cut -c1-10 "$OUT/xemu-chihiro/VERSION")" "$(du -sh "$OUT/xemu-chihiro" | cut -f1)"
 printf '  sunshine  %s, %s\n' "$(head -1 "$OUT/sunshine/VERSION" | cut -d' ' -f1)" "$(du -sh "$OUT/sunshine" | cut -f1)"
 printf '  system    %s, %s entries\n' "$(du -sh "$OUT/system" | cut -f1)" \
        "$(find "$OUT/system" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ')"

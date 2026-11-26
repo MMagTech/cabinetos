@@ -66,7 +66,15 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **After save channels, small, each on his word:**
+1. **#619, "Sega Chihiro: Virtua Cop 3 and The House of the Dead III in the
+   xemu fork": phase 4, the testing push, on "push to testing".** The build
+   is #756, "Arcade: Sega Chihiro games play in xemu-chihiro (#619)", open.
+   Phase 3 passed on 2026-11-26 (results on #619): headless on the A9 for
+   the pages, picture levels, controls, pause menu and two people, then on
+   the TV for the look, sound, driving, rumble and Crazy Taxi's jump, from
+   his RomM's Chihiro folder. Not covered: Maximum Tune, Ollie King and
+   Gundam (no files), and card slots with a real card.
+2. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
      the Switch check, what changed only.
@@ -79,12 +87,12 @@ RomM: keep test launches under a minute, or have his go.
    - The clean-up review: what future testing keeps of the save channels
      kits, sessions and branches; the audited list is in his research
      notes. Nothing is deleted before his yes.
-2. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
+3. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
    #654, passed twice: his console and his friend's, two servers linking up
    and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
    `docs/` into the server's build stage, and the relay's block list lacks
    3fff::/20.
-3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -92,7 +100,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-4. **Words from him, one at a time, no work:** which of the 36 faults the
+5. **Words from him, one at a time, no work:** which of the 36 faults the
    PROJECT.md scan found with no issue (2026-10-22) become issues, none
    filed until he says. That list is in the
    notes of the session that made it ("Faults recorded in PROJECT.md with no

@@ -440,6 +440,12 @@ struct SaveForm {
     // while the cartridge holds no save: a formatted, empty cartridge is
     // never sent.
     bool batteryFirst = false;
+    // A FOLDER SAVE OF ONE FILE TRAVELS AS THAT FILE, under its own name, and
+    // several as a zip with no folders, as RomM takes an arcade save
+    // (docs/decisions/2026-11-25-arcade-saves-in-romms-form.md): xemu-chihiro's
+    // folder holds only the emulator's own files, no folder in it (saves.cpp,
+    // aloneInFolder). Other folder saves always travel as a zip.
+    bool aloneAsItIs = false;
 };
 
 // Sigil's name for a machine's own memory in a zip of its save (its

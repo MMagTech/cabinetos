@@ -52,6 +52,7 @@ constexpr Credit kCredits[] = {
     {"sm2-emu", "Model 2, Daniel Martin (dmanlfc) \xC2\xB7 GPL v3+"},
     {"Supermodel", "Model 3 \xC2\xB7 GPL v3+"},
     {"SDL2_net", "Inside Supermodel \xC2\xB7 zlib"},
+    {"xemu-chihiro", "Chihiro, Tovarichtch's xemu \xC2\xB7 GPL v2"},
     {"xemu-dashboard", "The Xbox drive \xC2\xB7 MIT"},
     {"Sunshine", "Remote Play \xC2\xB7 GPL v3"},
     {"Tailscale", "Remote Play away \xC2\xB7 BSD 3-clause"},

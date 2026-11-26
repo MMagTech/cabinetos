@@ -171,12 +171,13 @@ bool snapshotsAllowed(const char* core) {
     // True to the machines: memory-card consoles, and everything after them.
     // Not the 3DS, a handheld, by MMagTech's decision of 2026-10-20, though
     // its states may not survive an emulator update (emulatorTag). And every
-    // emulator run as a program of its own, sm2-emu's Model 2 and
-    // Supermodel's Model 3 among them, whose pause menu is Resume, Screenshot
-    // and Exit to Home (MMagTech, 2026-10-29).
+    // emulator run as a program of its own, sm2-emu's Model 2, Supermodel's
+    // Model 3 and xemu-chihiro's Chihiro among them, whose pause menu has
+    // no Save state or Load latest state (MMagTech, 2026-10-29; Chihiro
+    // 2026-11-25, #619).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
                                                "xenia", "cemu", "vita3k", "sm2emu",
-                                               "supermodel"};
+                                               "supermodel", "xemu-chihiro"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -271,6 +272,15 @@ const char* saveTag(const char* core) {
         // game, the board's `<set>.nv` as Supermodel names it, which drops
         // into any Supermodel's NVRAM folder. No Cabinet app plays Model 3.
         {"supermodel", "supermodel"},
+        // Sega Chihiro, in xemu-chihiro: the board's `<game>.sav`, the media
+        // board's `<game>.dimm` and a player's card, under the emulator's own
+        // names, the only one alone as it is and several as a zip with no
+        // folders, as RomM takes an arcade save (docs/decisions/
+        // 2026-11-25-arcade-saves-in-romms-form.md;
+        // SaveForm::aloneAsItIs). They drop into any xemu-chihiro's saves folder,
+        // a card into its cards folder. No Cabinet app plays Chihiro, and
+        // Sigil has no row for it. The emulator's own name, as Batocera's.
+        {"xemu-chihiro", "xemu-chihiro"},
         //
         // Nintendo 3DS has states, so its save tag comes from emulatorTag
         // above: a zip of the emulated SD card's `Nintendo 3DS` folder
@@ -323,6 +333,9 @@ SaveForm saveForm(const char* core, const std::string& slug) {
     if (name == "cemu") f.profile = "80000001";
     if (name == "vita3k") f.profile = "00";
     if (name == "rpcs3") f.profile = "00000001";
+
+    // Chihiro's save folder: one file as it is (SaveForm::aloneAsItIs).
+    if (name == "xemu-chihiro") f.aloneAsItIs = true;
 
     // A folder save's place in Sigil's answer (its restore targets) against
     // this console's root for the same folder.
@@ -417,6 +430,17 @@ bool inDirectorySave(const char* core, const std::string& platformSlug,
         return relPath.compare(0, 6, "nvram/") == 0 ||
                (relPath.compare(0, 8, "hiscore/") == 0 && relPath.size() > hi.size() &&
                 relPath.compare(relPath.size() - hi.size(), hi.size(), hi) == 0);
+    }
+    // Chihiro: the board's backup, the media board's and a player's card, as
+    // xemu-chihiro names them, and not the temporary file it writes each
+    // through (standalone_chihiro.cpp).
+    if (core && manifestName(core) == "xemu-chihiro") {
+        auto ends = [&](const char* e) {
+            const size_t n = std::strlen(e);
+            return relPath.size() > n && relPath.compare(relPath.size() - n, n, e) == 0;
+        };
+        return relPath.find('/') == std::string::npos && (ends(".sav") || ends(".dimm") ||
+                                                          ends(".bin"));
     }
     if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
     // The Mii Channel's root is `User/Wii`: its Mii list, and under `title/`

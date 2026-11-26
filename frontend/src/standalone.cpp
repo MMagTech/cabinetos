@@ -28,8 +28,8 @@ namespace cab::standalone {
 namespace {
 
 // Eden and xemu are pinned in system_files/usr/share/cabinetos/flatpaks.list.
-// RPCS3, Xenia, Cemu, Vita3K, sm2-emu and Supermodel are in the image
-// (build_files/install-*.sh).
+// RPCS3, Xenia, Cemu, Vita3K, sm2-emu, Supermodel and xemu-chihiro are in the
+// image (build_files/install-*.sh).
 const Emulator kEmulators[] = {
     // Eden's words for a game it cannot load (yuzu/main_window.cpp, before its
     // "Error while loading ROM!" box).
@@ -49,7 +49,7 @@ const Emulator kEmulators[] = {
      // folder (user/save/), as Xenia and Cemu do, so a session cut off by a
      // crash, a power cut or an app restart is sent at the next start or
      // launch instead of being overwritten by the older copy on RomM.
-     "nsp|xci", "keys", false, false, false, false, false, true, false, false, true, false, false},
+     "nsp|xci", "keys", false, false, false, false, false, true, false, false, true, false, false, false},
 
     // PLAYSTATION 3. Its log sits beside its cache, in the game's folder
     // (XDG_CACHE_HOME, rpcs3/ appended: Utilities/File.cpp, get_cache_dir).
@@ -67,7 +67,7 @@ const Emulator kEmulators[] = {
      // notesPlaying (#213): its savedata is in the person's folder too
      // (hdd0/home/<user>/savedata), the same case as Eden's. guitars: a
      // guitar plays as a PS3 guitar (guitar.h).
-     "iso|pkg", "firmware", true, true, true, false, false, true, false, true, false, false, true},
+     "iso|pkg", "firmware", true, true, true, false, false, true, false, true, false, false, true, false},
 
     // ORIGINAL XBOX. xemu keeps no log of its own; what it prints is it. A
     // game is a folder, as a PS3 game is, because its hard drive lives beside
@@ -80,7 +80,7 @@ const Emulator kEmulators[] = {
      {nullptr, nullptr, nullptr, nullptr},
      nullptr, nullptr,
      nullptr, 0, nullptr,
-     "iso|xiso", "BIOS", true, false, false, true, true, false, false, false, false, false, false},
+     "iso|xiso", "BIOS", true, false, false, true, true, false, false, false, false, false, false, false},
 
     // XBOX 360. Xenia Edge's own Linux build, in the image
     // (build_files/install-xenia.sh). Its log is where the console tells it
@@ -99,7 +99,7 @@ const Emulator kEmulators[] = {
      nullptr,
      "x> ",
      "Xenia-edge", 2, nullptr,
-     "iso|xex|zar", "", false, false, true, false, false, true, false, false, false, false, false},
+     "iso|xex|zar", "", false, false, true, false, false, true, false, false, false, false, false, false},
 
     // WII U. Cemu main, built from source at a pin (cores/build-cemu.sh) and in
     // the image at /usr/lib/cabinetos/cemu. Its log is under its home
@@ -120,7 +120,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, "Error",
      // dualsense (#669): Cemu reads a pad's own sensors, as SDL pairs them;
      // onlyPlayerOneTilts: the GamePad, the one Wii U controller with a gyro.
-     "wua", "", false, false, true, false, false, true, false, false, true, true, false},
+     "wua", "", false, false, true, false, false, true, false, false, true, true, false, false},
 
     // PLAYSTATION VITA. Vita3K's own build, in the image
     // (build_files/install-vita3k.sh), started through its SDL frontend: a
@@ -143,7 +143,7 @@ const Emulator kEmulators[] = {
      // folder, through the link standalone_vita3k.cpp makes, as Xenia does.
      // dualsense (#669): Vita3K reads a pad's own sensors, as SDL pairs them;
      // onlyPlayerOneTilts: the Vita is one handheld, held by player 1.
-     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true, true, false},
+     "zip|vpk", "firmware", true, false, false, false, false, true, true, false, true, true, false, false},
 
     // SEGA MODEL 2. sm2-emu, built from source at a pin (cores/build-sm2emu.sh)
     // and in the image at /usr/lib/cabinetos/sm2emu, for the Model 2 games
@@ -162,7 +162,7 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: it writes the board's NVRAM straight into the person's
      // folder, as Cemu writes its saves.
-     "zip|7z", "", false, false, false, false, false, true, false, false, false, false, false},
+     "zip|7z", "", false, false, false, false, false, true, false, false, false, false, false, false},
 
     // SEGA MODEL 3. Supermodel, built from source at a pin
     // (cores/build-supermodel.sh) and in the image at
@@ -183,7 +183,32 @@ const Emulator kEmulators[] = {
      nullptr, 0, nullptr,
      // notesPlaying: its NVRAM is written straight into the person's folder,
      // through the link standalone_supermodel.cpp makes, as Vita3K's saves are.
-     "zip", "", false, false, false, false, false, true, false, false, false, false, false},
+     "zip", "", false, false, false, false, false, true, false, false, false, false, false, false},
+
+    // SEGA CHIHIRO. xemu-chihiro, Tovarichtch's xemu fork, built from source
+    // at a pin (cores/build-xemu-chihiro.sh) and in the image at
+    // /usr/lib/cabinetos/xemu-chihiro, for the Chihiro games the arcade match
+    // gives it (arcadematch.h): one converted image each, `<set>.bin`. Started
+    // on it, it boots the board and the game in a window of its own and keeps
+    // no log but what it prints. An image it cannot read, or a board file it
+    // lacks, is one of these two lines, and it then waits on its own screen
+    // (measured on the A9, 2026-11-25), so the console closes it. SIGTERM is
+    // qemu's shutdown: the board's backup is written and it exits 0 in 0.26 s
+    // (measured on the A9, 2026-11-25). Guide, and Back with Start, open its
+    // own menu, which no setting turns off: Guide never reaches it, and Back
+    // and Start are held back as for xemu (blocksBackStart).
+    // docs/decisions/2026-11-26-chihiro-in-the-xemu-fork.md.
+    {"xemu-chihiro", nullptr, "/usr/lib/cabinetos/xemu-chihiro/bin/xemu-chihiro", "xemu-chihiro",
+     nullptr,
+     {"is not a FATX image", "Chihiro: ERROR"},
+     {nullptr, nullptr, nullptr, nullptr},
+     nullptr,
+     nullptr,
+     nullptr, 0, nullptr,
+     // notesPlaying: it writes the board's backup straight into the person's
+     // folder, as sm2-emu its NVRAM. dpadOnStick: it takes one input for each
+     // control, and steering is on the stick and the d-pad both.
+     "bin", "BIOS", false, false, false, true, false, true, false, false, false, false, false, true},
 };
 
 // How long a program that was asked to close gets before it is made to.
@@ -417,6 +442,17 @@ std::string yamlQuote(const std::string& v) {
     return out + "\"";
 }
 
+// A TOML basic string, for xemu's and xemu-chihiro's settings: a game's
+// folder can hold an apostrophe.
+std::string tomlQuote(const std::string& v) {
+    std::string out = "\"";
+    for (const char c : v) {
+        if (c == '"' || c == '\\') out += '\\';
+        out += c;
+    }
+    return out + "\"";
+}
+
 // `link` made a link to `target`, whatever was there. A real folder there
 // is the emulator's own, made while a link was missing (Vita3K's under
 // ux0/user, Supermodel's NVRAM): it is moved aside, never deleted, since it
@@ -548,6 +584,8 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
         return prepareSm2emu(e, saveDir, players, level, err);
     if (std::strcmp(e.core, "supermodel") == 0)
         return prepareSupermodel(e, romPath, saveDir, players, level, err);
+    if (std::strcmp(e.core, "xemu-chihiro") == 0)
+        return prepareChihiro(e, saveDir, players, level, missingKeys, err);
     *err = std::string("nothing prepares ") + e.core;
     return false;
 }
@@ -570,6 +608,14 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir) {
     if (std::strcmp(e.core, "sm2emu") == 0) return sm2emuNvram(saveDir);
     // Model 3: the board's NVRAM, as Supermodel names it.
     if (std::strcmp(e.core, "supermodel") == 0) return supermodelNvram(saveDir);
+    // Chihiro: the board's backup, the media board's, and a player's card,
+    // as xemu-chihiro names them (standalone_chihiro.cpp).
+    if (std::strcmp(e.core, "xemu-chihiro") == 0) return chihiroSaves(saveDir);
+    return {};
+}
+
+std::string aloneSave(const Emulator& e, const std::string& romPath) {
+    if (std::strcmp(e.core, "xemu-chihiro") == 0) return chihiroAloneSave(e, romPath);
     return {};
 }
 
@@ -714,6 +760,8 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
             sm2emuArgs(full, dir, saveDir, romPath);
         } else if (std::strcmp(e.core, "supermodel") == 0) {
             supermodelArgs(full, e, dir, romPath);
+        } else if (std::strcmp(e.core, "xemu-chihiro") == 0) {
+            chihiroArgs(full, saveDir, romPath);
         } else {
             full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
         }

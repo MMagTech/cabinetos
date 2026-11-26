@@ -173,6 +173,8 @@ here. See `frontend/src/catalog.cpp`.
 | **Supermodel**, in `/usr/lib/cabinetos/supermodel` | built from source by `cores/build-supermodel.sh`, **modified**: a machine whose net board is linked to itself runs as the only cabinet (the patch is in that script), `trzy/Supermodel` at commit `14815455dc28fca2c8662fb1ed99d447ecf8f364` (v0.3a-20261025-git-1481545), with its own game list and crosshair pictures from the same commit; copyright 2003-2026 The Supermodel Team | GPL v3 or later |
 | **The libraries compiled into Supermodel** (GLEW, minizip, TinyXML-2, Dear ImGui, minimp3, and Musashi, its 68000 core) | its own `Src/Pkgs` and `Src/CPU/68K/Musashi` at its pinned commit, built by its own makefile, unchanged | each under its own licence (GLEW BSD 3-Clause and MIT, minizip zlib, TinyXML-2 zlib, Dear ImGui MIT, minimp3 CC0; Musashi under the GPL, by its author's permission, as its header says) |
 | **SDL2_net**, `/usr/lib/cabinetos/supermodel/lib/libSDL2_net-2.0.so.0` | Fedora 44's package, version 2.4.0, copied unchanged beside Supermodel, which the image's base lacks | zlib |
+| **xemu-chihiro**, `/usr/lib/cabinetos/xemu-chihiro/bin/xemu-chihiro` | built from source by `cores/build-xemu-chihiro.sh`, unmodified, `Tovarichtch/xemu` at commit `98fbd75dd0f3088a4988abc1698feb37b844a41a` (v0.8.134-410-g98fbd75dd0, its perf-experimental branch), Tovarichtch's fork of xemu, itself a fork of QEMU; stripped and renamed, its fonts, pictures and shader seeds compiled in | GPL v2, with parts under licences compatible with it, each file saying which (its `LICENSE`) |
+| **The libraries compiled into xemu-chihiro** (Dear ImGui, ImPlot, toml++, glslang, volk, SPIRV-Reflect, VulkanMemoryAllocator, Berkeley SoftFloat, xxHash, nv2a_vsh_cpu, and the code genconfig and keycodemapdb generate) | the subprojects its `.wrap` files pin at its pinned commit, built by its own meson, unchanged | each under its own licence (Dear ImGui, ImPlot, toml++, volk, VulkanMemoryAllocator and genconfig MIT, glslang BSD 3-Clause and others, SPIRV-Reflect Apache 2.0, Berkeley SoftFloat BSD 3-Clause, xxHash BSD 2-Clause, keycodemapdb BSD, nv2a_vsh_cpu public domain) |
 | **Sunshine** (Remote Play), `/usr/bin/sunshine` and `/usr/share/sunshine` | built from source by `cores/build-sunshine.sh` with LizardByte's own Fedora 44 recipe, `LizardByte/Sunshine` at tag `v2026.914.233613`, **modified**: our patches in `cores/sunshine-patches/` (#304); `build_files/install-sunshine.sh` removes only the file capability the package sets and its own service and launchers | GPL v3 |
 | **The libraries compiled into Sunshine** (FFmpeg, and x264 for its CPU encoder, which the console does not use) | linked statically by LizardByte's build recipe, unchanged | each under its own licence (FFmpeg LGPL 2.1 or later / GPL, x264 GPL v2 or later) |
 | **Tailscale** (Remote Play away from home), `/usr/bin/tailscale` and `/usr/sbin/tailscaled` | already in the Bazzite base (1.102.4); nothing is bundled, only its service given CabinetOS's settings | BSD 3-Clause |
@@ -227,6 +229,11 @@ asks that its source be available, and it is, at that commit. SDL2_net, the
 one library it needs that the base lacks, is Fedora's own build, copied
 beside it unchanged; its source is libsdl-org/SDL_net at release 2.4.0. No
 game or firmware ships: Model 3 boards need none beyond each game's zip.
+**SEGA CHIHIRO IS A WHOLE PROGRAM TOO**, xemu-chihiro built here from
+Tovarichtch's own source at a pinned commit by its own configure and meson,
+with nothing patched. GPL v2 asks that its source be available, and it is, at
+that commit. No game, BIOS or key ships: each game is a file the library's
+owner made, and the board's BIOS comes from their own RomM.
 **REMOTE PLAY IS A WHOLE PROGRAM TOO**, Sunshine, built by LizardByte's own
 Fedora recipe at the pinned tag, with our changes (#304). GPL v3 asks that its
 source be available, modified as shipped: it is LizardByte's tag plus the

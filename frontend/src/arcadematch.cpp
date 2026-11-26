@@ -5,6 +5,8 @@
 
 #include <archive.h>
 #include <archive_entry.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <zlib.h>
 
 #include <algorithm>
@@ -31,6 +33,9 @@ struct Entry {
     int buttons = 0;    // player 1's, where the catalogue says (b<n>)
     std::vector<std::pair<uint32_t, int64_t>> files;   // CRC32 and size; size 0 = any
     std::vector<Disc> discs;                           // sha1 empty = by name only
+    // A Chihiro game's (=<ID>:<name>): the ID its image's boot.id carries,
+    // and the name the emulator gives its saves.
+    std::string id, name;
 };
 
 struct Catalogue {
@@ -39,10 +44,12 @@ struct Catalogue {
 };
 
 // THE ORDER, and it is the decision (arcadematch.h).
-// sm2-emu and Supermodel are programs of their own (standalone.h), named as
-// their catalog rows name them.
+// sm2-emu, Supermodel and xemu-chihiro are programs of their own
+// (standalone.h), named as their catalog rows name them.
 constexpr const char* kOrder[] = {"flycast",    "fbneo_libretro", "mame2003_plus", "sm2emu",
-                                  "supermodel", "mame_libretro"};
+                                  "supermodel", "xemu-chihiro",   "mame_libretro"};
+// The one that plays a converted image, `<set>.bin`, and nothing else.
+constexpr const char* kImages = "xemu-chihiro";
 constexpr size_t kCores = sizeof kOrder / sizeof kOrder[0];
 
 std::string gDir = "cores/build";
@@ -96,7 +103,10 @@ Catalogue parse(const std::string& text) {
                 if (w.size() > 1 && w[0] == 'b') e.buttons = std::atoi(w.c_str() + 1);
                 continue;
             }
-            if (w[0] == '@') {
+            if (w[0] == '=') {
+                e.id = w.substr(1, colon - 1);
+                e.name = w.substr(colon + 1);
+            } else if (w[0] == '@') {
                 // A space in a disc's name is written %20, and % as %25.
                 std::string disc;
                 for (size_t k = 1; k < colon; ++k) {
@@ -127,7 +137,7 @@ void loadFrom(const std::string& dir, Catalogue* cats) {
     for (size_t i = 0; i < kCores; ++i) {
         // fbneo_libretro.so's is fbneo_libretro.catalogue; a program of its
         // own has no .so, and its catalogue is named for it (sm2emu.catalogue,
-        // supermodel.catalogue).
+        // supermodel.catalogue, xemu-chihiro.catalogue).
         std::string file = catalog::coreFileName(kOrder[i]);
         file.replace(file.size() - 3, 3, ".catalogue");
         if (cab::standalone::find(kOrder[i])) file = std::string(kOrder[i]) + ".catalogue";
@@ -168,10 +178,14 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
         if (dreamcast && core != "flycast") continue;
         // MAME 2003-Plus and Supermodel open a zip only.
         if (ext == "7z" && (core == "mame2003_plus" || core == "supermodel")) continue;
+        // A CONVERTED IMAGE IS A CHIHIRO GAME, and a Chihiro game is one: no
+        // other emulator opens a `.bin`, and xemu-chihiro opens nothing else.
+        if ((ext == "bin") != (core == kImages)) continue;
         const auto it = cats[i].sets.find(set);
         if (it == cats[i].sets.end() || !it->second.works) continue;
         // NOTHING LEFT TO CHECK is never a fit: an empty list fits any zip.
-        if (it->second.files.empty() && it->second.discs.empty()) continue;
+        if (it->second.files.empty() && it->second.discs.empty() && it->second.id.empty())
+            continue;
         out.push_back({kOrder[i], &it->second});
     }
     return out;
@@ -248,6 +262,18 @@ Answer byFilesIn(const Catalogue* cats, const std::string& fileName,
         return {Verdict::Plays, k.core, {}};
     }
     return first;
+}
+
+Answer byImageIn(const Catalogue* cats, const std::string& fileName, const std::string& id) {
+    const std::vector<Candidate> c = candidates(cats, fileName, false);
+    if (c.empty() || noController(c)) return notSupported();
+    if (needsGun(c)) return gunAnswer(c.front());
+    std::string base = fileName;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+        base.erase(0, slash + 1);
+    for (const Candidate& k : c)
+        if (!id.empty() && k.entry->id == id) return {Verdict::Plays, k.core, {}};
+    return {Verdict::FilesDiffer, c.front().core, base + " doesn't match its set"};
 }
 
 uint32_t le32(const unsigned char* p) {
@@ -368,7 +394,7 @@ bool sevenZipMembers(const std::string& path, std::vector<Member>* out, std::str
 bool isArcadeSlug(const std::string& slug) {
     for (const char* s : {"arcade", "mame", "mame-advmame", "fbneo", "fba", "naomi", "naomi2",
                           "naomigd", "atomiswave", "gaelco", "cps1", "cps2", "cps3", "neogeomvs",
-                          "neogeoaes", "stv", "model2", "model3"})
+                          "neogeoaes", "stv", "model2", "model3", "chihiro"})
         if (slug == s) return true;
     return false;
 }
@@ -390,6 +416,11 @@ Answer byFiles(const std::string& fileName, const std::vector<Member>& members,
                const std::vector<Disc>& discs, bool dreamcast) {
     load();
     return byFilesIn(gCat, fileName, members, discs, dreamcast);
+}
+
+Answer byImage(const std::string& fileName, const std::string& id) {
+    load();
+    return byImageIn(gCat, fileName, id);
 }
 
 bool readMembers(const std::string& path, std::vector<Member>* out, std::string* err) {
@@ -429,6 +460,40 @@ std::string chdSha1(const std::string& path) {
         out += kHex[h[i] & 15];
     }
     return out;
+}
+
+std::string chihiroId(const std::string& path) {
+    // boot.id begins `BTID`, with `XBAM` 0x20 in and the game's ID at 0x30;
+    // it sits on a 512-byte step within the image's first clusters (136 KB
+    // in at most, in the six games read on 2026-11-25, #619).
+    constexpr size_t kLook = 1 << 20;
+    std::vector<unsigned char> head(kLook);
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return {};
+    const size_t n = std::fread(head.data(), 1, kLook, f);
+    std::fclose(f);
+    if (n < 16 || std::memcmp(head.data(), "FATX", 4) != 0) return {};
+    for (size_t at = 512; at + 0x34 <= n; at += 512) {
+        if (std::memcmp(&head[at], "BTID", 4) != 0 || std::memcmp(&head[at + 0x20], "XBAM", 4) != 0)
+            continue;
+        std::string id(reinterpret_cast<const char*>(&head[at + 0x30]), 4);
+        for (const char c : id)
+            if (!std::isalnum(static_cast<unsigned char>(c))) return {};
+        return id;
+    }
+    return {};
+}
+
+std::string gameName(const char* core, const std::string& fileName) {
+    load();
+    std::string set, ext;
+    nameOf(fileName, &set, &ext);
+    for (size_t i = 0; i < kCores; ++i) {
+        if (std::strcmp(kOrder[i], core) != 0) continue;
+        const auto it = gCat[i].sets.find(set);
+        return it == gCat[i].sets.end() ? std::string() : it->second.name;
+    }
+    return {};
 }
 
 bool flycastBios(const std::string& fileName) {
@@ -526,8 +591,8 @@ int test() {
         std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
         if (!ok) ++failures;
     };
-    // Six catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
-    // sm2-emu, Supermodel, MAME 0.289.
+    // Seven catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
+    // sm2-emu, Supermodel, xemu-chihiro, MAME 0.289.
     Catalogue cats[kCores] = {
         parse("# flycast\n!bios naomi awbios\n"
               "azumanga w - b71ede16:0 @gdl-0018:\n"
@@ -560,6 +625,13 @@ int test() {
               "scud w - 00000201:0\n"
               "vf3 w - b4 00000202:0\n"
               "lostwsga w g 00000203:0\n"),
+        parse("# xemu-chihiro\n"
+              "outr2 w - =SGBZ:outr2\n"
+              "outr2st w - =SBJE:outr2st\n"
+              "outr2sto w - =SBJE:outr2st\n"
+              "vcop3 w g =SBFZ:vcop3\n"
+              "mj2 n - =SBHC:mj2\n"
+              "questofd n -\n"),
         parse("# mame_libretro\n"
               "sf2 w - b6 00000001:100 00000003:300\n"
               "gollygho w - b2 00000009:10\n"
@@ -574,7 +646,8 @@ int test() {
               "lastbrnx n - b3 00000106:10\n"
               "scud n - b2 00000201:10\n"
               "vf3 n - b4 00000202:10\n"
-              "lostwsga n g b2 00000203:10\n"),
+              "lostwsga n g b2 00000203:10\n"
+              "outr2 n - b6 00000300:80 @gdx-0004a:ffff\n"),
     };
     auto name = [&](const char* f, bool dc = false) { return byNameIn(cats, f, dc); };
     auto files = [&](const char* f, std::vector<Member> m, std::vector<Disc> d = {},
@@ -616,7 +689,7 @@ int test() {
           "plays it");
     check(name("megat.zip").verdict == Verdict::NotSupported,
           "a touchscreen machine in MAME 0.289's list is not supported");
-    check(cats[5].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
+    check(cats[6].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
           "MAME 0.289's catalogue says how many buttons a game has; the others say none");
     check(core(name("daytona.zip")) == "sm2emu",
           "sm2-emu comes before MAME 0.289, where both have a Model 2 game working");
@@ -637,6 +710,49 @@ int test() {
           "a light-gun game in Supermodel's catalogue needs a light gun");
     check(cats[4].sets.at("vf3").buttons == 4 && cats[4].sets.at("scud").buttons == 0,
           "Supermodel's catalogue gives a fighting game's four buttons, and a driving game none");
+    check(core(name("outr2.bin")) == "xemu-chihiro",
+          "a converted Chihiro image, <set>.bin, is xemu-chihiro's");
+    check(name("outr2.zip").verdict == Verdict::NotSupported,
+          "a Chihiro set's zip is nobody's: MAME 0.289 marks it not working, and xemu-chihiro "
+          "opens only the converted image");
+    check(name("sf2.bin").verdict == Verdict::NotSupported,
+          "a .bin is never another emulator's, though its name is one of their sets");
+    check(name("vcop3.bin").verdict == Verdict::NeedsGun,
+          "a Chihiro light-gun game needs a light gun");
+    check(name("mj2.bin").verdict == Verdict::NotSupported &&
+              name("questofd.bin").verdict == Verdict::NotSupported,
+          "a Chihiro game the fork has no controls for is not supported, nor one it does not know");
+    check(byImageIn(cats, "outr2.bin", "SGBZ").verdict == Verdict::Plays,
+          "by its image, a game whose boot.id carries its set's ID plays");
+    check(byImageIn(cats, "outr2sto.bin", "SBJE").verdict == Verdict::Plays &&
+              cats[5].sets.at("outr2sto").name == "outr2st",
+          "a revision carries its parent's ID, and its saves take its parent's name");
+    {
+        const Answer a = byImageIn(cats, "outr2.bin", "SBJE");
+        check(a.verdict == Verdict::FilesDiffer && a.why == "outr2.bin doesn't match its set",
+              "an image of another game under a set's name doesn't match its set");
+    }
+    {
+        // A converted image's start: FATX, then boot.id on a 512-byte step.
+        char tmpl[] = "/tmp/cabinetos-chihiro-XXXXXX";
+        const int fd = mkstemp(tmpl);
+        std::vector<unsigned char> img(0x20000, 0);
+        std::memcpy(img.data(), "FATX", 4);
+        std::memcpy(&img[0x15000], "BTID", 4);
+        std::memcpy(&img[0x15020], "XBAM", 4);
+        std::memcpy(&img[0x15030], "SBFZ", 4);
+        const bool wrote = fd >= 0 && ::write(fd, img.data(), img.size()) ==
+                                          static_cast<ssize_t>(img.size());
+        if (fd >= 0) ::close(fd);
+        check(wrote && chihiroId(tmpl) == "SBFZ", "an image's ID is read from its boot.id");
+        img[0] = 'X';
+        const int fd2 = ::open(tmpl, O_WRONLY | O_TRUNC);
+        const bool wrote2 = fd2 >= 0 && ::write(fd2, img.data(), img.size()) ==
+                                            static_cast<ssize_t>(img.size());
+        if (fd2 >= 0) ::close(fd2);
+        check(wrote2 && chihiroId(tmpl).empty(), "and a file that is not FATX has none");
+        ::unlink(tmpl);
+    }
     check(core(name("azumanga.zip", true)) == "flycast",
           "in the Dreamcast folder, a Flycast set is Flycast's");
     check(name("sf2.zip", true).verdict == Verdict::NotSupported,
@@ -664,7 +780,8 @@ int test() {
     check(core(files("kinst.zip", {{"k", 0x20, 10}}, {{"kinst", "AAAA"}})) == "fbneo_libretro",
           "a set FinalBurn Neo has with no disc plays there");
     {
-        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3], cats[4], cats[5]};
+        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3],
+                                  cats[4], cats[5],    cats[6]};
         check(core(byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"KINST", "AAAA"}}, false)) ==
                   "mame2003_plus",
               "a disc of the listed name and SHA1 fits, in any case");
@@ -697,6 +814,7 @@ int test() {
     check(isArcadeSlug("mame") && isArcadeSlug("fbneo") && isArcadeSlug("naomi") &&
               isArcadeSlug("naomigd") && isArcadeSlug("atomiswave") && isArcadeSlug("gaelco"),
           "and so are the labels RomM gives each emulator's folder after rommapp/romm#5273");
+    check(isArcadeSlug("chihiro"), "and RomM's own label for Chihiro's folder");
     check(!isArcadeSlug("triforce") && !isArcadeSlug("lindbergh") && !isArcadeSlug("dc"),
           "a board no emulator here plays is not, nor is Dreamcast");
 

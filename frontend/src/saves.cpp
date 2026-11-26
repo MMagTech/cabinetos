@@ -791,7 +791,7 @@ std::string wiiKindOf(const std::string& titleId) {
 
 void restoreDirSave(const SaveFetch& fetched, const char* tag, const std::string& root,
                     const std::string& title, const std::string& oldCard, StartNotes* notes,
-                    cab::ZipShape shape, const std::string& place) {
+                    cab::ZipShape shape, const std::string& place, const std::string& alone) {
     const From from = sourceOf(fetched);
     const std::vector<uint8_t>* picked = nullptr;
     std::string fileName;
@@ -877,6 +877,38 @@ void restoreDirSave(const SaveFetch& fetched, const char* tag, const std::string
         } else {
             std::fprintf(stderr, "[save] could not write %s\n", oldCard.c_str());
         }
+    } else if (!alone.empty() && !data.empty()) {
+        // ONE FILE AS IT IS (SaveForm::aloneAsItIs), back into the folder
+        // under the name the emulator gives it, whatever RomM named it; only
+        // a file whose name ends as that one does.
+        const std::string ending = alone.substr(alone.find_last_of('.'));
+        if (fileName.size() < ending.size() ||
+            fileName.compare(fileName.size() - ending.size(), ending.size(), ending) != 0) {
+            std::fprintf(stderr, "[save] %s is neither a zip nor a %s file; left alone\n",
+                         fileName.c_str(), ending.c_str());
+            return;
+        }
+        const std::string to = root + "/" + alone;
+        const std::vector<uint8_t> own = cab::readBytes(to);
+        if (own == data) {
+            std::fprintf(stderr, "[save] %s already holds %s; nothing to put back\n",
+                         to.c_str(), fileName.c_str());
+        } else {
+            if (!own.empty()) keepAside(notes, alone, own);
+            storage::makeDirs(root);
+            if (!cab::writeBytes(to, data)) {
+                std::fprintf(stderr, "[save] could not write %s\n", to.c_str());
+                return;
+            }
+            std::fprintf(stderr, "[save] %s (%zu bytes) put back as %s\n", fileName.c_str(),
+                         data.size(), to.c_str());
+        }
+        if (usesPicked(from) && notes) {
+            notes->tookPick = true;
+            if (own != data) notes->changedOwn = true;
+        }
+        if (from == From::OldRows && notes)
+            notes->oldRowsTaken.push_back({newest->id, savepick::OldRowTaken::As::Folder, "", 0});
     } else if (!data.empty()) {
         std::fprintf(stderr, "[save] %s is not a zip (%02x %02x %02x %02x) — left alone\n",
                      fileName.c_str(), data[0], data[1],
@@ -902,6 +934,14 @@ std::vector<cab::DirEntry> listDirSave(const GameSession& sess) {
 // The name a folder save's zip has on this console, in the person's save
 // folder for the game and in the copy a start keeps aside.
 std::string dirSaveZipName(const std::string& title) { return sanitisedStem(title) + ".zip"; }
+
+std::string aloneInFolder(const GameSession& sess) {
+    if (!catalog::saveForm(sess.dirSaveCore.c_str(), sess.dirSavePlatform).aloneAsItIs) return {};
+    const std::vector<cab::DirEntry> files = listDirSave(sess);
+    return files.size() == 1 && files.front().relPath.find('/') == std::string::npos
+               ? files.front().relPath
+               : std::string();
+}
 
 // A directory save, zipped: PSP, Wii, GameCube, and the folder saves of the
 // five separate emulators (Switch, PS3, Xbox, Xbox 360, Wii U). See dirsave.h
@@ -940,11 +980,17 @@ void syncDirSave(GameSession& sess) {
     std::vector<uint8_t> zip;
     std::string zerr;
     // In RomM's shape for the system (dirsave.h, ZipShape), else as the
-    // folder is.
+    // folder is; or, where one file travels as it is (aloneInFolder), that
+    // file.
     const cab::ZipShape shape =
         zipShapeOf(sess.dirSaveCore, sess.dirSavePlatform, sess.dirSaveTitleId);
+    const std::string alone = aloneInFolder(sess);
     bool zipped = false;
-    if (shape == cab::ZipShape::Folder) {
+    if (!alone.empty()) {
+        zip = cab::readBytes(sess.dirSaveRoot + "/" + alone);
+        zipped = !zip.empty();
+        if (!zipped) zerr = alone + " does not read";
+    } else if (shape == cab::ZipShape::Folder) {
         zipped = cab::zipTree(sess.dirSaveRoot, paths, &zip, &zerr);
     } else {
         std::vector<cab::ZipFile> files;
@@ -977,13 +1023,15 @@ void syncDirSave(GameSession& sess) {
     }
     // Local first, always. The network is the part that can fail, and a save
     // that only exists in a pending upload is a save that can be lost.
-    const std::string path = sess.saveDir + "/" + dirSaveZipName(sess.title);
+    const std::string path =
+        sess.saveDir + "/" + (alone.empty() ? dirSaveZipName(sess.title) : alone);
     if (!cab::writeBytes(path, zip)) {
         std::fprintf(stderr, "[save] could not write %s\n", path.c_str());
         return;
     }
-    std::fprintf(stderr, "[save] %zu file(s), %zu folder(s) changed, %zu bytes zipped to %s\n",
-                 paths.size(), touchedFolders.size(), zip.size(), path.c_str());
+    std::fprintf(stderr, "[save] %zu file(s), %zu folder(s) changed, %zu bytes %s %s\n",
+                 paths.size(), touchedFolders.size(), zip.size(),
+                 alone.empty() ? "zipped to" : "kept as it is at", path.c_str());
     sess.dirAtLaunch = now;   // this is the new baseline; do not gather it twice
     sess.saveChanged = true;
 }

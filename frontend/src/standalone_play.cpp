@@ -43,9 +43,12 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // player whose pad has the sensors (PS3, #683); or, for an emulator that
     // reads a pad's own sensors, the stand-in DualSense in place of the plain
     // controller (Switch, Wii U and Vita, #669). A guitar's seat is a guitar's
-    // for an emulator that takes one (PS3, guitar.h).
+    // for an emulator that takes one (PS3, guitar.h). The d-pad moves the
+    // left stick too for an emulator that takes one input per control
+    // (Chihiro).
     const int pads = std::max(1, players::count());
-    if (!cab::vpad::open(pads, emu.motion, emu.dualsense, emu.onlyPlayerOneTilts, emu.guitars)) {
+    if (!cab::vpad::open(pads, emu.motion, emu.dualsense, emu.onlyPlayerOneTilts, emu.guitars,
+                         emu.dpadOnStick)) {
         refuseLaunch("Couldn't start this game");
         return;
     }
@@ -110,7 +113,7 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     startNotes.asideDir = storage::replacedSaveDir(user, launchJob.platformFsSlug, launchJob.romId);
     if (!root.empty() && tag && launchJob.saves.asked)
         restoreDirSave(launchJob.saves, tag, root, launchJob.title, std::string(), &startNotes,
-                       shape, profile);
+                       shape, profile, cab::standalone::aloneSave(emu, launchJob.romPath));
     const SaveFetch startedFrom = std::move(launchJob.saves);
     launchJob.saves = SaveFetch{};
     // Where its save came from (saves.h, noteStart), before the note below,
@@ -120,6 +123,11 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     starting.title = launchJob.title;
     starting.core = launchJob.coreName;
     starting.platformSlug = launchJob.platformSlug;
+    // AN ARCADE BOARD'S SAVE FOLDER WRITTEN AGAIN WITH WHAT IT HELD is no new
+    // save (syncDirSave, #353), here as in a core: sm2-emu and Supermodel
+    // write the board's memory as every game closes, and xemu-chihiro its
+    // backup 8 s into every start, changed or not.
+    starting.arcade = launchJob.arcade;
     if (tag) starting.saveTag = tag;
     bool bringsOldSave = false;
     const bool elsewhere = noteStart(startedFrom, startNotes, user, &starting, &bringsOldSave);
@@ -169,8 +177,8 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // The newest save on RomM was one this console could not use (#346,
     // step 8; saves.cpp, fetchSaves).
     else if (starting.couldNotUseNewest) menuNotice.say(kCouldNotUseNewest, Tone::Problem);
-    // No save states: the pause menu is Resume, Screenshot and Exit to
-    // Home (open question 25; Switch fails its rule).
+    // No save states: the pause menu has no Save state or Load latest state
+    // (open question 25; Switch fails its rule).
     session.snapshots = catalog::snapshotsAllowed(launchJob.coreName.c_str());
     // The baseline: what changes between here and the end is what the
     // game saved. See GameSession.
