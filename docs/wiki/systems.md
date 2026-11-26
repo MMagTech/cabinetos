@@ -82,7 +82,7 @@ downloads anything new into the console's shared BIOS folder.
 | PlayStation 2 | `ps2` | PCSX2 | chd, iso | **Required:** a PS2 BIOS dump, for example `SCPH-70012.bin` (any name). With several, each game uses the one for its region, else a USA one |
 | PSP | `psp` | PPSSPP | iso, cso, chd, pbp | None |
 | PlayStation Vita | `psvita` | Vita3K | zip or vpk, with its licence inside (NoNpDrm) | **Required:** both of Sony's files: the system software (`PSVUPDAT.PUP`) and the font package (Sony names it `PSP2UPDAT.PUP`), any names. See [PlayStation Vita](#playstation-vita) |
-| PlayStation 3 | `ps3` | RPCS3 | decrypted iso, or pkg | **Required:** `PS3UPDAT.PUP` (installed once). A PKG game also needs its `.rap` licence in the same RomM game folder. |
+| PlayStation 3 | `ps3` | RPCS3 | decrypted iso, or pkg | **Required:** `PS3UPDAT.PUP` (installed once). A PKG game also needs its `.rap` licence in the same RomM game folder, and a game that comes as a trial needs its unlock key, a small `.pkg`, there too. What is in the game's `update` and `dlc` folders stays on the server. |
 | TurboGrafx-16 | `tg16` | Beetle PCE Fast | pce | None |
 | TurboGrafx-CD | `turbografx-cd` | Beetle PCE Fast | chd, cue, ccd | **Required:** `syscard3.pce` (256 KB, any name) |
 | Vectrex | `vectrex` | vecx | vec, bin | None |

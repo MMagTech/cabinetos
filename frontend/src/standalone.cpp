@@ -289,6 +289,14 @@ bool writeInstalledNote(const std::string& path, const std::string& note) {
            writeFile(path, note);
 }
 
+// Whether an installed note holds `line`, whole.
+bool noteHas(const std::string& note, const std::string& line) {
+    std::istringstream in(note);
+    for (std::string l; std::getline(in, l);)
+        if (l == line) return true;
+    return false;
+}
+
 // Copies `from` to `to` unless `to` already holds the same bytes.
 bool placeFile(const std::string& from, const std::string& to) {
     const std::string bytes = readFile(from);
@@ -464,16 +472,32 @@ bool installed(const Emulator& e) {
 
 std::string home(const Emulator& e) { return storage::emulatorsDir() + "/" + e.core; }
 
-bool installedFile(const std::string& entryPath, const std::string& fileName,
+bool installedFile(const Emulator& e, const std::string& entryPath, const std::string& fileName,
                    int64_t sizeBytes) {
-    const std::string line = std::to_string(sizeBytes) + " " + fileName;
-    std::istringstream in(readFile(entryPath + "/" + kInstalledNote));
-    for (std::string l; std::getline(in, l);)
-        if (l == line) return true;
-    return false;
+    const std::string note = readFile(entryPath + "/" + kInstalledNote);
+    return noteHas(note, std::to_string(sizeBytes) + " " + fileName) &&
+           (noteHas(note, kKeysKept) || sizeBytes >= kKeyPackageMax ||
+            std::strcmp(e.core, "rpcs3") != 0);
 }
 
 std::string bootPath(const std::string& entryPath) {
+    // A stamped decrypted disc image, which RPCS3 opens as it is (open
+    // question 19). The largest, should there ever be more than one. BEFORE
+    // anything installed beside it: a game with a disc image is started from
+    // it, and what was installed is its update, which started by itself stops
+    // at "Disc directory not found" (#749, run on the pinned RPCS3).
+    std::string pick;
+    int64_t pickSize = -1;
+    for (const std::string& name : listDir(entryPath)) {
+        struct stat st;
+        const std::string p = entryPath + "/" + name;
+        if (endsWithNoCase(name, ".iso") && ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode) &&
+            st.st_size > pickSize) {
+            pick = p;
+            pickSize = st.st_size;
+        }
+    }
+    if (!pick.empty()) return pick;
     // An installed game is a title directory with USRDIR/EBOOT.BIN; anything
     // else in the folder is the emulator's (rpcs3/) or the console's (dot).
     for (const std::string& name : listDir(entryPath)) {
@@ -488,20 +512,7 @@ std::string bootPath(const std::string& entryPath) {
         for (const std::string& id : listDir(apps))
             if (isFile(apps + "/" + id + "/eboot.bin")) return apps + "/" + id;
     }
-    // A stamped decrypted disc image, which RPCS3 opens as it is (open
-    // question 19). The largest, should there ever be more than one.
-    std::string pick;
-    int64_t pickSize = -1;
-    for (const std::string& name : listDir(entryPath)) {
-        struct stat st;
-        const std::string p = entryPath + "/" + name;
-        if (endsWithNoCase(name, ".iso") && ::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode) &&
-            st.st_size > pickSize) {
-            pick = p;
-            pickSize = st.st_size;
-        }
-    }
-    return pick;
+    return {};
 }
 
 bool installGame(const Emulator& e, const std::string& entryPath,

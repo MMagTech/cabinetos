@@ -35,10 +35,12 @@ namespace {
 //   emulators/rpcs3/rpcs3/        its settings and the PS3's system software
 //                                 (dev_flash, 189 MB, once per console)
 //   <the game's folder>/          the installed game (<title ID>/USRDIR/...),
-//                                 its `.rap`, and rpcs3/, its compile cache
-//                                 and log: removed with the game
+//                                 its `.rap`, its unlock key (`.edat`), and
+//                                 rpcs3/, its compile cache and log: removed
+//                                 with the game
 //   <this person's save folder>/  hdd0/, the PS3's hard drive as the game
-//                                 sees it: saves, the licence, trophies
+//                                 sees it: saves, the licence and the key,
+//                                 trophies
 //
 // RPCS3 starts an installed game from OUTSIDE its hard drive by itself: it
 // mounts the game's folder at /dev_hdd0/game/<title ID> (Emu/System.cpp, the
@@ -160,11 +162,55 @@ bool isPkg(const std::string& path) {
     return in.read(magic, 4) && std::memcmp(magic, "\x7FPKG", 4) == 0;
 }
 
+// AN UNLOCK KEY, by what its package says it is: a PS3 package's clear header
+// lists what is in it, and the entry numbered 2 is its kind, 11 for a key
+// (RPCS3's PKG_CONTENT_TYPE_LICENSE, Crypto/unpkg.h). A game sold as a trial
+// comes with one, a few kilobytes, and is the full game with it. It installs
+// one file, `<content ID>.edat`, into the PS3 user's exdata, beside where a
+// licence goes, and no title folder (#748).
+bool isKeyPkg(const std::string& path) {
+    if (!isPkg(path)) return false;
+    std::ifstream in(path, std::ios::binary);
+    const auto word = [&in](std::streamoff at) -> uint32_t {
+        unsigned char b[4] = {};
+        in.seekg(at);
+        if (!in.read(reinterpret_cast<char*>(b), 4)) return 0;
+        return uint32_t{b[0]} << 24 | uint32_t{b[1]} << 16 | uint32_t{b[2]} << 8 | b[3];
+    };
+    std::streamoff at = word(8);
+    // A header holds about a dozen entries; one that says more is not one.
+    const uint32_t count = std::min<uint32_t>(word(12), 64);
+    for (uint32_t i = 0; i < count && in; ++i) {
+        const uint32_t id = word(at), size = word(at + 4);
+        if (id == 2) return word(at + 8) == 0x0B;
+        at += std::streamoff{8} + size;
+    }
+    return false;
+}
+
+// Moves every file ending `.edat` out of `exdata`, where a key's package put
+// it, into the game's folder, where the licence is too: prepareRpcs3 gives both
+// to whoever plays.
+bool keepKeys(const std::string& exdata, const std::string& entryPath) {
+    bool ok = true;
+    for (const std::string& f : listDir(exdata))
+        if (endsWithNoCase(f, ".edat") &&
+            ::rename((exdata + "/" + f).c_str(), (entryPath + "/" + f).c_str()) != 0)
+            ok = false;
+    return ok;
+}
+
 // EVERY PACKAGE IN THE GAME'S FOLDER, installed into it, largest first (the
-// game before an update or add-on for it), then deleted. RPCS3 installs into
-// its hard drive's game/<title ID>; that drive is pointed at a staging folder
-// inside the game's own, so the result is on the same disk and moves into
-// place with a rename, never a copy.
+// game before its key, or before an update kept loose beside it), then
+// deleted. RPCS3 installs into its hard drive's game/<title ID>, and a key
+// into its user's exdata; that drive is pointed at a staging folder inside the
+// game's own, so the result is on the same disk and moves into place with a
+// rename, never a copy.
+//
+// A PACKAGE THE NOTE ALREADY HOLDS is here again because it may be a key
+// (installedFile): one that is, is installed for its key, and one that is not
+// is only deleted, since RPCS3 refuses an update it already has and the game
+// would fail with it.
 //
 // A GAME ALREADY INSTALLED goes back into staging first, so a later update
 // lands on top of it rather than beside it. AN INTERRUPTED INSTALL leaves its
@@ -197,22 +243,35 @@ bool installPackages(const Emulator& e, const std::string& entryPath,
             hadBefore.push_back(name);
 
     std::string note = readFile(entryPath + "/" + kInstalledNote);
-    bool ok = true;
+    bool ok = true, keys = true;
     for (const auto& [bytes, name] : pkgs) {
         const std::string pkg = entryPath + "/" + name;
+        const std::string line = std::to_string(bytes) + " " + name;
+        const bool again = noteHas(note, line);
+        if (again && !isKeyPkg(pkg)) continue;
         const std::string log = rpcs3Headless(e, staging, {"--installpkg", pkg}, cancel);
         // "Successfully installed <path> (title_id=NPEA00014, title=..." on
         // its own line (rpcs3qt/main_window.cpp).
         const size_t at = log.find("Successfully installed " + pkg);
         if (at == std::string::npos || cancel.load()) {
             std::fprintf(stderr, "[standalone] %s did not install\n", pkg.c_str());
+            if (again && !cancel.load()) {   // the game is installed and plays as it did
+                keys = false;
+                continue;
+            }
             ok = false;
             break;
         }
-        note += std::to_string(bytes) + " " + name + "\n";
+        if (!again) note += line + "\n";
         std::fprintf(stderr, "[standalone] installed %s (%lld bytes)\n", name.c_str(),
                      static_cast<long long>(bytes));
     }
+    if (ok && !keepKeys(staging + "/hdd0/home/" + kPs3User + "/exdata", entryPath)) {
+        std::fprintf(stderr, "[standalone] could not keep the unlock key in %s\n",
+                     entryPath.c_str());
+        ok = false;
+    }
+    if (keys && !noteHas(note, kKeysKept)) note += std::string(kKeysKept) + "\n";
 
     // WHAT CAME OUT, back into the game's folder: every title directory with
     // its PARAM.SFO. RPCS3 also makes TEST12345 and a lock folder on any new
@@ -234,6 +293,17 @@ bool installPackages(const Emulator& e, const std::string& entryPath,
     writeInstalledNote(entryPath + "/" + kInstalledNote, note);
     for (const auto& pkg : pkgs) ::unlink((entryPath + "/" + pkg.second).c_str());
     return true;
+}
+
+// THE LICENCE AND THE UNLOCK KEY, where RPCS3 says they must be: exdata, with
+// lower-case endings (its own errors, Crypto/unself.cpp). They stay in the
+// game's folder too, so a second person gets them.
+void placeLicences(const std::string& entryPath, const std::string& exdata) {
+    for (const std::string& f : listDir(entryPath))
+        for (const std::string ending : {".rap", ".edat"})
+            if (endsWithNoCase(f, ending.c_str()))
+                placeFile(entryPath + "/" + f,
+                          exdata + "/" + f.substr(0, f.size() - ending.size()) + ending);
 }
 
 // THE CONSOLE'S SETTINGS FOR RPCS3, written whole before every start: every
@@ -360,13 +430,7 @@ bool prepareRpcs3(const Emulator& e, const std::string& entryPath, const std::st
         name.resize(cut);
     }
     writeFile(user + "/localusername", name);
-    // THE LICENCE, where RPCS3 says it must be: exdata, lower-case `.rap`
-    // (its own error, Crypto/unself.cpp). It stays in the game's folder too,
-    // so a second person gets it.
-    for (const std::string& f : listDir(entryPath))
-        if (endsWithNoCase(f, ".rap"))
-            placeFile(entryPath + "/" + f,
-                      user + "/exdata/" + f.substr(0, f.size() - 4) + ".rap");
+    placeLicences(entryPath, user + "/exdata");
 
     const std::string vfs = "/dev_hdd0/: " + yamlQuote(hdd0 + "/") + "\n" +
                             "/dev_flash/: " + yamlQuote(rpcs3Flash(e) + "/") + "\n";

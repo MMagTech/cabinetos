@@ -684,6 +684,7 @@ std::optional<int> earlyProbe(const EarlyProbeOptions& o) {
     const bool playtimeTestMode = o.playtimeTestMode;
     const bool discTestMode = o.discTestMode;
     const bool filesTestMode = o.filesTestMode;
+    const bool ps3InstallTestMode = o.ps3InstallTestMode;
     const bool vectrexSheetsTestMode = o.vectrexSheetsTestMode;
     const bool gpuChoiceTestMode = o.gpuChoiceTestMode;
     const bool tailscaleSwitchTestMode = o.tailscaleSwitchTestMode;
@@ -714,6 +715,7 @@ std::optional<int> earlyProbe(const EarlyProbeOptions& o) {
     if (playtimeTestMode) return playtime::test();
     if (discTestMode) return disc::test();
     if (filesTestMode) return filesTest();
+    if (ps3InstallTestMode) return ps3InstallTest();
     if (vectrexSheetsTestMode) return vectrexsheets::test();
     if (gpuChoiceTestMode) return cab::gpu::test();
     if (tailscaleSwitchTestMode) return tailscale::test();
