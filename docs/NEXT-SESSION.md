@@ -67,22 +67,13 @@ RomM: keep test launches under a minute, or have his go.
 ## Next
 
 1. **#619, "Sega Chihiro: Virtua Cop 3 and The House of the Dead III in the
-   xemu fork": phase 3, the TV run, on his word.** The build is #756,
-   "Arcade: Sega Chihiro games play in xemu-chihiro (#619)", open, proven
-   headless on the A9 against the write-test RomM (its `chihiro` folder:
-   OutRun 2, Special Tours, Crazy Taxi High Roller and four name-only
-   placeholders). His RomM has the six converted games since 2026-11-26
-   (the Chihiro folder, RomM platform 68, games 4779 to 4784, his custom
-   covers moved onto them; the disc zips kept outside RomM in `Chihiro
-   discs` on the share) and `chihiro.zip` and `seganetw.zip` as its
-   firmware. The TV run takes the six checks on #619's plan through
-   `tools/ui-loop.sh`. The emulator is not in
-   any image yet, so the loop needs the A9's build of it
-   (`CABINETOS_BINARY_xemu-chihiro`) and its catalogue in the core folder
-   until the testing push. Not covered yet: driving, pedals, gears and
-   rumble; a second person; Maximum Tune, Ollie King and Gundam (no files);
-   the save's picture, black in a headless gamescope. Phase 4, the testing
-   push, on "push to testing".
+   xemu fork": phase 4, the testing push, on "push to testing".** The build
+   is #756, "Arcade: Sega Chihiro games play in xemu-chihiro (#619)", open.
+   Phase 3 passed on 2026-11-26 (results on #619): headless on the A9 for
+   the pages, picture levels, controls, pause menu and two people, then on
+   the TV for the look, sound, driving, rumble and Crazy Taxi's jump, from
+   his RomM's Chihiro folder. Not covered: Maximum Tune, Ollie King and
+   Gundam (no files), and card slots with a real card.
 2. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
