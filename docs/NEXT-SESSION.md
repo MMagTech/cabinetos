@@ -15,11 +15,12 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-11-26.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.26.3: #756, "Arcade: Sega Chihiro games
-play in xemu-chihiro (#619)", which closed #619. Read the newest image from
-the registry, not from here. Before it, the same day, #755, "Naomi, Naomi 2
-and Atomiswave games earn RetroAchievements (#740)" (2026.11.26.2), which
-closed #740; #754,
+change a player can see is 2026.11.26.4: #759, "Arcade: Sega Lindbergh
+games play in Linux Loader (#620)", which closed #620. Read the newest image
+from the registry, not from here. Before it, the same day, #756, "Arcade:
+Sega Chihiro games play in xemu-chihiro (#619)" (2026.11.26.3), which closed
+#619; #755, "Naomi, Naomi 2 and Atomiswave games earn RetroAchievements
+(#740)" (2026.11.26.2), which closed #740; #754,
 "Reports hide a PS3 game's licence key and save data keys (#750)"
 (2026.11.26), which closed #750; #753, "PS3 trials play as the full game, and
 installed games download only the game (#748, #749)" (2026.11.25.3), which
@@ -68,20 +69,7 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **Lindbergh's testing image (phase 4 of #620, "Sega Lindbergh: The House
-   of the Dead 4 and more with Linux Loader"), then the merge, on his
-   word.** #759, "Arcade: Sega Lindbergh games play in Linux Loader
-   (#620)", is open. Its TV run passed on 2026-11-26 (Hummer Extreme over
-   Moonlight: started, played, Exit sent its save to his RomM, the next
-   start downloaded nothing), and `testing` carries it as 2026.11.26.4.
-   Next: he installs it (Settings, System, System update), Hummer starts
-   once from the image, then the merge, the promotion to `latest` and #620
-   closed with a comment. His RomM has the seven games since 2026-11-26
-   (the Lindbergh folder, RomM platform 70, games 4785 to 4791, each a zip
-   of its folder, Hummer's without `drv/nvidia`). Left open: #760, "Hummer
-   Extreme sometimes stops at Error 1011 at boot" (Later). After the
-   merge, take the test catalogue out of the A9's `~/cores-dev`.
-2. **After save channels, small, each on his word:**
+1. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
      the Switch check, what changed only.
@@ -94,12 +82,12 @@ RomM: keep test launches under a minute, or have his go.
    - The clean-up review: what future testing keeps of the save channels
      kits, sessions and branches; the audited list is in his research
      notes. Nothing is deleted before his yes.
-3. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
+2. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
    #654, passed twice: his console and his friend's, two servers linking up
    and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
    `docs/` into the server's build stage, and the relay's block list lacks
    3fff::/20.
-4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -107,7 +95,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-5. **Words from him, one at a time, no work:** which of the 36 faults the
+4. **Words from him, one at a time, no work:** which of the 36 faults the
    PROJECT.md scan found with no issue (2026-10-22) become issues, none
    filed until he says. That list is in the
    notes of the session that made it ("Faults recorded in PROJECT.md with no
