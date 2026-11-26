@@ -168,21 +168,22 @@ std::vector<Line> settings(const std::string& saves, quality::Level level) {
         {"System", "LINDBERGH_COLOUR", "YELLOW"},
         // NO NETWORK OF ITS OWN: none of its patches for linked cabinets, which
         // Batocera turns off too (Harley-Davidson does not boot with them),
-        // inside a sandbox with no network anyway. The addresses are the
-        // loader's own defaults, read only by those patches.
+        // inside a sandbox with no network anyway; and no cabinet's address,
+        // which only those patches read: empty, the loader's own default when
+        // a key is missing (config.c), not the examples --create writes.
         {"Network", "ENABLE_NETWORK_PATCHES", "false"},
-        {"Network", "NIC_NAME", quoted("enp0s1")},
-        {"Network", "ID_IP_SEAT_1", quoted("192.168.1.2")},
-        {"Network", "ID_IP_SEAT_2", quoted("192.168.1.3")},
-        {"Network", "OR2_IPADDRESS", quoted("192.168.1.2")},
-        {"Network", "OR2_NETMASK", quoted("255.255.255.0")},
-        {"Network", "IP_CAB1", quoted("192.168.1.2")},
-        {"Network", "IP_CAB2", quoted("192.168.1.3")},
-        {"Network", "IP_CAB3", quoted("192.168.1.4")},
-        {"Network", "IP_CAB4", quoted("192.168.1.5")},
-        {"Network", "2SPICY_IP_CAB1", quoted("192.168.1.2")},
-        {"Network", "2SPICY_IP_CAB2", quoted("192.168.1.3")},
-        {"Network", "SRTV_IPADDRESS", quoted("192.168.1.2")},
+        {"Network", "NIC_NAME", quoted("")},
+        {"Network", "ID_IP_SEAT_1", quoted("")},
+        {"Network", "ID_IP_SEAT_2", quoted("")},
+        {"Network", "OR2_IPADDRESS", quoted("")},
+        {"Network", "OR2_NETMASK", quoted("")},
+        {"Network", "IP_CAB1", quoted("")},
+        {"Network", "IP_CAB2", quoted("")},
+        {"Network", "IP_CAB3", quoted("")},
+        {"Network", "IP_CAB4", quoted("")},
+        {"Network", "2SPICY_IP_CAB1", quoted("")},
+        {"Network", "2SPICY_IP_CAB2", quoted("")},
+        {"Network", "SRTV_IPADDRESS", quoted("")},
     };
 }
 
