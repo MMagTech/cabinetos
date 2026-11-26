@@ -31,8 +31,9 @@
 # with Steam, and named they stay should Steam ever go, so Lindbergh never
 # rests on Steam. And pipewire-alsa's 32-bit half, because The House of the
 # Dead EX opens ALSA itself and quits without it (the trial): the 32-bit copy
-# of a piece the image has for its 64-bit programs, with the same settings
-# files. Nothing changes for any 64-bit program.
+# of a piece the image has for its 64-bit programs, of the same version, with
+# the same settings files (pinned below). Nothing changes for any 64-bit
+# program.
 #
 # Its licence is CC BY-NC-SA 4.0, and each library left in it has its own;
 # see docs/LICENCES.md.
@@ -48,6 +49,14 @@ readonly LINUXLOADER_REPO=https://github.com/lindbergh-loader/linuxloader.git
 readonly LINUXLOADER_COMMIT=96334eb3c5bc028d8941ea4e180166f53d06cda7
 readonly LINUXLOADER_URL="https://github.com/lindbergh-loader/linuxloader/releases/download/v${LINUXLOADER_VERSION}/linuxloader.AppImage"
 readonly LINUXLOADER_SHA256=0234e1fa830a0dec9dfb3b758247ecc28b14d56a0a7c772e81a044db9fbfb200
+# THE 32-BIT HALF OF pipewire-alsa, Fedora's own build of the image's PipeWire,
+# version for version: Fedora's repositories keep only their newest, and one
+# that differs from the image's 64-bit PipeWire would take it along. So it is
+# pinned here and checked against the image's 32-bit PipeWire libraries; a base
+# update that moves PipeWire stops the build here, and the pin moves with it
+# (Fedora's build of the new version, kojipkgs.fedoraproject.org).
+readonly PIPEWIRE_ALSA_URL=https://kojipkgs.fedoraproject.org/packages/pipewire/1.6.10/1.fc44/i686/pipewire-alsa-1.6.10-1.fc44.i686.rpm
+readonly PIPEWIRE_ALSA_SHA256=2b78f6fb0d527b9db7b4cd957b6091ced8e889d39b65899f9bc93063848698c8
 readonly DEST=/usr/lib/cabinetos/linuxloader
 readonly CORES=/usr/lib/cabinetos/cores
 readonly CATALOGUE=/ctx/payload/linuxloader/linuxloader.catalogue
@@ -70,8 +79,17 @@ dnf5 -y install --setopt=install_weak_deps=False \
     libxml2.i686 libxshmfence.i686 libzstd.i686 mesa-dri-drivers.i686 \
     mesa-libGL.i686 mesa-vulkan-drivers.i686 ncurses-libs.i686 opus.i686 \
     pulseaudio-libs.i686 SDL3.i686 systemd-libs.i686 vulkan-loader.i686 \
-    xz-libs.i686 zlib-ng-compat.i686 \
-    pipewire-alsa.i686
+    xz-libs.i686 zlib-ng-compat.i686 pipewire-libs.i686
+have="$(rpm -q --qf '%{VERSION}-%{RELEASE}' pipewire-libs.i686)"
+if [[ "$(basename "${PIPEWIRE_ALSA_URL}")" != "pipewire-alsa-${have}.i686.rpm" ]]; then
+    log "ERROR: the image's 32-bit PipeWire is ${have}; move PIPEWIRE_ALSA_URL and PIPEWIRE_ALSA_SHA256 to Fedora's pipewire-alsa-${have}.i686.rpm"
+    exit 1
+fi
+rpmfile="$(mktemp -d)/pipewire-alsa.i686.rpm"
+fetch_pinned "${PIPEWIRE_ALSA_URL}" "${PIPEWIRE_ALSA_SHA256}" "${rpmfile}" "pipewire-alsa.i686"
+[[ "$(sha256sum "${rpmfile}" | cut -d' ' -f1)" == "${PIPEWIRE_ALSA_SHA256}" ]] ||
+    { log "ERROR: pipewire-alsa.i686's checksum is not the pin's"; exit 1; }
+dnf5 -y install --setopt=install_weak_deps=False "${rpmfile}"
 [[ -e /usr/lib/alsa-lib/libasound_module_pcm_pipewire.so ]] ||
     { log "ERROR: pipewire-alsa.i686 left no 32-bit ALSA plugin for PipeWire"; exit 1; }
 exit 0
