@@ -1,10 +1,10 @@
 // The worker a launch runs, off the frame thread: the firmware step every
-// launch runs first, then one of four routes in a fixed order: a game on
+// launch runs first, then one of five routes in a fixed order: a game on
 // several discs, a game installed before it runs (PS3, Vita, original Xbox), a
-// folder of files, one file. The disc route falls through to the others below
-// two discs; the other three always end the worker, by fetching the game's
-// saves from RomM (finish) before the job is Ready. beginLaunch (launch.cpp)
-// starts it.
+// Lindbergh game's whole folder, a folder of files, one file. The disc route
+// falls through to the others below two discs; the other four always end the
+// worker, by fetching the game's saves from RomM (finish) before the job is
+// Ready. beginLaunch (launch.cpp) starts it.
 // Moved out of main.cpp in the restructure (#398).
 
 #include "launch.h"

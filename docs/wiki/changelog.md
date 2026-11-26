@@ -4,6 +4,15 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** Sega Lindbergh arcade games play, as an experiment: Hummer,
+  Initial D, Virtua Fighter 5, OutRun 2 SP and more. Put each game as an
+  unpacked folder, or a zip or 7z of it, in your Lindbergh folder. Some games
+  may run into problems. The gun games wait for light guns. See
+  [Arcade](arcade.md#lindbergh).
+  ([#620](https://github.com/MMagTech/cabinetos/issues/620))
+
 ## 2026.11.26.3 {#v2026-11-26-3}
 
 - **New:** Sega Chihiro arcade games play: OutRun 2, Crazy Taxi High Roller
