@@ -68,19 +68,19 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **Lindbergh's TV run (phase 3 of #620, "Sega Lindbergh: The House of
-   the Dead 4 and more with Linux Loader"), then the testing push (phase
-   4), on his word.** #759, "Arcade: Sega Lindbergh games play in Linux
-   Loader (#620)", is open: built and proven headless on the A9 (its
-   description lists what). Left for the TV: Hummer Extreme driven on a
-   pad (steering, pedals, boost, gears), rumble, holding Start doing
-   nothing, the pause menu's rows and Exit, sound heard, the gun games
-   greyed on a grid, each picture level seen. The A9 needs the branch's
-   frontend, Linux Loader laid out as the image will have it and its
-   catalogue (the kit in his research folder,
-   2026-11-26-lindbergh-phase2), and a Lindbergh game in his RomM as a
-   zip of its folder with `drv/nvidia` taken out (the wiki says why).
-   His own RomM gets the games only on his say.
+1. **Lindbergh's testing image (phase 4 of #620, "Sega Lindbergh: The House
+   of the Dead 4 and more with Linux Loader"), then the merge, on his
+   word.** #759, "Arcade: Sega Lindbergh games play in Linux Loader
+   (#620)", is open. Its TV run passed on 2026-11-26 (Hummer Extreme over
+   Moonlight: started, played, Exit sent its save to his RomM, the next
+   start downloaded nothing), and `testing` carries it as 2026.11.26.4.
+   Next: he installs it (Settings, System, System update), Hummer starts
+   once from the image, then the merge, the promotion to `latest` and #620
+   closed with a comment. His RomM has the seven games since 2026-11-26
+   (the Lindbergh folder, RomM platform 70, games 4785 to 4791, each a zip
+   of its folder, Hummer's without `drv/nvidia`). Left open: #760, "Hummer
+   Extreme sometimes stops at Error 1011 at boot" (Later). After the
+   merge, take the test catalogue out of the A9's `~/cores-dev`.
 2. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
