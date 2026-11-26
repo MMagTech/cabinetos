@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.26.3 {#v2026-11-26-3}
 
 - **New:** Sega Chihiro arcade games play: OutRun 2, Crazy Taxi High Roller
   and more. Put each game, converted to one `.bin` file, in your Chihiro
