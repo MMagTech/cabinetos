@@ -141,12 +141,10 @@ std::string lindberghSaves(const std::string& saveDir);
 bool prepareLindbergh(const Emulator& e, const std::string& saveDir, int players,
                       quality::Level level, std::string* err);
 // Run::start's arguments for Linux Loader, as for xeniaArgs: the sandbox's
-// own /var/tmp and the two folders in it before bwrap's "--", the
-// environment entries before the program, then the folder holding the game's
-// program (`romPath`) and its three files.
-void lindberghArgs(std::vector<std::string>& full, const Emulator& e,
-                   const std::string& entryPath, const std::string& saveDir,
-                   const std::string& romPath);
+// own /var/tmp before bwrap's "--", the environment entries before the
+// program, then the folder holding the game's program (`romPath`) and its
+// three files.
+void lindberghArgs(std::vector<std::string>& full, const Emulator& e, const std::string& romPath);
 
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,

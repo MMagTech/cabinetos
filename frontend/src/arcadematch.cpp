@@ -193,13 +193,11 @@ std::vector<Candidate> candidates(const Catalogue* cats, const std::string& file
         // A CONVERTED IMAGE IS A CHIHIRO GAME, and a Chihiro game is one: no
         // other emulator opens a `.bin`, and xemu-chihiro opens nothing else.
         if ((ext == "bin") != (core == kImages)) continue;
-        // A LINDBERGH GAME IS ITS FOLDER, asked by its program (byProgram,
-        // byFingerprint), never by a file's name: `abc` is After Burner
-        // Climax's program and a MAME set.
-        if (core == kFolders) continue;
         const auto it = cats[i].sets.find(set);
         if (it == cats[i].sets.end() || !it->second.works) continue;
         // NOTHING LEFT TO CHECK is never a fit: an empty list fits any zip.
+        // So a Lindbergh program's line, which has none, is never a zip's:
+        // `abc` is After Burner Climax's program and a MAME set.
         if (it->second.files.empty() && it->second.discs.empty() && it->second.id.empty())
             continue;
         out.push_back({kOrder[i], &it->second});

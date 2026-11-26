@@ -35,19 +35,21 @@ namespace cab::standalone::detail {
 // kill reach the game only through the loader's whole process group
 // (standalone.h, `gameIsChild`), and the quit is the loader's own (below).
 //
-// WHERE THINGS ARE, inside the sandbox, at fixed paths with no space in them:
-// the loader refuses a settings or controls file whose path has one, and
-// warns of trouble for a game folder that does (mainShared.c, hasSpaces),
-// while the console's folders can hold one (a drive's name, a person's, a
-// game's). So the sandbox's /var/tmp is the run's own, empty (where The House
-// of the Dead 4 writes its empty `mwlogo`), with the game's folder at
-// kGameAt and this person's folder for the game at kPersonAt inside it.
-// The loader's settings, its controls and the controller list are this
-// person's (`-c`, `-o`, `-d`). The board's `eeprom.bin` (its settings, coin
-// counts and later a gun's calibration) and `sram.bin` (scores and
-// rankings), and a player's cards, go in `saves/` there (EEPROM_PATH,
-// SRAM_PATH, ID_CARDFOLDER, CARDFILE_01 and 02), which travels to RomM in
-// its arcade form (saveRoot; catalog::SaveForm::aloneAsItIs). The loader
+// WHERE THINGS ARE. The loader refuses a settings, controls or controller
+// list whose path has a space (mainShared.c, hasSpaces), and a person's
+// folder always has one (`1 - <name>`), so those three are written in its
+// home, `run/` (`-c`, `-o`, `-d`), on the console's own storage, before every
+// start and whole. NOT AT A FIXED PATH IN /var/tmp OR /tmp, which the loader
+// takes for the game's own temporary files and turns into the game folder's
+// `tmp/` (filesystemShared.c): a game folder put there could not open its
+// own files (Hummer Extreme quit 4 s in, on the A9, 2026-11-26). The board's
+// `eeprom.bin` (its settings, coin counts and later a gun's calibration) and
+// `sram.bin` (scores and rankings), and a player's cards, go in `saves/` in
+// this person's folder for the game (EEPROM_PATH, SRAM_PATH, ID_CARDFOLDER,
+// CARDFILE_01 and 02, read whole, spaces and all), which travels to RomM in
+// its arcade form (saveRoot; catalog::SaveForm::aloneAsItIs). The sandbox's
+// /var/tmp is the run's own, where The House of the Dead 4 writes its empty
+// `mwlogo`. The loader
 // writes both of the board's files through stdio with no flush (eeprom.c,
 // baseBoard.c), so only its own clean exit keeps the last write: hence the
 // quit below, never SIGTERM, which it has no handler for.
@@ -70,9 +72,6 @@ namespace cab::standalone::detail {
 
 namespace {
 
-constexpr const char* kGameAt = "/var/tmp/cabinetos-game";
-constexpr const char* kPersonAt = "/var/tmp/cabinetos-person";
-
 struct Line {
     const char* section;
     const char* key;
@@ -84,9 +83,8 @@ std::string quoted(const std::string& v) { return "\"" + v + "\""; }
 // The settings file, whole: the loader's own defaults (its `--create
 // config`) but for the values chosen for a console at home, the same for
 // every game; no game gets a branch of its own.
-std::vector<Line> settings(quality::Level level) {
+std::vector<Line> settings(const std::string& saves, quality::Level level) {
     const int lines = quality::lindberghLines(level);
-    const std::string saves = std::string(kPersonAt) + "/saves";
     return {
         // THE GAME'S OWN SHAPE at every level: the height by the level and
         // the width worked out by the loader from the game's own size, so a
@@ -319,30 +317,37 @@ std::string controls() {
     return t;
 }
 
+// Where the three files are written before every start.
+std::string runDir(const Emulator& e) { return home(e) + "/run"; }
+
 }  // namespace
 
 std::string lindberghSaves(const std::string& saveDir) { return saveDir + "/saves"; }
 
-bool prepareLindbergh(const Emulator&, const std::string& saveDir, int players,
+bool prepareLindbergh(const Emulator& e, const std::string& saveDir, int players,
                       quality::Level level, std::string* err) {
     storage::makeDirs(lindberghSaves(saveDir));
+    const std::string run = runDir(e);
+    storage::makeDirs(run);
+    if (run.find(' ') != std::string::npos)
+        std::fprintf(stderr, "[lindbergh] %s has a space, which Linux Loader refuses\n",
+                     run.c_str());
     // EACH PLAYER'S CONTROLLER, BY NAME, for the loader's SDL, which knows
     // none of the virtual ones by itself.
     std::string db;
     for (int p = 0; p < cab::vpad::kMaxPlayers; ++p) db += cab::vpad::sdlMapping(p) + "\n";
     std::string ini = "# Written by CabinetOS before every start (standalone_lindbergh.cpp).\n";
     const char* section = "";
-    for (const Line& l : settings(level)) {
+    for (const Line& l : settings(lindberghSaves(saveDir), level)) {
         if (std::string(section) != l.section) {
             ini += std::string("\n[") + l.section + "]\n";
             section = l.section;
         }
         ini += std::string(l.key) + " = " + l.value + "\n";
     }
-    if (!writeFile(saveDir + "/gamecontrollerdb.txt", db) ||
-        !writeFile(saveDir + "/linuxloader.ini", ini) ||
-        !writeFile(saveDir + "/controls.ini", controls())) {
-        *err = "could not write Linux Loader's settings in " + saveDir;
+    if (!writeFile(run + "/gamecontrollerdb.txt", db) || !writeFile(run + "/linuxloader.ini", ini) ||
+        !writeFile(run + "/controls.ini", controls())) {
+        *err = "could not write Linux Loader's settings in " + run;
         return false;
     }
     const int lines = quality::lindberghLines(level);
@@ -352,35 +357,35 @@ bool prepareLindbergh(const Emulator&, const std::string& saveDir, int players,
 }
 
 void lindberghArgs(std::vector<std::string>& full, const Emulator& e,
-                   const std::string& entryPath, const std::string& saveDir,
                    const std::string& romPath) {
-    // THE SANDBOX'S OWN /var/tmp, and in it the game's folder and this
-    // person's at fixed paths with no space (above), before bwrap's "--".
+    // THE SANDBOX'S OWN /var/tmp, before bwrap's "--".
     for (size_t i = 0; i < full.size(); ++i) {
         if (full[i] != "--") continue;
-        full.insert(full.begin() + static_cast<long>(i),
-                    {"--tmpfs", "/var/tmp", "--bind", entryPath, kGameAt, "--bind", saveDir,
-                     kPersonAt});
+        full.insert(full.begin() + static_cast<long>(i), {"--tmpfs", "/var/tmp"});
         break;
     }
-    // THE FOLDER HOLDING THE PROGRAM, as it sits in the game's folder (the
-    // top, or `elf/` and the like in a TeknoParrot copy).
-    std::string rel = romPath.substr(0, romPath.find_last_of('/'));
-    rel = rel.size() > entryPath.size() ? rel.substr(entryPath.size()) : std::string();
-    const std::string person = kPersonAt;
     // The unpacked AppImage's root, from the program's path in it
     // (`usr/bin/linuxloader`).
     std::string root = binaryOf(e);
     for (int up = 0; up < 3; ++up) root = root.substr(0, root.find_last_of('/'));
+    const std::string run = runDir(e);
     // As its AppImage's own start sets it (AppRun): where its library and
     // the rest of its own are, and its libraries before the image's. ONLY THE
     // VIRTUAL CONTROLLERS, as for every program: its SDL sees no real pad.
     full.insert(full.end() - 1, "APP_IMG_ROOT=" + root);
     full.insert(full.end() - 1, "LD_LIBRARY_PATH=" + root + "/usr/lib32");
     full.insert(full.end() - 1, "SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT=" + cab::vpad::sdlIds());
-    full.insert(full.end(), {"-g", std::string(kGameAt) + rel, "-c", person + "/linuxloader.ini",
-                             "-o", person + "/controls.ini", "-d",
-                             person + "/gamecontrollerdb.txt"});
+    // AND ITS SDL HEARS THEM WITHOUT ITS WINDOW HAVING THE FOCUS, as the
+    // console's own does (startup.cpp): the console's window has it under the
+    // pause menu, where Exit to Home presses the loader's quit, and SDL drops
+    // a pad's presses for an unfocused window by default, so the quit went
+    // unheard (on the A9, 2026-11-26).
+    full.insert(full.end() - 1, "SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1");
+    // THE FOLDER HOLDING THE PROGRAM, as it sits in the game's folder (the
+    // top, or `elf/` and the like in a TeknoParrot copy).
+    full.insert(full.end(), {"-g", romPath.substr(0, romPath.find_last_of('/')), "-c",
+                             run + "/linuxloader.ini", "-o", run + "/controls.ini", "-d",
+                             run + "/gamecontrollerdb.txt"});
 }
 
 }  // namespace cab::standalone::detail

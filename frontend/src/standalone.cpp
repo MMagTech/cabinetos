@@ -796,7 +796,7 @@ bool Run::start(const Emulator& e, const std::string& romPath, const std::string
         } else if (std::strcmp(e.core, "xemu-chihiro") == 0) {
             chihiroArgs(full, saveDir, romPath);
         } else if (std::strcmp(e.core, "linuxloader") == 0) {
-            lindberghArgs(full, e, entryPath, saveDir, romPath);
+            lindberghArgs(full, e, romPath);
         } else {
             full.insert(full.end(), {"--no-gui", "--fullscreen", romPath});
         }
