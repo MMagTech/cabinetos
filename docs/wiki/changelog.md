@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.26.4 {#v2026-11-26-4}
 
 - **New:** Sega Lindbergh arcade games, as an experiment: Hummer, Initial D,
   Virtua Fighter 5, OutRun 2 SP and more. See [Arcade](arcade.md#lindbergh).
