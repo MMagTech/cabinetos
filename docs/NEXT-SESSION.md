@@ -15,11 +15,13 @@ source of truth for anything on RomM's data.
 ## Where things stand
 
 **2026-11-25.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.25.3: #753, "PS3 trials play as the full
-game, and installed games download only the game (#748, #749)", which closed
-#748 and #749. Read the newest image from the registry, not from here. Before
-it, the same day, #752, "Arcade high scores and every file of a board's save go
-to RomM (#353)" (2026.11.25.2), which closed #353, and #751,
+change a player can see is 2026.11.26: #754, "Reports hide a PS3 game's
+licence key and save data keys (#750)", which closed #750. Read the newest
+image from the registry, not from here. Before it, the same day, #753, "PS3
+trials play as the full game, and installed games download only the game
+(#748, #749)" (2026.11.25.3), which closed #748 and #749; #752, "Arcade high
+scores and every file of a board's save go to RomM (#353)" (2026.11.25.2),
+which closed #353; and #751,
 "FinalBurn Neo games keep high scores, and CPS3 save states load clean (#608)"
 (2026.11.25), which closed #608; on 2026-11-24: #747,
 "Screenshot and Save state no longer stop the game (#726)" (2026.11.24.4), which
@@ -62,14 +64,7 @@ RomM: keep test launches under a minute, or have his go.
 
 ## Next
 
-1. **#750, "A problem report can include a PS3 game's licence key": built
-   as #754, "Reports hide a PS3 game's licence key and save data keys
-   (#750)".** On his "push to testing", and once he has installed that
-   image: one diagnostic report on the A9 (his yes, 2026-11-25), read only
-   for its `KLIC=` and `SECUREFILE:` lines, each with a placeholder and no
-   key left; nothing else from it quoted, and the report deleted after.
-   Then his merge closes #750.
-2. **After save channels, small, each on his word:**
+1. **After save channels, small, each on his word:**
    - When RomM moves its Sigil pin: vendor Sigil again at RomM's pin,
      update `savetable.cpp`'s "rows waiting in Sigil" comment, and rerun
      the Switch check, what changed only.
@@ -82,12 +77,12 @@ RomM: keep test launches under a minute, or have his go.
    - The clean-up review: what future testing keeps of the save channels
      kits, sessions and branches; the audited list is in his research
      notes. Nothing is deleted before his yes.
-3. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
+2. **LinkUp: two server tidy-ups, no issue.** The internet test, step 6 of
    #654, passed twice: his console and his friend's, two servers linking up
    and playing a game (his word, 2026-11-10). Left: `.dockerignore` lets
    `docs/` into the server's build stage, and the relay's block list lacks
    3fff::/20.
-4. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
+3. **Kirby's first save, inside Mario Kart 7's.** Before the folder fix,
    Kirby: Planet Robobot saved into Mario Kart 7's folder. Read on RomM on
    2026-10-25: Mario Kart 7's save (uploaded 2026-10-22) still carries
    Kirby's save data and its extra data, four files. He wants them gone
@@ -95,7 +90,7 @@ RomM: keep test launches under a minute, or have his go.
    folder, so deleting them on the A9 alone does not last: Mario Kart 7's
    save on RomM has to be replaced. Restate exactly what goes and wait for
    his yes before anything is deleted.
-5. **Words from him, one at a time, no work:** which of the 36 faults the
+4. **Words from him, one at a time, no work:** which of the 36 faults the
    PROJECT.md scan found with no issue (2026-10-22) become issues, none
    filed until he says. That list is in the
    notes of the session that made it ("Faults recorded in PROJECT.md with no
