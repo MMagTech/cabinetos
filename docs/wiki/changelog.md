@@ -6,11 +6,8 @@ one you install, so you only ever install the newest.
 
 ## Next
 
-- **New:** Sega Lindbergh arcade games play, as an experiment: Hummer,
-  Initial D, Virtua Fighter 5, OutRun 2 SP and more. Put each game's
-  folder, as a zip or 7z, in your Lindbergh folder. Some games may run into
-  problems. The gun games wait for light guns. See
-  [Arcade](arcade.md#lindbergh).
+- **New:** Sega Lindbergh arcade games, as an experiment: Hummer, Initial D,
+  Virtua Fighter 5, OutRun 2 SP and more. See [Arcade](arcade.md#lindbergh).
   ([#620](https://github.com/MMagTech/cabinetos/issues/620))
 
 ## 2026.11.26.3 {#v2026-11-26-3}

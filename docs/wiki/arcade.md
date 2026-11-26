@@ -38,11 +38,10 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
 
 ## Lindbergh
 
-Sega Lindbergh games play in Linux Loader. **This is an experiment: some games may run into problems.**
+Sega Lindbergh games play in Linux Loader, as an experiment: some games may run into problems.
 
-- **Each game is its hard drive's copy**, the game's whole folder as it ran on the cabinet, for example `Hummer Extreme/` with `elf/`, `data/` and the rest inside. Put it in your `lindbergh` folder **as a zip or 7z of that folder**, one file a game. An unpacked folder plays too, but RomM lists every file in it, so a large one starts slowly. A copy made for TeknoParrot works as it is, but take its `drv/nvidia` folder out first if it has one: Hummer Extreme's holds about 110,000 driver files the game never uses, too many for RomM to list. A DVD image of the game (`.iso`, `.chd`) does not play: the disc is locked, and only the hard drive's copy is open.
-- **The console knows a game by the program inside it**, not by its folder's name: a version Linux Loader does not know shows *Not supported* when you press Play.
-- **What plays:** the games played on a pad: Hummer and Hummer Extreme, After Burner Climax, OutRun 2 SP SDX, Initial D Arcade Stage 4 and 5, Harley-Davidson: King of the Road, R-Tuned, Sega Race TV, Virtua Fighter 5 and Virtua Tennis 3, each in the versions Linux Loader knows. The House of the Dead 4 and EX, Let's Go Jungle, Rambo, Ghost Squad Evolution, 2 Spicy and Primeval Hunt show *Needs a light gun*; the mahjong and quiz games show *Not supported*.
-- **Controls:** Back puts in a coin, Start starts. In a driving game the left stick steers, the right trigger accelerates and the left brakes, **A** boosts, **Y** changes the view and the shoulders change gear. In After Burner Climax the left stick flies, the right trigger speeds up and the left slows down, **A** fires the gun, **B** the missiles and **Y** sets off the Climax. In a fighting or sports game the d-pad or stick moves and **A**, **B** and **X** are the buttons.
-- **The first start of a game takes a while:** it downloads the whole game, and some games prepare their pictures before they begin (Rambo for a few minutes the first time). While it unpacks, the console needs room for the game twice over.
-- **Some games stop with a message of their own**, Hummer Extreme's *Error 1011* now and then among them: choose **Exit to Home** in the pause menu and start it again.
+- **Put each game in your `lindbergh` folder as a zip or 7z of its folder.** Take `drv/nvidia` out of a TeknoParrot copy first. A DVD image (`.iso`, `.chd`) does not play.
+- **What plays:** pad games such as Hummer, OutRun 2 SP SDX, Initial D, Virtua Fighter 5 and After Burner Climax. Gun games show *Needs a light gun*. Mahjong and quiz games, and versions Linux Loader doesn't know, show *Not supported*.
+- **Controls:** Select puts in a coin. Driving: the left stick steers, the triggers accelerate and brake, **A** boosts, the shoulders change gear, **Y** changes the view. After Burner: the left stick flies, the triggers set the speed, **A** fires the gun, **B** the missiles, **Y** the Climax.
+- **The first start is slow:** the whole game downloads and unpacks, and needs room for it twice over.
+- **If a game stops on an error** (Hummer's *Error 1011*), choose Exit to Home and start it again.
