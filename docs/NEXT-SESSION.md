@@ -71,10 +71,12 @@ RomM: keep test launches under a minute, or have his go.
    "Arcade: Sega Chihiro games play in xemu-chihiro (#619)", open, proven
    headless on the A9 against the write-test RomM (its `chihiro` folder:
    OutRun 2, Special Tours, Crazy Taxi High Roller and four name-only
-   placeholders). His RomM holds no converted game yet: he swaps his files in
-   himself (each `<set>.bin` in the Chihiro folder's `roms`, `chihiro.zip`
-   and `seganetw.zip` in its `bios`) before the TV run, which runs the six
-   checks on #619's plan through `tools/ui-loop.sh`. The emulator is not in
+   placeholders). His RomM has the six converted games since 2026-11-26
+   (the Chihiro folder, RomM platform 68, games 4779 to 4784, his custom
+   covers moved onto them; the disc zips kept outside RomM in `Chihiro
+   discs` on the share) and `chihiro.zip` and `seganetw.zip` as its
+   firmware. The TV run takes the six checks on #619's plan through
+   `tools/ui-loop.sh`. The emulator is not in
    any image yet, so the loop needs the A9's build of it
    (`CABINETOS_BINARY_xemu-chihiro`) and its catalogue in the core folder
    until the testing push. Not covered yet: driving, pedals, gears and
