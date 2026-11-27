@@ -67,7 +67,8 @@ The Home (Guide) button is never passed to a game.
 
 | System | Button | Does |
 |---|---|---|
-| Arcade | Hold **Start** for a second | The game's own settings (not in Model 2 and Model 3 games), see [Arcade](arcade.md) |
+| Arcade | Hold **Start** for a second | The game's own settings (not in Model 2, Model 3, Chihiro, Lindbergh and Windows Arcade games), see [Arcade](arcade.md) |
+| Windows Arcade | Hold **R3** or **L3** | The cabinet's Test switch on R3, which opens a game's operator settings where it has them, and its Service switch on L3, see [Arcade](arcade.md#windows-arcade) |
 | Nintendo DS | Right stick, **R3**, **L3**, **R2** | The right stick moves a pointer on the touch screen; **R3** (press the stick) touches; click **L3** for the top screen alone, again for the bottom screen alone, and again for both; hold **R2** to close the lid, for the few games that ask for it |
 | Nintendo 3DS | Right stick, **R3**, **L3** | The right stick moves a pointer on the touch screen, and is the C-stick too; **R3** touches; click **L3** for the top screen alone, again for the bottom screen alone, and again for both |
 | PlayStation (PS1) | **L1 + R1 + Select** | The DualShock's ANALOG button, for the few games that need it pressed |
@@ -102,7 +103,7 @@ use them, and L3+R3 is the pause menu.
 
 State, rewind, fast forward and screenshot shortcuts work in the built-in
 emulators (3DS: no rewind). In Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita,
-Model 2 and Model 3 games, only the tap works; use the pause menu for the rest.
+Model 2, Model 3, Chihiro, Lindbergh and Windows Arcade games, only the tap works; use the pause menu for the rest.
 
 ## The on-screen keyboard
 

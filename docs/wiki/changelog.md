@@ -4,6 +4,19 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** Windows Arcade, games from arcade boards that run Windows, played
+  in windowsarcadeloader. It is very experimental: some games will not
+  start, and some will start and not play right. Your library's owner sets
+  it up first: they run CabinetOS's script on their computer once to make
+  the Windows files and put them in RomM, then once for each game, and put
+  the games in a `windows-arcade` folder. The first game you start sets up
+  Windows on the console, which takes a few minutes. Select puts in a coin,
+  Start starts, and holding **R3** opens a game's operator settings where it
+  has them. See [Arcade](arcade.md#windows-arcade).
+  ([#762](https://github.com/MMagTech/cabinetos/issues/762))
+
 ## 2026.11.26.4 {#v2026-11-26-4}
 
 - **New:** Sega Lindbergh arcade games, as an experiment: Hummer, Initial D,

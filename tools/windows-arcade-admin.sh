@@ -327,13 +327,29 @@ list_files() {
 }
 
 # Sets top: the folder inside an archive the game's files sit in ("" for its root, else
-# "<folder>/"): the one folder everything is in, when there is only one.
+# "<folder>/"): the one folder everything is in, when there is only one (a zip of the game's
+# folder). settle_top then corrects it from the game's notes.
 find_top() {
     top=""
     [ "$kind" = folder ] && return 0
     top=$(awk -F'\t' '
         { p = $2; i = index(p, "/"); if (i == 0) { root = 1; exit } d[substr(p, 1, i)] = 1 }
         END { if (root) exit; n = 0; for (k in d) { n++; one = k } if (n == 1) print one }' "$tmp/all")
+}
+
+# When the loader's notes give the game's program with its folders (Daytona New Season
+# Edition's Sega/Daytona/Daytona.exe), that path is from the game's top: a zip of the folder's
+# contents holds only Sega/, and its top is its root, not Sega/.
+settle_top() {
+    local one=$top
+    [ -n "$one" ] || return 0
+    notes_programs "$1" | awk -F'\t' -v one="$one" '
+        FNR == NR { if (index($0, "/")) named[tolower($0)] = 1; next }
+        { p = tolower($2)
+          if (p in named) { root = 1 }
+          else if (substr(p, 1, length(one)) == tolower(one) && (substr(p, length(one) + 1) in named)) inside = 1 }
+        END { exit !(root && !inside) }' - "$tmp/all" && top=""
+    return 0
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -407,11 +423,11 @@ write_file() {
     esac
 }
 
-# Takes out the old file (every one at the game's top), in one go: Info-ZIP and 7-Zip copy the
-# whole archive to take a file out of it.
+# Takes out the old file (every one at the top or one folder down), in one go: Info-ZIP and
+# 7-Zip copy the whole archive to take a file out of it.
 remove_old() {
     local f names=()
-    while IFS= read -r f; do names+=("$top$f"); done <"$tmp/old"
+    while IFS= read -r f; do names+=("$f"); done <"$tmp/old"
     case "$kind" in
         folder) for f in "${names[@]}"; do rm -f "$src/$f"; done ;;
         zip)
@@ -436,10 +452,8 @@ one_game() {
     say "== $label"
     list_files >"$tmp/all"
     find_top
-    # A game that has its file already.
-    awk -F'\t' -v top="$top" '{ p = $2; if (substr(p, 1, length(top)) != top) next
-        p = substr(p, length(top) + 1); if (p !~ /\// && tolower(p) ~ /\.windowsloader$/) print p }' \
-        "$tmp/all" >"$tmp/old"
+    # A game that has its file already, at the top or one folder down, where the console looks.
+    awk -F'\t' '$2 !~ /\/.*\// && tolower($2) ~ /\.windowsloader$/ { print $2 }' "$tmp/all" >"$tmp/old"
     if [ -s "$tmp/old" ] && [ "$replace" = 0 ]; then
         say "  It has its file already ($(head -n 1 "$tmp/old")), so it is left as it is; --replace writes it again."
         return 0
@@ -483,8 +497,7 @@ one_game() {
     gname=$(game_field "$id" 2)
     status=$(game_field "$id" 4)
     say "  Game: $gname ($id). In the loader's list: $status"
-
-    [ "$kind" = folder ] && list_files >"$tmp/all"
+    settle_top "$id"
 
     # The program.
     if [ -n "$program_arg" ]; then
