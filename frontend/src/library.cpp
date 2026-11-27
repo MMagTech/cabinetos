@@ -680,7 +680,7 @@ LibraryRead readLibrary(romm::Client& client, const LibraryAsk& ask, const std::
     // downloaded (lindberghprograms.h). RomM's list is asked again each read;
     // only a game not yet known costs its entry.
     for (const romm::Platform& p : r.platforms) {
-        const bool windows = p.slug == "windows-arcade";
+        const bool windows = arcadematch::isWindowsFolder(p.slug, p.fsSlug);
         if ((!windows && p.slug != "lindbergh") || p.romCount <= 0) continue;
         if (over()) return r;
         std::vector<romm::Game> games;

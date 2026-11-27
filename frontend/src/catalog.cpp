@@ -288,8 +288,8 @@ Coverage arcadeGame(const romm::Game& g, bool dreamcast) {
     // them once (lindberghprograms.h), never by its folder's name. One not
     // asked yet plays in its emulator as far as anything here knows: Play
     // asks before anything is downloaded (launch_routes.cpp).
-    if (g.platformSlug == "lindbergh" || g.platformSlug == "windows-arcade") {
-        const bool windows = g.platformSlug == "windows-arcade";
+    const bool windows = arcadematch::isWindowsFolder(g.platformSlug, g.platformFsSlug);
+    if (g.platformSlug == "lindbergh" || windows) {
         const lindberghprograms::Kind kind =
             windows ? lindberghprograms::Kind::Windows : lindberghprograms::Kind::Lindbergh;
         std::string name;

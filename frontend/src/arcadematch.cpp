@@ -620,6 +620,10 @@ bool isArcadeSlug(const std::string& slug) {
     return false;
 }
 
+bool isWindowsFolder(const std::string& slug, const std::string& fsSlug) {
+    return slug == "windows-arcade" || lower(fsSlug) == "windows-arcade";
+}
+
 bool asksDreamcast(const std::string& fileName) {
     std::string set, ext;
     nameOf(fileName, &set, &ext);
@@ -1157,6 +1161,12 @@ int test() {
     check(isArcadeSlug("chihiro"), "and RomM's own label for Chihiro's folder");
     check(isArcadeSlug("lindbergh"), "and RomM's own label for Lindbergh's folder");
     check(isArcadeSlug("windows-arcade"), "and the Windows arcade games' folder");
+    check(isWindowsFolder("windows-arcade", "windows-arcade") &&
+              isWindowsFolder("arcade", "windows-arcade") &&
+              isWindowsFolder("arcade", "Windows-Arcade") && !isWindowsFolder("arcade", "MAME") &&
+              !isWindowsFolder("lindbergh", "Lindbergh"),
+          "the Windows arcade folder known by its own name when RomM calls it arcade, and no "
+          "other folder taken for it");
     check(!isArcadeSlug("triforce") && !isArcadeSlug("dc"),
           "a board no emulator here plays is not, nor is Dreamcast");
 

@@ -82,6 +82,11 @@ namespace arcadematch {
 // (Triforce, Hikaru and the like) have no emulator here, so get no tile.
 // Dreamcast's folder is not one, though a zip in it is asked about Flycast.
 bool isArcadeSlug(const std::string& slug);
+// Whether a platform is the Windows arcade games' folder: by RomM's label
+// for it, `windows-arcade`, or by the folder's own name. A library's owner
+// who wants covers maps the folder to `arcade` in RomM, which changes the
+// label and leaves the folder's name, so the name decides too.
+bool isWindowsFolder(const std::string& slug, const std::string& fsSlug);
 
 // Whether a Dreamcast folder's game is asked here: a zip or a 7z, which
 // Flycast would take for a Naomi board (its libretro.cpp treats every zip as
