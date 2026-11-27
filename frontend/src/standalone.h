@@ -302,6 +302,11 @@ bool windowsSaveFile(const std::string& relPath);
 enum class WindowsSetup { Ready, NoFiles, FilesMissing, Failed };
 WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& cancel,
                           std::string* detail);
+// The same question with nothing built, asked before a game is downloaded,
+// so a library with no Windows files says so at once and not after gigabytes
+// have come down: Ready when the setup is built or the file RomM gave holds
+// everything it needs.
+WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail);
 
 // Whether a picture level changes anything for this game in `e`: yes for
 // every emulator's every game, but for a Windows arcade game whose profile in

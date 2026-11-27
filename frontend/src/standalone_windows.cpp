@@ -313,17 +313,27 @@ std::vector<std::string> registrySections(const std::string& text) {
 }
 
 // THE GAME'S OWN REGISTRY KEYS, out of what Wine left in the setup's layer
-// after a game: every key of the person's registry under `Software\` that is
-// not Wine's, Microsoft's, the classes' or the policies', with a value in it,
-// as Wine wrote it (a key's path has its backslashes doubled there). Written
-// among Wine's user folders, where the save's rule takes it; none kept, none
-// written.
-void keepRegistry(const std::string& saveDir) {
+// after a game: every key of the person's registry under `Software\` that
+// the shared setup's registry does not have at all, with a value in it, as
+// Wine wrote it (a key's path has its backslashes doubled there), and not
+// Wine's, Microsoft's, the classes' or the policies'. A key the shared setup
+// has is the setup's or the runner's own, whatever it holds now: the runner
+// rewrites a few of its own at every start (Valve's, a sound one of Intel's),
+// and kept, they made a save out of every start of a game that keeps nothing
+// (Contra, through the console on the A9, 2026-11-27). Written among Wine's
+// user folders, where the save's rule takes it; none kept, none written.
+void keepRegistry(const std::string& sharedPrefix, const std::string& saveDir) {
     const std::string kept = windowsSaves(saveDir) + kRegistryKept;
+    auto keyOf = [](const std::string& section) {
+        return lowered(section.substr(0, section.find(']') + 1));
+    };
+    std::set<std::string> shared;
+    for (const std::string& s : registrySections(readFile(sharedPrefix + "/user.reg")))
+        shared.insert(keyOf(s));
     std::string out;
     for (const std::string& s : registrySections(readFile(windowsSaves(saveDir) + "/prefix/user.reg"))) {
-        const std::string head = lowered(s.substr(0, s.find('\n')));
-        if (head.compare(0, 11, "[software\\\\") != 0) continue;
+        const std::string head = keyOf(s);
+        if (head.compare(0, 11, "[software\\\\") != 0 || shared.count(head)) continue;
         bool ours = true;
         for (const char* skip : {"wine", "microsoft", "classes", "policies"}) {
             const size_t n = std::strlen(skip);
@@ -437,9 +447,12 @@ bool windowsBeforeStart(const Emulator& e, const std::string& entryPath,
     return true;
 }
 
-void windowsAfterEnd(const Emulator& e, const std::string& saveDir) {
+void windowsAfterEnd(const Emulator& e, const std::string& entryPath,
+                     const std::string& saveDir) {
     unmountGame(e);
-    keepRegistry(saveDir);
+    const arcadematch::WindowsGame game = arcadematch::windowsGame(
+        arcadematch::windowsGameId(arcadematch::windowsLoaderFile(entryPath)));
+    if (game.known) keepRegistry(prefixDir(e, game.prefix), saveDir);
     removeWork(saveDir + "/layers/prefix");
 }
 
@@ -553,29 +566,33 @@ std::vector<std::string> setupSandbox() {
 // (.NET 1.1) and where winetricks unpacks one installer out of another.
 // Built this way on the A9 with no network, 2026-11-27: 2 min 28 s, all 40
 // of a game's verbs in, 1.4 GB.
-WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
-                        const std::string& gameId, const std::atomic<bool>& cancel,
-                        std::string* detail) {
-    const std::string prefix = prefixDir(e, game.prefix);
-    auto missingVerbs = [&] {
-        const std::string done = readFile(prefix + "/.wal-tricks");
-        std::vector<std::string> out;
-        for (const std::string& v : game.verbs)
-            if (!noteHas(done, v)) out.push_back(v);
-        return out;
-    };
-    std::vector<std::string> todo = missingVerbs();
-    if (todo.empty() && isFile(prefix + "/system.reg")) return WindowsSetup::Ready;
+// The verbs of a game's setup the loader's record does not name yet.
+std::vector<std::string> missingVerbs(const Emulator& e, const arcadematch::WindowsGame& game) {
+    const std::string done = readFile(prefixDir(e, game.prefix) + "/.wal-tricks");
+    std::vector<std::string> out;
+    for (const std::string& v : game.verbs)
+        if (!noteHas(done, v)) out.push_back(v);
+    return out;
+}
 
-    // THE ADMIN'S FILE, and that it holds every file the verbs still to go
-    // in download, by the list made from winetricks at the pin
-    // (arcadematch::windowsFiles).
-    const std::string pack = storage::biosDir() + "/windows-arcade-files.tar";
+std::string packPath() { return storage::biosDir() + "/windows-arcade-files.tar"; }
+
+// WHETHER A GAME'S SETUP IS THERE, OR CAN BE BUILT FROM WHAT THE CONSOLE HAS:
+// Ready with `*built` when the loader's record names every verb; Ready
+// without it when the admin's file holds every file the verbs still to go in
+// download, by the list made from winetricks at the pin
+// (arcadematch::windowsFiles); else what is missing. Builds nothing.
+WindowsSetup checkSetup(const Emulator& e, const arcadematch::WindowsGame& game, bool* built,
+                        std::string* detail) {
+    const std::vector<std::string> todo = missingVerbs(e, game);
+    *built = todo.empty() && isFile(prefixDir(e, game.prefix) + "/system.reg");
+    if (*built) return WindowsSetup::Ready;
+    const std::string pack = packPath();
     if (!isFile(pack)) {
         *detail = pack + " is not there";
         return WindowsSetup::NoFiles;
     }
-    const proc::Result listed = proc::run({"tar", "-xOf", pack, "MANIFEST"}, 60, &cancel);
+    const proc::Result listed = proc::run({"tar", "-xOf", pack, "MANIFEST"}, 60);
     std::set<std::string> held;   // "<cache folder>/<file> <sha256>"
     for (const std::string& line : proc::lines(listed.out)) {
         const size_t a = line.find(' ');
@@ -592,6 +609,18 @@ WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
         *detail = "the file on the server lacks " + lacking;
         return WindowsSetup::FilesMissing;
     }
+    return WindowsSetup::Ready;
+}
+
+WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
+                        const std::string& gameId, const std::atomic<bool>& cancel,
+                        std::string* detail) {
+    bool built = false;
+    const WindowsSetup can = checkSetup(e, game, &built, detail);
+    if (can != WindowsSetup::Ready || built) return can;
+    const std::string prefix = prefixDir(e, game.prefix);
+    const std::string pack = packPath();
+    std::vector<std::string> todo = missingVerbs(e, game);
 
     const std::string cacheHome = home(e) + "/setup-cache";
     const std::string cache = cacheHome + "/winetricks";
@@ -612,16 +641,16 @@ WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
                  game.prefix.c_str(), gameId.c_str(), todo.size());
     // An hour: two and a half minutes on the reference console; a slow drive
     // has room.
-    const proc::Result built = proc::run(args, 60 * 60, &cancel);
+    const proc::Result ran = proc::run(args, 60 * 60, &cancel);
     removeTree(cacheHome);
     storage::makeDirs(storage::logsDir());
-    writeFile(storage::logsDir() + "/windowsarcadeloader-setup.log", built.out + built.err);
-    todo = missingVerbs();
+    writeFile(storage::logsDir() + "/windowsarcadeloader-setup.log", ran.out + ran.err);
+    todo = missingVerbs(e, game);
     if (!todo.empty() || !isFile(prefix + "/system.reg")) {
         std::string left;
         for (const std::string& v : todo) left += (left.empty() ? "" : ", ") + v;
-        *detail = built.timedOut ? "stopped before it was done"
-                                 : "exit " + std::to_string(built.status) + ", not in: " +
+        *detail = ran.timedOut ? "stopped before it was done"
+                                 : "exit " + std::to_string(ran.status) + ", not in: " +
                                        (left.empty() ? "the setup itself" : left);
         return WindowsSetup::Failed;
     }
@@ -645,6 +674,17 @@ WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& ca
         return WindowsSetup::Failed;
     }
     return buildSetup(*e, game, gameId, cancel, detail);
+}
+
+WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail) {
+    const Emulator* e = find("windowsarcadeloader");
+    const arcadematch::WindowsGame game = arcadematch::windowsGame(gameId);
+    if (!e || !game.known) {
+        *detail = "no game called " + gameId;
+        return WindowsSetup::Failed;
+    }
+    bool built = false;
+    return checkSetup(*e, game, &built, detail);
 }
 
 }  // namespace cab::standalone

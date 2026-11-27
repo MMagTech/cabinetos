@@ -155,7 +155,8 @@ bool prepareWindows(const Emulator& e, const std::string& romPath, const std::st
 // place, and let go of once the game has gone.
 bool windowsBeforeStart(const Emulator& e, const std::string& entryPath,
                         const std::string& saveDir, std::string* err);
-void windowsAfterEnd(const Emulator& e, const std::string& saveDir);
+void windowsAfterEnd(const Emulator& e, const std::string& entryPath,
+                     const std::string& saveDir);
 // Run::start's arguments for windowsarcadeloader, as for xeniaArgs: the
 // sandbox's own process space and this person's layer over the Windows setup
 // before bwrap's "--", the environment entries before the program, then

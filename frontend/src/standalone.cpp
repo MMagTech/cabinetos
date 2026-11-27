@@ -710,7 +710,7 @@ bool beforeStart(const Emulator& e, const std::string& entryPath, const std::str
 
 bool afterEnd(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
               std::string* err) {
-    if (std::strcmp(e.core, "windowsarcadeloader") == 0) windowsAfterEnd(e, saveDir);
+    if (std::strcmp(e.core, "windowsarcadeloader") == 0) windowsAfterEnd(e, entryPath, saveDir);
     if (std::strcmp(e.core, "xemu") != 0) return true;
     return xemuAfterEnd(e, entryPath, saveDir, err);
 }

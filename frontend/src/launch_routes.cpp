@@ -273,6 +273,29 @@ static void finish(LaunchJob& job, romm::Client& client, const storage::User& us
 // it (cache.h).
 static constexpr const char* kWholeNote = ".cabinetos-whole";
 
+// What a Windows game's setup answered, said on the page: true when it is
+// ready, else the job failed with the words for what is missing.
+static bool windowsSetupSays(LaunchJob& job, const cab::standalone::WindowsSetup setup,
+                             const std::string& gameId, const std::string& detail) {
+    if (!detail.empty())
+        std::fprintf(stderr, "[windows] setup for %s: %s\n", gameId.c_str(), detail.c_str());
+    switch (setup) {
+        case cab::standalone::WindowsSetup::Ready:
+            return true;
+        case cab::standalone::WindowsSetup::NoFiles:
+            job.message = "No Windows files on the server";
+            break;
+        case cab::standalone::WindowsSetup::FilesMissing:
+            job.message = "The Windows files on the server are out of date";
+            break;
+        case cab::standalone::WindowsSetup::Failed:
+            job.message = "Couldn't set up Windows";
+            break;
+    }
+    job.stage = LaunchJob::Stage::Failed;
+    return false;
+}
+
 // The whole folder on the drive, for either kind. A GUN GAME OR A PANEL'S IS
 // SAID FIRST, before any download, by the name RomM's list of its files gives
 // (lindberghprograms.h), asked here when no read has asked yet; the folder on
@@ -298,6 +321,15 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
                 (name.empty() ? "none" : name);
             if (!pickArcade(job, fsName, a, by)) return false;
             job.arcadePicked = false;
+            // A WINDOWS GAME WHOSE WINDOWS SETUP IS NEITHER THERE NOR ABLE TO
+            // BE BUILT says so now, before the game comes down: the firmware
+            // step above has already fetched whatever file RomM has.
+            if (windows) {
+                std::string detail;
+                if (!windowsSetupSays(job, cab::standalone::windowsSetupReady(name, &detail),
+                                      name, detail))
+                    return false;
+            }
         }
     }
     const std::string note = entryPath + "/" + kWholeNote;
@@ -448,23 +480,7 @@ static void windowsFolder(LaunchJob& job, romm::Client& client, const int id,
     const cab::standalone::WindowsSetup setup =
         cab::standalone::windowsSetup(gameId, job.cancel, &detail);
     if (cancelled(job)) return;
-    std::fprintf(stderr, "[windows] setup for %s: %s\n", gameId.c_str(),
-                 detail.empty() ? "nothing said" : detail.c_str());
-    switch (setup) {
-        case cab::standalone::WindowsSetup::Ready:
-            finish(job, client, user);
-            return;
-        case cab::standalone::WindowsSetup::NoFiles:
-            job.message = "No Windows files on the server";
-            break;
-        case cab::standalone::WindowsSetup::FilesMissing:
-            job.message = "The Windows files on the server are out of date";
-            break;
-        case cab::standalone::WindowsSetup::Failed:
-            job.message = "Couldn't set up Windows";
-            break;
-    }
-    job.stage = LaunchJob::Stage::Failed;
+    if (windowsSetupSays(job, setup, gameId, detail)) finish(job, client, user);
 }
 
 // The copies are const, as the lambda's were.
