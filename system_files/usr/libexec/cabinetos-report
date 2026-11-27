@@ -1631,6 +1631,16 @@ def section_emulator_logs(root):
         dirs[:] = [d for d in dirs
                    if os.path.join(folder, d) != os.path.join(root, "emulators", "windowsarcadeloader")]
         files += [os.path.join(folder, n) for n in names if n.endswith(".log")]
+    # THE LAST WINDOWS ARCADE GAME'S OWN LOG: windowsarcadeloader also writes one
+    # from inside the game, into the game's run folder, which is in the
+    # person's layer over the Windows setup (frontend/src/standalone_windows.cpp).
+    # It says what the launcher's output cannot: what went wrong once the game
+    # was running. The newest one on the console; a person's next start of a
+    # Windows game clears theirs.
+    own = glob.glob(os.path.join(root, "users", "*", "saves", "*", "*", "windowsarcadeloader",
+                                 "save", "prefix", "drive_c", "wal", "*", "*", "wal-*.log"))
+    if own:
+        files.append(max(own, key=os.path.getmtime))
     # logs/<emulator>.own.log is a link to the emulator's own log
     # (frontend/src/standalone.cpp), which may also be under emulators/: each
     # file once, named where it is.
