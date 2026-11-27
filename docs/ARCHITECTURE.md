@@ -299,7 +299,9 @@ thread, once a frame (`App::followLibrary`, `libraryrefresh.cpp`):
    for a Download, decides where the game goes, and starts the launch
    worker.
 2. The worker (`launch_routes.cpp`) fetches the platform's firmware from RomM
-   first, then takes one of six routes, in this order: a game on several
+   first, after asking room for the files not yet in `bios/` at RomM's size
+   (`cache::roomForMissing`; "Not enough space" when there is none), then
+   takes one of six routes, in this order: a game on several
    discs, a game installed before it runs (PS3, Vita, original Xbox), a
    Lindbergh game, a Windows arcade game, a folder of files, one file. Every
    route but Lindbergh's and Windows Arcade's takes only the game's own files
@@ -340,9 +342,12 @@ thread, once a frame (`App::followLibrary`, `libraryrefresh.cpp`):
    game's next start, so it is downloaded, unpacked or installed again.
    An archive the core does not open itself is unpacked beside it
    (`romfile.cpp`, `prepareFile`), each file stamped with the archive's own
-   time; an unpacking whose write or close the drive refuses for want of room
-   (ENOSPC or EDQUOT, `romfile::noRoom`) says "Not enough space", any other
-   failure "Couldn't open this game's file"; a later start that finds every file at its size with that time
+   time. A download (`fetchToFile`) or an unpacking whose write, flush or
+   close the drive refuses for want of room (ENOSPC or EDQUOT, `cab::noRoom`,
+   the error the write itself got) says "Not enough space", in every route
+   and the firmware step; any other failure "Couldn't download this game" or
+   "Couldn't open this game's file", and a firmware file that fails for
+   another reason is passed over as before; a later start that finds every file at its size with that time
    skips the unpacking and its room check (`alreadyUnpacked`, #530).
    With the game on the disk, a 3DS file Azahar cannot play (an encrypted
    dump, a CIA) ends the job with its reason (`ncch.cpp`); otherwise it

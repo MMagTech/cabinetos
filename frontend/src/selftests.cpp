@@ -675,15 +675,15 @@ int filesTest() {
     check(!skips(), "a new download of the archive unpacks again, the same bytes or not");
 
     // 7b. AN UNPACKING THAT RUNS OUT OF ROOM SAYS SO, by the error its own
-    // write got (romfile::noRoom). /dev/full refuses every write with
+    // write got (cab::noRoom). /dev/full refuses every write with
     // ENOSPC, the drive-full error, so a member's file linked to it is a
     // drive with no room left: a member larger than stdio's buffer fails at
     // its write, a small one at its close. A file size limit refuses with
     // EFBIG, which is no want of room.
-    check(romfile::noRoom(ENOSPC) && romfile::noRoom(EDQUOT),
+    check(cab::noRoom(ENOSPC) && cab::noRoom(EDQUOT),
           "a write refused with ENOSPC or EDQUOT is want of room");
-    check(!romfile::noRoom(EFBIG) && !romfile::noRoom(EIO) && !romfile::noRoom(EACCES) &&
-              !romfile::noRoom(0),
+    check(!cab::noRoom(EFBIG) && !cab::noRoom(EIO) && !cab::noRoom(EACCES) &&
+              !cab::noRoom(0),
           "EFBIG, EIO and EACCES are not");
     cab::writeBytes(src + "/big/b.bin", std::string(64 * 1024, 'b'));
     cab::writeBytes(src + "/small/s.bin", std::string("s\n"));
@@ -724,6 +724,18 @@ int filesTest() {
         check(!done && !noRoom,
               "a write refused for another reason (a file too big) fails it, not for want of room");
     }
+
+    // 7c. THE FIRMWARE STEP'S ROOM (cache::roomForMissing): what is not yet in
+    // bios/ at the server's size, with the overhead; nothing for what is.
+    const int64_t pack = 615LL * 1000 * 1000, bios = 524288;
+    check(cache::roomForMissing({{pack, -1}, {bios, bios}, {bios, 1000}, {0, -1}}) ==
+              pack + bios +
+                  static_cast<int64_t>(static_cast<double>(pack + bios) *
+                                       cache::kOverheadFraction),
+          "firmware not yet here, or here at another size, asks its room, with the overhead");
+    check(cache::roomForMissing({{pack, pack}, {bios, bios}}) == 0 &&
+              cache::roomForMissing({}) == 0,
+          "and firmware already here at the server's size asks none");
 
     // 8. What a drive may not have yet (unsettled.h, #559). A list of this
     // boot is kept; one from an earlier boot deletes what it names, so the

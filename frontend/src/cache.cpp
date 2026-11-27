@@ -334,6 +334,13 @@ std::vector<Entry> candidates(const std::string& location) {
     return out;
 }
 
+int64_t roomForMissing(const std::vector<std::pair<int64_t, int64_t>>& wantHave) {
+    int64_t missing = 0;
+    for (const auto& [want, have] : wantHave)
+        if (want > 0 && have != want) missing += want;
+    return missing + static_cast<int64_t>(static_cast<double>(missing) * kOverheadFraction);
+}
+
 bool holdsSavesInPlay(const std::string& entryPath) {
     return ::access((entryPath + "/.cabinetos-playing").c_str(), F_OK) == 0;
 }

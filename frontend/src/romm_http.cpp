@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -438,12 +439,16 @@ struct FileSink {
     int64_t got = 0;
     int64_t total = 0;
     bool aborted = false;
+    int failed = 0;   // the errno of a write the drive refused
 };
 
 size_t writeToFile(char* p, size_t sz, size_t n, void* user) {
     auto* s = static_cast<FileSink*>(user);
     const size_t bytes = sz * n;
-    if (std::fwrite(p, 1, bytes, s->f) != bytes) return 0;   // short write aborts curl
+    if (std::fwrite(p, 1, bytes, s->f) != bytes) {   // a short write aborts curl
+        s->failed = errno;
+        return 0;
+    }
     s->got += static_cast<int64_t>(bytes);
     return bytes;
 }
@@ -461,7 +466,8 @@ int reportProgress(void* user, curl_off_t dlTotal, curl_off_t dlNow, curl_off_t,
 }  // namespace
 
 bool Client::fetchToFile(const std::string& path, const std::string& destPath,
-                         const ProgressFn& onProgress, std::string* err) const {
+                         const ProgressFn& onProgress, std::string* err, bool* noRoom) const {
+    if (noRoom) *noRoom = false;
     CURL* c = curl_easy_init();
     if (!c) { if (err) *err = "curl init failed"; return false; }
 
@@ -472,6 +478,7 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     FileSink sink;
     sink.f = std::fopen(partPath.c_str(), "wb");
     if (!sink.f) {
+        if (noRoom) *noRoom = cab::noRoom(errno);
         if (err) *err = "cannot write " + partPath;
         curl_easy_cleanup(c);
         return false;
@@ -515,10 +522,14 @@ bool Client::fetchToFile(const std::string& path, const std::string& destPath,
     // so neither is needed. A body that failed is thrown away, so only a
     // whole one is written out.
     const bool whole = !sink.aborted && rc == CURLE_OK && status < 300;
-    const bool written = whole && std::fflush(sink.f) == 0 &&
-                         (cab::keepsSizeWithBytes(partPath) || unsettled::note({destPath}) ||
+    bool written = whole && std::fflush(sink.f) == 0;
+    if (whole && !written) sink.failed = errno;
+    written = written && (cab::keepsSizeWithBytes(partPath) || unsettled::note({destPath}) ||
                           ::fsync(fileno(sink.f)) == 0);
+    if (whole && !written && !sink.failed) sink.failed = errno;
     const bool closed = std::fclose(sink.f) == 0;
+    if (!closed && !sink.failed) sink.failed = errno;
+    if (noRoom) *noRoom = cab::noRoom(sink.failed);
     if (hdrs) curl_slist_free_all(hdrs);
     curl_easy_cleanup(c);
 

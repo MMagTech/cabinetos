@@ -389,17 +389,17 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
         const std::string zip = entryPath + "/.cabinetos-download";
         std::string err;
         job.stage = LaunchJob::Stage::Downloading;
-        if (!client.fetchToFile(
+        if (bool noRoom = false; !client.fetchToFile(
                 "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName), zip,
                 [&job](int64_t got, int64_t total) {
                     job.got = got;
                     job.total = total;
                     return !job.cancel.load();
                 },
-                &err)) {
+                &err, &noRoom)) {
             std::fprintf(stderr, "[launch] download %s: %s\n", fsName.c_str(), err.c_str());
             ::unlink(zip.c_str());
-            job.message = "Couldn't download this game";
+            job.message = noRoom ? "Not enough space" : "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
             return false;
         }
@@ -576,6 +576,30 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         if (away) ferr = "the server is away; using what is in bios/";
         const bool listed = !away && client.fetchFirmware(platformId, &firmware, &ferr);
         if (listed) {
+            // ROOM FOR WHAT IS MISSING FIRST, asked as every fetch asks, on the
+            // console's own drive where bios/ is: other games out of the cache
+            // there, this one kept. Without it a full drive failed the fetch
+            // with no word, and the game then said its files were not on the
+            // server (cache::roomForMissing).
+            std::vector<std::pair<int64_t, int64_t>> wantHave;
+            for (const auto& f : firmware) {
+                struct stat fst;
+                const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
+                wantHave.push_back({f.sizeBytes, ::stat(fdest.c_str(), &fst) == 0
+                                                     ? static_cast<int64_t>(fst.st_size)
+                                                     : -1});
+            }
+            const int64_t need = cache::roomForMissing(wantHave);
+            if (need > 0 && cache::freeBytes(biosDir) < need) {
+                cache::evictUntilFree(storage::root(), need, id);
+                if (cache::freeBytes(biosDir) < need) {
+                    std::fprintf(stderr, "[firmware] no room: %lld bytes asked\n",
+                                 static_cast<long long>(need));
+                    job.message = "Not enough space";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+            }
             for (const auto& f : firmware) {
                 if (job.cancel.load()) break;
                 const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
@@ -590,15 +614,22 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 const std::string fpath = "/api/firmware/" + std::to_string(f.id) +
                                           "/content/" + romm::encodeSegment(f.fileName);
                 std::string derr;
+                bool noRoom = false;
                 if (client.fetchToFile(fpath, fdest,
                         [&job](int64_t got, int64_t total) {
                             job.got = got;
                             job.total = total;
                             return !job.cancel.load();
-                        }, &derr)) {
+                        }, &derr, &noRoom)) {
                     std::fprintf(stderr, "[firmware] %s (%lld bytes)\n",
                                  f.fileName.c_str(),
                                  static_cast<long long>(f.sizeBytes));
+                } else if (noRoom) {
+                    std::fprintf(stderr, "[firmware] %s: %s\n", f.fileName.c_str(),
+                                 derr.c_str());
+                    job.message = "Not enough space";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
                 } else {
                     // Not fatal here. WHICH BIOS a core needs is the core's
                     // business and most platforms need none, so a refusal
@@ -791,15 +822,16 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             for (const auto& [f, d] : fetch) {
                 std::string derr;
                 const int64_t before = done;
-                if (!client.fetchToFile(romm::Client::romFilePath(id, f), d,
+                if (bool noRoom = false;
+                    !client.fetchToFile(romm::Client::romFilePath(id, f), d,
                         [&job, before, fetchBytes](int64_t got, int64_t) {
                             job.got = before + got;
                             job.total = fetchBytes;
                             return !job.cancel.load();
-                        }, &derr)) {
+                        }, &derr, &noRoom)) {
                     std::fprintf(stderr, "[launch] download %s: %s\n", f.fileName.c_str(),
                                  derr.c_str());
-                    job.message = "Couldn't download this game";
+                    job.message = noRoom ? "Not enough space" : "Couldn't download this game";
                     job.stage = LaunchJob::Stage::Failed;
                     return;
                 }
@@ -898,15 +930,16 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         for (const auto& [f, d] : fetch) {
             std::string derr;
             const int64_t before = done;
-            if (!client.fetchToFile(romm::Client::romFilePath(id, *f), d,
+            if (bool noRoom = false;
+                !client.fetchToFile(romm::Client::romFilePath(id, *f), d,
                     [&job, before, fetchBytes](int64_t got, int64_t) {
                         job.got = before + got;
                         job.total = fetchBytes;
                         return !job.cancel.load();
-                    }, &derr)) {
+                    }, &derr, &noRoom)) {
                 std::fprintf(stderr, "[launch] download %s: %s\n", f->fileName.c_str(),
                              derr.c_str());
-                job.message = "Couldn't download this game";
+                job.message = noRoom ? "Not enough space" : "Couldn't download this game";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -1031,15 +1064,16 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             for (const auto& [f, d] : fetch) {
                 std::string derr;
                 const int64_t before = done;
-                if (!client.fetchToFile(romm::Client::romFilePath(id, *f), d,
+                if (bool noRoom = false;
+                    !client.fetchToFile(romm::Client::romFilePath(id, *f), d,
                         [&job, before, fetchBytes](int64_t got, int64_t) {
                             job.got = before + got;
                             job.total = fetchBytes;
                             return !job.cancel.load();
-                        }, &derr)) {
+                        }, &derr, &noRoom)) {
                     std::fprintf(stderr, "[launch] download %s: %s\n",
                                  f->fileName.c_str(), derr.c_str());
-                    job.message = "Couldn't download this game";
+                    job.message = noRoom ? "Not enough space" : "Couldn't download this game";
                     job.stage = LaunchJob::Stage::Failed;
                     return;
                 }
@@ -1236,7 +1270,9 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName);
         // NO SIZE FROM RomM, NO ROOM CHECK ABOVE (#484, LAUNCH-11's other
         // half): the same check, once, when the server declares the length.
-        bool roomAsked = expectedSize > 0, noRoom = false;
+        // `noRoom` when the room the declared length needs is not there;
+        // `wroteNoRoom` when the drive refused a write for want of room.
+        bool roomAsked = expectedSize > 0, noRoom = false, wroteNoRoom = false;
         const bool ok = client.fetchToFile(path, dest,
             [&job, &roomAsked, &noRoom, &location, id](int64_t got, int64_t total) {
                 job.got = got;
@@ -1252,10 +1288,11 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                     }
                 }
                 return !job.cancel.load() && !noRoom;
-            }, &err);
+            }, &err, &wroteNoRoom);
         if (!ok) {
             std::fprintf(stderr, "[launch] download: %s\n", err.c_str());
-            job.message = noRoom ? "Not enough space" : "Couldn't download this game";
+            job.message =
+                noRoom || wroteNoRoom ? "Not enough space" : "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }

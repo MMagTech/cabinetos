@@ -69,6 +69,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "pending.h"
@@ -230,6 +231,13 @@ inline constexpr double kMarginFraction = 0.10;
 // bytes is where filesystems begin to fail in interesting ways, and staying off
 // it costs nothing.
 inline constexpr double kOverheadFraction = 0.05;
+
+// THE ROOM FILES STILL TO COME DOWN ASK, with kOverheadFraction on top: each
+// file's size as the server gives it (`first`) when the copy here (`second`,
+// -1 when there is none) is not already that size. A file the server gives
+// no size for is fetched but counts nothing, since nothing is known of it.
+// The firmware step's (launch_routes.cpp), which fetches exactly those.
+int64_t roomForMissing(const std::vector<std::pair<int64_t, int64_t>>& wantHave);
 
 // Marks a game as used now, so that oldest-first means anything at all.
 void touch(const std::string& entryPath);

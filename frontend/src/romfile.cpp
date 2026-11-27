@@ -319,8 +319,6 @@ int64_t unpackedSize(const std::string& path, const std::string& validExtensions
     return total;
 }
 
-bool noRoom(int errnum) { return errnum == ENOSPC || errnum == EDQUOT; }
-
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err,
@@ -390,7 +388,7 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
             }
             if (std::fclose(f) == 0) {
                 closed.push_back(out);
-            } else if (noRoom(errno)) {
+            } else if (cab::noRoom(errno)) {
                 failed = errno;
                 if (err) *err = "cannot finish " + out + because();
                 return -1;
@@ -398,7 +396,7 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
             return written;
         });
     if (primary.empty()) {
-        if (noRoomOut) *noRoomOut = noRoom(failed);
+        if (noRoomOut) *noRoomOut = cab::noRoom(failed);
         return false;
     }
     if (::stat(downloadedPath.c_str(), &from) == 0 &&
