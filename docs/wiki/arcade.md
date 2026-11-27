@@ -90,3 +90,7 @@ After that, each new game is steps 6 to 9.
 - **Controls:** Select puts in a coin, Start starts, and each game's other buttons are windowsarcadeloader's for that game. Hold **R3** (press the right stick) for the cabinet's Test switch, which opens a game's operator settings where it has them, and hold **L3** for its Service switch. Holding Start does not open settings here.
 - **Saves:** what a game keeps, its scores, a board's memory and its operator settings, is each person's own save, and goes to RomM when you leave, so your other consoles have it too. There are no save states and no RetroAchievements.
 - **Picture** is in the pause menu only for a game that offers a picture size; the others draw at their own size.
+
+### If a game stops and asks for an attendant
+
+These are arcade machines. A game may look for a part of its cabinet that isn't there, such as a camera or a card dispenser, and stop on an error screen. In an arcade, an attendant clears that in the game's own operator settings. Every game's are different, and CabinetOS doesn't cover them. [windowsarcadeloader](https://github.com/aderumier/windowsarcadeloader)'s page is the place to look.
