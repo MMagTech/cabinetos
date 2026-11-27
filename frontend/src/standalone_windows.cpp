@@ -632,6 +632,16 @@ int64_t setupRoom(bool built, int64_t packBytes) {
 // keeps what went in and the next pass goes on from there; no at the first
 // pass that adds none, which would only fail the same way again, and no
 // when none is missing. So at most one pass per verb.
+// HOW A PASS OF THE SETUP'S BUILD ENDED, the end of its line in the setup's
+// log and the console's own: cut short by a cancel (a person backing out,
+// the console stopping) or by its hour, else nothing. proc::run reports a
+// cancel as `timedOut` too, so the cancel is read from the build's own flag,
+// and it wins: a pass cancelled never ran its hour.
+const char* passEnd(bool timedOut, bool cancelled) {
+    if (cancelled) return ", stopped when the start was cancelled";
+    return timedOut ? ", stopped at its hour" : "";
+}
+
 bool setupGoesAgain(size_t missingBefore, size_t missingAfter) {
     return missingAfter > 0 && missingAfter < missingBefore;
 }
@@ -719,13 +729,14 @@ WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
     for (int pass = 1;; ++pass) {
         ran = proc::run(args, 60 * 60, &cancel);
         const size_t after = missingVerbs(e, game).size();
+        const char* end = passEnd(ran.timedOut, cancel.load());
         char head[160];
         std::snprintf(head, sizeof head, "=== pass %d: %zu verb(s) missing before, %zu after%s ===\n",
-                      pass, before, after, ran.timedOut ? ", stopped at its hour" : "");
+                      pass, before, after, end);
         logText += head + ran.out + ran.err + "\n";
         writeFile(logPath, logText);
-        std::fprintf(stderr, "[windows] the setup's pass %d: %zu verb(s) missing before, %zu after\n",
-                     pass, before, after);
+        std::fprintf(stderr, "[windows] the setup's pass %d: %zu verb(s) missing before, %zu after%s\n",
+                     pass, before, after, end);
         if (ran.timedOut || cancel.load() || !setupGoesAgain(before, after)) break;
         before = after;
     }
@@ -734,7 +745,8 @@ WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
     if (!todo.empty() || !isFile(prefix + "/system.reg")) {
         std::string left;
         for (const std::string& v : todo) left += (left.empty() ? "" : ", ") + v;
-        *detail = ran.timedOut ? "stopped before it was done"
+        *detail = cancel.load()  ? "stopped when the start was cancelled"
+                  : ran.timedOut ? "stopped before it was done"
                                  : "not in: " + (left.empty() ? std::string("the setup itself") : left);
         return WindowsSetup::Failed;
     }
@@ -795,6 +807,11 @@ int windowsSetupTest() {
           "a setup to build asks room for the admin's file unpacked and the setup, and the "
           "overhead");
     check(setupRoom(true, pack) == 0, "a setup already built asks none");
+    check(std::strcmp(passEnd(true, true), ", stopped when the start was cancelled") == 0,
+          "a pass cut short by a cancel says so, though proc::run calls it timed out");
+    check(std::strcmp(passEnd(true, false), ", stopped at its hour") == 0,
+          "one that ran its hour says that");
+    check(std::strcmp(passEnd(false, false), "") == 0, "one that ended by itself says neither");
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;
 }
