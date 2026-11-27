@@ -84,6 +84,8 @@ After that, each new game is steps 6 to 9.
 
 **After a CabinetOS update,** a game may say *The Windows files on the server are out of date*. Download the script again, run step 4 again, and put the new `windows-arcade-files.tar` in RomM in place of the old one.
 
+**If a big game shows *Not supported*.** During a scan, RomM reads inside each zip, and gives up on one that takes longer than three minutes. A game it gave up on shows *Not supported* on the console. In RomM's container settings, raise `SEVEN_ZIP_TIMEOUT` (RomM calls it the 7-Zip timeout, and it covers zips too), then scan the TeknoParrot platform again with the **Hashes** scan. A Quick scan does not read the zip again.
+
 ### Playing
 
 - **The first start is slow:** the whole game downloads and unpacks, and needs room for it twice over. The first Windows Arcade game you start also sets up Windows on the console, once, which takes a few minutes: the game's page says *Setting up Windows…*. If it says *No Windows files on the server*, the file from step 10 is not in RomM.
