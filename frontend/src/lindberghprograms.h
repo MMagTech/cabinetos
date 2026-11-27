@@ -28,9 +28,13 @@
 // way, in a file of its own.
 //
 // WHERE: `config/lindbergh-programs.json`, `{"<rom id>": {"size": <bytes>,
-// "program": "hummer_Master.elf"}}`, and `config/windows-arcade-games.json`,
-// `{"<rom id>": {"size": <bytes>, "game": "<gameid>"}}`; an empty name for a
-// game whose listed files give none. Safe from any thread.
+// "program": "hummer_Master.elf", "unpacked": <bytes>}}`, and
+// `config/windows-arcade-games.json`, `{"<rom id>": {"size": <bytes>, "game":
+// "<gameid>", "unpacked": <bytes>}}`; an empty name for a game whose listed
+// files give none. `unpacked` is what a game kept as one zip or 7z holds
+// unpacked (unpackedIn), the room its unpacking takes (roomToUnpack); 0, or
+// not there in an entry kept before it was, when that is not known. Safe
+// from any thread.
 
 #pragma once
 
@@ -89,5 +93,24 @@ std::string namedIn(Kind kind, const std::vector<romm::RomFile>& files);
 // and an archive whose members are listed among them, even when none of
 // them is a program or a loader file.
 bool listed(const std::vector<romm::RomFile>& files);
+
+// What a game that is one zip or 7z holds unpacked: the sum of the sizes
+// RomM listed for its members, which are the sizes they unpack to (RomM reads
+// them from the archive's own index). 0 for any other list: a folder, which
+// RomM zips for the download at about its own size, and an archive RomM
+// listed nothing inside.
+int64_t unpackedIn(const std::vector<romm::RomFile>& files);
+
+// The unpacked size kept for the game at that size (above), or 0.
+int64_t unpackedKept(Kind kind, int romId, int64_t size);
+
+// THE ROOM A WHOLE GAME TAKES AT ONCE while it comes down and unpacks: the
+// file downloaded and what it unpacks to, both on the drive until the
+// download is deleted, and cache::kOverheadFraction of the download on top.
+// With `unpackedBytes` 0 (not known) what it unpacks to is taken as the
+// download's own size, right for a folder RomM zips for the download; the
+// route asks again by the archive's own index once it is down
+// (launch_routes.cpp, wholeFolder).
+int64_t roomToUnpack(int64_t downloadBytes, int64_t unpackedBytes);
 
 }  // namespace lindberghprograms

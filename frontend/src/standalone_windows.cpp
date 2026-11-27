@@ -8,6 +8,7 @@
 #include "standalone_internal.h"
 
 #include "arcadematch.h"
+#include "cache.h"
 #include "proc.h"
 #include "quality.h"
 #include "storage.h"
@@ -608,6 +609,23 @@ std::vector<std::string> missingVerbs(const Emulator& e, const arcadematch::Wind
 
 std::string packPath() { return storage::biosDir() + "/windows-arcade-files.tar"; }
 
+// THE WINDOWS SETUP'S SIZE ON THE DISK, at most: the shared one, every
+// verb of every game that runs in it put in, measured at 1.4 GB, built on the
+// A9 with no network on 2026-11-27 (2 min 28 s, 40 verbs). No list gives it:
+// the catalogue and the files list name the verbs and their installers, not
+// what they install. A prefix of a game's own holds fewer of them.
+constexpr int64_t kSetupBytes = 1400LL * 1000 * 1000;
+
+// THE ROOM A SETUP'S BUILD TAKES AT ONCE on the console's own storage: the
+// admin's file unpacked into the build's cache (a plain tar, so its own size,
+// removed after the build) and the setup itself, with cache::kOverheadFraction
+// on top; none when it is built.
+int64_t setupRoom(bool built, int64_t packBytes) {
+    if (built) return 0;
+    const int64_t room = packBytes + kSetupBytes;
+    return room + static_cast<int64_t>(static_cast<double>(room) * cache::kOverheadFraction);
+}
+
 // WHETHER THE SETUP'S BUILD GOES AGAIN after a pass that left verbs out: yes
 // while a pass leaves fewer missing than it found, since the loader's record
 // keeps what went in and the next pass goes on from there; no at the first
@@ -767,8 +785,28 @@ int windowsSetupTest() {
     check(passes(40, {40}) == 1, "a build that goes through at once is one pass");
     check(passes(3, {1, 1, 1}) == 3, "at most one pass per verb");
     check(passes(40, {10, 0}) == 2, "a pass that adds none ends it");
+    const int64_t pack = 615LL * 1000 * 1000;
+    check(setupRoom(false, pack) >= pack + kSetupBytes &&
+              setupRoom(false, pack) ==
+                  pack + kSetupBytes +
+                      static_cast<int64_t>(static_cast<double>(pack + kSetupBytes) *
+                                           cache::kOverheadFraction),
+          "a setup to build asks room for the admin's file unpacked and the setup, and the "
+          "overhead");
+    check(setupRoom(true, pack) == 0, "a setup already built asks none");
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;
+}
+
+int64_t windowsSetupRoom(const std::string& gameId) {
+    const Emulator* e = find("windowsarcadeloader");
+    const arcadematch::WindowsGame game = arcadematch::windowsGame(gameId);
+    if (!e || !game.known) return 0;
+    struct stat st;
+    const int64_t pack = ::stat(packPath().c_str(), &st) == 0 ? static_cast<int64_t>(st.st_size) : 0;
+    const bool built =
+        missingVerbs(*e, game).empty() && isFile(prefixDir(*e, game.prefix) + "/system.reg");
+    return setupRoom(built, pack);
 }
 
 WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail) {

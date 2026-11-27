@@ -308,9 +308,15 @@ WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& ca
 // everything it needs.
 WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail);
 
+// The room building a game's Windows setup takes at once on the console's
+// own storage, where it is built: the admin's file unpacked and the setup
+// itself, measured (standalone_windows.cpp, setupRoom); 0 when it is built.
+// Asked before windowsSetup, as every fetch asks for its room.
+int64_t windowsSetupRoom(const std::string& gameId);
+
 // --windows-setup-test: when the Windows setup's build goes again after a
-// pass that left verbs out (standalone_windows.cpp, setupGoesAgain), no
-// screen, no loader. 0 when all pass.
+// pass that left verbs out (standalone_windows.cpp, setupGoesAgain), and the
+// room a build asks for (setupRoom), no screen, no loader. 0 when all pass.
 int windowsSetupTest();
 
 // Whether a picture level changes anything for this game in `e`: yes for

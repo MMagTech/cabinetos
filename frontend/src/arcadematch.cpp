@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "cache.h"
 #include "catalog.h"
 #include "fileio.h"
 #include "lindberghprograms.h"
@@ -1361,6 +1362,24 @@ int test() {
                   lindberghprograms::listed({}),
               "and so does a folder's list of files, an archive among them or none at all");
 
+        // WHAT AN ARCADE ZIP UNPACKS TO, and the room its first start asks.
+        romm::RomFile big;
+        big.fileName = "Mario Kart Arcade GP DX.zip";
+        big.members = {{"MKDX/a.bin", 1, 4000}, {"MKDX/b.bin", 2, 2200}};
+        check(lindberghprograms::unpackedIn({big}) == 6200,
+              "a zip's unpacked size is the sum of its members' sizes, as RomM lists them");
+        check(lindberghprograms::unpackedIn({unread}) == 0 &&
+                  lindberghprograms::unpackedIn({loose, big}) == 0 &&
+                  lindberghprograms::unpackedIn({loose}) == 0,
+              "not known for one RomM listed nothing inside, a folder, or a file that is no "
+              "archive");
+        check(lindberghprograms::roomToUnpack(2500, 6200) ==
+                  2500 + 6200 + static_cast<int64_t>(2500 * cache::kOverheadFraction),
+              "a zip whose unpacked size is known asks room for the zip and all it unpacks to");
+        check(lindberghprograms::roomToUnpack(2500, 0) ==
+                  2 * 2500 + static_cast<int64_t>(2500 * cache::kOverheadFraction),
+              "one whose unpacked size is not known asks for the download twice, as a folder");
+
         // THE STORE'S ANSWERS (lindberghprograms.h), in a storage root of the
         // test's own, RomM's answers handed in.
         using lindberghprograms::Kind;
@@ -1404,6 +1423,9 @@ int test() {
                   lindberghprograms::known(Kind::Windows, 4812, 10, &got) &&
                   got == "contra-evolution",
               "once RomM lists its members, the name they give is kept on the disk");
+        check(lindberghprograms::unpackedKept(Kind::Windows, 4812, 10) == 20 &&
+                  lindberghprograms::unpackedKept(Kind::Windows, 4812, 11) == 0,
+              "and with it what its members unpack to, at that size only");
         load();
         check(asked == 3, "and RomM is not asked again");
         ::unlink(store.c_str());

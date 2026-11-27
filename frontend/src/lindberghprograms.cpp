@@ -10,6 +10,7 @@
 #include <mutex>
 
 #include "arcadematch.h"
+#include "cache.h"
 #include "storage.h"
 
 namespace lindberghprograms {
@@ -53,12 +54,13 @@ json_object* load(Kind kind) {
     return json_object_new_object();
 }
 
-void keep(Kind kind, int romId, int64_t size, const std::string& name) {
+void keep(Kind kind, int romId, int64_t size, const std::string& name, int64_t unpacked) {
     std::lock_guard<std::mutex> hold(gLock);
     json_object* o = load(kind);
     json_object* e = json_object_new_object();
     json_object_object_add(e, "size", json_object_new_int64(size));
     json_object_object_add(e, storeOf(kind).key, json_object_new_string(name.c_str()));
+    json_object_object_add(e, "unpacked", json_object_new_int64(unpacked));
     json_object_object_add(o, std::to_string(romId).c_str(), e);
     unlistedOf(kind).erase(romId);
     storage::makeDirs(storage::configDir());
@@ -105,10 +107,12 @@ std::string take(Kind kind, int romId, int64_t size, const std::vector<romm::Rom
                      storeOf(kind).tag, romId, storeOf(kind).what, files[0].fileName.c_str());
         return name;
     }
-    keep(kind, romId, size, name);
-    std::fprintf(stderr, "[%s] game %d's %s: %s (of %zu files)\n", storeOf(kind).tag, romId,
-                 storeOf(kind).what, name.empty() ? "none in its list" : name.c_str(),
-                 files.size());
+    const int64_t unpacked = unpackedIn(files);
+    keep(kind, romId, size, name, unpacked);
+    std::fprintf(stderr, "[%s] game %d's %s: %s (of %zu files, %lld bytes unpacked)\n",
+                 storeOf(kind).tag, romId, storeOf(kind).what,
+                 name.empty() ? "none in its list" : name.c_str(), files.size(),
+                 static_cast<long long>(unpacked));
     return name;
 }
 
@@ -157,6 +161,34 @@ std::string namedIn(Kind kind, const std::vector<romm::RomFile>& files) {
 bool listed(const std::vector<romm::RomFile>& files) {
     return !(files.size() == 1 && arcadematch::isArchive(files[0].fileName) &&
              files[0].members.empty());
+}
+
+int64_t unpackedIn(const std::vector<romm::RomFile>& files) {
+    if (files.size() != 1 || !arcadematch::isArchive(files[0].fileName)) return 0;
+    int64_t total = 0;
+    for (const romm::ArchiveMember& m : files[0].members) total += m.size;
+    return total;
+}
+
+int64_t unpackedKept(Kind kind, int romId, int64_t size) {
+    std::lock_guard<std::mutex> hold(gLock);
+    std::string name;
+    if (!onDisk(kind, romId, size, &name)) return 0;
+    json_object* o = load(kind);
+    json_object* e = nullptr;
+    json_object* u = nullptr;
+    const int64_t unpacked =
+        json_object_object_get_ex(o, std::to_string(romId).c_str(), &e) &&
+                json_object_object_get_ex(e, "unpacked", &u)
+            ? json_object_get_int64(u)
+            : 0;
+    json_object_put(o);
+    return unpacked;
+}
+
+int64_t roomToUnpack(int64_t downloadBytes, int64_t unpackedBytes) {
+    return downloadBytes + (unpackedBytes > 0 ? unpackedBytes : downloadBytes) +
+           static_cast<int64_t>(static_cast<double>(downloadBytes) * cache::kOverheadFraction);
 }
 
 bool learn(romm::Client& client, Kind kind, int romId, int64_t size, std::string* name,

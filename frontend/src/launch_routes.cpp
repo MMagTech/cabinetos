@@ -350,10 +350,15 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
         return false;
     } else {
         ::unlink(note.c_str());
-        // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks.
-        const int64_t need =
-            2 * expectedSize +
-            static_cast<int64_t>(static_cast<double>(expectedSize) * cache::kOverheadFraction);
+        // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks: what the
+        // zip or 7z holds unpacked when RomM listed its members, which is far
+        // more than the archive (Wangan Midnight Maximum Tune 6: 10.0 GB
+        // zipped, 17.6 GB unpacked), else the download's own size again
+        // (lindberghprograms.h, roomToUnpack).
+        const int64_t need = lindberghprograms::roomToUnpack(
+            expectedSize, lindberghprograms::unpackedKept(kind, id, expectedSize));
+        std::fprintf(stderr, "[launch] room for the download and its unpacking: %lld bytes\n",
+                     static_cast<long long>(need));
         if (cache::freeBytes(location) < need) {
             cache::evictUntilFree(location, need, id);
             if (cache::freeBytes(location) < need) {
@@ -385,6 +390,21 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
         job.got = 0;
         job.total = 0;
         if (cancelled(job)) return false;
+        // THE SECOND CHECK, by the archive's own index, as for one file: what
+        // it unpacks to beside it, which RomM may not have listed (an archive
+        // it gave up reading inside).
+        const int64_t holds = romfile::unpackedSize(zip, "", false);
+        const int64_t room =
+            holds + static_cast<int64_t>(static_cast<double>(holds) * cache::kOverheadFraction);
+        if (room > 0 && cache::freeBytes(location) < room) {
+            cache::evictUntilFree(location, room, id);
+            if (cache::freeBytes(location) < room) {
+                ::unlink(zip.c_str());
+                job.message = "Not enough space";
+                job.stage = LaunchJob::Stage::Failed;
+                return false;
+            }
+        }
         job.stage = LaunchJob::Stage::Unpacking;
         std::string primary;
         romfile::Kind unpackedAs = romfile::Kind::Plain;
@@ -479,6 +499,20 @@ static void windowsFolder(LaunchJob& job, romm::Client& client, const int id,
                     "its .windowsloader file, " + gameId))
         return;
     job.romPath = file;
+    // ROOM FOR THE WINDOWS SETUP, on the console's own storage where it is
+    // built, asked as every fetch asks: other games out of the cache there
+    // first, this one kept.
+    const int64_t setupRoom = cab::standalone::windowsSetupRoom(gameId);
+    if (setupRoom > 0 && cache::freeBytes(storage::root()) < setupRoom) {
+        cache::evictUntilFree(storage::root(), setupRoom, id);
+        if (cache::freeBytes(storage::root()) < setupRoom) {
+            std::fprintf(stderr, "[windows] no room for the setup: %lld bytes asked\n",
+                         static_cast<long long>(setupRoom));
+            job.message = "Not enough space";
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+    }
     job.stage = LaunchJob::Stage::SettingUpWindows;
     std::string detail;
     const cab::standalone::WindowsSetup setup =
