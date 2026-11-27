@@ -15,7 +15,7 @@
 #     Once per game. PATH is a game's folder, a zip or 7z of it, or a folder of those. For each
 #     game it picks the game from the loader's own list by name and the program to start, then
 #     writes <gameid>.windowsloader at the game's top (inside the zip or 7z, which is not
-#     unpacked). --yes accepts every first choice, for tests; --game and --program set the
+#     unpacked). --yes accepts every first choice, for tests; --game with --program sets both
 #     choices for a single PATH; --replace writes the file again for a game that has one;
 #     --dry-run says what it would write and changes nothing; --loader reads the loader from a
 #     folder (its tree at the pin) in place of GitHub.

@@ -2,7 +2,7 @@
 # TMNT's input bridge, WAL.DirectInput.dll, which its build.sh compiles with
 # `mcs -sdk:2` (the .NET 2.0 profile of the game's Unity). Fedora 44's Mono has
 # no 2.0 reference set; Ubuntu's has, and it is what the loader's own release
-# workflow (.github/workflows/release.yml at the pin) builds it with.
+# workflow (its release.yml at the pin) builds it with.
 #
 # Only the compiler runs here, on the loader's own source; nothing from this
 # container but that one DLL goes into the image

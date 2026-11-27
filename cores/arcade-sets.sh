@@ -1005,8 +1005,8 @@ elif core == "windowsarcadeloader":
     if any(default_input.get(k) is not False for k in INPUT):
         sys.exit("windowsarcadeloader: defaults.yaml no longer sets %s false" % ", ".join(INPUT))
 
-    # WORKS: the loader's own status table (docs/IMPLEMENTATION.md, "Games
-    # status", one row per game id, the one tools/gamelist.py makes README's
+    # WORKS: the loader's own status table (its IMPLEMENTATION.md, "Games
+    # status", one row per game id, the one its gamelist.py makes README's
     # list from). Its status column is the loader's own words. A game works
     # when that column starts "works" (in every form: "works (user: 100%)",
     # "works fullscreen", "works headless") or "user" (a player's own report
