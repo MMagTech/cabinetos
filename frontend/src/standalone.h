@@ -2,8 +2,9 @@
 //
 // WHAT THIS IS FOR. Switch (Eden), PS3 (RPCS3), Xbox (xemu), Xbox 360 (Xenia
 // Edge), Wii U (Cemu), PlayStation Vita (Vita3K), Sega Model 2 (sm2-emu), Sega
-// Model 3 (Supermodel), Sega Chihiro (xemu-chihiro) and Sega Lindbergh (Linux
-// Loader) are not libretro cores and cannot be loaded into this process the
+// Model 3 (Supermodel), Sega Chihiro (xemu-chihiro), Sega Lindbergh (Linux
+// Loader) and the Windows arcade boards (windowsarcadeloader) are not
+// libretro cores and cannot be loaded into this process the
 // way the other systems are (PS2 included). Eden and xemu come from Flathub,
 // pinned in flatpaks.list; RPCS3 is the RPCS3 team's own build, in the image
 // (build_files/install-rpcs3.sh), because its Flatpak shows a warning box on
@@ -12,9 +13,12 @@
 // install-linuxloader.sh), because none is on Flathub; Cemu, sm2-emu,
 // Supermodel and xemu-chihiro are built here at a pin (cores/build-cemu.sh,
 // cores/build-sm2emu.sh, cores/build-supermodel.sh,
-// cores/build-xemu-chihiro.sh). sm2-emu, Supermodel, xemu-chihiro and Linux
-// Loader play the Model 2, Model 3, Chihiro and Lindbergh games the arcade
-// match gives them (arcadematch.h), from any arcade folder.
+// cores/build-xemu-chihiro.sh), and so is windowsarcadeloader, with the Wine
+// it runs games under beside it (cores/build-windowsarcadeloader.sh,
+// build_files/install-windowsarcadeloader.sh). sm2-emu, Supermodel,
+// xemu-chihiro, Linux Loader and windowsarcadeloader play the Model 2, Model
+// 3, Chihiro, Lindbergh and Windows arcade games the arcade match gives them
+// (arcadematch.h), from any arcade folder.
 // Each one opens its own window and draws its own picture.
 // So the console starts the emulator as a separate program, hands it the
 // television, and takes the screen back when it ends. docs/PROJECT.md, open
@@ -31,8 +35,8 @@
 // emulator's own setup is in its file (standalone_eden.cpp,
 // standalone_rpcs3.cpp, standalone_xemu.cpp, standalone_xenia.cpp,
 // standalone_cemu.cpp, standalone_vita3k.cpp, standalone_sm2emu.cpp,
-// standalone_supermodel.cpp, standalone_chihiro.cpp and
-// standalone_lindbergh.cpp), and what they share
+// standalone_supermodel.cpp, standalone_chihiro.cpp,
+// standalone_lindbergh.cpp and standalone_windows.cpp), and what they share
 // is standalone_internal.h.
 // Since the restructure (#398).
 //
@@ -183,6 +187,20 @@ struct Emulator {
     // the board's memory and exits cleanly where SIGTERM, which it has no
     // handler for, does neither (#620). Not with `closesByWindow`.
     bool quitsOnGuide;
+    // ITS GAME IS MANY PROCESSES THAT BELONG TO NO ONE GROUP: under Wine a
+    // game runs in a process group of its own beside Wine's server and
+    // services, which leave their parent (windowsarcadeloader, #762). So its
+    // sandbox is a process space of its own, with its own /proc: the pause
+    // menu's pause reaches every process in it, a kill ends them all, and the
+    // emulator is found in it by its name, being no longer the sandbox's one
+    // child.
+    bool ownPidSpace;
+    // IT EXITS 0 HOWEVER THE GAME ENDED, AND ITS GAMES HAVE NO QUIT OF THEIR
+    // OWN (an arcade board runs until it is switched off), so an end nobody
+    // asked for is never the player's: in the first minute the game could not
+    // be started (a `.windowsloader` file that names the wrong program opens
+    // and closes), after it the game crashed (windowsarcadeloader, #762).
+    bool neverQuits;
 };
 
 // The emulator for a catalog core name, or nullptr for an ordinary core.
@@ -259,8 +277,37 @@ bool prepare(const Emulator& e, const std::string& entryPath, const std::string&
 // board's `<game>.dimm` and a player's card, with no folders, which travels
 // as RomM takes an arcade save (catalog::SaveForm::aloneAsItIs); for Linux
 // Loader, `saves`, the board's `eeprom.bin` and `sram.bin` and a player's
-// cards, in the same form.
+// cards, in the same form; for windowsarcadeloader, `save`, this person's
+// layer over the game's folder (`game/`) and over the Windows setup
+// (`prefix/`), of which windowsSaveFile says what travels, a zip of its
+// folders.
 std::string saveRoot(const Emulator& e, const std::string& saveDir);
+
+// Whether a file under windowsarcadeloader's save root, by its path from it,
+// is part of the game's save: what the game wrote into its own folder, its
+// run folder in the Windows setup and Wine's user folders, and no log, cache,
+// program or note of the loader's (standalone_windows.cpp).
+bool windowsSaveFile(const std::string& relPath);
+
+// A WINDOWS ARCADE GAME'S WINDOWS SETUP, built once for the console from the
+// file the library's owner put in RomM's firmware for Windows Arcade, with no
+// network (standalone_windows.cpp). Runs on the download worker, for minutes
+// the first time and no time after. `*detail`, for the log, says what was
+// missing or what went wrong.
+//   Ready         the setup holds everything the game's profile asks for
+//   NoFiles       RomM has no Windows files for the console
+//   FilesMissing  the file RomM has lacks one this game needs (made for an
+//                 older loader)
+//   Failed        it could not be built
+enum class WindowsSetup { Ready, NoFiles, FilesMissing, Failed };
+WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& cancel,
+                          std::string* detail);
+
+// Whether a picture level changes anything for this game in `e`: yes for
+// every emulator's every game, but for a Windows arcade game whose profile in
+// the loader offers no picture size or scale (arcadematch::WindowsGame's
+// options), which is drawn at its own size whatever the level.
+bool hasPictureLevels(const Emulator& e, const std::string& romPath);
 
 // The name a save folder's one file is put back under, for an emulator whose
 // folder travels as that file when it holds only that
@@ -294,12 +341,15 @@ std::string switchKeys();
 // the way the next paragraph's do, and the game starts. Only saves the drive
 // will not give up keep the game from starting.
 //
-// Xenia, Cemu, Eden, RPCS3, Vita3K, sm2-emu, Supermodel, xemu-chihiro and
-// Linux Loader (`notesPlaying`): the note goes in the PERSON's folder for
+// Xenia, Cemu, Eden, RPCS3, Vita3K, sm2-emu, Supermodel, xemu-chihiro, Linux
+// Loader and windowsarcadeloader (`notesPlaying`): the note goes in the PERSON's folder for
 // the game (`saveDir`), where the emulator writes the saves itself. A note
 // still there at the next start or the next launch of that game means the
 // last one never got its saves zipped, and the whole folder is sent then.
 // Xenia's profile is written too, named `player` (x360profile.h).
+//
+// windowsarcadeloader: the game's folder is mounted under this person's layer
+// before the start and let go of after the end (standalone_windows.cpp).
 //
 // Nothing for the others.
 bool beforeStart(const Emulator& e, const std::string& entryPath, const std::string& saveDir,
@@ -327,8 +377,9 @@ public:
     // ended, after which `ended()` says how.
     bool poll();
     // Asks it to close the way its own window close would: SIGTERM to the
-    // program, the close itself (`closesByWindow`), or its own quit on player
-    // 1's Guide (`quitsOnGuide`). `poll` forces it after
+    // program (found by its name for `ownPidSpace`), the close itself
+    // (`closesByWindow`), or its own quit on player 1's Guide
+    // (`quitsOnGuide`). `poll` forces it after
     // a deadline if it does not. A frozen
     // program is thawed first, or it never hears the request (measured: Eden
     // asked while frozen had to be forced after the full grace).
@@ -336,7 +387,8 @@ public:
     // THE PAUSE MENU'S PAUSE (decision C): the whole program stops where it
     // is, sound and all, and carries on from the same instant when thawed.
     // Measured on the A9 2026-09-28: frozen for 10, 20 and 30 s, Eden's
-    // picture held still and moved again the moment it was thawed.
+    // picture held still and moved again the moment it was thawed. Every
+    // process of an `ownPidSpace` emulator's sandbox stops and carries on.
     void freeze();
     void thaw();
     bool frozen() const { return frozen_; }
@@ -358,6 +410,7 @@ private:
     int program_ = -1;       // the emulator itself, once it is found
     int64_t startMs_ = 0;
     int64_t stopAtMs_ = 0;
+    std::vector<int> frozenPids_;   // what freeze stopped, for `ownPidSpace`
     std::string logPath_;    // the emulator's own log, read for a failed load
     long logRead_ = 0;
     bool failedLoad_ = false;

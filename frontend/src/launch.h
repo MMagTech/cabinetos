@@ -30,7 +30,18 @@
 // bytes go straight to disk. The client was deliberately built synchronous so
 // that callers could do exactly this, the same way ImageCache already does.
 struct LaunchJob {
-    enum class Stage { Idle, Firmware, Downloading, Unpacking, Installing, Ready, Failed };
+    // SettingUpWindows: a Windows arcade game's Windows setup being built,
+    // once, after its download (standalone.h, windowsSetup).
+    enum class Stage {
+        Idle,
+        Firmware,
+        Downloading,
+        Unpacking,
+        Installing,
+        SettingUpWindows,
+        Ready,
+        Failed
+    };
 
     std::atomic<Stage> stage{Stage::Idle};
     // How long this job has been doing something a person would wait for, in
@@ -141,7 +152,7 @@ struct LaunchJob {
     bool busy() const {
         const Stage st = stage.load();
         return st == Stage::Firmware || st == Stage::Downloading || st == Stage::Unpacking ||
-               st == Stage::Installing;
+               st == Stage::Installing || st == Stage::SettingUpWindows;
     }
     // Finished, and not yet taken by the frame loop (takeFinishedJob): a
     // Ready game waits there while the curtain comes down. No new launch

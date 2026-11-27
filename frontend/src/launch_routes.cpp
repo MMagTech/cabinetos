@@ -1,10 +1,11 @@
 // The worker a launch runs, off the frame thread: the firmware step every
-// launch runs first, then one of five routes in a fixed order: a game on
+// launch runs first, then one of six routes in a fixed order: a game on
 // several discs, a game installed before it runs (PS3, Vita, original Xbox), a
-// Lindbergh game's whole folder, a folder of files, one file. The disc route
-// falls through to the others below two discs; the other four always end the
-// worker, by fetching the game's saves from RomM (finish) before the job is
-// Ready. beginLaunch (launch.cpp) starts it.
+// Lindbergh game's whole folder, a Windows arcade game's whole folder, a
+// folder of files, one file. The disc route falls through to the others below
+// two discs; the other five always end the worker, by fetching the game's
+// saves from RomM (finish) before the job is Ready. beginLaunch (launch.cpp)
+// starts it.
 // Moved out of main.cpp in the restructure (#398).
 
 #include "launch.h"
@@ -254,46 +255,48 @@ static void finish(LaunchJob& job, romm::Client& client, const storage::User& us
     job.stage = LaunchJob::Stage::Ready;
 }
 
-// A LINDBERGH GAME, FETCHED WHOLE (#620): its hard drive's folder, subfolders
-// and all, kept in RomM as that folder, or as a zip or 7z of it. Either way
-// one file comes down, the zip RomM makes of a folder game or the archive
-// it keeps, unpacked here in the folders it gives (romfile::prepareFile) and
-// then deleted. Not file by file,
+// A LINDBERGH GAME OR A WINDOWS ARCADE GAME, FETCHED WHOLE (#620, #762): its
+// folder, subfolders and all (a Lindbergh game's hard drive, a Windows game's
+// folder with its .windowsloader file), kept in RomM as that folder, or as a
+// zip or 7z of it. Either way one file comes down, the zip RomM makes of a
+// folder game or the archive it keeps, unpacked here in the folders it gives
+// (romfile::prepareFile) and then deleted. Not file by file,
 // as other folder games come: RomM lists every file of the folder, and Hummer
 // Extreme's TeknoParrot copy holds 124,777, which made its entry from RomM
 // 104 MB and 25 s on the write-test server (2026-11-26), against one zip of
 // 3.04 GB in 116 s. Once it is all on the drive, a note in the folder says so
 // with the size RomM gave the game, and a start with that note asks RomM
-// nothing about the folder; one RomM gives a new size comes down again. The
-// program Linux Loader will start in it is then found as the loader finds it,
-// checked by the loader's fingerprint (arcadematch.h), and made executable
-// with every program beside it, a bit a zip does not carry.
+// nothing about the folder; one RomM gives a new size comes down again.
 //
-// What the loader and the games write into the folder later (converted
+// What the emulator and the games write into the folder later (converted
 // shaders, the games' own files) stays in it and goes when the cache evicts
 // it (cache.h).
 static constexpr const char* kWholeNote = ".cabinetos-whole";
 
-static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
-                            const std::string& fsName, const std::string& entryPath,
-                            const std::string& location, const int64_t expectedSize,
-                            const storage::User& user) {
+// The whole folder on the drive, for either kind. A GUN GAME OR A PANEL'S IS
+// SAID FIRST, before any download, by the name RomM's list of its files gives
+// (lindberghprograms.h), asked here when no read has asked yet; the folder on
+// the disk confirms it after. False when the job has ended, Failed.
+static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghprograms::Kind kind,
+                        const int id, const std::string& fsName, const std::string& entryPath,
+                        const std::string& location, const int64_t expectedSize) {
     struct stat est;
     if (::lstat(entryPath.c_str(), &est) == 0 && !S_ISDIR(est.st_mode))
         storage::removeEntry(entryPath);
     storage::makeDirs(entryPath);
-    // A GUN GAME OR A PANEL'S IS SAID BEFORE ANY DOWNLOAD, by the program
-    // RomM's list of its files names (lindberghprograms.h), asked here when
-    // no read has asked yet; the fingerprint below confirms it once here.
     {
-        std::string program, lerr;
-        bool knownNow = lindberghprograms::known(id, expectedSize, &program);
+        const bool windows = kind == lindberghprograms::Kind::Windows;
+        std::string name, lerr;
+        bool knownNow = lindberghprograms::known(kind, id, expectedSize, &name);
         if (!knownNow && !romm::serverAway())
-            knownNow = lindberghprograms::learn(client, id, expectedSize, &program, &lerr);
+            knownNow = lindberghprograms::learn(client, kind, id, expectedSize, &name, &lerr);
         if (knownNow) {
-            const arcadematch::Answer a = arcadematch::byProgram(program);
-            if (!pickArcade(job, fsName, a, "its program, " + (program.empty() ? "none" : program)))
-                return;
+            const arcadematch::Answer a =
+                windows ? arcadematch::byWindowsId(name) : arcadematch::byProgram(name);
+            const std::string by =
+                std::string(windows ? "its .windowsloader file, " : "its program, ") +
+                (name.empty() ? "none" : name);
+            if (!pickArcade(job, fsName, a, by)) return false;
             job.arcadePicked = false;
         }
     }
@@ -308,7 +311,7 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
                      entryPath.c_str());
         job.message = "Couldn't download this game";
         job.stage = LaunchJob::Stage::Failed;
-        return;
+        return false;
     } else {
         ::unlink(note.c_str());
         // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks.
@@ -320,10 +323,10 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
             if (cache::freeBytes(location) < need) {
                 job.message = "Not enough space";
                 job.stage = LaunchJob::Stage::Failed;
-                return;
+                return false;
             }
         }
-        if (cancelled(job)) return;
+        if (cancelled(job)) return false;
         // The folder as RomM zips it, or the zip or 7z RomM keeps: one file
         // either way, unpacked by what it is (romfile.h).
         const std::string zip = entryPath + "/.cabinetos-download";
@@ -341,22 +344,22 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
             ::unlink(zip.c_str());
             job.message = "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
-            return;
+            return false;
         }
         job.got = 0;
         job.total = 0;
-        if (cancelled(job)) return;
+        if (cancelled(job)) return false;
         job.stage = LaunchJob::Stage::Unpacking;
         std::string primary;
-        romfile::Kind kind = romfile::Kind::Plain;
-        const bool unpacked = romfile::prepareFile(zip, entryPath, "", false, &primary, &kind,
-                                                   &err, job.cancel);
+        romfile::Kind unpackedAs = romfile::Kind::Plain;
+        const bool unpacked = romfile::prepareFile(zip, entryPath, "", false, &primary,
+                                                   &unpackedAs, &err, job.cancel);
         ::unlink(zip.c_str());
         if (!unpacked) {
             std::fprintf(stderr, "[launch] unpack %s: %s\n", fsName.c_str(), err.c_str());
             job.message = "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
-            return;
+            return false;
         }
         // THE NOTE ONLY ONCE THE DRIVE HAS IT ALL, so a power cut before
         // that unpacks it again at the next start (unsettled.h).
@@ -367,7 +370,20 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
         }
         std::fprintf(stderr, "[launch] fetched and unpacked %s whole\n", fsName.c_str());
     }
-    if (cancelled(job)) return;
+    return !cancelled(job);
+}
+
+// A LINDBERGH GAME (#620), its whole folder (wholeFolder). The program Linux
+// Loader will start in it is then found as the loader finds it, checked by
+// the loader's fingerprint (arcadematch.h), and made executable with every
+// program beside it, a bit a zip does not carry.
+static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
+                            const std::string& fsName, const std::string& entryPath,
+                            const std::string& location, const int64_t expectedSize,
+                            const storage::User& user) {
+    if (!wholeFolder(job, client, lindberghprograms::Kind::Lindbergh, id, fsName, entryPath,
+                     location, expectedSize))
+        return;
     const std::string program = arcadematch::lindberghProgram(entryPath);
     uint32_t crc = 0;
     if (program.empty() || !arcadematch::lindberghFingerprint(program, &crc)) {
@@ -399,6 +415,56 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
     }
     job.romPath = program;
     finish(job, client, user);
+}
+
+// A WINDOWS ARCADE GAME (#762), its whole folder (wholeFolder). The game is
+// the `<gameid>.windowsloader` file at the top of the folder or one folder
+// down (arcadematch::windowsLoaderFile), which windowsarcadeloader is handed,
+// confirmed by its id against the loader's lists. Then the game's Windows
+// setup is built, once, from the Windows files the firmware step brought
+// down (standalone.h, windowsSetup), with words of its own on the page while
+// it is.
+static void windowsFolder(LaunchJob& job, romm::Client& client, const int id,
+                          const std::string& fsName, const std::string& entryPath,
+                          const std::string& location, const int64_t expectedSize,
+                          const storage::User& user) {
+    if (!wholeFolder(job, client, lindberghprograms::Kind::Windows, id, fsName, entryPath,
+                     location, expectedSize))
+        return;
+    const std::string file = arcadematch::windowsLoaderFile(entryPath);
+    if (file.empty()) {
+        std::fprintf(stderr, "[arcade] %s: no .windowsloader file\n", entryPath.c_str());
+        job.message = "Not supported";
+        job.stage = LaunchJob::Stage::Failed;
+        return;
+    }
+    const std::string gameId = arcadematch::windowsGameId(file);
+    if (!pickArcade(job, baseName(file), arcadematch::byWindowsId(gameId),
+                    "its .windowsloader file, " + gameId))
+        return;
+    job.romPath = file;
+    job.stage = LaunchJob::Stage::SettingUpWindows;
+    std::string detail;
+    const cab::standalone::WindowsSetup setup =
+        cab::standalone::windowsSetup(gameId, job.cancel, &detail);
+    if (cancelled(job)) return;
+    std::fprintf(stderr, "[windows] setup for %s: %s\n", gameId.c_str(),
+                 detail.empty() ? "nothing said" : detail.c_str());
+    switch (setup) {
+        case cab::standalone::WindowsSetup::Ready:
+            finish(job, client, user);
+            return;
+        case cab::standalone::WindowsSetup::NoFiles:
+            job.message = "No Windows files on the server";
+            break;
+        case cab::standalone::WindowsSetup::FilesMissing:
+            job.message = "The Windows files on the server are out of date";
+            break;
+        case cab::standalone::WindowsSetup::Failed:
+            job.message = "Couldn't set up Windows";
+            break;
+    }
+    job.stage = LaunchJob::Stage::Failed;
 }
 
 // The copies are const, as the lambda's were.
@@ -793,6 +859,12 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     // A LINDBERGH GAME (Linux Loader's), its whole folder (lindberghFolder).
     if (emu && std::strcmp(emu->core, "linuxloader") == 0) {
         lindberghFolder(job, client, id, fsName, entryPath, location, expectedSize, user);
+        return;
+    }
+    // A WINDOWS ARCADE GAME (windowsarcadeloader's), its whole folder too
+    // (windowsFolder).
+    if (emu && std::strcmp(emu->core, "windowsarcadeloader") == 0) {
+        windowsFolder(job, client, id, fsName, entryPath, location, expectedSize, user);
         return;
     }
 

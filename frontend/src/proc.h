@@ -75,6 +75,10 @@ int spawn(const std::vector<std::string>& args, const std::string& logPath);
 // closed it in 0.8 s. An empty `name` is `root`'s first child, whatever it
 // calls itself: bwrap's one child is the program it was given.
 int findDescendant(int root, const std::string& name);
+// Every process below `root`, its children first, then theirs. For a sandbox
+// that is a process space of its own, whose processes share no group
+// (standalone.h, `ownPidSpace`).
+std::vector<int> descendants(int root);
 
 // Whitespace off both ends. Every one of these tools newline-terminates
 // everything, and a trailing newline in an error message reads badly on a

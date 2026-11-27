@@ -172,6 +172,7 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     session.saveDir = saveDir;
     session.standaloneCore = emu.core;
     session.entryPath = launchJob.entryPath;
+    session.pictureFixed = !cab::standalone::hasPictureLevels(emu, launchJob.romPath);
     // The pill when its save came from another device, drawn over the game
     // as any pill is.
     if (elsewhere) menuNotice.say(kContinuingElsewhere, Tone::Info);

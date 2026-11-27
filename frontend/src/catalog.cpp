@@ -65,6 +65,10 @@ const Entry kTable[] = {
     // Lindbergh game, each its hard drive's folder, known by its program
     // (docs/decisions/2026-11-26-lindbergh-in-linux-loader.md).
     {"arcade",               Support::Playable, "linuxloader",     nullptr},
+    // windowsarcadeloader, a program of its own (standalone.cpp), for every
+    // Windows arcade game, each its folder, known by its .windowsloader
+    // file (#762).
+    {"arcade",               Support::Playable, "windowsarcadeloader", nullptr},
     // MAME 0.289, libretro's own build, for what nothing else plays
     // (docs/decisions/2026-10-28-prebuilt-mame-core.md).
     {"arcade",               Support::Playable, "mame_libretro",   nullptr},
@@ -279,18 +283,23 @@ Coverage answer(const Entry* e) {
 // launch read) is asked of its files when they fit, so a game offline names
 // the emulator it plays on, and the save tags it is mirrored under.
 Coverage arcadeGame(const romm::Game& g, bool dreamcast) {
-    // A LINDBERGH GAME by the program its files name, as RomM listed them
-    // once (lindberghprograms.h), never by its folder's name. One not asked
-    // yet plays in Linux Loader as far as anything here knows: Play asks
-    // before anything is downloaded (launch_routes.cpp).
-    if (g.platformSlug == "lindbergh") {
-        std::string program;
-        if (!lindberghprograms::known(g.id, g.sizeBytes, &program)) {
-            Coverage c = answer(arcadeRow("linuxloader"));
+    // A LINDBERGH GAME by the program its files name, and A WINDOWS ARCADE
+    // GAME by the id of the .windowsloader file among them, as RomM listed
+    // them once (lindberghprograms.h), never by its folder's name. One not
+    // asked yet plays in its emulator as far as anything here knows: Play
+    // asks before anything is downloaded (launch_routes.cpp).
+    if (g.platformSlug == "lindbergh" || g.platformSlug == "windows-arcade") {
+        const bool windows = g.platformSlug == "windows-arcade";
+        const lindberghprograms::Kind kind =
+            windows ? lindberghprograms::Kind::Windows : lindberghprograms::Kind::Lindbergh;
+        std::string name;
+        if (!lindberghprograms::known(kind, g.id, g.sizeBytes, &name)) {
+            Coverage c = answer(arcadeRow(windows ? "windowsarcadeloader" : "linuxloader"));
             c.arcade = true;
             return c;
         }
-        const arcadematch::Answer l = arcadematch::byProgram(program);
+        const arcadematch::Answer l =
+            windows ? arcadematch::byWindowsId(name) : arcadematch::byProgram(name);
         if (l.verdict == arcadematch::Verdict::Plays) {
             Coverage c = answer(arcadeRow(l.core));
             c.arcade = true;

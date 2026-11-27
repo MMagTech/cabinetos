@@ -1,0 +1,126 @@
+# Build Windows Arcade (windowsarcadeloader) for Linux x86-64, on a machine
+# nobody owns.
+#
+# WHY A WORKFLOW OF ITS OWN, as Model 2 has: windowsarcadeloader is a launcher
+# run as a program of its own (frontend/src/standalone_windows.cpp), with
+# Windows DLLs built beside it, in builder containers of its own (Rust and
+# MinGW on Fedora 44; Ubuntu's Mono for TMNT's bridge). The pin and the
+# reasons are in cores/build-windowsarcadeloader.sh. GE-Proton and winetricks
+# are not built: they are pinned downloads of the image build
+# (build_files/install-windowsarcadeloader.sh, ci/fetch-pinned.sh).
+#
+# What it asserts: the source is at the pinned commit and holds everything the
+# console leans on, the crates are the lock's, every file its build.sh
+# installs is made, and every library the launcher asks the system for is in
+# Fedora 44, the image's base. With it, its catalogue and files list
+# (cores/arcade-sets.sh), which the console reads beside the cores, and the
+# files list is checked against the tracked cores/windows-arcade-files.txt.
+# What it cannot: that a game runs. That is judged on the A9.
+
+name: Build Windows Arcade
+
+# CALLED BY build.yml, like build-sm2emu.yml, and on pull requests aimed at
+# anything but main for the same reason build-cemu.yml gives.
+on:
+  workflow_call:
+  pull_request:
+    branches-ignore:
+      - main
+    paths:
+      - 'cores/build-windowsarcadeloader.sh'
+      - 'cores/windowsarcadeloader-builder/**'
+      - 'cores/arcade-sets.sh'
+      - 'cores/windows-arcade-files.txt'
+      - 'build_files/install-windowsarcadeloader.sh'
+      - '.github/workflows/build-windowsarcadeloader.yml'
+  workflow_dispatch:
+
+# No `concurrency:`, for the reason build-core.yml sets out.
+
+jobs:
+  build:
+    name: windowsarcadeloader
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      # NOTHING CHANGES UNLESS ONE OF THESE DOES: build-windowsarcadeloader.sh
+      # holds the pinned commit (and through its Cargo.lock every crate), the
+      # Containerfiles are the toolchains.
+      - name: Restore the build, if this exact one has been built before
+        id: walcache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: cores/build/windowsarcadeloader
+          key: windowsarcadeloader-${{ hashFiles('cores/build-windowsarcadeloader.sh', 'cores/windowsarcadeloader-builder/Containerfile', 'cores/windowsarcadeloader-builder/Containerfile.mono') }}
+
+      - name: Build it
+        if: steps.walcache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          cores/build-windowsarcadeloader.sh 2>&1 | tee /tmp/windowsarcadeloader.log
+
+      # A CACHE HIT STILL HAS TO PROVE WHAT IT RESTORED, as Model 2's does.
+      - name: Check what it has
+        run: |
+          set -euo pipefail
+          out=cores/build/windowsarcadeloader
+          fail=0
+          for f in dist/arcade-launcher dist/payloads/WAL.DirectInput.dll dist/payloads/wal-loader.exe \
+                   systemprofiles LICENSE VERSION; do
+            if [ -e "$out/$f" ]; then echo "ok: $f"; else echo "MISSING: $f" >&2; fail=1; fi
+          done
+          pinned=$(sed -n 's/^COMMIT=//p' cores/build-windowsarcadeloader.sh)
+          built=$(cat "$out/VERSION" 2>/dev/null || true)
+          if [ "$pinned" != "$built" ]; then
+            echo "the build is of $built, the pin is $pinned" >&2
+            fail=1
+          fi
+          exit $fail
+
+      # THE SAME SHAPE AS EVERY OTHER PAYLOAD ARTIFACT, so build.yml's
+      # download merges it with no special case: one top folder,
+      # windowsarcadeloader/, with its catalogue and files list made from the
+      # same pin (install-windowsarcadeloader.sh puts them beside the cores).
+      # THE FILES LIST MUST BE THE TRACKED ONE: the admin's script reads
+      # cores/windows-arcade-files.txt, so a pin that moves the list without
+      # it would send admins a list the console does not check against.
+      - name: Stage it
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          cp -R cores/build/windowsarcadeloader artifact/windowsarcadeloader
+          cores/arcade-sets.sh windowsarcadeloader artifact/windowsarcadeloader
+          if ! diff -u cores/windows-arcade-files.txt artifact/windowsarcadeloader/windowsarcadeloader.files; then
+            echo "cores/windows-arcade-files.txt is not the files list the pins make: copy windowsarcadeloader.files over it" >&2
+            exit 1
+          fi
+          find artifact -maxdepth 3 | sort | head -80
+
+      - name: Upload it
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          # The `-linux-x86_64` suffix is what build.yml's download matches.
+          name: windowsarcadeloader-linux-x86_64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Windows Arcade (windowsarcadeloader), Linux x86-64"
+            echo
+            if [[ -f /tmp/windowsarcadeloader.log ]]; then
+              echo '```'
+              tail -30 /tmp/windowsarcadeloader.log
+              echo '```'
+            else
+              echo "Restored from cache; see the check step above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

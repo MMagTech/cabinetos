@@ -176,7 +176,7 @@ bool hasLevels(const std::string& core) {
     if (core == "melonds") return cab::Core::canServeDesktopGL();
     for (const char* c : {"pcsx2", "dolphin", "ppsspp", "mupen64plus", "flycast", "azahar",
                           "eden", "rpcs3", "xemu", "vita3k", "sm2emu", "supermodel",
-                          "xemu-chihiro", "linuxloader"})
+                          "xemu-chihiro", "linuxloader", "windowsarcadeloader"})
         if (core == c) return true;
     return false;
 }

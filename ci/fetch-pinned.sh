@@ -6,7 +6,8 @@
 #
 # THE PINS ARE THE INSTALL SCRIPTS' OWN, read out of them here, so there is no
 # second copy to drift: each script names each file by a `readonly <NAME>_URL=`
-# and a `readonly <NAME>_SHA256=` line (install-linuxloader.sh has two). Moving a pin changes the cache key, and the new
+# and a `readonly <NAME>_SHA256=` line (install-linuxloader.sh and
+# install-windowsarcadeloader.sh have two each). Moving a pin changes the cache key, and the new
 # file is fetched.
 #
 #   ci/fetch-pinned.sh key                    the cache key: a hash of every
@@ -25,7 +26,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPTS=(install-rpcs3.sh install-xenia.sh install-vita3k.sh install-xemu-drive.sh
-         install-linuxloader.sh)
+         install-linuxloader.sh install-windowsarcadeloader.sh)
 
 # "<sha256> <url> <script>" per pin. Only the `readonly NAME=...` lines are
 # evaluated, in a subshell, since a URL is built from a version line above it.

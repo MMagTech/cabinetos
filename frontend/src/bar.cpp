@@ -396,10 +396,11 @@ void App::drawBar(bool gameUp, float sc, float dt) {
             const int64_t got = launchJob.got.load();
             const int64_t total = launchJob.total.load();
             // Installing has no fraction either (RPCS3 says nothing while
-            // it works), so it turns the same way.
+            // it works), nor has setting up Windows, so they turn the same way.
             const bool unpacking =
                 launchJob.stage.load() == LaunchJob::Stage::Unpacking ||
-                launchJob.stage.load() == LaunchJob::Stage::Installing;
+                launchJob.stage.load() == LaunchJob::Stage::Installing ||
+                launchJob.stage.load() == LaunchJob::Stage::SettingUpWindows;
             // Clear of the chip's focus pill (kChipPillPadX), so the two
             // never touch when focus lands on the chip.
             const float chipLeft = leftOfChip;

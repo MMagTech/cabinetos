@@ -196,10 +196,11 @@ void App::toggleOverlay(SDL_JoystickID opener) {
              session.discChange == disc::Change::StartOver))
             pauseItems.push_back(OvDisc);
         // PICTURE QUALITY, on the systems where a level changes something
-        // (quality::hasLevels), and with a PIN set only for the owner, as in
-        // Settings (MMagTech, 2026-10-02).
+        // (quality::hasLevels) and for the games it changes something in
+        // (GameSession::pictureFixed), and with a PIN set only for the owner,
+        // as in Settings (MMagTech, 2026-10-02).
         pauseChoices.clear();
-        if (quality::hasLevels(session.core) &&
+        if (quality::hasLevels(session.core) && !session.pictureFixed &&
             (!accounts::pinIsSet() || accounts::activeId() == accounts::ownerId())) {
             PauseChoice c;
             c.label = "Picture";

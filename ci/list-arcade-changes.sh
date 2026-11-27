@@ -8,8 +8,10 @@
 # WHAT MAKES THE CATALOGUES: cores/arcade-sets.sh itself, the arcade cores'
 # arms in cores/build-core.sh (their pins), cores/fetch-mame.sh (MAME 0.289's
 # -listxml), cores/build-sm2emu.sh (sm2-emu's pin), cores/build-supermodel.sh
-# (Supermodel's), cores/build-xemu-chihiro.sh (xemu-chihiro's) and
-# build_files/install-linuxloader.sh (Linux Loader's). When none of it
+# (Supermodel's), cores/build-xemu-chihiro.sh (xemu-chihiro's),
+# build_files/install-linuxloader.sh (Linux Loader's) and
+# cores/build-windowsarcadeloader.sh with build_files/
+# install-windowsarcadeloader.sh's winetricks (windowsarcadeloader's). When none of it
 # differs from the base, it says so and stops. Otherwise it makes every
 # catalogue at the base and here, and asks
 # the frontend this run compiled, with this pull request's rule, which
@@ -30,7 +32,7 @@ set -euo pipefail
 BASE="${1:?usage: ci/list-arcade-changes.sh <base commit>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORES=(flycast fbneo_libretro mame2003_plus sm2emu supermodel xemu-chihiro linuxloader
-       mame_libretro)
+       windowsarcadeloader mame_libretro)
 SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 git -C "${ROOT}" cat-file -e "${BASE}^{commit}" 2>/dev/null ||
@@ -50,6 +52,9 @@ inputs() {
     git -C "${ROOT}" show "${rev}:cores/build-xemu-chihiro.sh" 2>/dev/null | grep -E '^(REPO|COMMIT)=' || true
     git -C "${ROOT}" show "${rev}:build_files/install-linuxloader.sh" 2>/dev/null |
         grep -E '^readonly LINUXLOADER_(REPO|COMMIT)=' || true
+    git -C "${ROOT}" show "${rev}:cores/build-windowsarcadeloader.sh" 2>/dev/null | grep -E '^(REPO|COMMIT)=' || true
+    git -C "${ROOT}" show "${rev}:build_files/install-windowsarcadeloader.sh" 2>/dev/null |
+        grep -E '^readonly WINETRICKS_(URL|SHA256)=' || true
 }
 
 if [[ "$(inputs "${BASE}" | sha256sum)" == "$(inputs HEAD | sha256sum)" ]]; then
