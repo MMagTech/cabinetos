@@ -142,13 +142,16 @@ name="$(basename "${launcher}")"
 # FILE` and `prepare <gameid> --root DIR --profile FILE` (main.rs, USAGE and
 # parse_args), the game's file (config.rs, DUMP_EXT), the layers and the run
 # folder (config.rs, main.rs), the pads' order and the stop (main.rs,
-# players.rs).
+# players.rs). The launcher's own .NET 1.1 cache is read from XDG_CACHE_HOME;
+# that name is checked in the source (cores/build-windowsarcadeloader.sh),
+# not here: the compiler does not keep a name that short as one string in the
+# program, so only the path beside it, winetricks/dotnet11, can be found.
 for s in "arcade-launcher [run] <dump> [--root DIR] [--profile FILE]..." \
          "arcade-launcher prepare <dump> | <gameid> [--root DIR] [--profile FILE]..." \
          "--root needs a directory" "--profile needs a file" "windowsloader" \
          "launcher.yaml" "systemprofiles" "userprofiles" "drive_c/wal" "WAL_PLAYER_PADS" \
          "launcher: stopping the game" "bin/winetricks" "bin/wineserver" \
-         "lib/x86_64-linux-gnu" "XDG_CACHE_HOME" "winetricks/dotnet11" "dotnetfx.exe"; do
+         "lib/x86_64-linux-gnu" "winetricks/dotnet11" "dotnetfx.exe"; do
     need "${launcher}" "${s}"
 done
 # Its built-in defaults (defaults.yaml, in the program whole): the layer order,
