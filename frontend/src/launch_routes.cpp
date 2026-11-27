@@ -310,9 +310,13 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
     {
         const bool windows = kind == lindberghprograms::Kind::Windows;
         std::string name, lerr;
-        bool knownNow = lindberghprograms::known(kind, id, expectedSize, &name);
+        // Kept on the disk, else asked of RomM, so a game RomM listed nothing
+        // inside earlier in this run starts once RomM has read it; else what
+        // this run already knows.
+        bool knownNow = lindberghprograms::kept(kind, id, expectedSize, &name);
         if (!knownNow && !romm::serverAway())
             knownNow = lindberghprograms::learn(client, kind, id, expectedSize, &name, &lerr);
+        if (!knownNow) knownNow = lindberghprograms::known(kind, id, expectedSize, &name);
         if (knownNow) {
             const arcadematch::Answer a =
                 windows ? arcadematch::byWindowsId(name) : arcadematch::byProgram(name);

@@ -25,6 +25,7 @@
 #include "fileio.h"
 #include "lindberghprograms.h"
 #include "standalone.h"
+#include "storage.h"
 
 namespace arcadematch {
 
@@ -628,11 +629,13 @@ bool isArcadeSlug(const std::string& slug) {
 
 bool isWindowsSlug(const std::string& slug) { return slug == "teknoparrot"; }
 
-bool asksDreamcast(const std::string& fileName) {
+bool isArchive(const std::string& fileName) {
     std::string set, ext;
     nameOf(fileName, &set, &ext);
     return ext == "zip" || ext == "7z";
 }
+
+bool asksDreamcast(const std::string& fileName) { return isArchive(fileName); }
 
 void setDirectory(const std::string& dir) { gDir = dir; }
 
@@ -1342,6 +1345,70 @@ int test() {
         check(lindberghprograms::namedIn(lindberghprograms::Kind::Windows, {zip}) ==
                   "contra-evolution",
               "and a name inside a zip's members, by its last part");
+        romm::RomFile unread;
+        unread.fileName = "Wangan Midnight Maximum Tune 6.ZIP";
+        romm::RomFile unread7z = unread;
+        unread7z.fileName = "Hummer Extreme.7z";
+        romm::RomFile noneInside = zip;
+        noneInside.members = {{"Contra/AMContra.exe", 1, 10}};
+        romm::RomFile loose;
+        loose.fileName = "AMContra.exe";
+        check(!lindberghprograms::listed({unread}) && !lindberghprograms::listed({unread7z}),
+              "a game that is one zip or 7z RomM listed nothing inside gives nothing to keep");
+        check(lindberghprograms::listed({zip}) && lindberghprograms::listed({noneInside}),
+              "one whose members RomM listed does, a list with no loader file in it too");
+        check(lindberghprograms::listed({loose}) && lindberghprograms::listed({loose, unread}) &&
+                  lindberghprograms::listed({}),
+              "and so does a folder's list of files, an archive among them or none at all");
+
+        // THE STORE'S ANSWERS (lindberghprograms.h), in a storage root of the
+        // test's own, RomM's answers handed in.
+        using lindberghprograms::Kind;
+        char tmpl[] = "/tmp/cabinetos-learn-XXXXXX";
+        const bool made = ::mkdtemp(tmpl) != nullptr;
+        storage::setRoot(tmpl);
+        const std::string store = storage::configDir() + "/windows-arcade-games.json";
+        int asked = 0;
+        std::vector<romm::RomFile> answer = {unread};
+        const lindberghprograms::Fetch fetch = [&](int, std::vector<romm::RomFile>* files,
+                                                   std::string*) {
+            ++asked;
+            *files = answer;
+            return true;
+        };
+        romm::Game wangan;
+        wangan.id = 4812;
+        wangan.sizeBytes = 10;
+        auto load = [&] {
+            lindberghprograms::learnAll(fetch, Kind::Windows, {wangan}, [] { return false; });
+        };
+        auto stored = [&] {
+            const std::vector<uint8_t> b = cab::readBytes(store);
+            return std::string(b.begin(), b.end()).find("\"4812\"") != std::string::npos;
+        };
+        load();
+        std::string got = "x", onDisk;
+        check(made && asked == 1 && lindberghprograms::known(Kind::Windows, 4812, 10, &got) &&
+                  got.empty() && !lindberghprograms::kept(Kind::Windows, 4812, 10, &onDisk) &&
+                  !stored(),
+              "a game RomM listed nothing inside is known as none at once, and nothing is "
+              "written for it");
+        check(!lindberghprograms::known(Kind::Windows, 4812, 11, &got),
+              "at another size it is not known");
+        load();
+        check(asked == 2, "the next library load asks RomM again");
+        answer = {zip};
+        load();
+        check(asked == 3 && lindberghprograms::kept(Kind::Windows, 4812, 10, &onDisk) &&
+                  onDisk == "contra-evolution" && stored() &&
+                  lindberghprograms::known(Kind::Windows, 4812, 10, &got) &&
+                  got == "contra-evolution",
+              "once RomM lists its members, the name they give is kept on the disk");
+        load();
+        check(asked == 3, "and RomM is not asked again");
+        ::unlink(store.c_str());
+        ::rmdir(storage::configDir().c_str());
+        ::rmdir(tmpl);
     }
     {
         char tmpl[] = "/tmp/cabinetos-windows-XXXXXX";

@@ -678,7 +678,8 @@ LibraryRead readLibrary(romm::Client& client, const LibraryAsk& ask, const std::
     // EACH LINDBERGH GAME'S PROGRAM AND EACH WINDOWS ARCADE GAME'S ID, asked
     // of RomM once per game, so a grid can tell a gun game before anything is
     // downloaded (lindberghprograms.h). RomM's list is asked again each read;
-    // only a game not yet known costs its entry.
+    // only a game not yet kept on the disk costs its entry, one RomM listed
+    // nothing inside at every read.
     for (const romm::Platform& p : r.platforms) {
         const bool windows = arcadematch::isWindowsSlug(p.slug);
         if ((!windows && p.slug != "lindbergh") || p.romCount <= 0) continue;

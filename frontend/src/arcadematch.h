@@ -88,6 +88,11 @@ bool isArcadeSlug(const std::string& slug);
 // name the library's owner maps to it.
 bool isWindowsSlug(const std::string& slug);
 
+// Whether a file is a zip or a 7z, by its name's ending in any case: the
+// archives an arcade game is kept in, and the ones RomM lists the members of
+// when one is a game's one file (`archive_members`).
+bool isArchive(const std::string& fileName);
+
 // Whether a Dreamcast folder's game is asked here: a zip or a 7z, which
 // Flycast would take for a Naomi board (its libretro.cpp treats every zip as
 // one), so it goes to Flycast only when it is a Flycast set.
