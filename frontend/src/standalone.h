@@ -314,6 +314,13 @@ WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail);
 // options), which is drawn at its own size whatever the level.
 bool hasPictureLevels(const Emulator& e, const std::string& romPath);
 
+// Whether a pad player's buttons are turned to where the console's other
+// arcade systems put them (vpad.h, arcadePadButton): for a Windows arcade
+// game whose profile in the loader gives a pad no layout of its own
+// (arcadematch::WindowsGame's ownPadLayout), and for no other game in `e` or
+// in any other emulator.
+bool turnsArcadePads(const Emulator& e, const std::string& romPath);
+
 // The name a save folder's one file is put back under, for an emulator whose
 // folder travels as that file when it holds only that
 // (catalog::SaveForm::aloneAsItIs): xemu-chihiro's `<game>.sav`, the board's

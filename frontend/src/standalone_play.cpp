@@ -45,10 +45,12 @@ void App::startStandalone(const cab::standalone::Emulator& emu) {
     // controller (Switch, Wii U and Vita, #669). A guitar's seat is a guitar's
     // for an emulator that takes one (PS3, guitar.h). The d-pad moves the
     // left stick too for an emulator that takes one input per control
-    // (Chihiro).
+    // (Chihiro). A pad's buttons are turned to the console's arcade layout
+    // in a Windows arcade game that does not lay a pad out itself.
     const int pads = std::max(1, players::count());
     if (!cab::vpad::open(pads, emu.motion, emu.dualsense, emu.onlyPlayerOneTilts, emu.guitars,
-                         emu.dpadOnStick)) {
+                         emu.dpadOnStick,
+                         cab::standalone::turnsArcadePads(emu, launchJob.romPath))) {
         refuseLaunch("Couldn't start this game");
         return;
     }

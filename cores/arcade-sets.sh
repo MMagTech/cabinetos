@@ -118,8 +118,12 @@
 #
 # windowsarcadeloader's line is a game, by its id (the name of the game's
 # <gameid>.windowsloader file), with only its marks and its Windows setup:
-#   <gameid> <w|n> <-|g|x> ~<prefix>:<verb>,<verb>,... [%<KEY>=<default>:<choices>] ...
-# <prefix> the last part of the Wine prefix the game runs in (full, the shared
+#   <gameid> <w|n> <-|g|x> [pad] ~<prefix>:<verb>,<verb>,... [%<KEY>=<default>:<choices>] ...
+# pad when its profile gives a pad a layout of its own: it sets any of a b x
+# y l1 r1 l2 r2 under input.gamepad (the loader merges a profile's keys there
+# one by one over defaults.yaml's), which the console then leaves as it is;
+# every other game's buttons a pad player gets where this console's other
+# arcade systems put them (frontend/src/vpad.h). <prefix> the last part of the Wine prefix the game runs in (full, the shared
 # one, or its own), the verbs every winetricks verb `prepare` installs there,
 # in its order: the prefix's prefix_tricks, then the game's tricks not among
 # them. A % word for each picture option the profile declares (a key ending
@@ -877,6 +881,13 @@ elif core == "windowsarcadeloader":
     # build, so a profile written another way is seen, never misread.
     TOP = ("name", "system", "prefix", "prefix_archive", "prefix_tricks", "tricks", "runner")
     INPUT = ("guns_enabled", "touch", "mouse_wrap")
+    # A PAD'S EIGHT BUTTONS, by the loader's names for an SDL gamepad's (Xbox
+    # words, by position), and where defaults.yaml puts each on the cabinet:
+    # the layout the console turns a pad player's buttons from (vpad.cpp). A
+    # profile that sets any of them under input.gamepad has a pad layout of
+    # its own; one that sets only guide, the d-pad, the sticks, start, back or
+    # the stick clicks has not.
+    PAD = {"x": "b1", "y": "b2", "r1": "b3", "l1": "b4", "a": "b5", "b": "b6", "r2": "b7", "l2": "b8"}
 
     def uncomment(text):
         out, quote = [], None
@@ -940,6 +951,10 @@ elif core == "windowsarcadeloader":
         lines = open(path, encoding="utf-8").read().split("\n")
         keys, inp, notes, top = {}, {}, [], None
         env, options = {}, []
+        # input's key at the first level the lines below it are under, and
+        # input.gamepad's entries: one `<pad's name>: <cabinet's>` a line, the
+        # cabinet's one or more (`a: accel,brake`).
+        sub, pad = None, {}
         comments = " ".join(l.strip()[1:] for l in lines if l.strip().startswith("#"))
         # Its opening comment, before the first key: what the game is.
         head = []
@@ -956,7 +971,7 @@ elif core == "windowsarcadeloader":
                 sys.exit("windowsarcadeloader: %s merges a YAML anchor, a form not read here" % path)
             m = re.match(r"^([A-Za-z_]\w*):(.*)$", l)
             if m:
-                top, v = m.group(1), m.group(2).strip()
+                top, v, sub = m.group(1), m.group(2).strip(), None
                 if top == "input" and v:
                     sys.exit("windowsarcadeloader: %s's input is a flow map, a form not read here" % path)
                 if top in TOP:
@@ -973,6 +988,17 @@ elif core == "windowsarcadeloader":
                         keys[top] = unquote(v)
             else:
                 m = re.match(r"^(\s+)([A-Za-z_]\w*):(.*)$", l)
+                if top == "input" and m and m.group(1) == "  ":
+                    sub = m.group(2)
+                    if sub == "gamepad" and m.group(3).strip():
+                        sys.exit("windowsarcadeloader: %s's input.gamepad is a flow map, a form not read here"
+                                 % path)
+                elif top == "input" and sub == "gamepad" and l.strip():
+                    g = re.match(r"^    ([a-z0-9+-]+): *([\"']?)([A-Za-z0-9+-]+(,[A-Za-z0-9+-]+)*)\2$", l)
+                    if not g:
+                        sys.exit("windowsarcadeloader: %s's input.gamepad has %r, a form not read here"
+                                 % (path, l.strip()))
+                    pad[g.group(1)] = g.group(3)
                 if m and m.group(2) in INPUT:
                     if top != "input" or m.group(1) != "  ":
                         sys.exit("windowsarcadeloader: %s has %s outside input's first level"
@@ -993,7 +1019,7 @@ elif core == "windowsarcadeloader":
                 elif top == "input" and raw.strip().startswith("#"):
                     notes.append(raw.strip()[1:])
             i += 1
-        keys["env"], keys["options"] = env, picture_options(path, options)
+        keys["env"], keys["options"], keys["gamepad"] = env, picture_options(path, options), pad
         return keys, inp, " ".join(head), " ".join(notes), comments
 
     launcher = os.path.join(wal, "crates/launcher/src")
@@ -1004,6 +1030,9 @@ elif core == "windowsarcadeloader":
         sys.exit("windowsarcadeloader: defaults.yaml's env was not read")
     if any(default_input.get(k) is not False for k in INPUT):
         sys.exit("windowsarcadeloader: defaults.yaml no longer sets %s false" % ", ".join(INPUT))
+    if any(defaults["gamepad"].get(k) != v for k, v in PAD.items()):
+        sys.exit("windowsarcadeloader: defaults.yaml's input.gamepad no longer puts a pad's buttons where "
+                 "the console turns them from (vpad.cpp)")
 
     # WORKS: the loader's own status table (its IMPLEMENTATION.md, "Games
     # status", one row per game id, the one its gamelist.py makes README's
@@ -1107,16 +1136,17 @@ elif core == "windowsarcadeloader":
                     sys.exit("windowsarcadeloader: %s's %s default %s is out of range" % (gid, key, d))
                 words.append("%%%s=%s:%s" % (key, d, "|".join(choices) if choices is not None
                                              else "%d-%d" % span))
+            own_pad = any(k in PAD for k in keys["gamepad"])
             games[gid] = (bool(re.match(r"(works|user)\b", st)), mark(keys, merged, head, notes, comments, st),
-                          prefix.split("/")[-1], verbs, words)
+                          prefix.split("/")[-1], verbs, words, own_pad)
     # The runner's folder, the same for every game (defaults.yaml's runner).
     runner = defaults.get("runner", "")
     if not isinstance(runner, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", runner):
         sys.exit("windowsarcadeloader: defaults.yaml names no runner")
     print("!runner " + runner)
-    for gid, (works, flag, prefix, verbs, words) in sorted(games.items()):
-        print(" ".join(["%s %s %s ~%s:%s" % (gid, "w" if works else "n", flag, prefix, ",".join(verbs))]
-                       + words))
+    for gid, (works, flag, prefix, verbs, words, own_pad) in sorted(games.items()):
+        print(" ".join(["%s %s %s%s ~%s:%s" % (gid, "w" if works else "n", flag, " pad" if own_pad else "",
+                                               prefix, ",".join(verbs))] + words))
 
     # THE FILES EACH VERB DOWNLOADS, from winetricks' own source: its
     # load_<verb>, every helper that body calls and every verb it w_calls,
@@ -1224,9 +1254,9 @@ elif core == "windowsarcadeloader":
                   % (os.environ["WAL_COMMIT"], hashlib.sha256(open(winetricks, "rb").read()).hexdigest()))
         for r in sorted(rows):
             out.write(" ".join(r) + "\n")
-    print("! %d profiles, %d verbs, %d files (%d lines)" % (
-        len(games), len({v for g in games.values() for v in g[3]}), len(seen_path), len(rows)),
-        file=sys.stderr)
+    print("! %d profiles (%d with a pad layout of their own), %d verbs, %d files (%d lines)" % (
+        len(games), sum(g[5] for g in games.values()), len({v for g in games.values() for v in g[3]}),
+        len(seen_path), len(rows)), file=sys.stderr)
 PY
 } > "${file}"
 
@@ -1238,7 +1268,7 @@ count=$(grep -vc '^[#!]' "${file}")
 FORM='^[a-z0-9_.]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*( =[A-Z0-9]{4}:[a-z0-9_]+)?$'
 # windowsarcadeloader's: a game id (dashes in it), then its Windows setup.
 [[ "${CORE}" == windowsarcadeloader ]] &&
-    FORM='^[a-z0-9][a-z0-9-]* [wn] [-gx] ~[a-z0-9][a-z0-9_-]*:[a-z0-9_]+(,[a-z0-9_]+)*( %[A-Z0-9_]+=[A-Za-z0-9.]+:([A-Za-z0-9.]+(\|[A-Za-z0-9.]+)*|-?[0-9]+--?[0-9]+))*$'
+    FORM='^[a-z0-9][a-z0-9-]* [wn] [-gx]( pad)? ~[a-z0-9][a-z0-9_-]*:[a-z0-9_]+(,[a-z0-9_]+)*( %[A-Z0-9_]+=[A-Za-z0-9.]+:([A-Za-z0-9.]+(\|[A-Za-z0-9.]+)*|-?[0-9]+--?[0-9]+))*$'
 bad=$(grep -v '^[#!]' "${file}" | grep -vcE "${FORM}" || true)
 (( bad == 0 )) || { echo "${CORE}: ${bad} lines are not in the catalogue's form" >&2; exit 1; }
 if [[ "${CORE}" == windowsarcadeloader ]]; then

@@ -683,6 +683,13 @@ bool hasPictureLevels(const Emulator& e, const std::string& romPath) {
     return !arcadematch::windowsGame(arcadematch::windowsGameId(romPath)).options.empty();
 }
 
+bool turnsArcadePads(const Emulator& e, const std::string& romPath) {
+    if (std::strcmp(e.core, "windowsarcadeloader") != 0) return false;
+    const arcadematch::WindowsGame game =
+        arcadematch::windowsGame(arcadematch::windowsGameId(romPath));
+    return game.known && !game.ownPadLayout;
+}
+
 std::string aloneSave(const Emulator& e, const std::string& romPath) {
     if (std::strcmp(e.core, "xemu-chihiro") == 0) return chihiroAloneSave(e, romPath);
     return {};

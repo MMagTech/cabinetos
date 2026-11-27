@@ -87,7 +87,7 @@ After that, each new game is steps 6 to 9.
 ### Playing
 
 - **The first start is slow:** the whole game downloads and unpacks, and needs room for it twice over. The first Windows Arcade game you start also sets up Windows on the console, once, which takes a few minutes: the game's page says *Setting up Windows…*. If it says *No Windows files on the server*, the file from step 10 is not in RomM.
-- **Controls:** Select puts in a coin, Start starts, and each game's other buttons are windowsarcadeloader's for that game. Hold **R3** (press the right stick) for the cabinet's Test switch, which opens a game's operator settings where it has them, and hold **L3** for its Service switch. Holding Start does not open settings here.
+- **Controls:** Select puts in a coin, Start starts. On a pad a game's buttons 1 to 4 are **A**, **B**, **X** and **Y**, as in the other arcade games, then L1, R1, L2 and R2 for 5 to 8, unless windowsarcadeloader lays that game out for a pad itself, as it does for most driving games; the 8BitDo Arcade Stick has the cabinet's own layout. Hold **R3** (press the right stick) for the cabinet's Test switch, which opens a game's operator settings where it has them, and hold **L3** for its Service switch. Holding Start does not open settings here.
 - **Saves:** what a game keeps, its scores, a board's memory and its operator settings, is each person's own save, and goes to RomM when you leave, so your other consoles have it too. There are no save states and no RetroAchievements.
 - **Picture** is in the pause menu only for a game that offers a picture size; the others draw at their own size.
 

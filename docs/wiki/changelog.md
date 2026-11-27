@@ -14,7 +14,8 @@ one you install, so you only ever install the newest.
   the games under RomM's TeknoParrot platform. The first game you start sets up
   Windows on the console, which takes a few minutes. Select puts in a coin,
   Start starts, and holding **R3** opens a game's operator settings where it
-  has them. See [Arcade](arcade.md#windows-arcade).
+  has them. On a pad a game's buttons are on **A**, **B**, **X** and **Y** as
+  in the other arcade games, unless the game has a pad layout of its own. See [Arcade](arcade.md#windows-arcade).
   ([#762](https://github.com/MMagTech/cabinetos/issues/762))
 
 ## 2026.11.26.4 {#v2026-11-26-4}

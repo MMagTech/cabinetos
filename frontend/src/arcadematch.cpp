@@ -46,6 +46,8 @@ struct Entry {
     std::vector<std::string> verbs;
     // Its picture options (%<KEY>=<default>:...).
     std::vector<WindowsOption> options;
+    // Whether its profile gives a pad a layout of its own (pad).
+    bool ownPadLayout = false;
 };
 
 struct Catalogue {
@@ -141,7 +143,10 @@ Catalogue parse(const std::string& text) {
             const std::string& w = words[i];
             const size_t colon = w.find(':');
             if (colon == std::string::npos) {
-                if (w.size() > 1 && w[0] == 'b') e.buttons = std::atoi(w.c_str() + 1);
+                if (w == "pad")
+                    e.ownPadLayout = true;
+                else if (w.size() > 1 && w[0] == 'b')
+                    e.buttons = std::atoi(w.c_str() + 1);
                 continue;
             }
             if (w[0] == '%') {
@@ -411,6 +416,7 @@ WindowsGame windowsGameIn(const Catalogue* cats, const std::string& gameId) {
     g.verbs = it->second.verbs;
     g.options = it->second.options;
     g.runner = c.runner;
+    g.ownPadLayout = it->second.ownPadLayout;
     return g;
 }
 
@@ -973,6 +979,7 @@ int test() {
               "house-of-the-dead-scarlet-dawn w g ~full:vcrun2019\n"
               "music-gungun-2 n - ~full:\n"
               "mahjong-fight-club w x ~mfc:vcrun2005,dotnet11\n"
+              "mario-kart-arcade-gp-dx w - pad ~full:vcrun2019\n"
               "kinst w - ~full:\n"),
         parse("# mame_libretro\n"
               "sf2 w - b6 00000001:100 00000003:300\n"
@@ -1295,6 +1302,12 @@ int test() {
         check(shared.runner == "GE-Proton11-14-x86_64" && g.runner == shared.runner,
               "every game gives the catalogue's one runner");
         check(!windowsGameIn(cats, "not-a-loader-game").known, "an id not listed is not known");
+        const WindowsGame ownPad = windowsGameIn(cats, "mario-kart-arcade-gp-dx");
+        check(ownPad.known && ownPad.ownPadLayout && ownPad.prefix == "full" &&
+                  ownPad.verbs == std::vector<std::string>({"vcrun2019"}) &&
+                  !shared.ownPadLayout && !g.ownPadLayout,
+              "a game marked pad has a pad layout of its own, its setup still read; one "
+              "not marked has none");
     }
     {
         const std::string sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

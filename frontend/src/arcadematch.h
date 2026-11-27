@@ -205,15 +205,18 @@ struct WindowsOption {
 // start (standalone.h, windowsSetup): `known` when the catalogue has the id,
 // with the last part of the game's Wine prefix (`full` for the shared one),
 // every winetricks verb the loader installs in it, in the order it installs
-// them (the `~<prefix>:<verb>,...` of its line), its picture options, and
-// the folder name of the Wine the loader runs every game under (the
-// catalogue's `!runner` line, the same for every game).
+// them (the `~<prefix>:<verb>,...` of its line), its picture options, the
+// folder name of the Wine the loader runs every game under (the catalogue's
+// `!runner` line, the same for every game), and `ownPadLayout` when its
+// profile puts a pad's buttons where it wants them (the `pad` word of its
+// line), which the console then leaves as they are (vpad.h, `arcadePad`).
 struct WindowsGame {
     bool known = false;
     std::string prefix;
     std::vector<std::string> verbs;
     std::vector<WindowsOption> options;
     std::string runner;
+    bool ownPadLayout = false;
 };
 WindowsGame windowsGame(const std::string& gameId);
 // One file a verb downloads, as `windowsarcadeloader.files` lists it: the
