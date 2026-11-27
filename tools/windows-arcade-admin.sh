@@ -217,7 +217,7 @@ load_loader() {
         find_list
         loader_dir=$cache_dir/loader-$loader_pin
         tables_dir=$loader_dir
-        if [ ! -f "$loader_dir/.complete" ]; then
+        if [ ! -f "$loader_dir/.complete" ] || [ ! -d "$loader_dir/systemprofiles" ]; then
             need curl "install curl, then run this again."
             need tar "install tar, then run this again."
             say "Reading the loader's list of games from GitHub (about 3 MB, once)."
@@ -226,7 +226,7 @@ load_loader() {
             tree=windowsarcadeloader-$loader_pin
             curl -fsSL --retry 3 "https://codeload.github.com/$LOADER_REPO/tar.gz/$loader_pin" |
                 tar -xzf - -C "$loader_dir" --strip-components=1 \
-                    "$tree/README.md" "$tree/docs/IMPLEMENTATION.md" ||
+                    "$tree/README.md" "$tree/docs/IMPLEMENTATION.md" "$tree/systemprofiles" ||
                 die "Could not download the loader from GitHub. Check the internet connection, then run this again."
             : >"$loader_dir/.complete"
         fi
@@ -251,6 +251,21 @@ load_loader() {
 
 game_field() { awk -F'\t' -v id="$1" -v f="$2" '$1 == id { print $f; exit }' "$tables_dir/games.tsv"; }
 game_notes() { awk -F'\t' -v id="$1" '$1 == id { print $2; exit }' "$tables_dir/notes.tsv"; }
+
+# The paths in the game a game's profile names (`"{dump}/<path>"`, its `files:`), from the
+# game's top, one a line.
+profile_paths() {
+    local profile
+    profile=$loader_dir/systemprofiles/$(game_field "$1" 3)/$1.yaml
+    [ -f "$profile" ] || return 0
+    awk '/^[[:space:]]*#/ { next }
+        { s = $0
+        while ((i = index(s, "{dump}/")) > 0) {
+            q = i > 1 ? substr(s, i - 1, 1) : ""; s = substr(s, i + 7); p = s
+            if (q == "\"" || q == "\047") { j = index(p, q); if (j) p = substr(p, 1, j - 1) }
+            else sub(/[[:space:]].*$/, "", p)
+            if (p != "") print p } }' "$profile"
+}
 
 # The best few games for a name: lines "<id>\t<name>\t<system>\t<status>", best first.
 match_games() {
@@ -338,19 +353,36 @@ find_top() {
         END { if (root) exit; n = 0; for (k in d) { n++; one = k } if (n == 1) print one }' "$tmp/all")
 }
 
-# When the loader's notes give the game's program with its folders (Daytona New Season
-# Edition's Sega/Daytona/Daytona.exe), that path is from the game's top: a zip of the folder's
-# contents holds only Sega/, and its top is its root, not Sega/.
+# Paths the loader gives from the game's top, with their folders: the notes' program names
+# (Daytona New Season Edition's Sega/Daytona/Daytona.exe) and the profile's files (Transformers
+# Shadows Rising's Sega/shell/Game.ini). A zip of such a game's folder contents holds only
+# Sega/, and its top is its root, not Sega/.
 settle_top() {
     local one=$top
+    { notes_programs "$1"; profile_paths "$1"; } | awk 'index($0, "/")' >"$tmp/toppaths"
     [ -n "$one" ] || return 0
-    notes_programs "$1" | awk -F'\t' -v one="$one" '
-        FNR == NR { if (index($0, "/")) named[tolower($0)] = 1; next }
+    awk -F'\t' -v one="$one" -v pathsfile="$tmp/toppaths" '
+        BEGIN { while ((getline l < pathsfile) > 0) named[tolower(l)] = 1 }
         { p = tolower($2)
           if (p in named) { root = 1 }
           else if (substr(p, 1, length(one)) == tolower(one) && (substr(p, length(one) + 1) in named)) inside = 1 }
-        END { exit !(root && !inside) }' - "$tmp/all" && top=""
+        END { exit !(root && !inside) }' "$tmp/all" && top=""
     return 0
+}
+
+# Says which files the game's profile needs that this copy of the game does not have: with one
+# missing, the loader stops before the game starts.
+check_profile_files() {
+    profile_paths "$1" >"$tmp/needed"
+    [ -s "$tmp/needed" ] || return 0
+    awk -F'\t' -v top="$top" -v needfile="$tmp/needed" '
+        BEGIN { while ((getline l < needfile) > 0) need[++n] = l }
+        { have[tolower($2)] = 1 }
+        END { for (i = 1; i <= n; i++) if (!(tolower(top need[i]) in have)) print need[i] }' \
+        "$tmp/all" >"$tmp/missing"
+    while IFS= read -r f; do
+        say "  The loader needs $f in the game, and this copy does not have it: the game will not start without it."
+    done <"$tmp/missing"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -358,10 +390,11 @@ settle_top() {
 
 # Picks the program: lines "<size>\t<path from the game's top>\t<why>", the pick first, then
 # the rest by size. The pick: a renamed program the loader's notes name (gs2.exe.ori) when it is
-# there; else the biggest .exe, nearest the top on a tie; else, with no .exe at all, the first
-# file the notes name that is there (an AVS game's DLL). The notes also name programs that do
-# not start the game (a test mode, a DLL the payload answers), so a plain .exe or .dll they name
-# is listed and marked, not picked.
+# there; else the biggest .exe, nearest the top on a tie, then the shortest name (a changed copy
+# beside the program adds to its name: Tetris The Grand Master 3's game-gloader.exe beside
+# game.exe); else, with no .exe at all, the first file the notes name that is there (an AVS
+# game's DLL). The notes also name programs that do not start the game (a test mode, a DLL the
+# payload answers), so a plain .exe or .dll they name is listed and marked, not picked.
 pick_programs() {
     local id=$1
     notes_programs "$id" >"$tmp/named"
@@ -383,7 +416,7 @@ pick_programs() {
         done <"$tmp/cands" >"$tmp/cands.sized"
         mv "$tmp/cands.sized" "$tmp/cands"
     fi
-    # Sort key: the pick first, then by size, nearest the top, by name.
+    # Sort key: the pick first, then by size, nearest the top, the shortest name, by name.
     awk -F'\t' '
         { size[NR] = $1; path[NR] = $2; why[NR] = $3; lp = tolower($2)
           if ($3 != "" && lp ~ /\.exe\.[a-z0-9_]+$/ && (ren == "" || $3 < why[ren])) ren = NR
@@ -393,10 +426,10 @@ pick_programs() {
             pick = ren
             if (pick == "" && !exe) pick = first
             for (i = 1; i <= NR; i++) {
-                d = gsub(/\//, "/", path[i])
-                printf "%d\t%012d\t%04d\t%s\t%s\t%s\n", (i == pick ? 0 : 1), 999999999999 - size[i], d,
-                    path[i], size[i], (why[i] == "" ? "" : "named in the loader\047s notes") } }' "$tmp/cands" |
-        sort | cut -f5,4,6 | awk -F'\t' '{ print $2 "\t" $1 "\t" $3 }'
+                d = gsub(/\//, "/", path[i]); base = path[i]; sub(/^.*\//, "", base)
+                printf "%d\t%012d\t%04d\t%04d\t%s\t%s\t%s\n", (i == pick ? 0 : 1), 999999999999 - size[i], d,
+                    length(base), path[i], size[i], (why[i] == "" ? "" : "named in the loader\047s notes") } }' \
+        "$tmp/cands" | sort | cut -f5,6,7 | awk -F'\t' '{ print $2 "\t" $1 "\t" $3 }'
 }
 
 # Writes the file into the folder, zip or 7z.
@@ -499,6 +532,7 @@ one_game() {
     status=$(game_field "$id" 4)
     say "  Game: $gname ($id). In the loader's list: $status"
     settle_top "$id"
+    check_profile_files "$id"
 
     # The program.
     if [ -n "$program_arg" ]; then
