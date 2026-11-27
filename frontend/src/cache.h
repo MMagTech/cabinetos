@@ -190,8 +190,16 @@ struct Entry {
 };
 
 // Everything in `cache/` on this location, oldest first. There is nothing to
-// exclude and no rule to remember: if it is in there, it may go.
+// exclude and no rule to remember: if it is in there, it may go, but for a
+// game holding saves still only in its folder (holdsSavesInPlay).
 std::vector<Entry> candidates(const std::string& location);
+
+// Whether a game's folder holds saves still only in it: an Xbox game's drive
+// between the start of a game and the saves coming off it
+// (standalone::beforeStart's `.cabinetos-playing` note). Such a folder is
+// never deleted or emptied until they are off, which the next start of the
+// console sees to.
+bool holdsSavesInPlay(const std::string& entryPath);
 
 // Deletes least-recently-used games until `needBytes` are free, plus a margin so
 // the next few launches cost nothing. Returns the number of bytes freed.

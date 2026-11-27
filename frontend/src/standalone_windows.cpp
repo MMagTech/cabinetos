@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -796,6 +797,14 @@ int windowsSetupTest() {
     check(setupRoom(true, pack) == 0, "a setup already built asks none");
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;
+}
+
+bool gameFolderMounted(const std::string& entryPath) {
+    const Emulator* e = find("windowsarcadeloader");
+    if (!e || !mounted(gameMount(*e))) return false;
+    char lower[PATH_MAX], entry[PATH_MAX];
+    return ::realpath((home(*e) + "/layers/lower").c_str(), lower) &&
+           ::realpath(entryPath.c_str(), entry) && std::strcmp(lower, entry) == 0;
 }
 
 int64_t windowsSetupRoom(const std::string& gameId) {

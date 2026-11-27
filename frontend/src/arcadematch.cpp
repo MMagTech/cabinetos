@@ -1379,6 +1379,25 @@ int test() {
         check(lindberghprograms::roomToUnpack(2500, 0) ==
                   2 * 2500 + static_cast<int64_t>(2500 * cache::kOverheadFraction),
               "one whose unpacked size is not known asks for the download twice, as a folder");
+        const std::string cacheDir = "/d/cache";
+        const std::string inCache = "/d/cache/teknoparrot/4812 - Wangan";
+        using lindberghprograms::emptiesBeforeRoom;
+        check(emptiesBeforeRoom(inCache, cacheDir, false, false, false),
+              "a cache folder that is not whole is emptied before room is asked");
+        check(!emptiesBeforeRoom(inCache, cacheDir, true, false, false),
+              "never one that is whole");
+        check(!emptiesBeforeRoom("/d/roms/teknoparrot/4812 - Wangan", cacheDir, false, false,
+                                 false),
+              "nor a kept game's");
+        check(!emptiesBeforeRoom("/d/cache2/teknoparrot/4812 - Wangan", cacheDir, false, false,
+                                 false) &&
+                  !emptiesBeforeRoom("/d/cache/", cacheDir, false, false, false) &&
+                  !emptiesBeforeRoom("/d/cache", cacheDir, false, false, false),
+              "nor one outside the cache that only begins like it, nor the cache itself");
+        check(!emptiesBeforeRoom(inCache, cacheDir, false, true, false),
+              "nor one holding saves still only in it");
+        check(!emptiesBeforeRoom(inCache, cacheDir, false, false, true),
+              "nor one a game is mounted from");
 
         // THE STORE'S ANSWERS (lindberghprograms.h), in a storage root of the
         // test's own, RomM's answers handed in.

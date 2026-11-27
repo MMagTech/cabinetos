@@ -307,8 +307,12 @@ thread, once a frame (`App::followLibrary`, `libraryrefresh.cpp`):
    game is its hard drive's whole folder, subfolders and all, and a Windows
    arcade game its folder with its `<gameid>.windowsloader` file; either
    comes down as one file, the zip RomM makes of the folder or the zip or 7z
-   it keeps, unpacked and noted as whole (`wholeFolder`), with room asked
-   first for the download and what it unpacks to, by the sizes RomM listed
+   it keeps, unpacked and noted as whole (`wholeFolder`): a cache folder
+   not noted whole is first emptied of what an earlier try left
+   (`emptiesBeforeRoom`; never a kept game's, one holding saves still only
+   in it, `cache::holdsSavesInPlay`, or one a Windows game is mounted from,
+   `standalone::gameFolderMounted`), then room is asked
+   for the download and what it unpacks to, by the sizes RomM listed
    for an archive's members, kept with the name (`roomToUnpack`), else the
    download's own size again, and asked again by the archive's own index
    once it is down, after the name its
@@ -336,7 +340,9 @@ thread, once a frame (`App::followLibrary`, `libraryrefresh.cpp`):
    game's next start, so it is downloaded, unpacked or installed again.
    An archive the core does not open itself is unpacked beside it
    (`romfile.cpp`, `prepareFile`), each file stamped with the archive's own
-   time; a later start that finds every file at its size with that time
+   time; an unpacking whose write or close the drive refuses for want of room
+   (ENOSPC or EDQUOT, `romfile::noRoom`) says "Not enough space", any other
+   failure "Couldn't open this game's file"; a later start that finds every file at its size with that time
    skips the unpacking and its room check (`alreadyUnpacked`, #530).
    With the game on the disk, a 3DS file Azahar cannot play (an encrypted
    dump, a CIA) ends the job with its reason (`ncch.cpp`); otherwise it

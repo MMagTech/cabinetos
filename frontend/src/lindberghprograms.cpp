@@ -191,6 +191,13 @@ int64_t roomToUnpack(int64_t downloadBytes, int64_t unpackedBytes) {
            static_cast<int64_t>(static_cast<double>(downloadBytes) * cache::kOverheadFraction);
 }
 
+bool emptiesBeforeRoom(const std::string& entryPath, const std::string& cacheDir, bool whole,
+                       bool holdsSaves, bool mounted) {
+    const std::string under = cacheDir + "/";
+    return !whole && !holdsSaves && !mounted && entryPath.size() > under.size() &&
+           entryPath.compare(0, under.size(), under) == 0;
+}
+
 bool learn(romm::Client& client, Kind kind, int romId, int64_t size, std::string* name,
            std::string* err) {
     return learnWith(fromClient(client), kind, romId, size, name, err);

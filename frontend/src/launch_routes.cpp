@@ -350,6 +350,22 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
         return false;
     } else {
         ::unlink(note.c_str());
+        // WHAT AN UNPACKING THAT FAILED LEFT goes first, from a cache folder
+        // that is not whole, so it never holds the room asked next, nor has
+        // other games evicted for it (lindberghprograms.h, emptiesBeforeRoom).
+        if (lindberghprograms::emptiesBeforeRoom(
+                entryPath, storage::cacheDir(location), whole,
+                cache::holdsSavesInPlay(entryPath),
+                cab::standalone::gameFolderMounted(entryPath))) {
+            const int64_t left = storage::treeBytes(entryPath);
+            if (left > 0) {
+                storage::removeEntry(entryPath);
+                storage::makeDirs(entryPath);
+                cab::syncDrive(location);
+                std::fprintf(stderr, "[launch] emptied %s of %lld bytes an earlier try left\n",
+                             entryPath.c_str(), static_cast<long long>(left));
+            }
+        }
         // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks: what the
         // zip or 7z holds unpacked when RomM listed its members, which is far
         // more than the archive (Wangan Midnight Maximum Tune 6: 10.0 GB
@@ -408,12 +424,13 @@ static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghpro
         job.stage = LaunchJob::Stage::Unpacking;
         std::string primary;
         romfile::Kind unpackedAs = romfile::Kind::Plain;
+        bool noRoom = false;
         const bool unpacked = romfile::prepareFile(zip, entryPath, "", false, &primary,
-                                                   &unpackedAs, &err, job.cancel);
+                                                   &unpackedAs, &err, job.cancel, &noRoom);
         ::unlink(zip.c_str());
         if (!unpacked) {
             std::fprintf(stderr, "[launch] unpack %s: %s\n", fsName.c_str(), err.c_str());
-            job.message = "Couldn't open this game's file";
+            job.message = noRoom ? "Not enough space" : "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
             return false;
         }
@@ -1123,10 +1140,11 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // unpacked again (#530), as for a game of one file below.
         if (romfile::alreadyUnpacked(boot, entry, validExts, blockExtract, &primary)) {
             std::fprintf(stderr, "[launch] already unpacked\n");
-        } else if (!romfile::prepareFile(boot, entry, validExts, blockExtract, &primary,
-                                         &kind, &err, job.cancel)) {
+        } else if (bool noRoom = false;
+                   !romfile::prepareFile(boot, entry, validExts, blockExtract, &primary, &kind,
+                                         &err, job.cancel, &noRoom)) {
             std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
-            job.message = "Couldn't open this game's file";
+            job.message = noRoom ? "Not enough space" : "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
@@ -1329,10 +1347,10 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         }
     }
 
-    if (!romfile::prepareFile(dest, entryPath, validExts, blockExtract, &primary,
-                              &kind, &err, job.cancel)) {
+    if (bool noRoom = false; !romfile::prepareFile(dest, entryPath, validExts, blockExtract,
+                                                   &primary, &kind, &err, job.cancel, &noRoom)) {
         std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
-        job.message = "Couldn't open this game's file";
+        job.message = noRoom ? "Not enough space" : "Couldn't open this game's file";
         job.stage = LaunchJob::Stage::Failed;
         return;
     }

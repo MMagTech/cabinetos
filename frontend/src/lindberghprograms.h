@@ -113,4 +113,14 @@ int64_t unpackedKept(Kind kind, int romId, int64_t size);
 // (launch_routes.cpp, wholeFolder).
 int64_t roomToUnpack(int64_t downloadBytes, int64_t unpackedBytes);
 
+// WHETHER A GAME'S FOLDER IS EMPTIED BEFORE ITS ROOM IS ASKED, so what an
+// unpacking that failed left in it never holds the room the next try needs,
+// nor makes the console evict other games for it: only a folder that is not
+// `whole` (no note that it came down and unpacked whole), in the cache
+// (under `cacheDir`, never a kept game's folder under roms/), holding no
+// save still only in it (`holdsSaves`, cache::holdsSavesInPlay), and that no
+// game is mounted from (`mounted`, standalone::gameFolderMounted).
+bool emptiesBeforeRoom(const std::string& entryPath, const std::string& cacheDir, bool whole,
+                       bool holdsSaves, bool mounted);
+
 }  // namespace lindberghprograms

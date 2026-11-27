@@ -308,6 +308,15 @@ WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& ca
 // everything it needs.
 WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail);
 
+// Whether `entryPath` is the folder a Windows arcade game is mounted from
+// now: its layer (fuse-overlayfs) at `game/` in the loader's home, whose
+// lower folder is a link to it, as one left by a console that went down
+// mid-game stays until the next Windows game's start lets go of it. False
+// for every other folder. No other emulator mounts a game's folder outside
+// its own sandbox, and no launch starts while an emulator of its own runs
+// (App::launchById).
+bool gameFolderMounted(const std::string& entryPath);
+
 // The room building a game's Windows setup takes at once on the console's
 // own storage, where it is built: the admin's file unpacked and the setup
 // itself, measured (standalone_windows.cpp, setupRoom); 0 when it is built.

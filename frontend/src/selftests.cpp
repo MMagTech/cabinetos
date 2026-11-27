@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -672,6 +673,57 @@ int filesTest() {
     ::usleep(20 * 1000);
     cab::writeBytes(zip, cab::readBytes(zip));
     check(!skips(), "a new download of the archive unpacks again, the same bytes or not");
+
+    // 7b. AN UNPACKING THAT RUNS OUT OF ROOM SAYS SO, by the error its own
+    // write got (romfile::noRoom). /dev/full refuses every write with
+    // ENOSPC, the drive-full error, so a member's file linked to it is a
+    // drive with no room left: a member larger than stdio's buffer fails at
+    // its write, a small one at its close. A file size limit refuses with
+    // EFBIG, which is no want of room.
+    check(romfile::noRoom(ENOSPC) && romfile::noRoom(EDQUOT),
+          "a write refused with ENOSPC or EDQUOT is want of room");
+    check(!romfile::noRoom(EFBIG) && !romfile::noRoom(EIO) && !romfile::noRoom(EACCES) &&
+              !romfile::noRoom(0),
+          "EFBIG, EIO and EACCES are not");
+    cab::writeBytes(src + "/big/b.bin", std::string(64 * 1024, 'b'));
+    cab::writeBytes(src + "/small/s.bin", std::string("s\n"));
+    auto unpackInto = [&](const std::string& game, const std::string& member, bool toFull,
+                          bool* noRoom, std::string* why) {
+        std::vector<uint8_t> zipped;
+        if (!cab::zipTree(src, {member}, &zipped, why)) return true;
+        const std::string dir = std::string(root) + "/" + game;
+        const std::string file = dir + "/" + game + ".zip";
+        cab::writeBytes(file, zipped);
+        if (toFull) {
+            storage::makeDirs(dir + "/" + member.substr(0, member.find('/')));
+            ::symlink("/dev/full", (dir + "/" + member).c_str());
+        }
+        romfile::Kind kind = romfile::Kind::Plain;
+        std::string first;
+        const std::atomic<bool> cancel{false};
+        return romfile::prepareFile(file, dir, "bin", false, &first, &kind, why, cancel, noRoom);
+    };
+    bool noRoom = false;
+    check(::access("/dev/full", W_OK) == 0 &&
+              !unpackInto("fullbig", "big/b.bin", true, &noRoom, &why) && noRoom,
+          "a member whose write finds the drive full fails the unpacking, for want of room");
+    noRoom = false;
+    check(!unpackInto("fullsmall", "small/s.bin", true, &noRoom, &why) && noRoom,
+          "and so does one whose last bytes the drive refuses at its close");
+    noRoom = true;
+    {
+        void (*oldXfsz)(int) = std::signal(SIGXFSZ, SIG_IGN);
+        struct rlimit was{};
+        ::getrlimit(RLIMIT_FSIZE, &was);
+        struct rlimit tight = was;
+        tight.rlim_cur = 16 * 1024;
+        ::setrlimit(RLIMIT_FSIZE, &tight);
+        const bool done = unpackInto("toobig", "big/b.bin", false, &noRoom, &why);
+        ::setrlimit(RLIMIT_FSIZE, &was);
+        std::signal(SIGXFSZ, oldXfsz);
+        check(!done && !noRoom,
+              "a write refused for another reason (a file too big) fails it, not for want of room");
+    }
 
     // 8. What a drive may not have yet (unsettled.h, #559). A list of this
     // boot is kept; one from an earlier boot deletes what it names, so the

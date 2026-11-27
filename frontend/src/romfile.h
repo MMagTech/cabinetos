@@ -131,10 +131,23 @@ int64_t unpackedSize(const std::string& path, const std::string& validExtensions
 //
 // Each file written whole is given the archive's own modification time
 // (#530), which is how alreadyUnpacked knows it later.
+//
+// `noRoomOut`, when given, says whether it failed for want of room on the
+// drive (noRoom): by the error the write itself got, never by the free space
+// after it. A file whose close fails for want of room fails the unpacking,
+// since its last bytes never reached the drive; a close that fails for any
+// other reason leaves the file unstamped, so the next start unpacks it again.
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err,
-                 const std::atomic<bool>& cancel);
+                 const std::atomic<bool>& cancel, bool* noRoomOut = nullptr);
+
+// Whether a write that failed with `errnum` failed for want of room: ENOSPC,
+// no space left on the drive, or EDQUOT, over a quota. Nothing else is, not
+// EFBIG, a file too big for the drive's own format (FAT32's 4 GB), which no
+// amount of room cures. libarchive only reads here; every byte written is
+// written by prepareFile itself, so a libarchive error is the archive's.
+bool noRoom(int errnum);
 
 // WHETHER AN EARLIER prepareFile ALREADY UNPACKED THIS ARCHIVE INTO `outDir`
 // (#530), so a start can skip writing it all again: 37 s at every start for
