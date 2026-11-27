@@ -615,14 +615,12 @@ bool isArcadeSlug(const std::string& slug) {
     for (const char* s : {"arcade", "mame", "mame-advmame", "fbneo", "fba", "naomi", "naomi2",
                           "naomigd", "atomiswave", "gaelco", "cps1", "cps2", "cps3", "neogeomvs",
                           "neogeoaes", "stv", "model2", "model3", "chihiro", "lindbergh",
-                          "windows-arcade"})
+                          "teknoparrot"})
         if (slug == s) return true;
     return false;
 }
 
-bool isWindowsFolder(const std::string& slug, const std::string& fsSlug) {
-    return slug == "windows-arcade" || lower(fsSlug) == "windows-arcade";
-}
+bool isWindowsSlug(const std::string& slug) { return slug == "teknoparrot"; }
 
 bool asksDreamcast(const std::string& fileName) {
     std::string set, ext;
@@ -1160,13 +1158,11 @@ int test() {
           "and so are the labels RomM gives each emulator's folder after rommapp/romm#5273");
     check(isArcadeSlug("chihiro"), "and RomM's own label for Chihiro's folder");
     check(isArcadeSlug("lindbergh"), "and RomM's own label for Lindbergh's folder");
-    check(isArcadeSlug("windows-arcade"), "and the Windows arcade games' folder");
-    check(isWindowsFolder("windows-arcade", "windows-arcade") &&
-              isWindowsFolder("arcade", "windows-arcade") &&
-              isWindowsFolder("arcade", "Windows-Arcade") && !isWindowsFolder("arcade", "MAME") &&
-              !isWindowsFolder("lindbergh", "Lindbergh"),
-          "the Windows arcade folder known by its own name when RomM calls it arcade, and no "
-          "other folder taken for it");
+    check(isArcadeSlug("teknoparrot"), "and RomM's label for the Windows arcade games");
+    check(isWindowsSlug("teknoparrot") && !isWindowsSlug("arcade") && !isWindowsSlug("lindbergh") &&
+              !isWindowsSlug("windows-arcade"),
+          "the Windows arcade games known by RomM's label for them, and no other label taken "
+          "for it");
     check(!isArcadeSlug("triforce") && !isArcadeSlug("dc"),
           "a board no emulator here plays is not, nor is Dreamcast");
 

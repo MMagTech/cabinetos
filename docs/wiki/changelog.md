@@ -11,7 +11,7 @@ one you install, so you only ever install the newest.
   start, and some will start and not play right. Your library's owner sets
   it up first: they run CabinetOS's script on their computer once to make
   the Windows files and put them in RomM, then once for each game, and put
-  the games in a `windows-arcade` folder. The first game you start sets up
+  the games under RomM's TeknoParrot platform. The first game you start sets up
   Windows on the console, which takes a few minutes. Select puts in a coin,
   Start starts, and holding **R3** opens a game's operator settings where it
   has them. See [Arcade](arcade.md#windows-arcade).

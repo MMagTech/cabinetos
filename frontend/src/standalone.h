@@ -290,7 +290,7 @@ std::string saveRoot(const Emulator& e, const std::string& saveDir);
 bool windowsSaveFile(const std::string& relPath);
 
 // A WINDOWS ARCADE GAME'S WINDOWS SETUP, built once for the console from the
-// file the library's owner put in RomM's firmware for Windows Arcade, with no
+// file the library's owner put in RomM's firmware for the TeknoParrot platform, with no
 // network (standalone_windows.cpp). Runs on the download worker, for minutes
 // the first time and no time after. `*detail`, for the log, says what was
 // missing or what went wrong.

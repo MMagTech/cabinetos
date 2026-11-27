@@ -8,7 +8,8 @@
 #     Once per household. Downloads every Windows file the loader's games need (the list is
 #     cores/windows-arcade-files.txt, from this checkout or from GitHub), checks each one's
 #     sha256 and packs them into windows-arcade-files.tar, which goes into RomM as firmware of
-#     the windows-arcade platform. Run it again after a failure: what is done is kept.
+#     the TeknoParrot platform, where the games are. Run it again after a failure: what is
+#     done is kept.
 #
 #   windows-arcade-admin.sh games [--yes] [--game ID] [--program PATH] [--replace]
 #                                 [--dry-run] [--list FILE] [--loader DIR] PATH...
@@ -198,7 +199,7 @@ job_files() {
     mv "$out.part" "$out"
     say ""
     say "Done: $n files, $(human "$bytes"), downloaded or checked in $((finished - started)) seconds."
-    say "Upload $(basename "$out") ($(human "$(size_of "$out")")) in RomM as a firmware file of the Windows Arcade platform (its folder is windows-arcade)."
+    say "Upload $(basename "$out") ($(human "$(size_of "$out")")) in RomM as a firmware file of the TeknoParrot platform, where your Windows arcade games are."
     say "The console builds its Windows setup from it the first time a Windows game starts."
 }
 

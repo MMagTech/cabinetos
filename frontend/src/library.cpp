@@ -680,7 +680,7 @@ LibraryRead readLibrary(romm::Client& client, const LibraryAsk& ask, const std::
     // downloaded (lindberghprograms.h). RomM's list is asked again each read;
     // only a game not yet known costs its entry.
     for (const romm::Platform& p : r.platforms) {
-        const bool windows = arcadematch::isWindowsFolder(p.slug, p.fsSlug);
+        const bool windows = arcadematch::isWindowsSlug(p.slug);
         if ((!windows && p.slug != "lindbergh") || p.romCount <= 0) continue;
         if (over()) return r;
         std::vector<romm::Game> games;
@@ -1200,7 +1200,7 @@ int arcadeTileTest() {
         platform(45, "arcade", "MAME2003", "Arcade"),
         platform(66, "neogeomvs", "NeoGeoMVS", "Neo Geo MVS"),
         platform(62, "model3", "Model3", "Sega Model 3"),
-        platform(70, "windows-arcade", "windows-arcade", "windows-arcade"),
+        platform(70, "teknoparrot", "TeknoParrot", "TeknoParrot"),
     };
     const auto groups = tileGroups(server);
     check(groups.size() == 2 + 1, "every arcade folder is one tile, every other platform its own");

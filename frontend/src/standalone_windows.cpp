@@ -340,12 +340,43 @@ void keepRegistry(const std::string& sharedPrefix, const std::string& saveDir) {
             if (head.compare(11, n, skip) == 0 && !std::isalnum(static_cast<unsigned char>(head[11 + n])))
                 ours = false;
         }
-        // A value's line begins with its name in quotes, or `@` for the
-        // key's own.
-        const bool hasValue = s.find("\n\"") != std::string::npos ||
-                              s.find("\n@=") != std::string::npos;
-        if (!ours || !hasValue) continue;
-        out += s;
+        if (!ours) continue;
+        // WITHOUT WINE'S TIMES, the number after the key's name and its
+        // `#time=` line, which are new at every start, AND WITHOUT THE UNITY
+        // ENGINE'S OWN COUNTERS, the values it names `unity.` (how many times
+        // the game has started, an id for each start, an id for its usage
+        // statistics), which it rewrites at every start of every Unity game:
+        // with either, every sitting made a new save out of a game nobody
+        // had played (TMNT through the console on the A9, 2026-11-27). A
+        // value's line begins with its name in quotes, or `@` for the key's
+        // own, and a long one goes on over lines that end in a backslash.
+        std::string kept1;
+        bool hasValue = false, first = true, skipping = false;
+        size_t at = 0;
+        while (at < s.size()) {
+            size_t end = s.find('\n', at);
+            end = end == std::string::npos ? s.size() : end + 1;
+            std::string line = s.substr(at, end - at);
+            at = end;
+            const bool goesOn = line.size() > 1 && line[line.size() - 2] == '\\';
+            if (first) {
+                line = line.substr(0, line.find(']') + 1) + "\n";
+                first = false;
+            } else if (skipping) {
+                skipping = goesOn;
+                continue;
+            } else if (line.compare(0, 6, "#time=") == 0) {
+                continue;
+            } else if (lowered(line.substr(0, 7)) == "\"unity.") {
+                skipping = goesOn;
+                continue;
+            } else if (line[0] == '"' || line.compare(0, 2, "@=") == 0) {
+                hasValue = true;
+            }
+            kept1 += line;
+        }
+        if (!hasValue) continue;
+        out += kept1;
         while (out.size() > 1 && out[out.size() - 1] == '\n' && out[out.size() - 2] == '\n')
             out.pop_back();
         out += "\n";
@@ -557,8 +588,8 @@ std::vector<std::string> setupSandbox() {
 // own `prepare` builds it, exactly as it would on any computer, with one
 // difference: no network. winetricks takes each installer from its cache when
 // the file there has the checksum it expects, and the cache is filled from
-// the admin's file (`windows-arcade-files.tar` in RomM's firmware for Windows
-// Arcade, made by tools/windows-arcade-admin.sh; docs/decisions/
+// the admin's file (`windows-arcade-files.tar` in RomM's firmware for the
+// TeknoParrot platform, made by tools/windows-arcade-admin.sh; docs/decisions/
 // 2026-11-26-windows-files-from-the-admin.md), so it downloads nothing. The
 // installers open windows, so it runs under a gamescope with no screen of its
 // own. The cache is `winetricks/` under a cache folder of the run's own,
@@ -640,8 +671,17 @@ WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
     std::fprintf(stderr, "[windows] building the %s setup for %s: %zu verb(s) to go in\n",
                  game.prefix.c_str(), gameId.c_str(), todo.size());
     // An hour: two and a half minutes on the reference console; a slow drive
-    // has room.
-    const proc::Result ran = proc::run(args, 60 * 60, &cancel);
+    // has room. ONCE MORE WHEN VERBS ARE STILL MISSING: the loader's record
+    // keeps what went in, so a second run goes on from there. One build in
+    // five on the A9 stopped 35 s in, winetricks finding no Program Files
+    // folder at its start, and went through when asked again (2026-11-27).
+    proc::Result ran;
+    for (int attempt = 1; attempt <= 2; ++attempt) {
+        ran = proc::run(args, 60 * 60, &cancel);
+        if (ran.timedOut || cancel.load() || missingVerbs(e, game).empty()) break;
+        std::fprintf(stderr, "[windows] the setup's build stopped (exit %d) with verbs still to "
+                     "go in%s\n", ran.status, attempt == 1 ? "; once more" : "");
+    }
     removeTree(cacheHome);
     storage::makeDirs(storage::logsDir());
     writeFile(storage::logsDir() + "/windowsarcadeloader-setup.log", ran.out + ran.err);

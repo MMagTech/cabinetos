@@ -792,13 +792,13 @@ int test() {
         s.title = "Windows Arcade Game";
         s.fsStem = "Windows Arcade Game";
         s.core = "windowsarcadeloader";
-        s.platformSlug = "windows-arcade";
+        s.platformSlug = "teknoparrot";
         s.arcade = true;
         s.saveTag = "windowsarcadeloader";
-        s.saveDir = storage::savesDir(u, "windows-arcade", game, "windowsarcadeloader");
+        s.saveDir = storage::savesDir(u, "teknoparrot", game, "windowsarcadeloader");
         s.dirSaveRoot = s.saveDir + "/save";
         s.dirSaveCore = "windowsarcadeloader";
-        s.dirSavePlatform = "windows-arcade";
+        s.dirSavePlatform = "teknoparrot";
         const std::vector<std::string> saved = {
             "game/sv/E2PROM.bin",
             "game/sv/SRAM.bin",
@@ -858,7 +858,7 @@ int test() {
               "and registry files beside them");
         cache::clearPushOwed(u, game, p.stamp);
         const std::string other =
-            storage::savesDir(u, "windows-arcade", game + 5000, "windowsarcadeloader") + "/save";
+            storage::savesDir(u, "teknoparrot", game + 5000, "windowsarcadeloader") + "/save";
         SaveFetch fetched;
         fetched.romId = game + 5000;
         fetched.asked = fetched.listed = true;

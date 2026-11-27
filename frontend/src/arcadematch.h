@@ -76,17 +76,17 @@ namespace arcadematch {
 // `naomi2`, `naomigd` and `atomiswave` (RomM 5.4 called them all `arcade`),
 // `gaelco`, whose games FinalBurn Neo and MAME play, `chihiro`, whose
 // games xemu-chihiro plays, `lindbergh` (RomM 5.5.0-alpha.1 on;
-// rommapp/romm#5273), whose games Linux Loader plays, and `windows-arcade`,
-// a folder of the library's owner's own that RomM has no platform for
-// (#762), whose games windowsarcadeloader plays. RomM's other new boards
-// (Triforce, Hikaru and the like) have no emulator here, so get no tile.
+// rommapp/romm#5273), whose games Linux Loader plays, and `teknoparrot`,
+// RomM's label for games from Windows-based arcade boards (#762), whose games
+// windowsarcadeloader plays. RomM's other new boards (Triforce, Hikaru and the
+// like) have no emulator here, so get no tile.
 // Dreamcast's folder is not one, though a zip in it is asked about Flycast.
 bool isArcadeSlug(const std::string& slug);
-// Whether a platform is the Windows arcade games' folder: by RomM's label
-// for it, `windows-arcade`, or by the folder's own name. A library's owner
-// who wants covers maps the folder to `arcade` in RomM, which changes the
-// label and leaves the folder's name, so the name decides too.
-bool isWindowsFolder(const std::string& slug, const std::string& fsSlug);
+// Whether a platform is the Windows arcade games': RomM's label
+// `teknoparrot`, one of its arcade platforms (its `ARCADE_PLATFORMS`, RomM
+// 5.5), for which it looks covers up as arcade games. The folder may have any
+// name the library's owner maps to it.
+bool isWindowsSlug(const std::string& slug);
 
 // Whether a Dreamcast folder's game is asked here: a zip or a 7z, which
 // Flycast would take for a Naomi board (its libretro.cpp treats every zip as

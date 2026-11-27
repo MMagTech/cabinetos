@@ -13,7 +13,7 @@ How to set out arcade games in RomM for CabinetOS, and what each one gets.
   | `model2`, `model3` | Sega Model 2 and Model 3 |
   | `chihiro` | Sega Chihiro |
   | `lindbergh` | Sega Lindbergh |
-  | `windows-arcade` | Windows Arcade: games from Windows-based arcade boards |
+  | `teknoparrot` | Windows Arcade: games from Windows-based arcade boards (see [Windows Arcade](#windows-arcade)) |
   | `fbneo` | FinalBurn Neo sets |
   | `gaelco` | Gaelco |
   | `arcade` or `mame` | everything else |
@@ -52,13 +52,13 @@ Sega Lindbergh games play in Linux Loader, as an experiment: some games may run 
 **Windows Arcade is very experimental.** Some games will not start, and some will start and not play right. CabinetOS runs these games with [windowsarcadeloader](https://github.com/aderumier/windowsarcadeloader), a separate project, and each game works or not according to that project. CabinetOS cannot fix a game that doesn't work in it. Its page lists every game it knows and what each one needs.
 
 - **What plays:** the games windowsarcadeloader marks as working, on a controller. Gun games show *Needs a light gun* until light guns play ([#575](https://github.com/MMagTech/cabinetos/issues/575)). Games it does not mark as working, games made for anything but a controller (a touch screen, a trackball, a mahjong panel, a medal machine), and a game without its `.windowsloader` file show *Not supported*.
-- **All of them go in one folder, `windows-arcade`**, whatever board they come from, each as a zip or 7z of the game's folder (the folder itself plays too). RomM does not know this folder, so it has no covers for these games: add them by hand in RomM. Keep the folder's name as it is: the console knows these games by it.
+- **All of them go in the folder RomM knows as TeknoParrot**, whatever board they come from: a folder named `teknoparrot`, or any folder you map to TeknoParrot in RomM (**Library management**, then **Folder mappings**). Each game is a zip or 7z of the game's folder (the folder itself plays too). RomM looks for their covers as arcade games; a cover comes only for a game RomM's sources list, so add any other by hand in RomM.
 
 ### Setting it up, for the library's owner
 
-You do this on your own computer, a Mac, Linux, or Windows. Nothing from Windows runs on it: a script of CabinetOS's downloads files, checks them, packs them, and writes one small file into each game.
+You do the first part on your own computer, a Mac, Linux, or Windows. Nothing from Windows runs on it: a script of CabinetOS's downloads files, checks them, packs them, and writes one small file into each game.
 
-**Once:**
+**Once, on your computer:**
 
 1. On Windows only: open PowerShell as administrator, type `wsl --install`, restart, then open **Ubuntu** from the Start menu. Do every step below in that window.
 2. Download the script:
@@ -66,22 +66,27 @@ You do this on your own computer, a Mac, Linux, or Windows. Nothing from Windows
 3. Make it runnable: `chmod +x windows-arcade-admin.sh`
 4. Get the Windows files: `./windows-arcade-admin.sh files`. It downloads about 615 MB from Microsoft and a few other places, checks every file, and makes `windows-arcade-files.tar`. It takes a few minutes.
 5. If it says a file could not be downloaded, open the address it shows in your browser, put the file in the folder it names, and run step 4 again.
-6. In RomM, add `windows-arcade-files.tar` as firmware for the `windows-arcade` folder, as you do for the other arcade BIOS files.
 
 **For each game:**
 
-7. Run `./windows-arcade-admin.sh games` followed by the game's folder, zip or 7z. You can drag it into the window to type its path. On Windows, your drive C: is `/mnt/c`, so your Downloads folder is `/mnt/c/Users/<your name>/Downloads`. A folder holding several games does them one after another.
-8. It shows the games whose names are closest. Press Enter if the first is right, type its number if another is, or type words from the game's name to search again.
-9. It shows the game's programs, the one it thinks starts the game first. Press Enter, or type another number.
-10. Put the game in RomM's `windows-arcade` folder as it is (folder, zip or 7z), then scan.
+6. Run `./windows-arcade-admin.sh games` followed by the game's folder, zip or 7z. You can drag it into the window to type its path. On Windows, your drive C: is `/mnt/c`, so your Downloads folder is `/mnt/c/Users/<your name>/Downloads`. A folder holding several games does them one after another.
+7. It shows the games whose names are closest. Press Enter if the first is right, type its number if another is, or type words from the game's name to search again.
+8. It shows the game's programs, the one it thinks starts the game first. Press Enter, or type another number.
+9. Put the game, as it is (folder, zip or 7z), in the `teknoparrot` folder of your RomM library (or the folder you mapped to TeknoParrot), beside your other arcade folders, then scan. Make the folder the first time.
 
 If the script says it needs a program it does not find (`zip`, `unzip`, or 7-Zip for a 7z), install that program and run it again. Adding the file to a zip takes about a second, whatever its size; a 7z is copied once, so it needs free room as big as itself.
+
+**Once, in RomM:**
+
+10. Add `windows-arcade-files.tar` to the TeknoParrot platform's firmware, as you do for the other arcade BIOS files.
+
+After that, each new game is steps 6 to 9.
 
 **After a CabinetOS update,** a game may say *The Windows files on the server are out of date*. Download the script again, run step 4 again, and put the new `windows-arcade-files.tar` in RomM in place of the old one.
 
 ### Playing
 
-- **The first start is slow:** the whole game downloads and unpacks, and needs room for it twice over. The first Windows Arcade game you start also sets up Windows on the console, once, which takes a few minutes: the game's page says *Setting up Windows…*. If it says *No Windows files on the server*, the file from step 6 is not in RomM.
+- **The first start is slow:** the whole game downloads and unpacks, and needs room for it twice over. The first Windows Arcade game you start also sets up Windows on the console, once, which takes a few minutes: the game's page says *Setting up Windows…*. If it says *No Windows files on the server*, the file from step 10 is not in RomM.
 - **Controls:** Select puts in a coin, Start starts, and each game's other buttons are windowsarcadeloader's for that game. Hold **R3** (press the right stick) for the cabinet's Test switch, which opens a game's operator settings where it has them, and hold **L3** for its Service switch. Holding Start does not open settings here.
 - **Saves:** what a game keeps, its scores, a board's memory and its operator settings, is each person's own save, and goes to RomM when you leave, so your other consoles have it too. There are no save states and no RetroAchievements.
 - **Picture** is in the pause menu only for a game that offers a picture size; the others draw at their own size.
