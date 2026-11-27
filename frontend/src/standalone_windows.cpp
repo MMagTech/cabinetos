@@ -608,6 +608,15 @@ std::vector<std::string> missingVerbs(const Emulator& e, const arcadematch::Wind
 
 std::string packPath() { return storage::biosDir() + "/windows-arcade-files.tar"; }
 
+// WHETHER THE SETUP'S BUILD GOES AGAIN after a pass that left verbs out: yes
+// while a pass leaves fewer missing than it found, since the loader's record
+// keeps what went in and the next pass goes on from there; no at the first
+// pass that adds none, which would only fail the same way again, and no
+// when none is missing. So at most one pass per verb.
+bool setupGoesAgain(size_t missingBefore, size_t missingAfter) {
+    return missingAfter > 0 && missingAfter < missingBefore;
+}
+
 // WHETHER A GAME'S SETUP IS THERE, OR CAN BE BUILT FROM WHAT THE CONSOLE HAS:
 // Ready with `*built` when the loader's record names every verb; Ready
 // without it when the admin's file holds every file the verbs still to go in
@@ -670,28 +679,44 @@ WindowsSetup buildSetup(const Emulator& e, const arcadematch::WindowsGame& game,
     });
     std::fprintf(stderr, "[windows] building the %s setup for %s: %zu verb(s) to go in\n",
                  game.prefix.c_str(), gameId.c_str(), todo.size());
-    // An hour: two and a half minutes on the reference console; a slow drive
-    // has room. ONCE MORE WHEN VERBS ARE STILL MISSING: the loader's record
-    // keeps what went in, so a second run goes on from there. One build in
-    // five on the A9 stopped 35 s in, winetricks finding no Program Files
-    // folder at its start, and went through when asked again (2026-11-27).
+    // An hour a pass: two and a half minutes on the reference console; a slow
+    // drive has room. AGAIN WHILE A PASS MENDS SOMETHING (setupGoesAgain):
+    // winetricks stopped at its start in 3 of 163 of its runs over four fresh
+    // builds on the A9, about one in 55, at a different verb each time, Wine
+    // having answered an empty %ProgramFiles%; winetricks' own check then
+    // exits before it installs anything, so no verb is left half in, and the
+    // loader's prepare stops at that verb. The next pass goes on from the
+    // loader's record and never redoes a verb (2026-11-27). EVERY PASS IS IN
+    // THE SETUP'S LOG, under a line saying which pass and how many verbs were
+    // missing before and after it, so a pass that failed and was mended shows
+    // in a report; the log starts afresh with each build. The status a pass
+    // ends with is the headless gamescope's, not the loader's, so it is not
+    // told: the verbs missing are.
+    const std::string logPath = storage::logsDir() + "/windowsarcadeloader-setup.log";
+    storage::makeDirs(storage::logsDir());
+    std::string logText;
     proc::Result ran;
-    for (int attempt = 1; attempt <= 2; ++attempt) {
+    size_t before = todo.size();
+    for (int pass = 1;; ++pass) {
         ran = proc::run(args, 60 * 60, &cancel);
-        if (ran.timedOut || cancel.load() || missingVerbs(e, game).empty()) break;
-        std::fprintf(stderr, "[windows] the setup's build stopped (exit %d) with verbs still to "
-                     "go in%s\n", ran.status, attempt == 1 ? "; once more" : "");
+        const size_t after = missingVerbs(e, game).size();
+        char head[160];
+        std::snprintf(head, sizeof head, "=== pass %d: %zu verb(s) missing before, %zu after%s ===\n",
+                      pass, before, after, ran.timedOut ? ", stopped at its hour" : "");
+        logText += head + ran.out + ran.err + "\n";
+        writeFile(logPath, logText);
+        std::fprintf(stderr, "[windows] the setup's pass %d: %zu verb(s) missing before, %zu after\n",
+                     pass, before, after);
+        if (ran.timedOut || cancel.load() || !setupGoesAgain(before, after)) break;
+        before = after;
     }
     removeTree(cacheHome);
-    storage::makeDirs(storage::logsDir());
-    writeFile(storage::logsDir() + "/windowsarcadeloader-setup.log", ran.out + ran.err);
     todo = missingVerbs(e, game);
     if (!todo.empty() || !isFile(prefix + "/system.reg")) {
         std::string left;
         for (const std::string& v : todo) left += (left.empty() ? "" : ", ") + v;
         *detail = ran.timedOut ? "stopped before it was done"
-                                 : "exit " + std::to_string(ran.status) + ", not in: " +
-                                       (left.empty() ? "the setup itself" : left);
+                                 : "not in: " + (left.empty() ? std::string("the setup itself") : left);
         return WindowsSetup::Failed;
     }
     std::fprintf(stderr, "[windows] the %s setup is ready\n", game.prefix.c_str());
@@ -714,6 +739,36 @@ WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& ca
         return WindowsSetup::Failed;
     }
     return buildSetup(*e, game, gameId, cancel, detail);
+}
+
+int windowsSetupTest() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+    check(setupGoesAgain(40, 12), "a pass that leaves fewer verbs missing than it found goes again");
+    check(setupGoesAgain(12, 11) && setupGoesAgain(2, 1), "by one verb too, and again after that");
+    check(!setupGoesAgain(12, 12), "one that adds none stops");
+    check(!setupGoesAgain(12, 13), "and one that leaves more missing");
+    check(!setupGoesAgain(40, 0) && !setupGoesAgain(0, 0), "none missing is done");
+    // The passes a build makes, each pass putting in `mended` verbs, until it
+    // stops.
+    auto passes = [](size_t missing, const std::vector<size_t>& mended) {
+        int n = 0;
+        for (size_t i = 0;; ++i) {
+            ++n;
+            const size_t after = missing - std::min(missing, i < mended.size() ? mended[i] : 0);
+            if (!setupGoesAgain(missing, after)) return n;
+            missing = after;
+        }
+    };
+    check(passes(40, {28, 11, 1}) == 3, "two stops in a 40-verb build: three passes, the last whole");
+    check(passes(40, {40}) == 1, "a build that goes through at once is one pass");
+    check(passes(3, {1, 1, 1}) == 3, "at most one pass per verb");
+    check(passes(40, {10, 0}) == 2, "a pass that adds none ends it");
+    std::printf("\n%s\n", failures ? "FAILED" : "all passed");
+    return failures ? 1 : 0;
 }
 
 WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail) {

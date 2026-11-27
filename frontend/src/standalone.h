@@ -308,6 +308,11 @@ WindowsSetup windowsSetup(const std::string& gameId, const std::atomic<bool>& ca
 // everything it needs.
 WindowsSetup windowsSetupReady(const std::string& gameId, std::string* detail);
 
+// --windows-setup-test: when the Windows setup's build goes again after a
+// pass that left verbs out (standalone_windows.cpp, setupGoesAgain), no
+// screen, no loader. 0 when all pass.
+int windowsSetupTest();
+
 // Whether a picture level changes anything for this game in `e`: yes for
 // every emulator's every game, but for a Windows arcade game whose profile in
 // the loader offers no picture size or scale (arcadematch::WindowsGame's

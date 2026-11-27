@@ -77,6 +77,7 @@ TESTS=(
     --linkup-pad-test
     --files-test
     --ps3-install-test
+    --windows-setup-test
     --vectrex-sheets-test
     --gone-games-test
     --save-notes-test
