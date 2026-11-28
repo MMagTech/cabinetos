@@ -19,11 +19,19 @@
 #     and the links udev lists for them (Sinden's software reads the by-id
 #     folders, and quits without them);
 #   - the system's /sys with every other Sinden gun and camera covered over,
-#     so it counts one gun and calls it gun 1; its own /dev is what keeps it
-#     off another gun's port even if it saw one;
+#     and every folder that lists devices of its gun's and camera's kinds
+#     fixed as it was when the copy started, without the others. Sinden's
+#     software looks for guns again every second, and a gun that came back
+#     on USB after a copy started was found in /sys/class/tty and broke that
+#     copy (#575, 2026-11-28). So it counts one gun and calls it gun 1,
+#     whatever is plugged in later; its own /dev is what keeps it off
+#     another gun's port even if it saw one;
+#   - udev's records of its own gun and camera and none other, and the
+#     console's list of input devices (/proc/bus/input/devices) as it was at
+#     the start, without the other guns' and cameras';
 #   - no network, no /var and no /home: it reads only /usr, /etc, /sys and
-#     udev's database, and writes nothing but the runtime folder systemd
-#     gives this unit.
+#     those records, and writes nothing but the runtime folder systemd gives
+#     this unit.
 #
 # Its settings are Sinden's own file with the keys set_key names below: the
 # gun and camera of this world, recoil off with its switch-on shortcut held
@@ -162,7 +170,6 @@ args=(
     --dev /dev
     --ro-bind /sys /sys
     --tmpfs /run
-    --ro-bind /run/udev /run/udev
     --bind "${runtime}" "${runtime}"
     --ro-bind "${config}" "${SINDEN}/${CONFIG_NAME}"
     --tmpfs /tmp
@@ -183,7 +190,9 @@ for node in "${nodes[@]}"; do
         args+=(--symlink "$(realpath -m --relative-to="$(dirname "/dev/${link}")" "${node}")" "/dev/${link}")
     done
 done
-# Every other Sinden gun and camera, out of sight.
+# Every other Sinden gun and camera, out of sight. Kept as paths under /sys,
+# without it, the way the links in /sys name them.
+hidden=()
 for u in /sys/bus/usb/devices/*; do
     product=$(cat "${u}/product" 2>/dev/null) || continue
     case "${product}" in
@@ -193,6 +202,60 @@ for u in /sys/bus/usb/devices/*; do
     r=$(readlink -f "${u}")
     [[ "${r}" == "${gun}" || "${r}" == "${camera}" ]] && continue
     args+=(--tmpfs "${r}")
+    hidden+=("${r#/sys/}")
 done
+is_hidden() {
+    local h
+    for h in "${hidden[@]}"; do
+        [[ "$1" == "${h}" || "$1" == "${h}/"* ]] && return 0
+    done
+    return 1
+}
+
+# Every folder that lists devices of a kind the gun or its camera has (the
+# class or bus of each of their devices: tty, input, video4linux and the
+# rest), and /sys/dev/char, which lists every device node by its number:
+# fixed. Each becomes a folder of its own holding the links it holds now,
+# but those into another Sinden gun or camera, read-only; a device that
+# comes later is in none of them.
+declare -A lists=([dev/char]=1)
+declare -A kind=()
+while IFS=$'\t' read -r dir link; do
+    kind[${dir}]=${link##*/}
+    case "${link}" in
+        */class/*) lists[class/${link##*/}]=1 ;;
+        */bus/*) lists[bus/${link##*/}/devices]=1 ;;
+    esac
+done < <(find "${gun}" "${camera}" -name subsystem -type l -printf '%h\t%l\n' 2>/dev/null)
+for list in "${!lists[@]}"; do
+    [[ -d "/sys/${list}" ]] || continue
+    args+=(--tmpfs "/sys/${list}")
+    while IFS=$'\t' read -r name link; do
+        is_hidden "${link##*../}" && continue
+        args+=(--symlink "${link}" "/sys/${list}/${name}")
+    done < <(find "/sys/${list}/" -mindepth 1 -maxdepth 1 -type l -printf '%f\t%l\n')
+    args+=(--remount-ro "/sys/${list}")
+done
+
+# udev's record of each device of the gun and its camera, under the name
+# udev gives it: c<major>:<minor> for a node, +<subsystem>:<name> otherwise.
+for dir in "${!kind[@]}"; do
+    if [[ -r "${dir}/dev" ]]; then
+        read -r number < "${dir}/dev"
+        record=c${number}
+    else
+        record=+${kind[${dir}]}:${dir##*/}
+    fi
+    [[ -e "/run/udev/data/${record}" ]] || continue
+    args+=(--ro-bind "/run/udev/data/${record}" "/run/udev/data/${record}")
+done
+
+# The console's input devices as they are now, but the other guns' and
+# cameras': one block for each device, its folder in /sys on its S: line.
+awk -v RS= -v ORS='\n\n' -v hidden="${hidden[*]}" '
+    BEGIN { n = split(hidden, h, " ") }
+    { for (i = 1; i <= n; i++) if (index($0, "S: Sysfs=/" h[i] "/")) next; print }
+' /proc/bus/input/devices > "${runtime}/input-devices"
+args+=(--ro-bind "${runtime}/input-devices" /proc/bus/input/devices)
 
 exec bwrap "${args[@]}" /usr/bin/mono "${SINDEN}/LightgunMono.exe"
