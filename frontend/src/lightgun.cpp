@@ -619,9 +619,32 @@ bool onPicture(float x, float y, float picX, float picY, float picW, float picH,
 // at our pin), and with it reads the aim as libretro's screen position and
 // fire 1, fire 2, fire 3, fire 4, Start, coin and the D-pad from the light gun
 // (retro_input.cpp, GameInpSpecialOne).
+//
+// MAME 2003-Plus offers only its pads on a port, and reads each player's light
+// gun beside the pad of that player's port once its X-Y device is a light gun
+// (coreOptions): osd_xy_device_read and osd_is_joy_pressed in
+// src/mame2003/mame2003.c at our pin. So a gun's port holds the plain pad,
+// which is what a player's port is told there in every game.
 unsigned deviceFor(const std::string& core) {
     if (core == "fbneo_libretro") return RETRO_DEVICE_LIGHTGUN;
+    if (core == "mame2003_plus") return RETRO_DEVICE_JOYPAD;
     return 0;
+}
+
+// MAME 2003-PLUS: its X-Y device a light gun, not the mouse it reads by
+// default, so the gun aims, shoots and has Start and coin (JOYCODE_GUN_n_*,
+// the gun's own buttons in src/inptport.c's defaults at our pin); and no
+// crosshair, which it draws for every player of a gun game unless told not
+// to. It declares that option only with a gun game loaded (set_variables in
+// src/mame2003/core_options.c), so cores/check-options.sh lists its options
+// with one loaded too.
+std::map<std::string, std::string> coreOptions(const std::string& core) {
+    if (core == "mame2003_plus")
+        return {
+            {"mame2003-plus_xy_device", "lightgun"},
+            {"mame2003-plus_crosshair_enabled", "disabled"},
+        };
+    return {};
 }
 
 int test() {
@@ -838,10 +861,22 @@ int test() {
     }
 
     // ---- Which emulators get a gun
-    check(deviceFor("fbneo_libretro") == RETRO_DEVICE_LIGHTGUN,
-          "FinalBurn Neo is given libretro's light gun");
-    check(deviceFor("mame2003_plus") == 0 && deviceFor("fceumm") == 0 && deviceFor("") == 0,
-          "no other emulator is given a gun yet");
+    check(deviceFor("fbneo_libretro") == RETRO_DEVICE_LIGHTGUN &&
+              coreOptions("fbneo_libretro").empty(),
+          "FinalBurn Neo is given libretro's light gun, and no option for it");
+    {
+        const std::map<std::string, std::string> o = coreOptions("mame2003_plus");
+        check(deviceFor("mame2003_plus") == RETRO_DEVICE_JOYPAD && o.size() == 2 &&
+                  o.count("mame2003-plus_xy_device") &&
+                  o.at("mame2003-plus_xy_device") == "lightgun" &&
+                  o.count("mame2003-plus_crosshair_enabled") &&
+                  o.at("mame2003-plus_crosshair_enabled") == "disabled",
+              "MAME 2003-Plus keeps the pad in a gun's port, reads the gun beside it, and draws "
+              "no crosshair");
+    }
+    check(deviceFor("mame_libretro") == 0 && deviceFor("fceumm") == 0 && deviceFor("") == 0 &&
+              coreOptions("mame_libretro").empty() && coreOptions("fceumm").empty(),
+          "no other emulator is given a gun yet, nor an option for one");
     check(isGun(kGunId) && isGun(kGunId + 1) && !isGun(kGunId + 2) && !isGun(1) &&
               !isGun(0x57494900),
           "a gun's presses in the menus are told from a pad's and a Wii Remote's");

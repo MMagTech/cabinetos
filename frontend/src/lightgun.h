@@ -51,6 +51,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 
 namespace lightgun {
@@ -129,9 +130,19 @@ bool onPicture(float x, float y, float picX, float picY, float picW, float picH,
 
 // THE DEVICE A CORE IS GIVEN FOR A GUN, on the port of the player holding it,
 // in a light-gun game (catalog's lists say which games those are); 0 for a
-// core the console does not hand a gun yet. FinalBurn Neo first; one core per
-// change after it (#575).
+// core the console does not hand a gun yet. libretro's light gun on FinalBurn
+// Neo; the pad's own on MAME 2003-Plus, which reads the gun beside the pad of
+// the same port once an option says so (coreOptions). One core per change
+// (#575). `core` is the manifest's name (launchJob.coreName).
 unsigned deviceFor(const std::string& core);
+
+// THE OPTIONS A CORE IS GIVEN IN A LIGHT-GUN GAME, on top of all the others
+// and only there, set once the launch knows the game is one, before it loads
+// (App::restoreBeforeLoad, Core::addOptionOverrides): what turns the core's
+// gun on and its crosshair off. Empty for a core that needs none: FinalBurn
+// Neo's gun is its device, and its crosshair is off in every game
+// (coreoptions.cpp).
+std::map<std::string, std::string> coreOptions(const std::string& core);
 
 // The share of the screen's height the border takes on each side (#575 rule
 // 9): white, 2%.

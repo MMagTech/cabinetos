@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "catalog.h"
+#include "lightgun.h"
 #include "quality.h"
 #include "screenview.h"
 #include "storage.h"
@@ -70,6 +71,8 @@ int run(const std::string& dir) {
                 for (const auto& kv : catalog::optionOverrides(core, vk, above))
                     fromCatalog.emplace(kv.first, kv.second);
         for (const auto& kv : fromCatalog) sets.push_back({kv, "catalog"});
+        // And a light-gun game's, on top (#575, lightgun.h).
+        for (const auto& kv : lightgun::coreOptions(core)) sets.push_back({kv, "light gun"});
         // And a DS or 3DS game's screens, every view (screenview.h).
         for (int v = 0; v < screenview::kViewCount; ++v)
             for (const auto& kv : screenview::coreOptions(core, static_cast<screenview::View>(v)))

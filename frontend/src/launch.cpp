@@ -878,9 +878,12 @@ void App::restoreBeforeLoad(LaunchContext& c) {
     // A LIGHT-GUN GAME ON A CORE THAT TAKES A GUN (#575): each gun plugged
     // in now goes into its player's port, gun 1 into port 1 and gun 2 into
     // port 2, in place of a pad; one plugged in later goes in then
-    // (App::followGunsInGame).
+    // (App::followGunsInGame). And the options that turn the core's gun on
+    // and its crosshair off, which only a gun game gets: known only now, once
+    // the arcade pick has looked inside the game, after loadCore.
     c.gunDevice = launchJob.lightGunGame ? lightgun::deviceFor(launchJob.coreName) : 0;
     c.core.setGunDevice(c.gunDevice, lightgun::plugged());
+    if (c.gunDevice) c.core.addOptionOverrides(lightgun::coreOptions(launchJob.coreName));
     if (launchJob.platformSlug == "wii") {
         const unsigned device = wii::padDevice(wii::codeFromTitleId(launchJob.titleId));
         sessionNeedsRemote = device == 0;

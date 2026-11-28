@@ -3,7 +3,8 @@
 // THE OTHER HALF OF THE VERSION-BUMP CHECK (#63, MMagTech 2026-10-02).
 // cores/check-options.sh fails when a core's options differ from cores/options/<core>.txt;
 // this fails when the console's own tables (catalog::optionOverrides with and
-// without Vulkan and for both sensor bar places, quality::coreOptions at every
+// without Vulkan and for both sensor bar places, a light-gun game's
+// lightgun::coreOptions, quality::coreOptions at every
 // level and on both N64 renderers and both DS renderers, every choice of every
 // sysopts row, and
 // wii::coreOptions and vectrexsheets::coreOptions both ways) name a key a core does not declare, or a value

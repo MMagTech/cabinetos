@@ -220,6 +220,11 @@ public:
     // core's own stated default. An override is for the cases where CabinetOS
     // wants something other than what the core ships with.
     void setOptionOverrides(const std::map<std::string, std::string>& overrides);
+    // MORE CHOICES ON TOP OF THOSE, known only once the launch has looked
+    // inside the game, after load() and before loadGame(): a light-gun game's
+    // (lightgun::coreOptions), for a core that reads its options as the game
+    // loads, as both MAMEs do. The command line still wins.
+    void addOptionOverrides(const std::map<std::string, std::string>& overrides);
 
     // One option from the command line (`--core-option key=value`,
     // repeatable), for finding out what a value does before it goes into

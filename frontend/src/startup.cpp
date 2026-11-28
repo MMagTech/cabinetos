@@ -707,17 +707,22 @@ std::optional<int> App::startDeveloperLaunch() {
         }
         core.setPlayers(players::count());
         // AN ARCADE LIGHT-GUN GAME gets the guns as from the library (#575):
-        // by its zip's name, on a core that takes a gun.
+        // by its zip's name, on a core that takes a gun, with that core's gun
+        // options. The core by the manifest's name for its file, which for
+        // MAME 2003-Plus is not the file's stem.
         {
-            std::string stem = corePath;
-            stem.erase(0, stem.find_last_of('/') + 1);
-            if (const size_t dot = stem.rfind(".so"); dot != std::string::npos) stem.erase(dot);
+            std::string file = corePath;
+            file.erase(0, file.find_last_of('/') + 1);
+            std::string name;
+            for (const auto& kv : catalog::libretroCores())
+                if (catalog::coreFileName(kv.first) == file) name = kv.first;
             std::string zip = romPath;
             zip.erase(0, zip.find_last_of('/') + 1);
-            const unsigned gun = lightgun::deviceFor(stem);
+            const unsigned gun = lightgun::deviceFor(name);
             if (gun && arcadematch::byName(zip, false).gun) {
                 session.gunDevice = gun;
                 core.setGunDevice(gun, lightgun::plugged());
+                core.addOptionOverrides(lightgun::coreOptions(name));
                 std::fprintf(stderr, "[frontend] %s is a light-gun game\n", zip.c_str());
             }
         }

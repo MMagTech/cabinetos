@@ -18,7 +18,10 @@
 # Dolphin and FBNeo declare their options only with a real game loaded, which
 # CI does not have; their lists come from the A9 (tools/check-applied.sh).
 # FCEUmm and MAME 2003-Plus declare inside retro_load_game before reading the
-# file, so a stub is enough.
+# file, so a stub is enough. MAME 2003-Plus declares some options only for
+# some games, and the console sets two of them in a light-gun game (#575,
+# frontend/src/lightgun.cpp), so its list is its options with two stubs, both
+# listed and each once: Asteroids, a vector game, and Turkey Shoot, a gun game.
 #
 # Usage: cores/check-options.sh <core>      the .so is read from
 #                                           $CABINETOS_CORE_OUT (cores/build),
@@ -51,7 +54,11 @@ now=$(podman run --rm -v "$ROOT":/repo:Z -v "$OUT":/out:Z -w /tmp "$BUILDER" \
            printf "PK\005\006\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000" > asteroid.zip
            case "$2" in
                fceumm) exec /tmp/core-options "/out/$1" --game blank.nes ;;
-               mame2003_plus) exec /tmp/core-options "/out/$1" --game asteroid.zip ;;
+               mame2003_plus)
+                   cp asteroid.zip tshoot.zip
+                   /tmp/core-options "/out/$1" --game asteroid.zip > asteroid.txt || exit 1
+                   /tmp/core-options "/out/$1" --game tshoot.zip > tshoot.txt || exit 1
+                   exec env LC_ALL=C sort -u asteroid.txt tshoot.txt ;;
                *) exec /tmp/core-options "/out/$1" ;;
            esac' _ "$SO" "$CORE") || {
     echo "$CORE: could not list its options" >&2

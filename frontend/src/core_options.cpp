@@ -301,6 +301,16 @@ std::optional<bool> environmentOptions(unsigned cmd, void* data) {
 
 using namespace corestate;
 
+// Re-applies the overrides to anything already declared, so setting them
+// after a load is not silently a no-op.
+static void applyOverrides() {
+    for (Option& o : gDeclared) {
+        auto it = gOverrides.find(o.key);
+        o.overridden = (it != gOverrides.end());
+        o.chosen = o.overridden ? it->second : o.defaultValue;
+    }
+}
+
 void Core::setOptionOverrides(const std::map<std::string, std::string>& overrides) {
     gOverrides.clear();
     for (const auto& [k, v] : overrides) gOverrides[k] = v;
@@ -309,14 +319,15 @@ void Core::setOptionOverrides(const std::map<std::string, std::string>& override
                      v.c_str());
         gOverrides[k] = v;
     }
-    // Re-apply to anything already declared, so setting these after a load is
-    // not silently a no-op. Before load() is still the correct time to call it,
-    // because a core may read its options inside retro_init.
-    for (Option& o : gDeclared) {
-        auto it = gOverrides.find(o.key);
-        o.overridden = (it != gOverrides.end());
-        o.chosen = o.overridden ? it->second : o.defaultValue;
-    }
+    // Before load() is still the correct time to call it, because a core may
+    // read its options inside retro_init.
+    applyOverrides();
+}
+
+void Core::addOptionOverrides(const std::map<std::string, std::string>& overrides) {
+    for (const auto& [k, v] : overrides)
+        if (!gCommandLine.count(k)) gOverrides[k] = v;
+    applyOverrides();
 }
 
 void Core::setOptionLive(const std::string& key, const std::string& value) {
