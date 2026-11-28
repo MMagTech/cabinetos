@@ -97,6 +97,8 @@ bool removeFile(const std::string& path) {
     return errno == ENOENT;
 }
 
+bool noRoom(int errnum) { return errnum == ENOSPC || errnum == EDQUOT; }
+
 bool syncDrive(const std::string& path) {
     const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) return false;

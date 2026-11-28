@@ -3,7 +3,8 @@
 // Internal: only standalone.cpp, standalone_eden.cpp, standalone_rpcs3.cpp,
 // standalone_xenia.cpp, standalone_cemu.cpp, standalone_xemu.cpp,
 // standalone_vita3k.cpp, standalone_sm2emu.cpp, standalone_supermodel.cpp,
-// standalone_chihiro.cpp and standalone_lindbergh.cpp include it.
+// standalone_chihiro.cpp, standalone_lindbergh.cpp and standalone_windows.cpp
+// include it.
 // Moved out of standalone.cpp's anonymous namespace in the restructure (#398).
 
 #pragma once
@@ -145,6 +146,24 @@ bool prepareLindbergh(const Emulator& e, const std::string& saveDir, int players
 // program, then the folder holding the game's program (`romPath`) and its
 // three files.
 void lindberghArgs(std::vector<std::string>& full, const Emulator& e, const std::string& romPath);
+
+// Windows arcade boards (standalone_windows.cpp).
+std::string windowsSaves(const std::string& saveDir);
+bool prepareWindows(const Emulator& e, const std::string& romPath, const std::string& saveDir,
+                    int players, quality::Level level, std::string* err);
+// The game's folder mounted under this person's layer, once their save is in
+// place, and let go of once the game has gone.
+bool windowsBeforeStart(const Emulator& e, const std::string& entryPath,
+                        const std::string& saveDir, std::string* err);
+void windowsAfterEnd(const Emulator& e, const std::string& entryPath,
+                     const std::string& saveDir);
+// Run::start's arguments for windowsarcadeloader, as for xeniaArgs: the
+// sandbox's own process space and this person's layer over the Windows setup
+// before bwrap's "--", the environment entries before the program, then
+// `run`, the game's `.windowsloader` file (`romPath`, as the mount shows it),
+// the loader's root and the console's layer.
+void windowsArgs(std::vector<std::string>& full, const Emulator& e, const std::string& romPath,
+                 const std::string& entryPath, const std::string& saveDir);
 
 // Xbox (standalone_xemu.cpp).
 bool prepareXemu(const Emulator& e, const std::string& entryPath, int players,

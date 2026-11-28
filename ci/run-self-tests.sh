@@ -58,6 +58,7 @@ TESTS=(
     --tilt-test
     --fightstick-test
     --guitar-test
+    --arcade-pad-test
     --arcade-settings-test
     --arcade-match-test
     --arcade-tile-test
@@ -76,6 +77,7 @@ TESTS=(
     --linkup-pad-test
     --files-test
     --ps3-install-test
+    --windows-setup-test
     --vectrex-sheets-test
     --gone-games-test
     --save-notes-test

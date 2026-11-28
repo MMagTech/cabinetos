@@ -30,6 +30,10 @@ struct GameSession {
     // The core's manifest name, for the pause menu's Picture quality row
     // (quality::hasLevels). Standalones set it to the emulator's.
     std::string core;
+    // A GAME WITH NO PICTURE SIZE TO MOVE in an emulator that has levels: a
+    // Windows arcade game whose own profile offers none
+    // (standalone::hasPictureLevels). It gets no Picture row.
+    bool pictureFixed = false;
     // RomM's platform slug, for the pause menu's system rows (sysopts.h).
     std::string platformSlug;
     // An arcade game (catalog::Coverage::arcade): Flycast plays Dreamcast

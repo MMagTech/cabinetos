@@ -131,10 +131,18 @@ int64_t unpackedSize(const std::string& path, const std::string& validExtensions
 //
 // Each file written whole is given the archive's own modification time
 // (#530), which is how alreadyUnpacked knows it later.
+//
+// `noRoomOut`, when given, says whether it failed for want of room on the
+// drive (cab::noRoom): by the error the write itself got, never by the free space
+// after it. A file whose close fails for want of room fails the unpacking,
+// since its last bytes never reached the drive; a close that fails for any
+// other reason leaves the file unstamped, so the next start unpacks it again.
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err,
-                 const std::atomic<bool>& cancel);
+                 const std::atomic<bool>& cancel, bool* noRoomOut = nullptr);
+// libarchive only reads here; every byte written is written by prepareFile
+// itself, so a libarchive error is the archive's, never want of room.
 
 // WHETHER AN EARLIER prepareFile ALREADY UNPACKED THIS ARCHIVE INTO `outDir`
 // (#530), so a start can skip writing it all again: 37 s at every start for

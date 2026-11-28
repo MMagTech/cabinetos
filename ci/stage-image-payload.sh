@@ -3,7 +3,8 @@
 # Assemble everything the image has to carry that is not in this repository:
 # the frontend and the Wii bridge, the 23 libretro cores and PCSX2, MAME
 # 0.289, the system files that ship with emulators rather than coming off
-# RomM, Cemu, sm2-emu and Sunshine.
+# RomM, Cemu, sm2-emu, Supermodel, xemu-chihiro, windowsarcadeloader and
+# Sunshine.
 #
 # WHY THIS EXISTS AT ALL. Until 2026-09-19 the image contained none of it. The
 # Containerfile copied build_files, system_files and two licence files, so a
@@ -27,6 +28,8 @@
 #   sm2-emu        .github/workflows/build-sm2emu.yml (and its catalogue)
 #   Supermodel     .github/workflows/build-supermodel.yml (and its catalogue)
 #   xemu-chihiro   .github/workflows/build-xemu-chihiro.yml (and its catalogue)
+#   windowsarcadeloader  .github/workflows/build-windowsarcadeloader.yml (and
+#                  its catalogue and files list)
 #   Sunshine       .github/workflows/build-sunshine.yml
 #
 # So this only ever COLLECTS and CHECKS. It builds nothing, and it fails before
@@ -60,6 +63,11 @@
 #                                 emulator, SDL2_net, and which sets it plays
 #   xemu-chihiro/bin/xemu-chihiro, xemu-chihiro.catalogue   Chihiro's emulator
 #                                 and which sets it plays
+#   windowsarcadeloader/{dist,systemprofiles}/..., windowsarcadeloader.catalogue,
+#                                 windowsarcadeloader.files   Windows Arcade's
+#                                 launcher, which games it plays and the files
+#                                 their Windows setups install (its Wine is a
+#                                 pinned download, downloads/)
 #   sunshine/Sunshine-*.rpm       Remote Play's streaming host, with our patch (#304)
 #
 # This starts image_payload/ afresh. Three more folders go in after it, from
@@ -90,6 +98,7 @@ if [ $# -ge 1 ]; then
     SM2SRC="$SRC/sm2emu"
     SUPERMODELSRC="$SRC/supermodel"
     CHIHIROSRC="$SRC/xemu-chihiro"
+    WALSRC="$SRC/windowsarcadeloader"
     SUNSHINESRC="$SRC/sunshine"
     MAMESRC="$SRC/mame"
 else
@@ -102,6 +111,7 @@ else
     SM2SRC="$ROOT/cores/build/sm2emu"
     SUPERMODELSRC="$ROOT/cores/build/supermodel"
     CHIHIROSRC="$ROOT/cores/build/xemu-chihiro"
+    WALSRC="$ROOT/cores/build/windowsarcadeloader"
     SUNSHINESRC="$ROOT/cores/build/sunshine"
     MAMESRC="$ROOT/cores/build/mame"
 fi
@@ -389,6 +399,25 @@ done
 rm -rf "$OUT/xemu-chihiro"
 cp -R "$CHIHIROSRC" "$OUT/xemu-chihiro"
 
+# --- Windows Arcade ---------------------------------------------------------
+# windowsarcadeloader, built by cores/build-windowsarcadeloader.sh at its pin,
+# and its catalogue and files list (cores/arcade-sets.sh windowsarcadeloader,
+# run into the same folder). REQUIRED, for PlayStation 2's reason: without it
+# every Windows arcade game greys, since nothing else plays one.
+# build_files/install-windowsarcadeloader.sh puts it at
+# /usr/lib/cabinetos/windowsarcadeloader with GE-Proton, and the two lists
+# beside the cores.
+for f in dist/arcade-launcher dist/payloads/WAL.DirectInput.dll systemprofiles LICENSE VERSION \
+         windowsarcadeloader.catalogue windowsarcadeloader.files; do
+    [ -s "$WALSRC/$f" ] || {
+        echo "windowsarcadeloader's $f is not in $WALSRC, so the image would lose Windows Arcade" >&2
+        echo "Build it with cores/build-windowsarcadeloader.sh, then cores/arcade-sets.sh windowsarcadeloader $WALSRC." >&2
+        exit 1
+    }
+done
+rm -rf "$OUT/windowsarcadeloader"
+cp -R "$WALSRC" "$OUT/windowsarcadeloader"
+
 # --- Remote Play ------------------------------------------------------------
 # Sunshine, built by cores/build-sunshine.sh at its pin with our patch (#304).
 # REQUIRED: build_files/install-sunshine.sh installs this package and nothing
@@ -421,6 +450,7 @@ printf '  wii u     Cemu %s, %s\n' "$(cut -c1-10 "$OUT/cemu/VERSION")" "$(du -sh
 printf '  model 2   sm2-emu %s, %s\n' "$(cut -c1-10 "$OUT/sm2emu/VERSION")" "$(du -sh "$OUT/sm2emu" | cut -f1)"
 printf '  model 3   Supermodel %s, %s\n' "$(cut -c1-10 "$OUT/supermodel/VERSION")" "$(du -sh "$OUT/supermodel" | cut -f1)"
 printf '  chihiro   xemu-chihiro %s, %s\n' "$(cut -c1-10 "$OUT/xemu-chihiro/VERSION")" "$(du -sh "$OUT/xemu-chihiro" | cut -f1)"
+printf '  windows   windowsarcadeloader %s, %s\n' "$(cut -c1-10 "$OUT/windowsarcadeloader/VERSION")" "$(du -sh "$OUT/windowsarcadeloader" | cut -f1)"
 printf '  sunshine  %s, %s\n' "$(head -1 "$OUT/sunshine/VERSION" | cut -d' ' -f1)" "$(du -sh "$OUT/sunshine" | cut -f1)"
 printf '  system    %s, %s entries\n' "$(du -sh "$OUT/system" | cut -f1)" \
        "$(find "$OUT/system" -mindepth 2 -maxdepth 2 | wc -l | tr -d ' ')"

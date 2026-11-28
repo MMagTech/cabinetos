@@ -321,12 +321,9 @@ std::vector<Entry> candidates(const std::string& location) {
                  if (romId <= 0) return;
                  const std::string path =
                      storage::cacheDir(location) + "/" + platform + "/" + entry;
-                 // A GAME WHOSE SAVES ARE STILL ONLY IN ITS FOLDER: an Xbox
-                 // game's drive between the start of a game and the saves
-                 // coming off it (standalone::beforeStart). Deleting it would
-                 // take somebody's save, so it is not a candidate until they
-                 // are off, which the next start of the console sees to.
-                 if (::access((path + "/.cabinetos-playing").c_str(), F_OK) == 0) return;
+                 // A GAME WHOSE SAVES ARE STILL ONLY IN ITS FOLDER: deleting
+                 // it would take somebody's save (holdsSavesInPlay).
+                 if (holdsSavesInPlay(path)) return;
                  out.push_back({path, storage::treeBytes(path), newestMtime(path), romId,
                                 platform});
              });
@@ -335,6 +332,17 @@ std::vector<Entry> candidates(const std::string& location) {
         return a.lastUsed < b.lastUsed;
     });
     return out;
+}
+
+int64_t roomForMissing(const std::vector<std::pair<int64_t, int64_t>>& wantHave) {
+    int64_t missing = 0;
+    for (const auto& [want, have] : wantHave)
+        if (want > 0 && have != want) missing += want;
+    return missing + static_cast<int64_t>(static_cast<double>(missing) * kOverheadFraction);
+}
+
+bool holdsSavesInPlay(const std::string& entryPath) {
+    return ::access((entryPath + "/.cabinetos-playing").c_str(), F_OK) == 0;
 }
 
 namespace {

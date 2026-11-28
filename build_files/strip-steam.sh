@@ -14,8 +14,10 @@
 # added by install-steam-session.sh.
 #
 # Lutris, the Windows-compatibility layer around it and Bazzite's own Steam
-# wrappers still go: Steam brings its own Proton, and nothing else here
-# launches Windows games.
+# wrappers still go: Steam brings its own Proton, and Windows Arcade (#762)
+# brings its own Wine, GE-Proton with its own winetricks, both pinned in
+# build_files/install-windowsarcadeloader.sh and run only from
+# /usr/lib/cabinetos/windowsarcadeloader.
 #
 # What is deliberately KEPT from Bazzite's gaming stack, and why:
 #
@@ -77,9 +79,13 @@ remove_pkgs "no third-party game launchers" \
     heroic-games-launcher-bin \
     bottles
 
-# Windows compatibility. CabinetOS runs emulators, not Windows games. umu is
-# Valve's Proton launcher wrapper; winetricks is a Wine configuration helper.
-remove_pkgs "no Windows compatibility layer" \
+# Bazzite's Windows compatibility. umu is Valve's Proton launcher wrapper,
+# which nothing here runs: Steam starts its own games. Bazzite's winetricks is
+# whatever version Bazzite last copied in; Windows Arcade runs the one its
+# runner carries (bin/winetricks, pinned at 20260125, the version its files
+# list is read from), so another on the PATH is never used and could only
+# stand in for it with other downloads if that one were missing.
+remove_pkgs "Bazzite's Windows compatibility layer, unused" \
     umu-launcher \
     umu-wrapper
 

@@ -1,0 +1,32 @@
+# The build environment for windowsarcadeloader, the launcher that plays
+# games from Windows-based arcade boards, on Linux x86-64: the Linux launcher
+# and the Windows payload DLLs its own build.sh makes.
+#
+# SEPARATE FROM frontend/Containerfile, for the reason sm2emu-builder gives:
+# every libretro core's CI cache key covers frontend/Containerfile
+# (ci/core-cache-key.sh), so adding Rust and MinGW there would rebuild all of
+# them for one program that needs them.
+#
+# Fedora 44 for the same reason as the others: it is what Bazzite 44 is built
+# from, so the launcher links the glibc and SDL 3 the image has. Move it when
+# the base moves.
+#
+# WHAT IT TAKES, all of it Fedora's own packages: Rust and Cargo with the two
+# Windows targets of the payloads (i686 and x86_64, windows-gnu), MinGW for
+# both with static winpthreads, and SDL 3 for the launcher. The crates come
+# from crates.io at the versions the loader's Cargo.lock pins
+# (cores/build-windowsarcadeloader.sh checks the lock is unchanged).
+#
+# NO MONO HERE: TMNT's input bridge needs the .NET 2.0 reference set
+# (mcs -sdk:2), which Fedora 44's Mono lacks, so it is built in
+# Containerfile.mono beside this one, as the loader's own release.yml builds
+# it on Ubuntu 24.04.
+FROM registry.fedoraproject.org/fedora:44
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+        rust cargo rust-std-static-i686-pc-windows-gnu rust-std-static-x86_64-pc-windows-gnu \
+        mingw32-gcc mingw64-gcc mingw32-winpthreads-static mingw64-winpthreads-static \
+        SDL3-devel gcc gcc-c++ make cmake pkgconf-pkg-config git \
+    && dnf clean all
+
+WORKDIR /src

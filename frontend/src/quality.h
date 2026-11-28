@@ -68,7 +68,10 @@ Level forGame(int romId);
 // can run (Core::canServeDesktopGL, #219). Only these get the pause menu's
 // row; Wii U (Cemu) has no lever without resolution packs (#207), Xbox 360 is
 // 720p at every level since the A9 measured it (2026-10-04), and 3DO and the
-// vector systems are fixed at every level.
+// vector systems are fixed at every level. A Windows arcade game has a level
+// only when its own profile in the loader offers a picture size or scale
+// (standalone::hasPictureLevels; nine of the loader's games at its pin), so
+// the row is shown for those alone (GameSession::pictureFixed).
 bool hasLevels(const std::string& core);
 
 // --- What each emulator is told ----------------------------------------------

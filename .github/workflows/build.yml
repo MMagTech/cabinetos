@@ -270,6 +270,17 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     uses: ./.github/workflows/build-xemu-chihiro.yml
 
+  # WINDOWS ARCADE, windowsarcadeloader built from source at a pin
+  # (build-windowsarcadeloader.yml), with its catalogue and files list, and
+  # the same refusal: ci/stage-image-payload.sh will not build an image
+  # without it. Its Wine, GE-Proton, and winetricks are pinned downloads
+  # (below).
+  windowsarcade:
+    name: Windows Arcade
+    needs: [lint, promote]
+    if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/build-windowsarcadeloader.yml
+
   # REMOTE PLAY, Sunshine built at its pin with our patch (build-sunshine.yml,
   # #304), with the same refusal: ci/stage-image-payload.sh will not build an
   # image without it.
@@ -293,7 +304,7 @@ jobs:
 
   build_push:
     name: Build and push image
-    needs: [lint, promote, frontend, cores, playstation2, wiiu, model2, model3, chihiro, sunshine, mame]
+    needs: [lint, promote, frontend, cores, playstation2, wiiu, model2, model3, chihiro, windowsarcade, sunshine, mame]
     if: ${{ !cancelled() && !failure() && needs.promote.outputs.promoted != 'true' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
 
@@ -313,14 +324,15 @@ jobs:
           remove-codeql: true
 
       # The frontend and the Wii bridge, the cores, PlayStation 2, MAME 0.289,
-      # Wii U, Model 2, Model 3, Chihiro and Sunshine, from the jobs above.
-      # Merged into one directory, which works because each artifact was
-      # staged into the payload's own folders (bin/, cores/, system/, mame/,
-      # cemu/, sm2emu/, supermodel/, xemu-chihiro/, sunshine/) and no two of
-      # them hold a file of the same name: bin/ comes from the frontend,
-      # cores/ has one .so per core plus the PS2 emulator and its libraries,
-      # system/ has PPSSPP's, Dolphin's and PCSX2's files under different
-      # directories, mame/, cemu/, sm2emu/, supermodel/, xemu-chihiro/ and
+      # Wii U, Model 2, Model 3, Chihiro, Windows Arcade and Sunshine, from
+      # the jobs above. Merged into one directory, which works because each
+      # artifact was staged into the payload's own folders (bin/, cores/,
+      # system/, mame/, cemu/, sm2emu/, supermodel/, xemu-chihiro/,
+      # windowsarcadeloader/, sunshine/) and no two of them hold a file of the
+      # same name: bin/ comes from the frontend, cores/ has one .so per core
+      # plus the PS2 emulator and its libraries, system/ has PPSSPP's,
+      # Dolphin's and PCSX2's files under different directories, mame/,
+      # cemu/, sm2emu/, supermodel/, xemu-chihiro/, windowsarcadeloader/ and
       # sunshine/ one emulator each.
       - name: Fetch the frontend and the cores
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
@@ -341,7 +353,7 @@ jobs:
         run: ci/stage-image-payload.sh .artifacts
 
       # THE FILES THE IMAGE BUILD WOULD DOWNLOAD FROM OUTSIDE (RPCS3, Xenia
-      # Edge, xemu's drive), kept in the Actions cache so a release site that
+      # Edge, xemu's drive, GE-Proton and winetricks for Windows Arcade), kept in the Actions cache so a release site that
       # answers 500 cannot fail a build (RPCS3's, 2026-10-12). The key is the
       # install scripts' own pins; the scripts check each sha256 again.
       # ci/fetch-pinned.sh. The key is read on its own line: inside echo's

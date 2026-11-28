@@ -438,6 +438,8 @@ void App::showDetailProgress() {
             launchJob.stage.load() == LaunchJob::Stage::Unpacking;
         prog.installing =
             launchJob.stage.load() == LaunchJob::Stage::Installing;
+        prog.settingUpWindows =
+            launchJob.stage.load() == LaunchJob::Stage::SettingUpWindows;
     }
     detailScreen.setProgress(prog);
 }

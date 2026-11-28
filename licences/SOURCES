@@ -64,6 +64,26 @@ vita3k                 Vita3K/Vita3K                       649d7d69b2da2eb55f172
 # Creative Commons Attribution-NonCommercial-ShareAlike 4.0
 # (build_files/install-linuxloader.sh).
 linuxloader            lindbergh-loader/linuxloader        96334eb3c5bc028d8941ea4e180166f53d06cda7  README.md#L74-76
+# Windows Arcade (#762): windowsarcadeloader at its pin, GE-Proton11-14's own
+# notices as its release ships them (its Makefile.in: dist.LICENSE as LICENSE,
+# liberation-fonts' LICENSE as LICENSE.OFL, dav1d's doc/PATENTS as
+# PATENTS.AV1), the full texts of the parts those notices name under a licence
+# that asks for its text, at the commits the GE-Proton11-14 tag (commit
+# 777d72b4) pins as submodules, and winetricks 20260125
+# (build_files/install-windowsarcadeloader.sh).
+windowsarcadeloader    aderumier/windowsarcadeloader       2bfe0694bce3c603163cad390624a8ad416852f9  LICENSE
+ge-proton              GloriousEggroll/proton-ge-custom    777d72b4ae50b3121ac46df2a7605bb2d6156840  dist.LICENSE
+ge-proton-ofl          liberationfonts/liberation-fonts    4b0192046158094654e865245832c66d2104219e  LICENSE
+ge-proton-patents-av1  videolan/dav1d                      b546257f770768b2c88258c533da38b91a06f737  doc/PATENTS
+ge-proton-wine         ValveSoftware/wine                  a47c73f52fd7b2efafc1c560710f3a5099ae51e0  LICENSE
+ge-proton-wine-lgpl    ValveSoftware/wine                  a47c73f52fd7b2efafc1c560710f3a5099ae51e0  COPYING.LIB
+ge-proton-dxvk         doitsujin/dxvk                      f90f1bf180f41356695ddf3df6af62119fb64a3e  LICENSE
+ge-proton-vkd3d-proton HansKristian-Work/vkd3d-proton      cae8353ed7959c448ac976342052de1ec2b81715  LICENSE
+ge-proton-d7vk         WinterSnowfall/d7vk                 9fb6a2d5046bbda0ab31d8399b68f6e979127320  LICENSE
+ge-proton-ffmpeg       FFmpeg/FFmpeg                       9047fa1b084f76b1b4d065af2d743df1b40dfb56  LICENSE.md
+ge-proton-ffmpeg-lgpl  FFmpeg/FFmpeg                       9047fa1b084f76b1b4d065af2d743df1b40dfb56  COPYING.LGPLv2.1
+ge-proton-dav1d        videolan/dav1d                      b546257f770768b2c88258c533da38b91a06f737  COPYING
+winetricks             Winetricks/winetricks               b76e1ee79ac57d7aceb384f74518fc423265810c  COPYING
 cemu                   cemu-project/Cemu                   4e3c824faa00f6b85782db019f20f29f063f3a2a  LICENSE.txt
 # sm2-emu's licence, the additional terms its NOTICE sets under GPL v3 section
 # 7, and the BSD 3-Clause licence of the code it takes from MAME's Model 2 driver.

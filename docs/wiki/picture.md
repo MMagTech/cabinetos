@@ -43,6 +43,12 @@ start on Performance; **Picture** raises them.
 Sizes are for each system's usual picture. A game drawn at another size scales
 by the same amount.
 
+A Windows Arcade game has levels only when it offers a picture size of its
+own: Performance is the game's own choice, Balanced the largest size up to
+1080 lines and Quality up to 2160, or for a scale, about halfway and the
+most. The other Windows Arcade games draw at their own size and have no
+**Picture**.
+
 These systems look the same at every level, so their pause menu has no
 **Picture**: Xbox 360 at 720p, Wii U at the game's own resolution, 3DO at
 640x480, Vectrex and the vector arcade games drawn sharp, and PlayStation,

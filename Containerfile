@@ -99,17 +99,25 @@ FROM ghcr.io/ublue-os/bazzite:44.20261026@sha256:ee82a885dbb77cd4604a5ffa8278a0e
 #                                Not yet in an image: 57 MB on disk, 21.5
 #                                MB gzipped, as unpacked on the test VM on
 #                                2026-11-26.
-#   11. xemu's drive       1 MB  pinned.
-#   12. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
-#   13. the frontend       4 MB  the frontend, the Wii bridge, the
+#   11. Windows Arcade  ~600 MB  windowsarcadeloader built at a pin by
+#                                build-windowsarcadeloader.yml, with its
+#                                catalogue and files list, and GE-Proton11-14
+#                                and winetricks, pinned. Not yet in an image:
+#                                GE-Proton's Wine tree is 1.6 GB on disk and
+#                                its release 599 MB gzipped; the loader's
+#                                dist/ was 76 MB on disk, both on the A9 in
+#                                the trial of 2026-11-26.
+#   12. xemu's drive       1 MB  pinned.
+#   13. the core files    16 MB  PPSSPP's, Dolphin's and PCSX2's resources.
+#   14. the frontend       4 MB  the frontend, the Wii bridge, the
 #                                controller lists and the shaders. Moves
 #                                with nearly every change.
-#   14. the boot splash  254 MB  the initramfs. Moves with the OS layer.
-#   15. the version       1 kB  every image.
-#   16. the lint               (nothing in it)
+#   15. the boot splash  254 MB  the initramfs. Moves with the OS layer.
+#   16. the version       1 kB  every image.
+#   17. the lint               (nothing in it)
 #
 # A console downloads only the layers whose bytes changed, so a frontend change
-# ships layer 13, PROVIDED the other layers rebuild to identical bytes. CI
+# ships layer 14, PROVIDED the other layers rebuild to identical bytes. CI
 # builds from nothing every time, so that rests on `podman build --timestamp`
 # in the Justfile, on build.sh stamping the packages it installs with a fixed
 # time (#511), and on there being NO RECHUNK, which throws this order away
@@ -193,6 +201,16 @@ RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=tmpfs,dst=/tmp \
     /ctx/install-linuxloader.sh
+
+# Windows Arcade: windowsarcadeloader, built from source at a pin by
+# build-windowsarcadeloader.yml, its catalogue and files list, from the
+# payload, and the Wine it runs games in, GE-Proton11-14 with winetricks,
+# pinned by checksum, about 1.6 GB on disk. A layer of its own after Linux
+# Loader's, the largest CabinetOS adds, moving only when one of its pins
+# does. build_files/install-windowsarcadeloader.sh says why.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=tmpfs,dst=/tmp \
+    /ctx/install-windowsarcadeloader.sh
 
 # xemu's blank Xbox hard drive, pinned by checksum, 1.6 MB, beside the EEPROM
 # that system_files puts in the same folder. xemu itself is a Flatpak

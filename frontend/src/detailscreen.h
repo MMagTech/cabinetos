@@ -147,6 +147,8 @@ public:
         bool unpacking = false;
         // A PS3 game going into the emulator after its download (#171).
         bool installing = false;
+        // A Windows arcade game's Windows setup being built (#762).
+        bool settingUpWindows = false;
     };
     void setProgress(const Progress& p) { progress_ = p; }
 

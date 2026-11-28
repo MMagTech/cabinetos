@@ -775,6 +775,106 @@ int test() {
               "which a start on another console puts back under the loader's names");
     }
     {
+        // WINDOWS ARCADE'S TWO LAYERS (windowsarcadeloader, #762): what a game
+        // wrote under this person's layer over its own folder (`game/`) and
+        // over the Windows setup (`prefix/`) goes up as one zip of those
+        // folders, under the game's name, and nothing Wine or the loader wrote
+        // there for itself goes with it (standalone::windowsSaveFile). The
+        // five kinds of save, by the files the games of the A9's run of
+        // 2026-11-27 wrote: a board's memory in the game's folder (Let's Go
+        // Island), an Unreal game's board files and settings (Scarlet Dawn),
+        // a program writing beside itself in its run folder (Senxin Aleste,
+        // and TMNT's scores and operator settings), Wine's user folders
+        // (Elevator Action Invasion), and the game's own registry keys kept
+        // among them. A start on another console puts each back where it was.
+        GameSession s;
+        s.romId = ++game;
+        s.title = "Windows Arcade Game";
+        s.fsStem = "Windows Arcade Game";
+        s.core = "windowsarcadeloader";
+        s.platformSlug = "teknoparrot";
+        s.arcade = true;
+        s.saveTag = "windowsarcadeloader";
+        s.saveDir = storage::savesDir(u, "teknoparrot", game, "windowsarcadeloader");
+        s.dirSaveRoot = s.saveDir + "/save";
+        s.dirSaveCore = "windowsarcadeloader";
+        s.dirSavePlatform = "teknoparrot";
+        const std::vector<std::string> saved = {
+            "game/sv/E2PROM.bin",
+            "game/sv/SRAM.bin",
+            "game/AMFS/sysfile.dat",
+            "game/AppData/SDET/appfile.dat",
+            "game/App/Hodzero/WindowsNoEditor/Hodzero/Saved/Config/WindowsNoEditor/Game.ini",
+            "game/ESGame/Binaries/Win64/Ranking.DB",
+            "prefix/drive_c/wal/apm3/senxin-aleste/save.dat",
+            "prefix/drive_c/wal/apm3/senxin-aleste/ranking_100.dat",
+            "prefix/drive_c/wal/rawthrills/teenage-mutant-ninja-turtles/LocalData/testmenu/prefs/"
+            "prefs",
+            "prefix/drive_c/wal/rawthrills/teenage-mutant-ninja-turtles/LocalData/highscores/HST.txt",
+            "prefix/drive_c/users/steamuser/AppData/Local/ESGame/Saved/Config/WindowsNoEditor/"
+            "Engine.ini",
+            "prefix/drive_c/users/cabinetos-registry.reg",
+        };
+        const std::vector<std::string> left = {
+            "game/log/boot.log",
+            "game/App/Hodzero/WindowsNoEditor/Hodzero/Saved/Logs/Hodzero.log",
+            "game/App/Hodzero/WindowsNoEditor/Hodzero/Saved/Config/CrashReportClient/"
+            "UE4CC-Windows-5D75/CrashReportClient.ini",
+            "game/GameData/.shaders/shader_cache.bin",
+            "game/BepInEx/cache/chainloader_typeloader.dat",
+            "game/tmp.dmp",
+            "prefix/user.reg",
+            "prefix/system.reg",
+            "prefix/.wal-update-timestamp",
+            "prefix/drive_c/windows/system32/d3d11.dll",
+            "prefix/drive_c/wal/apm3/senxin-aleste/Log.txt",
+            "prefix/drive_c/wal/apm3/senxin-aleste/wal_apm3.dll",
+            "prefix/drive_c/wal/apm3/senxin-aleste/senxin_aleste_apm3.exe",
+            "prefix/drive_c/wal/apm3/senxin-aleste/wal-apm3.log",
+            "prefix/drive_c/wal/apm3/senxin-aleste/.wal-installed",
+            "prefix/drive_c/users/steamuser/AppData/Local/dxvk/8b16266b5f2e7419.dxvk.bin",
+            "prefix/drive_c/users/steamuser/AppData/LocalLow/RawThrills/TMNT/Unity/local.a982/"
+            "Analytics/values",
+            "prefix/drive_c/users/steamuser/Temp/UnityShaderCache/0a1b",
+        };
+        for (const std::string& f : saved) cab::writeBytes(s.dirSaveRoot + "/" + f, scores);
+        for (const std::string& f : left) cab::writeBytes(s.dirSaveRoot + "/" + f, one);
+        syncDirSave(s);
+        const bool marked = s.saveChanged && mark(s, u) && cache::owedPush(u, game, &p);
+        std::vector<cab::ZipFile> in;
+        std::string zerr;
+        const std::vector<uint8_t> zip = marked ? cab::readBytes(p.savePath)
+                                                : std::vector<uint8_t>();
+        std::vector<std::string> sent;
+        if (marked && cab::readZip(zip, &in, &zerr))
+            for (const cab::ZipFile& f : in) sent.push_back(f.relPath);
+        std::vector<std::string> want = saved;
+        std::sort(sent.begin(), sent.end());
+        std::sort(want.begin(), want.end());
+        check(marked && p.saveName == "Windows Arcade Game.zip" && p.saveShape == "FOLDER" &&
+                  sent == want,
+              "Windows Arcade: what the game wrote in its folder, its run folder and Wine's user "
+              "folders goes up as one zip of those folders, without the logs, caches, programs "
+              "and registry files beside them");
+        cache::clearPushOwed(u, game, p.stamp);
+        const std::string other =
+            storage::savesDir(u, "teknoparrot", game + 5000, "windowsarcadeloader") + "/save";
+        SaveFetch fetched;
+        fetched.romId = game + 5000;
+        fetched.asked = fetched.listed = true;
+        fetched.mark = savemirror::mark();
+        fetched.pick.from = savepick::Pick::From::Channel;
+        fetched.pick.channel.current.save.fileName =
+            "Windows Arcade Game [2026-11-27_02-14-02-114].zip";
+        fetched.picked = zip;
+        restoreDirSave(fetched, "windowsarcadeloader", other, s.title, std::string(), nullptr,
+                       cab::ZipShape::Folder, std::string(), std::string());
+        bool back = !saved.empty();
+        for (const std::string& f : saved) back = back && cab::readBytes(other + "/" + f) == scores;
+        check(back, "which a start on another console puts back, each file where the game "
+                    "wrote it");
+    }
+    {
         // DREAMCAST'S CARD, ONE PER GAME IN THE GAME'S SAVE FOLDER (#346,
         // step 8): a start copies the person's card from before once to the
         // name Flycast reads, the old file left, and takes away a card under

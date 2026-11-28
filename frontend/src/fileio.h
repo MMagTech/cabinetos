@@ -58,6 +58,13 @@ bool removeFile(const std::string& path);
 // `path` cannot be opened or the drive reports a write that failed.
 bool syncDrive(const std::string& path);
 
+// Whether a write that failed with `errnum` failed for want of room: ENOSPC,
+// no space left on the drive, or EDQUOT, over a quota. Nothing else is, not
+// EFBIG, a file too big for the drive's own format (FAT32's 4 GB), which no
+// amount of room cures. What romfile::prepareFile and Client::fetchToFile
+// report, from the error their own write got, never from free space after.
+bool noRoom(int errnum);
+
 // Whether the drive holding `path` puts a file's size on it only together
 // with the file's bytes: true on btrfs and ext4, false on exFAT, NTFS and
 // any filesystem it does not know, and when `path` cannot be read.

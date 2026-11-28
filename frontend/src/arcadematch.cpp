@@ -21,8 +21,12 @@
 #include <unordered_map>
 #include <utility>
 
+#include "cache.h"
 #include "catalog.h"
+#include "fileio.h"
+#include "lindberghprograms.h"
 #include "standalone.h"
+#include "storage.h"
 
 namespace arcadematch {
 
@@ -38,6 +42,14 @@ struct Entry {
     // A Chihiro game's (=<ID>:<name>): the ID its image's boot.id carries,
     // and the name the emulator gives its saves.
     std::string id, name;
+    // A Windows game's (~<prefix>:<verb>,...): its Wine prefix's last part
+    // and the winetricks verbs the loader installs in it, in order.
+    std::string prefix;
+    std::vector<std::string> verbs;
+    // Its picture options (%<KEY>=<default>:...).
+    std::vector<WindowsOption> options;
+    // Whether its profile gives a pad a layout of its own (pad).
+    bool ownPadLayout = false;
 };
 
 struct Catalogue {
@@ -46,19 +58,36 @@ struct Catalogue {
     // Linux Loader's !programs line: the names of the programs it starts, in
     // the order it looks for them (mainShared.c, games[]), as they are spelt.
     std::vector<std::string> programs;
+    // windowsarcadeloader's files list, windowsarcadeloader.files.
+    std::vector<WindowsFile> windowsFiles;
+    // windowsarcadeloader's !runner line: the Wine folder it runs games under.
+    std::string runner;
 };
 
 // THE ORDER, and it is the decision (arcadematch.h).
-// sm2-emu, Supermodel, xemu-chihiro and Linux Loader are programs of their own
-// (standalone.h), named as their catalog rows name them.
+// sm2-emu, Supermodel, xemu-chihiro, Linux Loader and windowsarcadeloader are
+// programs of their own (standalone.h), named as their catalog rows name them.
 constexpr const char* kOrder[] = {"flycast",      "fbneo_libretro", "mame2003_plus",
                                   "sm2emu",       "supermodel",     "xemu-chihiro",
-                                  "linuxloader",  "mame_libretro"};
+                                  "linuxloader",  "windowsarcadeloader",
+                                  "mame_libretro"};
 // The one that plays a converted image, `<set>.bin`, and nothing else.
 constexpr const char* kImages = "xemu-chihiro";
 // The one that plays a Lindbergh game's folder, by its program, and no zip.
 constexpr const char* kFolders = "linuxloader";
+// The one that plays a Windows arcade game's folder, by its .windowsloader
+// file, and no zip.
+constexpr const char* kWindows = "windowsarcadeloader";
 constexpr size_t kCores = sizeof kOrder / sizeof kOrder[0];
+
+// Where an emulator's catalogue is among the order's.
+size_t indexOf(const char* core) {
+    return static_cast<size_t>(std::find_if(std::begin(kOrder), std::end(kOrder),
+                                            [core](const char* k) {
+                                                return std::strcmp(k, core) == 0;
+                                            }) -
+                               std::begin(kOrder));
+}
 
 std::string gDir = "cores/build";
 std::once_flag gLoaded;
@@ -104,6 +133,10 @@ Catalogue parse(const std::string& text) {
             c.programs.assign(words.begin() + 1, words.end());
             continue;
         }
+        if (words[0] == "!runner") {
+            if (words.size() > 1) c.runner = words[1];
+            continue;
+        }
         if (words.size() < 3) continue;
         Entry e;
         e.works = words[1] == "w";
@@ -112,10 +145,44 @@ Catalogue parse(const std::string& text) {
             const std::string& w = words[i];
             const size_t colon = w.find(':');
             if (colon == std::string::npos) {
-                if (w.size() > 1 && w[0] == 'b') e.buttons = std::atoi(w.c_str() + 1);
+                if (w == "pad")
+                    e.ownPadLayout = true;
+                else if (w.size() > 1 && w[0] == 'b')
+                    e.buttons = std::atoi(w.c_str() + 1);
                 continue;
             }
-            if (w[0] == '=') {
+            if (w[0] == '%') {
+                const size_t eq = w.find('=');
+                if (eq == std::string::npos || eq > colon) continue;
+                WindowsOption o;
+                o.key = w.substr(1, eq - 1);
+                o.def = w.substr(eq + 1, colon - eq - 1);
+                const std::string range = w.substr(colon + 1);
+                const size_t dash = range.find('-');
+                const bool number =
+                    dash != std::string::npos && dash > 0 && dash + 1 < range.size() &&
+                    std::all_of(range.begin(), range.end(), [](char ch) {
+                        return ch == '-' || std::isdigit(static_cast<unsigned char>(ch));
+                    });
+                if (number) {
+                    o.min = std::atoi(range.c_str());
+                    o.max = std::atoi(range.c_str() + dash + 1);
+                } else {
+                    for (size_t v = 0; v < range.size();) {
+                        const size_t bar = std::min(range.find('|', v), range.size());
+                        if (bar > v) o.choices.push_back(range.substr(v, bar - v));
+                        v = bar + 1;
+                    }
+                }
+                e.options.push_back(std::move(o));
+            } else if (w[0] == '~') {
+                e.prefix = w.substr(1, colon - 1);
+                for (size_t v = colon + 1; v < w.size();) {
+                    const size_t comma = std::min(w.find(',', v), w.size());
+                    if (comma > v) e.verbs.push_back(w.substr(v, comma - v));
+                    v = comma + 1;
+                }
+            } else if (w[0] == '=') {
                 e.id = w.substr(1, colon - 1);
                 e.name = w.substr(colon + 1);
             } else if (w[0] == '@') {
@@ -143,6 +210,40 @@ Catalogue parse(const std::string& text) {
     return c;
 }
 
+bool isHex64(const std::string& s) {
+    return s.size() == 64 && std::all_of(s.begin(), s.end(), [](char c) {
+               return std::isdigit(static_cast<unsigned char>(c)) || (c >= 'a' && c <= 'f');
+           });
+}
+
+// windowsarcadeloader.files: `<verb> <cache folder>/<file name> <sha256>
+// <url>` a line. The path is all between the verb and the SHA-256, so a
+// space in a file's name stays in it; the URL is not kept (the console
+// downloads nothing). A line of any other form is skipped.
+std::vector<WindowsFile> parseFiles(const std::string& text) {
+    std::vector<WindowsFile> out;
+    size_t at = 0;
+    while (at < text.size()) {
+        size_t end = text.find('\n', at);
+        if (end == std::string::npos) end = text.size();
+        const std::string line = text.substr(at, end - at);
+        at = end + 1;
+        if (line.empty() || line[0] == '#') continue;
+        const size_t first = line.find(' ');
+        const size_t last = line.find_last_of(' ');
+        if (first == std::string::npos || last == first) continue;
+        const size_t shaAt = line.find_last_of(' ', last - 1);
+        if (shaAt == std::string::npos || shaAt <= first) continue;
+        WindowsFile f;
+        f.verb = line.substr(0, first);
+        f.path = line.substr(first + 1, shaAt - first - 1);
+        f.sha256 = lower(line.substr(shaAt + 1, last - shaAt - 1));
+        if (f.verb.empty() || f.path.empty() || !isHex64(f.sha256)) continue;
+        out.push_back(std::move(f));
+    }
+    return out;
+}
+
 // Every emulator's catalogue in `dir`, in the order. A missing one is said
 // and reads as empty.
 void loadFrom(const std::string& dir, Catalogue* cats) {
@@ -168,6 +269,13 @@ void loadFrom(const std::string& dir, Catalogue* cats) {
         }
         cats[i] = parse(text);
         std::fprintf(stderr, "[arcade] %s: %zu sets\n", kOrder[i], cats[i].sets.size());
+        if (std::strcmp(kOrder[i], kWindows) == 0) {
+            const std::string list = dir + "/" + kWindows + ".files";
+            const std::vector<uint8_t> bytes = cab::readBytes(list);
+            cats[i].windowsFiles = parseFiles(std::string(bytes.begin(), bytes.end()));
+            std::fprintf(stderr, "[arcade] %s: %zu Windows files\n", list.c_str(),
+                         cats[i].windowsFiles.size());
+        }
     }
 }
 
@@ -278,16 +386,40 @@ Answer byFilesIn(const Catalogue* cats, const std::string& fileName,
     return first;
 }
 
+// A game by its key in one emulator's catalogue, the whole answer its line
+// gives: one not there, not marked working or made for anything but a
+// controller is not supported, a gun game needs a light gun.
+Answer byKey(const Catalogue* cats, const char* core, const std::string& key) {
+    const Catalogue& c = cats[indexOf(core)];
+    const auto it = c.sets.find(key);
+    if (it == c.sets.end() || !it->second.works || it->second.flag == 'x') return notSupported();
+    if (it->second.flag == 'g') return {Verdict::NeedsGun, core, "Needs a light gun"};
+    return {Verdict::Plays, core, {}};
+}
+
 // A Lindbergh game by a key of Linux Loader's catalogue: a program's name in
 // lower case, or a fingerprint as eight hex digits.
 Answer byLoaderKey(const Catalogue* cats, const std::string& key) {
-    const Catalogue& c = cats[std::find_if(std::begin(kOrder), std::end(kOrder), [](const char* k) {
-                                  return std::strcmp(k, kFolders) == 0;
-                              }) - std::begin(kOrder)];
-    const auto it = c.sets.find(key);
-    if (it == c.sets.end() || !it->second.works || it->second.flag == 'x') return notSupported();
-    if (it->second.flag == 'g') return {Verdict::NeedsGun, kFolders, "Needs a light gun"};
-    return {Verdict::Plays, kFolders, {}};
+    return byKey(cats, kFolders, key);
+}
+
+// A Windows game by its id, in windowsarcadeloader's catalogue.
+Answer byWindowsIdIn(const Catalogue* cats, const std::string& gameId) {
+    return byKey(cats, kWindows, gameId);
+}
+
+WindowsGame windowsGameIn(const Catalogue* cats, const std::string& gameId) {
+    WindowsGame g;
+    const Catalogue& c = cats[indexOf(kWindows)];
+    const auto it = c.sets.find(gameId);
+    if (it == c.sets.end()) return g;
+    g.known = true;
+    g.prefix = it->second.prefix;
+    g.verbs = it->second.verbs;
+    g.options = it->second.options;
+    g.runner = c.runner;
+    g.ownPadLayout = it->second.ownPadLayout;
+    return g;
 }
 
 std::string fingerprintKey(uint32_t crc) {
@@ -342,6 +474,22 @@ std::string programIn(const std::vector<std::string>& programs, const std::strin
             if (::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode) && isElf(p)) return p;
         }
     return {};
+}
+
+// The files in `dir`, by name, none hidden, that are `.windowsloader` files.
+std::vector<std::string> loaderFilesIn(const std::string& dir) {
+    std::vector<std::string> out;
+    if (DIR* d = ::opendir(dir.c_str())) {
+        while (dirent* e = ::readdir(d)) {
+            if (e->d_name[0] == '.' || windowsGameId(e->d_name).empty()) continue;
+            struct stat st;
+            const std::string p = dir + "/" + e->d_name;
+            if (::stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode)) out.push_back(p);
+        }
+        ::closedir(d);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 Answer byImageIn(const Catalogue* cats, const std::string& fileName, const std::string& id) {
@@ -474,16 +622,21 @@ bool sevenZipMembers(const std::string& path, std::vector<Member>* out, std::str
 bool isArcadeSlug(const std::string& slug) {
     for (const char* s : {"arcade", "mame", "mame-advmame", "fbneo", "fba", "naomi", "naomi2",
                           "naomigd", "atomiswave", "gaelco", "cps1", "cps2", "cps3", "neogeomvs",
-                          "neogeoaes", "stv", "model2", "model3", "chihiro", "lindbergh"})
+                          "neogeoaes", "stv", "model2", "model3", "chihiro", "lindbergh",
+                          "teknoparrot"})
         if (slug == s) return true;
     return false;
 }
 
-bool asksDreamcast(const std::string& fileName) {
+bool isWindowsSlug(const std::string& slug) { return slug == "teknoparrot"; }
+
+bool isArchive(const std::string& fileName) {
     std::string set, ext;
     nameOf(fileName, &set, &ext);
     return ext == "zip" || ext == "7z";
 }
+
+bool asksDreamcast(const std::string& fileName) { return isArchive(fileName); }
 
 void setDirectory(const std::string& dir) { gDir = dir; }
 
@@ -528,6 +681,45 @@ std::string lindberghProgramNamed(const std::vector<std::string>& fileNames) {
             if (std::find(fileNames.begin(), fileNames.end(), p) != fileNames.end()) return p;
     }
     return {};
+}
+
+Answer byWindowsId(const std::string& gameId) {
+    load();
+    return byWindowsIdIn(gCat, gameId);
+}
+
+std::string windowsGameId(const std::string& path) {
+    static const std::string kExt = ".windowsloader";
+    const std::string base = path.substr(path.find_last_of('/') + 1);
+    if (base.size() <= kExt.size() ||
+        base.compare(base.size() - kExt.size(), kExt.size(), kExt) != 0)
+        return {};
+    return base.substr(0, base.size() - kExt.size());
+}
+
+std::string windowsIdNamed(const std::vector<std::string>& fileNames) {
+    for (const std::string& n : fileNames)
+        if (const std::string id = windowsGameId(n); !id.empty()) return id;
+    return {};
+}
+
+std::string windowsLoaderFile(const std::string& folder) {
+    std::vector<std::string> dirs = {folder};
+    const std::vector<std::string> one = foldersIn(folder);
+    dirs.insert(dirs.end(), one.begin(), one.end());
+    for (const std::string& dir : dirs)
+        if (const std::vector<std::string> f = loaderFilesIn(dir); !f.empty()) return f.front();
+    return {};
+}
+
+WindowsGame windowsGame(const std::string& gameId) {
+    load();
+    return windowsGameIn(gCat, gameId);
+}
+
+std::vector<WindowsFile> windowsFiles() {
+    load();
+    return gCat[indexOf(kWindows)].windowsFiles;
 }
 
 bool lindberghFingerprint(const std::string& path, uint32_t* crc) {
@@ -730,8 +922,9 @@ int test() {
         std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
         if (!ok) ++failures;
     };
-    // Eight catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
-    // sm2-emu, Supermodel, xemu-chihiro, Linux Loader, MAME 0.289.
+    // Nine catalogues in the order Flycast, FinalBurn Neo, MAME 2003-Plus,
+    // sm2-emu, Supermodel, xemu-chihiro, Linux Loader, windowsarcadeloader,
+    // MAME 0.289.
     Catalogue cats[kCores] = {
         parse("# flycast\n!bios naomi awbios\n"
               "azumanga w - b71ede16:0 @gdl-0018:\n"
@@ -784,6 +977,14 @@ int test() {
               "e213414d w g\n"
               "057813a7 w x\n"
               "00000abc n -\n"),
+        parse("# windowsarcadeloader\n!runner GE-Proton11-14-x86_64\n"
+              "contra-evolution w - ~full:vcrun2008,d3dx9,dxvk "
+              "%TP_RESOLUTION=1280x720:640x480|1280x720|1920x1080 %TP_RENDER_SCALE=1:1-4\n"
+              "house-of-the-dead-scarlet-dawn w g ~full:vcrun2019\n"
+              "music-gungun-2 n - ~full:\n"
+              "mahjong-fight-club w x ~mfc:vcrun2005,dotnet11\n"
+              "mario-kart-arcade-gp-dx w - pad ~full:vcrun2019\n"
+              "kinst w - ~full:\n"),
         parse("# mame_libretro\n"
               "sf2 w - b6 00000001:100 00000003:300\n"
               "gollygho w - b2 00000009:10\n"
@@ -841,7 +1042,7 @@ int test() {
           "plays it");
     check(name("megat.zip").verdict == Verdict::NotSupported,
           "a touchscreen machine in MAME 0.289's list is not supported");
-    check(cats[7].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
+    check(cats[8].sets.at("raystorm").buttons == 2 && cats[1].sets.at("sf2").buttons == 0,
           "MAME 0.289's catalogue says how many buttons a game has; the others say none");
     check(core(name("daytona.zip")) == "sm2emu",
           "sm2-emu comes before MAME 0.289, where both have a Model 2 game working");
@@ -932,8 +1133,8 @@ int test() {
     check(core(files("kinst.zip", {{"k", 0x20, 10}}, {{"kinst", "AAAA"}})) == "fbneo_libretro",
           "a set FinalBurn Neo has with no disc plays there");
     {
-        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3],
-                                  cats[4], cats[5],    cats[6], cats[7]};
+        Catalogue noFb[kCores] = {cats[0], Catalogue{}, cats[2], cats[3], cats[4],
+                                  cats[5], cats[6],    cats[7], cats[8]};
         check(core(byFilesIn(noFb, "kinst.zip", {{"k", 0x20, 10}}, {{"KINST", "AAAA"}}, false)) ==
                   "mame2003_plus",
               "a disc of the listed name and SHA1 fits, in any case");
@@ -968,6 +1169,11 @@ int test() {
           "and so are the labels RomM gives each emulator's folder after rommapp/romm#5273");
     check(isArcadeSlug("chihiro"), "and RomM's own label for Chihiro's folder");
     check(isArcadeSlug("lindbergh"), "and RomM's own label for Lindbergh's folder");
+    check(isArcadeSlug("teknoparrot"), "and RomM's label for the Windows arcade games");
+    check(isWindowsSlug("teknoparrot") && !isWindowsSlug("arcade") && !isWindowsSlug("lindbergh") &&
+              !isWindowsSlug("windows-arcade"),
+          "the Windows arcade games known by RomM's label for them, and no other label taken "
+          "for it");
     check(!isArcadeSlug("triforce") && !isArcadeSlug("dc"),
           "a board no emulator here plays is not, nor is Dreamcast");
 
@@ -1052,6 +1258,232 @@ int test() {
         ::unlink((top + "/data/abc").c_str());
         for (const char* d : {"/Hummer/elf", "/Hummer", "/elf", "/data", ""})
             ::rmdir((top + d).c_str());
+    }
+
+    // WINDOWS ARCADE: a game's folder, known by its .windowsloader file's name.
+    auto windows = [&](const std::string& id) { return byWindowsIdIn(cats, id); };
+    check(windows("contra-evolution").verdict == Verdict::Plays &&
+              core(windows("contra-evolution")) == "windowsarcadeloader",
+          "Windows Arcade: a game the loader marks working, on a pad, plays in "
+          "windowsarcadeloader");
+    check(windows("Contra-Evolution").verdict == Verdict::NotSupported,
+          "its id is read as the loader spells it: another case is not one of its games");
+    check(windows("house-of-the-dead-scarlet-dawn").verdict == Verdict::NeedsGun &&
+              windows("house-of-the-dead-scarlet-dawn").why == "Needs a light gun",
+          "a gun game needs a light gun");
+    check(windows("music-gungun-2").verdict == Verdict::NotSupported &&
+              windows("music-gungun-2").why == "Not supported",
+          "a game the loader does not mark working is not supported");
+    check(windows("mahjong-fight-club").verdict == Verdict::NotSupported,
+          "nor is one made for anything but a controller, though marked working");
+    check(windows("not-a-loader-game").verdict == Verdict::NotSupported &&
+              windows("").verdict == Verdict::NotSupported,
+          "nor an id the loader does not have, nor no id (no .windowsloader file)");
+    check(core(name("kinst.zip")) != "windowsarcadeloader" &&
+              name("contra-evolution.zip").verdict == Verdict::NotSupported,
+          "a zip named as a Windows game's id is never windowsarcadeloader's");
+    {
+        const WindowsGame g = windowsGameIn(cats, "mahjong-fight-club");
+        check(g.known && g.prefix == "mfc" &&
+                  g.verbs == std::vector<std::string>({"vcrun2005", "dotnet11"}),
+              "a game's own prefix and its verbs are read back, in order");
+        const WindowsGame shared = windowsGameIn(cats, "contra-evolution");
+        check(shared.known && shared.prefix == "full" && shared.verbs.size() == 3 &&
+                  shared.verbs[2] == "dxvk",
+              "and the shared prefix's");
+        const WindowsGame none = windowsGameIn(cats, "music-gungun-2");
+        check(none.known && none.prefix == "full" && none.verbs.empty() && none.options.empty(),
+              "a game with no verbs or options has none, and is still known");
+        check(shared.options.size() == 2 && shared.options[0].key == "TP_RESOLUTION" &&
+                  shared.options[0].def == "1280x720" &&
+                  shared.options[0].choices ==
+                      std::vector<std::string>({"640x480", "1280x720", "1920x1080"}),
+              "a picture option that is a choice: its key, default and choices, in order");
+        check(shared.options.size() == 2 && shared.options[1].key == "TP_RENDER_SCALE" &&
+                  shared.options[1].def == "1" && shared.options[1].choices.empty() &&
+                  shared.options[1].min == 1 && shared.options[1].max == 4,
+              "and one that is a number: its default and range, no choices");
+        check(shared.runner == "GE-Proton11-14-x86_64" && g.runner == shared.runner,
+              "every game gives the catalogue's one runner");
+        check(!windowsGameIn(cats, "not-a-loader-game").known, "an id not listed is not known");
+        const WindowsGame ownPad = windowsGameIn(cats, "mario-kart-arcade-gp-dx");
+        check(ownPad.known && ownPad.ownPadLayout && ownPad.prefix == "full" &&
+                  ownPad.verbs == std::vector<std::string>({"vcrun2019"}) &&
+                  !shared.ownPadLayout && !g.ownPadLayout,
+              "a game marked pad has a pad layout of its own, its setup still read; one "
+              "not marked has none");
+    }
+    {
+        const std::string sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        const std::vector<WindowsFile> f = parseFiles(
+            "# windowsarcadeloader files\n"
+            "vcrun2019 vcrun2019/VC_redist.x64.exe " + sha + " https://example.invalid/a.exe\n"
+            "d3dx9 directx9/directx_Jun2010_redist.exe " + sha + " https://example.invalid/b\n"
+            "dotnet11 dotnet11/dotnet 1.1.exe " + sha + " https://example.invalid/c\n"
+            "broken vcrun2019/x.exe nothex https://example.invalid/d\n");
+        check(f.size() == 3 && f[0].verb == "vcrun2019" &&
+                  f[0].path == "vcrun2019/VC_redist.x64.exe" && f[0].sha256 == sha &&
+                  f[1].verb == "d3dx9" && f[1].path == "directx9/directx_Jun2010_redist.exe",
+              "the files list is read back: each file's verb, cache path and SHA-256");
+        check(f.size() == 3 && f[2].path == "dotnet11/dotnet 1.1.exe",
+              "a space in a file's name stays in its path");
+    }
+    check(windowsIdNamed({"Daytona.exe", "contra-evolution.windowsloader", "x.windowsloader"}) ==
+              "contra-evolution",
+          "by RomM's list of a game's files: the first .windowsloader file's name");
+    check(windowsIdNamed({"game.exe", "windowsloader", ".windowsloader", "x.WindowsLoader"})
+              .empty(),
+          "and none when no file is one, an ending in another case not one");
+    check(windowsGameId("/g/Contra/Contra-Evolution.windowsloader") == "Contra-Evolution" &&
+              windowsGameId("contra-evolution.windowsloader") == "contra-evolution" &&
+              windowsGameId("/g/AMContra.exe").empty(),
+          "a .windowsloader file's game id, from a path or a name, as it is spelt");
+    {
+        romm::RomFile zip;
+        zip.fileName = "Contra Evolution.zip";
+        zip.members = {{"Contra/AMContra.exe", 1, 10},
+                       {"Contra/contra-evolution.windowsloader", 2, 10}};
+        check(lindberghprograms::namedIn(lindberghprograms::Kind::Windows, {zip}) ==
+                  "contra-evolution",
+              "and a name inside a zip's members, by its last part");
+        romm::RomFile unread;
+        unread.fileName = "Wangan Midnight Maximum Tune 6.ZIP";
+        romm::RomFile unread7z = unread;
+        unread7z.fileName = "Hummer Extreme.7z";
+        romm::RomFile noneInside = zip;
+        noneInside.members = {{"Contra/AMContra.exe", 1, 10}};
+        romm::RomFile loose;
+        loose.fileName = "AMContra.exe";
+        check(!lindberghprograms::listed({unread}) && !lindberghprograms::listed({unread7z}),
+              "a game that is one zip or 7z RomM listed nothing inside gives nothing to keep");
+        check(lindberghprograms::listed({zip}) && lindberghprograms::listed({noneInside}),
+              "one whose members RomM listed does, a list with no loader file in it too");
+        check(lindberghprograms::listed({loose}) && lindberghprograms::listed({loose, unread}) &&
+                  lindberghprograms::listed({}),
+              "and so does a folder's list of files, an archive among them or none at all");
+
+        // WHAT AN ARCADE ZIP UNPACKS TO, and the room its first start asks.
+        romm::RomFile big;
+        big.fileName = "Mario Kart Arcade GP DX.zip";
+        big.members = {{"MKDX/a.bin", 1, 4000}, {"MKDX/b.bin", 2, 2200}};
+        check(lindberghprograms::unpackedIn({big}) == 6200,
+              "a zip's unpacked size is the sum of its members' sizes, as RomM lists them");
+        check(lindberghprograms::unpackedIn({unread}) == 0 &&
+                  lindberghprograms::unpackedIn({loose, big}) == 0 &&
+                  lindberghprograms::unpackedIn({loose}) == 0,
+              "not known for one RomM listed nothing inside, a folder, or a file that is no "
+              "archive");
+        check(lindberghprograms::roomToUnpack(2500, 6200) ==
+                  2500 + 6200 + static_cast<int64_t>(2500 * cache::kOverheadFraction),
+              "a zip whose unpacked size is known asks room for the zip and all it unpacks to");
+        check(lindberghprograms::roomToUnpack(2500, 0) ==
+                  2 * 2500 + static_cast<int64_t>(2500 * cache::kOverheadFraction),
+              "one whose unpacked size is not known asks for the download twice, as a folder");
+        const std::string cacheDir = "/d/cache";
+        const std::string inCache = "/d/cache/teknoparrot/4812 - Wangan";
+        using lindberghprograms::emptiesBeforeRoom;
+        check(emptiesBeforeRoom(inCache, cacheDir, false, false, false),
+              "a cache folder that is not whole is emptied before room is asked");
+        check(!emptiesBeforeRoom(inCache, cacheDir, true, false, false),
+              "never one that is whole");
+        check(!emptiesBeforeRoom("/d/roms/teknoparrot/4812 - Wangan", cacheDir, false, false,
+                                 false),
+              "nor a kept game's");
+        check(!emptiesBeforeRoom("/d/cache2/teknoparrot/4812 - Wangan", cacheDir, false, false,
+                                 false) &&
+                  !emptiesBeforeRoom("/d/cache/", cacheDir, false, false, false) &&
+                  !emptiesBeforeRoom("/d/cache", cacheDir, false, false, false),
+              "nor one outside the cache that only begins like it, nor the cache itself");
+        check(!emptiesBeforeRoom(inCache, cacheDir, false, true, false),
+              "nor one holding saves still only in it");
+        check(!emptiesBeforeRoom(inCache, cacheDir, false, false, true),
+              "nor one a game is mounted from");
+
+        // THE STORE'S ANSWERS (lindberghprograms.h), in a storage root of the
+        // test's own, RomM's answers handed in.
+        using lindberghprograms::Kind;
+        char tmpl[] = "/tmp/cabinetos-learn-XXXXXX";
+        const bool made = ::mkdtemp(tmpl) != nullptr;
+        storage::setRoot(tmpl);
+        const std::string store = storage::configDir() + "/windows-arcade-games.json";
+        int asked = 0;
+        std::vector<romm::RomFile> answer = {unread};
+        const lindberghprograms::Fetch fetch = [&](int, std::vector<romm::RomFile>* files,
+                                                   std::string*) {
+            ++asked;
+            *files = answer;
+            return true;
+        };
+        romm::Game wangan;
+        wangan.id = 4812;
+        wangan.sizeBytes = 10;
+        auto load = [&] {
+            lindberghprograms::learnAll(fetch, Kind::Windows, {wangan}, [] { return false; });
+        };
+        auto stored = [&] {
+            const std::vector<uint8_t> b = cab::readBytes(store);
+            return std::string(b.begin(), b.end()).find("\"4812\"") != std::string::npos;
+        };
+        load();
+        std::string got = "x", onDisk;
+        check(made && asked == 1 && lindberghprograms::known(Kind::Windows, 4812, 10, &got) &&
+                  got.empty() && !lindberghprograms::kept(Kind::Windows, 4812, 10, &onDisk) &&
+                  !stored(),
+              "a game RomM listed nothing inside is known as none at once, and nothing is "
+              "written for it");
+        check(!lindberghprograms::known(Kind::Windows, 4812, 11, &got),
+              "at another size it is not known");
+        load();
+        check(asked == 2, "the next library load asks RomM again");
+        answer = {zip};
+        load();
+        check(asked == 3 && lindberghprograms::kept(Kind::Windows, 4812, 10, &onDisk) &&
+                  onDisk == "contra-evolution" && stored() &&
+                  lindberghprograms::known(Kind::Windows, 4812, 10, &got) &&
+                  got == "contra-evolution",
+              "once RomM lists its members, the name they give is kept on the disk");
+        check(lindberghprograms::unpackedKept(Kind::Windows, 4812, 10) == 20 &&
+                  lindberghprograms::unpackedKept(Kind::Windows, 4812, 11) == 0,
+              "and with it what its members unpack to, at that size only");
+        load();
+        check(asked == 3, "and RomM is not asked again");
+        ::unlink(store.c_str());
+        ::rmdir(storage::configDir().c_str());
+        ::rmdir(tmpl);
+    }
+    {
+        char tmpl[] = "/tmp/cabinetos-windows-XXXXXX";
+        const bool made = ::mkdtemp(tmpl) != nullptr;
+        const std::string top = tmpl;
+        auto touch = [&](const std::string& p) {
+            FILE* f = std::fopen(p.c_str(), "wb");
+            if (!f) return false;
+            const bool w = std::fputs("AMContra.exe\n", f) >= 0;
+            std::fclose(f);
+            return w;
+        };
+        check(made && windowsLoaderFile(top).empty(),
+              "on the disk, a folder with no .windowsloader file has none");
+        ::mkdir((top + "/Contra").c_str(), 0755);
+        ::mkdir((top + "/Contra/deep").c_str(), 0755);
+        const bool deep = touch(top + "/Contra/deep/deeper.windowsloader");
+        check(deep && windowsLoaderFile(top).empty(),
+              "and one two folders down is not the game's");
+        const bool one = touch(top + "/Contra/contra-evolution.windowsloader");
+        check(one && windowsLoaderFile(top) == top + "/Contra/contra-evolution.windowsloader" &&
+                  windowsGameId(windowsLoaderFile(top)) == "contra-evolution",
+              "one a folder down is found, a zip that held the game's own folder, and gives "
+              "its id");
+        const bool atTop = touch(top + "/contra-evolution-top.windowsloader") &&
+                           touch(top + "/Other.WINDOWSLOADER");
+        check(atTop && windowsLoaderFile(top) == top + "/contra-evolution-top.windowsloader",
+              "and one at the top before it, a file whose ending is in another case passed "
+              "over");
+        for (const char* f : {"/contra-evolution-top.windowsloader", "/Other.WINDOWSLOADER",
+                              "/Contra/contra-evolution.windowsloader",
+                              "/Contra/deep/deeper.windowsloader"})
+            ::unlink((top + f).c_str());
+        for (const char* d : {"/Contra/deep", "/Contra", ""}) ::rmdir((top + d).c_str());
     }
 
     std::printf("%s\n", failures ? "arcade match test: FAILED" : "arcade match test: passed");

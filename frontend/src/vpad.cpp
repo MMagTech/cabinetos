@@ -103,6 +103,28 @@ constexpr int kMotionAxes = 6;
 constexpr int kMotionCodes[kMotionAxes] = {ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ};
 int gMotionSaid[kMaxPlayers][kMotionAxes] = {};
 
+// A WINDOWS ARCADE GAME'S BUTTONS TURNED for a player on a pad (vpad.h,
+// arcadePadButton): each of a pad's eight and what it is sent as.
+bool gArcadePad = false;
+struct Turn {
+    SDL_GamepadButton from, to;
+};
+constexpr Turn kArcadePad[] = {
+    {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_WEST},
+    {SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_NORTH},
+    {SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER},
+    {SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER},
+    {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, SDL_GAMEPAD_BUTTON_SOUTH},
+    {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_GAMEPAD_BUTTON_EAST},
+};
+
+// Whether the pad player `player` holds now is a fight stick the console
+// knows (players.h).
+bool onKnownStick(int player) {
+    SDL_Gamepad* gp = players::gamepad(player);
+    return gp && players::stick(SDL_GetGamepadID(gp));
+}
+
 // THE GUITARS' SHAPES (guitar.h), one per seat: a seat that is not a guitar's
 // has no layout and is sent its pad as it is.
 ::guitar::Ps3Shape gGuitar[kMaxPlayers];
@@ -371,10 +393,14 @@ void send(int player, const std::vector<::guitar::Change>& changes) {
 }  // namespace
 
 bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, bool guitars,
-          bool dpadOnStick) {
+          bool dpadOnStick, bool arcadePad) {
     close();
     if (players < 1) players = 1;
     if (players > kMaxPlayers) players = kMaxPlayers;
+    gArcadePad = arcadePad;
+    if (arcadePad)
+        std::fprintf(stderr, "[vpad] a pad's buttons as the console's other arcade systems have them, "
+                             "a known fight stick's as they are\n");
     if (dualsense) {
         bool ok = true;
         for (int i = 0; i < players && ok; ++i) {
@@ -431,6 +457,7 @@ bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, boo
 void close() {
     if (gCount > 0) rumble::reset();
     gDpadOnStick = false;
+    gArcadePad = false;
     for (::guitar::Ps3Shape& g : gGuitar) g.reset(nullptr);
     if (gDualSense) {
         vdualsense::closeAll();
@@ -472,8 +499,23 @@ std::string motionName(int player) {
     return motionNameOf(player);
 }
 
+SDL_GamepadButton arcadePadButton(SDL_GamepadButton b, bool arcadePad, bool onStick) {
+    if (!arcadePad || onStick) return b;
+    for (const Turn& t : kArcadePad)
+        if (t.from == b) return t.to;
+    return b;
+}
+
+SDL_GamepadAxis arcadePadAxis(SDL_GamepadAxis a, bool arcadePad, bool onStick) {
+    if (!arcadePad || onStick) return a;
+    if (a == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) return SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
+    if (a == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) return SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
+    return a;
+}
+
 void button(int player, SDL_GamepadButton b, bool down) {
     if (player < 0 || player >= gCount) return;
+    b = arcadePadButton(b, gArcadePad, gArcadePad && onKnownStick(player));
     if (gDualSense) {
         vdualsense::button(player, b, down);
         return;
@@ -503,6 +545,7 @@ void button(int player, SDL_GamepadButton b, bool down) {
 
 void axis(int player, SDL_GamepadAxis a, int16_t value) {
     if (player < 0 || player >= gCount) return;
+    a = arcadePadAxis(a, gArcadePad, gArcadePad && onKnownStick(player));
     if (gDualSense) {
         vdualsense::axis(player, a, value);
         return;
@@ -772,7 +815,7 @@ int motionTest() {
 
     // AN EMULATOR THAT READS NO MOTION DEVICE.
     if (!open(3, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false, /*guitars=*/false,
-              /*dpadOnStick=*/false)) {
+              /*dpadOnStick=*/false, /*arcadePad=*/false)) {
         std::printf("  FAIL  no virtual controllers: /dev/uinput cannot be opened\n");
         players::setInGame(false);
         SDL_Quit();
@@ -784,7 +827,7 @@ int motionTest() {
 
     // RPCS3.
     check(open(3, /*motion=*/true, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false, /*guitars=*/false,
-               /*dpadOnStick=*/false),
+               /*dpadOnStick=*/false, /*arcadePad=*/false),
           "three virtual controllers, motion asked");
     check(motionName(0) == "CabinetOS player 1 motion" && motionName(1) == "CabinetOS player 2 motion" &&
               motionName(2).empty(),
@@ -850,7 +893,7 @@ int motionTest() {
     // THE D-PAD ON THE LEFT STICK TOO (xemu-chihiro's row, standalone.h): read
     // back through the plain controller's own node.
     check(open(1, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false,
-               /*guitars=*/false, /*dpadOnStick=*/true),
+               /*guitars=*/false, /*dpadOnStick=*/true, /*arcadePad=*/false),
           "one virtual controller whose d-pad moves the left stick too");
     const int pad = openNode(padSysPath(0));
     auto stickAt = [&](int x, int y) {
@@ -872,7 +915,7 @@ int motionTest() {
     if (pad >= 0) ::close(pad);
     close();
     check(open(1, /*motion=*/false, /*dualsense=*/false, /*onlyPlayerOneTilts=*/false,
-               /*guitars=*/false, /*dpadOnStick=*/false),
+               /*guitars=*/false, /*dpadOnStick=*/false, /*arcadePad=*/false),
           "one virtual controller as every other emulator has it");
     const int plainPad = openNode(padSysPath(0));
     button(0, SDL_GAMEPAD_BUTTON_DPAD_LEFT, true);
@@ -886,6 +929,72 @@ int motionTest() {
     tilt::testUnplug(plain);
     players::setInGame(false);
     SDL_Quit();
+    std::printf("\n%s\n", failures ? "FAILED" : "all passed");
+    return failures ? 1 : 0;
+}
+
+int arcadePadTest() {
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s  %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) ++failures;
+    };
+    // THE LOADER'S OWN LAYOUT (windowsarcadeloader's defaults.yaml, which
+    // cores/arcade-sets.sh asserts): which cabinet button it reads from each
+    // of a pad's eight, 1 to 8, the triggers as axes.
+    auto cabinet = [](SDL_GamepadButton b) {
+        switch (b) {
+        case SDL_GAMEPAD_BUTTON_WEST: return 1;
+        case SDL_GAMEPAD_BUTTON_NORTH: return 2;
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: return 3;
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: return 4;
+        case SDL_GAMEPAD_BUTTON_SOUTH: return 5;
+        case SDL_GAMEPAD_BUTTON_EAST: return 6;
+        default: return 0;
+        }
+    };
+    auto cabinetAxis = [](SDL_GamepadAxis a) {
+        return a == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER ? 7 : a == SDL_GAMEPAD_AXIS_LEFT_TRIGGER ? 8 : 0;
+    };
+
+    // THE RULE: a pad's A, B, X, Y, L1, R1 are buttons 1 to 6, L2 and R2 7
+    // and 8.
+    check(cabinet(arcadePadButton(SDL_GAMEPAD_BUTTON_SOUTH, true, false)) == 1, "A is button 1");
+    check(cabinet(arcadePadButton(SDL_GAMEPAD_BUTTON_EAST, true, false)) == 2, "B is button 2");
+    check(cabinet(arcadePadButton(SDL_GAMEPAD_BUTTON_WEST, true, false)) == 3, "X is button 3");
+    check(cabinet(arcadePadButton(SDL_GAMEPAD_BUTTON_NORTH, true, false)) == 4, "Y is button 4");
+    check(cabinet(arcadePadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, true, false)) == 5, "L1 is button 5");
+    check(cabinet(arcadePadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, true, false)) == 6, "R1 is button 6");
+    check(cabinetAxis(arcadePadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER, true, false)) == 7,
+          "L2 is button 7, its travel on the trigger the loader reads 7 from");
+    check(cabinetAxis(arcadePadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, true, false)) == 8, "R2 is button 8");
+
+    // NOTHING ELSE MOVES, and no two of a pad's controls are sent as one.
+    bool othersStay = true, stickStays = true, ownStays = true;
+    bool seen[SDL_GAMEPAD_BUTTON_COUNT] = {};
+    bool oneEach = true;
+    for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; ++i) {
+        const auto b = static_cast<SDL_GamepadButton>(i);
+        const SDL_GamepadButton to = arcadePadButton(b, true, false);
+        if (!cabinet(b) && to != b) othersStay = false;
+        if (seen[to]) oneEach = false;
+        seen[to] = true;
+        if (arcadePadButton(b, true, true) != b) stickStays = false;
+        if (arcadePadButton(b, false, false) != b) ownStays = false;
+    }
+    for (int i = 0; i < SDL_GAMEPAD_AXIS_COUNT; ++i) {
+        const auto a = static_cast<SDL_GamepadAxis>(i);
+        if (!cabinetAxis(a) && arcadePadAxis(a, true, false) != a) othersStay = false;
+        if (arcadePadAxis(a, true, true) != a) stickStays = false;
+        if (arcadePadAxis(a, false, false) != a) ownStays = false;
+    }
+    check(othersStay,
+          "Start, Select, the stick clicks (Service and Test), the d-pad, the sticks and Guide are sent "
+          "as they are");
+    check(oneEach, "every button is sent as a button of its own");
+    check(stickStays, "a player on a known fight stick is sent every control as it is");
+    check(ownStays, "a game whose profile lays a pad out itself is sent every control as it is");
+
     std::printf("\n%s\n", failures ? "FAILED" : "all passed");
     return failures ? 1 : 0;
 }

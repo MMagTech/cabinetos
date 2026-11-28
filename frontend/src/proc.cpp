@@ -175,14 +175,21 @@ int spawn(const std::vector<std::string>& args, const std::string& logPath) {
     return pid;
 }
 
-int findDescendant(int root, const std::string& name) {
-    // Every process's parent and name, from /proc/<pid>/stat. The name is in
-    // brackets and may itself contain spaces or brackets, so it is everything
-    // between the first '(' and the LAST ')'.
-    std::vector<std::pair<int, int>> links;   // pid, parent
-    std::vector<std::string> names;
+namespace {
+
+struct Proc {
+    int pid = 0;
+    int parent = 0;
+    std::string name;
+};
+
+// Every process's parent and name, from /proc/<pid>/stat. The name is in
+// brackets and may itself contain spaces or brackets, so it is everything
+// between the first '(' and the LAST ')'.
+std::vector<Proc> everyProcess() {
+    std::vector<Proc> all;
     DIR* d = opendir("/proc");
-    if (!d) return -1;
+    if (!d) return all;
     while (dirent* e = readdir(d)) {
         const int pid = std::atoi(e->d_name);
         if (pid <= 0) continue;
@@ -200,23 +207,42 @@ int findDescendant(int root, const std::string& name) {
         int parent = 0;
         char state = 0;
         if (std::sscanf(close + 1, " %c %d", &state, &parent) != 2) continue;
-        links.emplace_back(pid, parent);
-        names.emplace_back(open + 1, close);
+        all.push_back({pid, parent, std::string(open + 1, close)});
     }
     closedir(d);
+    return all;
+}
 
+// The processes below `root`, a generation at a time, until `each` says
+// true for one, which is returned; -1 when it never does.
+int below(int root, const std::function<bool(const Proc&)>& each) {
+    const std::vector<Proc> all = everyProcess();
     std::vector<int> frontier{root};
     while (!frontier.empty()) {
         std::vector<int> next;
-        for (size_t i = 0; i < links.size(); ++i) {
-            if (std::find(frontier.begin(), frontier.end(), links[i].second) == frontier.end())
-                continue;
-            if (name.empty() || names[i] == name) return links[i].first;
-            next.push_back(links[i].first);
+        for (const Proc& p : all) {
+            if (std::find(frontier.begin(), frontier.end(), p.parent) == frontier.end()) continue;
+            if (each(p)) return p.pid;
+            next.push_back(p.pid);
         }
         frontier = std::move(next);
     }
     return -1;
+}
+
+}  // namespace
+
+int findDescendant(int root, const std::string& name) {
+    return below(root, [&name](const Proc& p) { return name.empty() || p.name == name; });
+}
+
+std::vector<int> descendants(int root) {
+    std::vector<int> out;
+    below(root, [&out](const Proc& p) {
+        out.push_back(p.pid);
+        return false;
+    });
+    return out;
 }
 
 std::string trimmed(const std::string& s) {

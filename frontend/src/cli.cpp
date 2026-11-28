@@ -32,6 +32,7 @@
 #include "savepicture.h"
 #include "savepush.h"
 #include "selftests.h"
+#include "standalone.h"
 #include "storage.h"
 #include "tilt.h"
 #include "tokenrevoke.h"
@@ -316,6 +317,10 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             return tilt::test();
         } else if (SDL_strcmp(argv[i], "--motion-device-test") == 0) {
             return cab::vpad::motionTest();
+        } else if (SDL_strcmp(argv[i], "--arcade-pad-test") == 0) {
+            return cab::vpad::arcadePadTest();
+        } else if (SDL_strcmp(argv[i], "--windows-setup-test") == 0) {
+            return cab::standalone::windowsSetupTest();
         } else if (SDL_strcmp(argv[i], "--dualsense-test") == 0) {
             return cab::vdualsense::test();
         } else if (SDL_strcmp(argv[i], "--fightstick-test") == 0) {

@@ -43,7 +43,13 @@
 // motion device of its own, made though the guitar has no sensors. Every
 // other seat, and every other emulator, is sent its pad as it is.
 //
-// Xbox, Xbox 360, Model 2, Model 3 and Chihiro keep the plain controller,
+// A WINDOWS ARCADE GAME (windowsarcadeloader, the open's `arcadePad`) sends a
+// player on a pad the cabinet's buttons where the console's other arcade
+// systems put them (arcadePadButton, below), unless its profile in the loader
+// lays a pad out itself, or that player is on a fight stick.
+//
+// Xbox, Xbox 360, Model 2, Model 3, Chihiro and Windows arcade boards keep
+// the plain controller,
 // Chihiro's with its d-pad on the left stick too (open). Rumble comes
 // back the other way from both kinds: each virtual controller takes the
 // emulator's force-feedback the way a real pad does, and pump() hands it to
@@ -110,8 +116,14 @@ constexpr int kMaxPlayers = 4;
 // d-pad both), the d-pad also moves its player's left stick: fully along a
 // direction it holds, the stick itself along one it does not. Only with the
 // plain controllers.
+//
+// With `arcadePad` (a Windows arcade game whose profile gives a pad no layout
+// of its own, standalone.h's turnsArcadePads), each player's buttons are
+// sent as arcadePadButton and arcadePadAxis turn them, judged at every press
+// and every move by the pad that player holds then, so a stick and a pad in
+// one game each get theirs.
 bool open(int players, bool motion, bool dualsense, bool onlyPlayerOneTilts, bool guitars,
-          bool dpadOnStick);
+          bool dpadOnStick, bool arcadePad);
 void close();
 int count();
 // True while player `player`'s controller is a stand-in DualSense carrying
@@ -134,6 +146,31 @@ void button(int player, SDL_GamepadButton b, bool down);
 void axis(int player, SDL_GamepadAxis a, int16_t value);
 // Everything let go and centred: the pause menu opening, a pad unplugged.
 void releaseAll();
+
+// A WINDOWS ARCADE GAME'S BUTTONS ON A PAD WHERE THE CONSOLE'S OTHER ARCADE
+// SYSTEMS PUT THEM (docs/decisions/2026-11-27-windows-arcade-pad-layout.md).
+// windowsarcadeloader lays a pad out as a fight stick is wired: its
+// defaults.yaml puts the cabinet's top row, buttons 1 to 4, on X, Y, R1 and
+// L1, and the bottom row, 5 to 8, on A, B, R2 and L2. So a pad here sends
+// each of the eight as the button the loader reads that cabinet button from,
+// and the cabinet's buttons land as FinalBurn Neo and MAME games have them on
+// a pad (Xbox words, by position):
+//   A button 1, B 2, X 3, Y 4, L1 5, R1 6, L2 7, R2 8
+// that is, A is sent as X, B as Y, X as R1, Y as L1, L1 as A, R1 as B, and
+// each trigger as the other: an axis, so its travel goes over, not a press.
+// Nothing else is turned: Start, Select (the coin), the stick clicks (the
+// cabinet's Service and Test), the d-pad, the sticks and Guide.
+// Nothing at all is turned without `arcadePad` (a game whose profile lays a
+// pad out itself, which the loader is left to do), nor `onStick`, a player on
+// a fight stick the console knows (fightstick.h), whose wiring the loader's
+// layout already is. cores/arcade-sets.sh stops the build should the
+// loader's own layout ever change.
+SDL_GamepadButton arcadePadButton(SDL_GamepadButton b, bool arcadePad, bool onStick);
+SDL_GamepadAxis arcadePadAxis(SDL_GamepadAxis a, bool arcadePad, bool onStick);
+
+// --arcade-pad-test: arcadePadButton and arcadePadAxis, every control, no SDL
+// device. 0 when all pass.
+int arcadePadTest();
 
 // Once a frame while an emulator runs: answers its force-feedback requests
 // and passes each player's rumble to rumble.h, and stops a rumble whose time

@@ -675,16 +675,24 @@ LibraryRead readLibrary(romm::Client& client, const LibraryAsk& ask, const std::
         r.counted[p.id] = c;
     }
 
-    // EACH LINDBERGH GAME'S PROGRAM, asked of RomM once per game, so a grid
-    // can tell a gun game before anything is downloaded (lindberghprograms.h).
-    // RomM's list is asked again each read; only a game not yet known costs
-    // its entry.
+    // EACH LINDBERGH GAME'S PROGRAM AND EACH WINDOWS ARCADE GAME'S ID, asked
+    // of RomM once per game, so a grid can tell a gun game before anything is
+    // downloaded (lindberghprograms.h). RomM's list is asked again each read;
+    // only a game not yet kept on the disk costs its entry, one RomM listed
+    // nothing inside at every read.
     for (const romm::Platform& p : r.platforms) {
-        if (p.slug != "lindbergh" || p.romCount <= 0) continue;
+        const bool windows = arcadematch::isWindowsSlug(p.slug);
+        if ((!windows && p.slug != "lindbergh") || p.romCount <= 0) continue;
         if (over()) return r;
         std::vector<romm::Game> games;
-        if (!client.fetchGames(p.id, &games, &err)) { failed("Lindbergh's games"); continue; }
-        lindberghprograms::learnAll(client, games, over);
+        if (!client.fetchGames(p.id, &games, &err)) {
+            failed(windows ? "Windows Arcade's games" : "Lindbergh's games");
+            continue;
+        }
+        lindberghprograms::learnAll(client,
+                                    windows ? lindberghprograms::Kind::Windows
+                                            : lindberghprograms::Kind::Lindbergh,
+                                    games, over);
     }
 
     if (over()) return r;
@@ -1193,6 +1201,7 @@ int arcadeTileTest() {
         platform(45, "arcade", "MAME2003", "Arcade"),
         platform(66, "neogeomvs", "NeoGeoMVS", "Neo Geo MVS"),
         platform(62, "model3", "Model3", "Sega Model 3"),
+        platform(70, "teknoparrot", "TeknoParrot", "TeknoParrot"),
     };
     const auto groups = tileGroups(server);
     check(groups.size() == 2 + 1, "every arcade folder is one tile, every other platform its own");
@@ -1200,8 +1209,9 @@ int arcadeTileTest() {
     for (const auto& g : groups)
         if (g.size() > 1)
             for (const romm::Platform& p : g) arcade.push_back(p.id);
-    check(arcade == std::vector<int>({45, 55, 58, 62, 66}),
-          "the Arcade tile holds every arcade label, RomM's and the boards', in id order");
+    check(arcade == std::vector<int>({45, 55, 58, 62, 66, 70}),
+          "the Arcade tile holds every arcade label, RomM's and the boards', and the Windows "
+          "arcade games' folder, in id order");
     bool alone = true;
     for (const auto& g : groups)
         if (g.size() == 1 && arcadematch::isArcadeSlug(g[0].slug)) alone = false;
@@ -1213,7 +1223,8 @@ int arcadeTileTest() {
           "the Arcade tile's query names each folder once, in id order");
     check(platformsQuery({5}) == "platform_ids=5", "and any other tile's is its one platform");
     check(catalog::displayName(server[2]) == "Arcade" &&
-              catalog::displayName(server[1]) == "Arcade",
+              catalog::displayName(server[1]) == "Arcade" &&
+              catalog::displayName(server[7]) == "Arcade",
           "every arcade folder is called Arcade, whatever RomM names it");
     check(catalog::displayName(server[0]) == "Super Nintendo Entertainment System",
           "any other platform keeps RomM's name");

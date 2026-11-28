@@ -5,8 +5,8 @@ built-in emulators: every system from the Atari 2600 to the Dreamcast, PS1,
 PSP, DS, GameCube, Wii and PS2. In arcade games, where FinalBurn Neo or
 Flycast plays the game (Flycast plays Naomi, Naomi 2 and Atomiswave), the two
 arcade emulators RetroAchievements supports. Not in the 3DS, and not in the
-separate emulators (Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita, Model 2 and
-Model 3).
+separate emulators (Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita, Model 2,
+Model 3, Chihiro, Lindbergh and Windows Arcade).
 
 ## Sign in
 

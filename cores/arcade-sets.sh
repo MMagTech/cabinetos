@@ -69,6 +69,18 @@
 #                   since the loader names a game's version, not its program.
 #                   A test menu, a server box and Segaboot are no game and
 #                   have no line
+#   windowsarcadeloader  windowsarcadeloader's own tree, at the commit
+#                   cores/build-windowsarcadeloader.sh pins: one line per
+#                   game profile (systemprofiles/<system>/<gameid>.yaml, over
+#                   its built-in defaults.yaml); whether it works by the
+#                   status column of its own status table (docs/
+#                   IMPLEMENTATION.md, which README's list is made from); its
+#                   marks by what its profile marks (the rule is in the code
+#                   below); and the Windows setup the loader's `prepare`
+#                   builds for it. With it a second file, the files list:
+#                   every file those setups' verbs download, read from the
+#                   winetricks build_files/install-windowsarcadeloader.sh pins
+#                   (and dotnet11's from the launcher, its own verb)
 #
 # THE FILE, <core file stem>.catalogue, one set a line (Linux Loader's: one
 # program a line, by its name in lower case, then one game version a line,
@@ -104,6 +116,25 @@
 # -listxml lists under each device. Flycast's also has
 # one `!bios` line: the BIOS zips it reads from bios/dc/.
 #
+# windowsarcadeloader's line is a game, by its id (the name of the game's
+# <gameid>.windowsloader file), with only its marks and its Windows setup:
+#   <gameid> <w|n> <-|g|x> [pad] ~<prefix>:<verb>,<verb>,... [%<KEY>=<default>:<choices>] ...
+# pad when its profile gives a pad a layout of its own: it sets any of a b x
+# y l1 r1 l2 r2 under input.gamepad (the loader merges a profile's keys there
+# one by one over defaults.yaml's), which the console then leaves as it is;
+# every other game's buttons a pad player gets where this console's other
+# arcade systems put them (frontend/src/vpad.h). <prefix> the last part of the Wine prefix the game runs in (full, the shared
+# one, or its own), the verbs every winetricks verb `prepare` installs there,
+# in its order: the prefix's prefix_tricks, then the game's tricks not among
+# them. A % word for each picture option the profile declares (a key ending
+# RESOLUTION or RENDER_SCALE): the value its merged env gives, then a choice's
+# values in the profile's order, `a|b|c`, or a number's range, `min-max`. One
+# `!runner` line names the runner's folder (defaults.yaml's runner). Its files
+# list, windowsarcadeloader.files (tracked as cores/windows-arcade-files.txt,
+# which CI checks against it), one file a verb downloads a line, in
+# winetricks' cache layout:
+#   <verb> <cache folder>/<file name> <sha256> <url>
+#
 # THE PIN IS READ FROM cores/build-core.sh, the one place it is written, and
 # for MAME 0.289, which is not built there, from cores/fetch-mame.sh (its
 # LISTXML_URL and LISTXML_SHA256; $CABINETOS_LISTXML may name a copy already
@@ -112,7 +143,10 @@
 # cores/build-supermodel.sh and cores/build-xemu-chihiro.sh (their REPO= and
 # COMMIT=), and for Linux Loader, which is not built here, from
 # build_files/install-linuxloader.sh (its LINUXLOADER_REPO= and
-# LINUXLOADER_COMMIT=). Not a mode of build-core.sh on
+# LINUXLOADER_COMMIT=), and for windowsarcadeloader from
+# cores/build-windowsarcadeloader.sh (its REPO= and COMMIT=), with winetricks
+# from build_files/install-windowsarcadeloader.sh (its WINETRICKS_URL and
+# WINETRICKS_SHA256). Not a mode of build-core.sh on
 # purpose: every core's CI cache key covers its shared lines
 # (ci/core-cache-key.sh), so editing a mode there would rebuild every core.
 #
@@ -122,7 +156,8 @@
 # Usage: cores/arcade-sets.sh <core> <out dir>
 #   writes <out dir>/<core file stem>.catalogue, e.g. fbneo_libretro.catalogue,
 #   or for a program of its own its name's, sm2emu.catalogue,
-#   supermodel.catalogue, xemu-chihiro.catalogue or linuxloader.catalogue
+#   supermodel.catalogue, xemu-chihiro.catalogue, linuxloader.catalogue or
+#   windowsarcadeloader.catalogue (and windowsarcadeloader.files)
 
 set -euo pipefail
 
@@ -166,6 +201,13 @@ linuxloader)
            "src/loader/mainL.c" "src/loader/linuxExe.c" "src/loader/graphics/gpuVendor.c")
     LEAST=80
     ;;
+windowsarcadeloader)
+    # Fetched as one sparse checkout (below), not file by file: the profiles
+    # are 418 files.
+    FILES=("systemprofiles" "docs/IMPLEMENTATION.md" "crates/launcher/src/defaults.yaml"
+           "crates/launcher/src/wine.rs" "crates/launcher/src/wine/dotnet11.rs")
+    LEAST=400
+    ;;
 *)
     exit 0
     ;;
@@ -205,6 +247,7 @@ sm2emu) arm=$(cat "${ROOT}/cores/build-sm2emu.sh") ;;
 supermodel) arm=$(cat "${ROOT}/cores/build-supermodel.sh") ;;
 xemu-chihiro) arm=$(cat "${ROOT}/cores/build-xemu-chihiro.sh") ;;
 linuxloader) arm=$(sed -n 's/^readonly LINUXLOADER_//p' "${ROOT}/build_files/install-linuxloader.sh") ;;
+windowsarcadeloader) arm=$(cat "${ROOT}/cores/build-windowsarcadeloader.sh") ;;
 *) arm=$(awk -v c="${CORE})" '$1 == c {on=1} on {print} on && /;;/ {exit}' "${ROOT}/cores/build-core.sh") ;;
 esac
 REPO=$(sed -n 's/^ *REPO=//p' <<<"${arm}")
@@ -216,7 +259,7 @@ COMMIT=$(sed -n 's/^ *COMMIT=//p' <<<"${arm}")
 
 slug=${REPO#https://github.com/}
 slug=${slug%.git}
-for f in "${FILES[@]}"; do
+[[ "${CORE}" == windowsarcadeloader ]] || for f in "${FILES[@]}"; do
     url="https://raw.githubusercontent.com/${slug}/${COMMIT}/${f// /%20}"
     url=${url//(/%28}
     url=${url//)/%29}
@@ -235,6 +278,33 @@ if [[ "${CORE}" == fbneo_libretro ]]; then
     git -C "${tmp}/fbneo" checkout -q FETCH_HEAD
     src+=("${tmp}/fbneo/src/burn/drv")
 fi
+# windowsarcadeloader's profiles, notes and launcher source, at the pin, and
+# winetricks at the version and checksum install-windowsarcadeloader.sh pins
+# (its WINETRICKS_URL and WINETRICKS_SHA256), the one the image carries as the
+# runner's bin/winetricks: its verbs' downloads are the files list.
+if [[ "${CORE}" == windowsarcadeloader ]]; then
+    git init -q "${tmp}/wal"
+    git -C "${tmp}/wal" remote add origin "${REPO}"
+    git -C "${tmp}/wal" fetch -q --depth 1 --filter=blob:none origin "${COMMIT}"
+    git -C "${tmp}/wal" sparse-checkout set --no-cone "${FILES[@]/#//}" >/dev/null
+    git -C "${tmp}/wal" checkout -q FETCH_HEAD
+    [[ "$(git -C "${tmp}/wal" rev-parse HEAD)" == "${COMMIT}" ]] ||
+        { echo "${CORE}: the checkout is not at ${COMMIT}" >&2; exit 1; }
+    src+=("${tmp}/wal")
+    WT_URL=$(sed -n 's/^readonly WINETRICKS_URL=//p' "${ROOT}/build_files/install-windowsarcadeloader.sh")
+    WT_SHA=$(sed -n 's/^readonly WINETRICKS_SHA256=//p' "${ROOT}/build_files/install-windowsarcadeloader.sh")
+    [[ "${WT_URL}" =~ ^https://raw.githubusercontent.com/Winetricks/winetricks/[0-9a-f]{40}/src/winetricks$ &&
+       "${WT_SHA}" =~ ^[0-9a-f]{64}$ ]] ||
+        { echo "${CORE}: no WINETRICKS_URL= and WINETRICKS_SHA256= in build_files/install-windowsarcadeloader.sh" >&2; exit 1; }
+    curl -fsSL --retry 3 -o "${tmp}/winetricks" "${WT_URL}"
+    got=$(sha256sum "${tmp}/winetricks" | cut -d' ' -f1)
+    [[ "${got}" == "${WT_SHA}" ]] ||
+        { echo "${CORE}: ${WT_URL} has sha256 ${got}, the pin says ${WT_SHA}" >&2; exit 1; }
+    src+=("${tmp}/winetricks")
+    FILES+=("${WT_URL}")
+    # The second file, the files list, written by the Python below.
+    export WAL_FILES_OUT="${OUT}/${CORE}.files" WAL_COMMIT="${COMMIT}"
+fi
 # Supermodel's marks are MAME 0.289's for the same set (above), and
 # xemu-chihiro's sets are MAME 0.289's.
 if [[ "${CORE}" == supermodel || "${CORE}" == xemu-chihiro ]]; then
@@ -247,12 +317,12 @@ mkdir -p "${OUT}"
 file="${OUT}/${CORE%_libretro}_libretro.catalogue"
 # A program of its own is named for itself (arcadematch.cpp, loadFrom).
 [[ "${CORE}" == sm2emu || "${CORE}" == supermodel || "${CORE}" == xemu-chihiro ||
-   "${CORE}" == linuxloader ]] &&
+   "${CORE}" == linuxloader || "${CORE}" == windowsarcadeloader ]] &&
     file="${OUT}/${CORE}.catalogue"
 {
     echo "# ${CORE} @ ${COMMIT}, from ${FILES[*]}"
     python3 - "${CORE}" "${src[@]}" <<'PY'
-import os, re, sys, zipfile
+import hashlib, os, re, sys, zipfile
 import xml.etree.ElementTree as ET
 
 core, paths = sys.argv[1], sys.argv[2:]
@@ -802,6 +872,391 @@ elif core == "linuxloader":
         if len(kinds) != 1:
             sys.exit("linuxloader: %s's games are of %s kinds" % (p, sorted(kinds) or "no"))
         line(p, True, kinds.pop(), [], [])
+elif core == "windowsarcadeloader":
+    wal, winetricks = paths
+    # THE PROFILES' KEYS, read by the few forms the profiles use at the pin: a
+    # top-level `key: value` or `key: [a, b]` (a flow list, on one line or
+    # more), and input's own keys one level in. No YAML library: neither
+    # this Mac's Python nor CI's has one. A form not read here stops the
+    # build, so a profile written another way is seen, never misread.
+    TOP = ("name", "system", "prefix", "prefix_archive", "prefix_tricks", "tricks", "runner")
+    INPUT = ("guns_enabled", "touch", "mouse_wrap")
+    # A PAD'S EIGHT BUTTONS, by the loader's names for an SDL gamepad's (Xbox
+    # words, by position), and where defaults.yaml puts each on the cabinet:
+    # the layout the console turns a pad player's buttons from (vpad.cpp). A
+    # profile that sets any of them under input.gamepad has a pad layout of
+    # its own; one that sets only guide, the d-pad, the sticks, start, back or
+    # the stick clicks has not.
+    PAD = {"x": "b1", "y": "b2", "r1": "b3", "l1": "b4", "a": "b5", "b": "b6", "r2": "b7", "l2": "b8"}
+
+    def uncomment(text):
+        out, quote = [], None
+        for i, c in enumerate(text):
+            if quote:
+                quote = None if c == quote else quote
+            elif c in "\"'":
+                quote = c
+            elif c == "#" and (i == 0 or text[i - 1] in " \t"):
+                break
+            out.append(c)
+        return "".join(out).rstrip()
+
+    def unquote(v):
+        v = v.strip()
+        return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
+
+    # A GAME'S PICTURE OPTIONS: the options its profile declares for the
+    # GUI (options: groups, each with options: items) whose key ends
+    # RESOLUTION or RENDER_SCALE. Read in the one form the profiles use: an
+    # item `- key: <KEY>` with its `kind:`, a one-line `choices: [...]` for a
+    # choice, `min:` and `max:` for a number, at the item's indent.
+    PICTURE_KEY = r"\bkey: *[\"']?[A-Z0-9_]*(RESOLUTION|RENDER_SCALE)\b"
+    VALUE = r"[A-Za-z0-9.]+"
+
+    def picture_options(path, lines):
+        found, i = [], 0
+        while i < len(lines):
+            m = re.match(r"^(\s*)- key: *[\"']?([A-Z0-9_]+)[\"']?$", lines[i])
+            i += 1
+            if not m or not re.search(r"(RESOLUTION|RENDER_SCALE)$", m.group(2)):
+                continue
+            item, indent = {}, len(m.group(1)) + 2
+            while i < len(lines):
+                n = re.match(r"^(\s*)(- )?([a-z_]+):(.*)$", lines[i])
+                if not n or n.group(2) or len(n.group(1)) < indent:
+                    break
+                if len(n.group(1)) == indent:
+                    item[n.group(3)] = n.group(4).strip()
+                i += 1
+            kind = item.get("kind")
+            if kind == "choice":
+                v = item.get("choices", "")
+                if not re.fullmatch(r"\[[^\[\]]+\]", v):
+                    sys.exit("windowsarcadeloader: %s's %s has no one-line choices" % (path, m.group(2)))
+                choices = [unquote(x) for x in v[1:-1].split(",")]
+                if not all(re.fullmatch(VALUE, c) for c in choices):
+                    sys.exit("windowsarcadeloader: %s's %s choices %r" % (path, m.group(2), choices))
+                found.append((m.group(2), choices, None))
+            elif kind == "number":
+                lo, hi = item.get("min", ""), item.get("max", "")
+                if not (re.fullmatch(r"-?\d+", lo) and re.fullmatch(r"-?\d+", hi)):
+                    sys.exit("windowsarcadeloader: %s's %s has no whole min and max" % (path, m.group(2)))
+                found.append((m.group(2), None, (int(lo), int(hi))))
+            else:
+                sys.exit("windowsarcadeloader: %s's %s is of kind %r, not choice or number"
+                         % (path, m.group(2), kind))
+        return found
+
+    def profile(path):
+        lines = open(path, encoding="utf-8").read().split("\n")
+        keys, inp, notes, top = {}, {}, [], None
+        env, options = {}, []
+        # input's key at the first level the lines below it are under, and
+        # input.gamepad's entries: one `<pad's name>: <cabinet's>` a line, the
+        # cabinet's one or more (`a: accel,brake`).
+        sub, pad = None, {}
+        comments = " ".join(l.strip()[1:] for l in lines if l.strip().startswith("#"))
+        # Its opening comment, before the first key: what the game is.
+        head = []
+        for l in lines:
+            if l.startswith("#"):
+                head.append(l[1:].strip())
+            elif l.strip():
+                break
+        i = 0
+        while i < len(lines):
+            raw = lines[i]
+            l = uncomment(raw)
+            if "<<:" in l:
+                sys.exit("windowsarcadeloader: %s merges a YAML anchor, a form not read here" % path)
+            m = re.match(r"^([A-Za-z_]\w*):(.*)$", l)
+            if m:
+                top, v, sub = m.group(1), m.group(2).strip(), None
+                if top == "input" and v:
+                    sys.exit("windowsarcadeloader: %s's input is a flow map, a form not read here" % path)
+                if top in TOP:
+                    if v.startswith("["):
+                        while "]" not in v:
+                            i += 1
+                            v += " " + uncomment(lines[i]).strip()
+                        if not re.fullmatch(r"\[[^\[\]{}]*\]", v):
+                            sys.exit("windowsarcadeloader: %s's %s is not a flat list" % (path, top))
+                        keys[top] = [unquote(x) for x in v[1:-1].split(",") if x.strip()]
+                    elif not v or v[0] in "&*|>{-":
+                        sys.exit("windowsarcadeloader: %s's %s is in a form not read here" % (path, top))
+                    else:
+                        keys[top] = unquote(v)
+            else:
+                m = re.match(r"^(\s+)([A-Za-z_]\w*):(.*)$", l)
+                if top == "input" and m and m.group(1) == "  ":
+                    sub = m.group(2)
+                    if sub == "gamepad" and m.group(3).strip():
+                        sys.exit("windowsarcadeloader: %s's input.gamepad is a flow map, a form not read here"
+                                 % path)
+                elif top == "input" and sub == "gamepad" and l.strip():
+                    g = re.match(r"^    ([a-z0-9+-]+): *([\"']?)([A-Za-z0-9+-]+(,[A-Za-z0-9+-]+)*)\2$", l)
+                    if not g:
+                        sys.exit("windowsarcadeloader: %s's input.gamepad has %r, a form not read here"
+                                 % (path, l.strip()))
+                    pad[g.group(1)] = g.group(3)
+                if m and m.group(2) in INPUT:
+                    if top != "input" or m.group(1) != "  ":
+                        sys.exit("windowsarcadeloader: %s has %s outside input's first level"
+                                 % (path, m.group(2)))
+                    v = m.group(3).strip()
+                    if v not in ("true", "false"):
+                        sys.exit("windowsarcadeloader: %s's %s is %r, not true or false"
+                                 % (path, m.group(2), v))
+                    inp[m.group(2)] = v == "true"
+                elif m and m.group(2) in TOP[2:]:
+                    sys.exit("windowsarcadeloader: %s has %s indented" % (path, m.group(2)))
+                elif m and top == "env" and m.group(1) == "  ":
+                    env[m.group(2)] = unquote(m.group(3))
+                if top == "options" and l.strip():
+                    options.append(l)
+                elif re.search(PICTURE_KEY, l):
+                    sys.exit("windowsarcadeloader: %s names a picture option outside options:" % path)
+                elif top == "input" and raw.strip().startswith("#"):
+                    notes.append(raw.strip()[1:])
+            i += 1
+        keys["env"], keys["options"], keys["gamepad"] = env, picture_options(path, options), pad
+        return keys, inp, " ".join(head), " ".join(notes), comments
+
+    launcher = os.path.join(wal, "crates/launcher/src")
+    defaults, default_input, _, _, _ = profile(os.path.join(launcher, "defaults.yaml"))
+    if defaults.get("prefix") != "wine-prefix/full" or len(defaults.get("prefix_tricks", [])) < 30:
+        sys.exit("windowsarcadeloader: defaults.yaml no longer gives the shared prefix and its verbs")
+    if "WAL_VOLUME" not in defaults["env"]:
+        sys.exit("windowsarcadeloader: defaults.yaml's env was not read")
+    if any(default_input.get(k) is not False for k in INPUT):
+        sys.exit("windowsarcadeloader: defaults.yaml no longer sets %s false" % ", ".join(INPUT))
+    if any(defaults["gamepad"].get(k) != v for k, v in PAD.items()):
+        sys.exit("windowsarcadeloader: defaults.yaml's input.gamepad no longer puts a pad's buttons where "
+                 "the console turns them from (vpad.cpp)")
+
+    # WORKS: the loader's own status table (its IMPLEMENTATION.md, "Games
+    # status", one row per game id, the one its gamelist.py makes README's
+    # list from). Its status column is the loader's own words. A game works
+    # when that column starts "works" (in every form: "works (user: 100%)",
+    # "works fullscreen", "works headless") or "user" (a player's own report
+    # of play: "user 100%", "user ok", "user-tested", "user: perfect"). Not
+    # working: reached play in tests or by hand but not marked working ("in
+    # game", "in fight", "headless tests"), "in progress", "boots", "title",
+    # "not running", and a profile with no row. Every status must start in
+    # one of those forms; another stops the build, to be read.
+    doc = open(os.path.join(wal, "docs/IMPLEMENTATION.md"), encoding="utf-8").read().split("\n")
+    status, on = {}, False
+    for l in doc:
+        if l.startswith("| Game id | Game | System | Result |"):
+            on = True
+            continue
+        if on and l.startswith("|---"):
+            continue
+        if on and not l.startswith("| `"):
+            if status:
+                break
+            continue
+        if on:
+            cells = [c.strip() for c in l.strip().strip("|").split(" | ")]
+            status[cells[0].strip("`")] = cells[3]
+    if len(status) < 400:
+        sys.exit("windowsarcadeloader: only %d rows in its status table" % len(status))
+    for gid, st in status.items():
+        if not re.match(r"(works|user|in (game|fight|progress)|headless|boots|title|not running)\b", st):
+            sys.exit("windowsarcadeloader: %s's status %r starts in a form not read here" % (gid, st[:60]))
+
+    # THE MARKS, from what the profiles mark plainly, in this order: x when
+    # its input reads a touch panel or slider (input.touch) or a trackball or
+    # spinner through the mouse (input.mouse_wrap); x when its name or its
+    # opening comment says what the cabinet is played with or is: a mahjong
+    # panel, a medal or slot machine, a coin pusher, a drum, dance or guitar
+    # game, a trackball or a spinner. A profile with guns_enabled (the gun or
+    # mouse as a pointer) is g when its status row counts its guns ("2
+    # guns"), x when its opening comment or its input's comments say the
+    # pointer is a touch screen, g when any of its comments or its status
+    # row say gun ("Direct3D 9 lightgun game"), and x when nothing names
+    # the pointer. Every other game is played on a controller.
+    WORDS = (r"\b(mahjong|medal|slot machine|coin pusher|drum|dance game|guitar|trackball"
+             r"|spinner)")
+
+    def mark(keys, inp, head, notes, comments, st):
+        what = (keys.get("name", "") + " " + head).lower()
+        if inp.get("touch") or inp.get("mouse_wrap") or re.search(WORDS, what):
+            return "x"
+        if not inp.get("guns_enabled"):
+            return "-"
+        if re.search(r"\b\d+ (light)?guns?\b", st.lower()):
+            return "g"
+        if re.search(r"\btouch", what + " " + notes.lower()):
+            return "x"
+        said = (comments + " " + st).lower()
+        return "g" if re.search(r"\bguns?\b|\blight ?guns?\b|\bgunners?\b", said) else "x"
+
+    games = {}
+    root = os.path.join(wal, "systemprofiles")
+    for system in sorted(os.listdir(root)):
+        if not os.path.isdir(os.path.join(root, system)):
+            continue
+        for f in sorted(os.listdir(os.path.join(root, system))):
+            if not f.endswith(".yaml"):
+                continue
+            gid = f[:-5]
+            if gid in games:
+                sys.exit("windowsarcadeloader: %s is in two systems, which the loader refuses" % gid)
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", gid):
+                sys.exit("windowsarcadeloader: the game id %r is not in the form read here" % gid)
+            keys, inp, head, notes, comments = profile(os.path.join(root, system, f))
+            # Its board's payload; not always its folder's (Battle Fantasia's
+            # NESiCA release is a Type X game).
+            if not re.fullmatch(r"[a-z0-9]+", keys.get("system", "")):
+                sys.exit("windowsarcadeloader: %s/%s names no system" % (system, f))
+            merged = dict(default_input, **inp)
+            # THE VERBS prepare installs (main.rs): its prefix_tricks, then
+            # its tricks not among them, in the prefix it names.
+            prefix_tricks = keys.get("prefix_tricks", defaults["prefix_tricks"])
+            verbs = prefix_tricks + [t for t in keys.get("tricks", []) if t not in prefix_tricks]
+            prefix = keys.get("prefix", defaults["prefix"])
+            if not re.fullmatch(r"wine-prefix/[a-z0-9][a-z0-9_-]*", prefix) or not verbs:
+                sys.exit("windowsarcadeloader: %s's prefix %r or its verbs are not read here" % (gid, prefix))
+            for v in verbs:
+                if not re.fullmatch(r"[a-z0-9_]+", v):
+                    sys.exit("windowsarcadeloader: %s's verb %r" % (gid, v))
+            st = status.get(gid, "")
+            # Each picture option, with the value the merged profile's env
+            # gives it (defaults.yaml's env, then the profile's).
+            menv = dict(defaults["env"], **keys["env"])
+            words = []
+            for key, choices, span in keys["options"]:
+                d = menv.get(key)
+                if d is None or not re.fullmatch(VALUE, d):
+                    sys.exit("windowsarcadeloader: %s's env gives %s no default" % (gid, key))
+                if choices is not None and d not in choices:
+                    sys.exit("windowsarcadeloader: %s's %s default %s is not a choice" % (gid, key, d))
+                if span is not None and not (re.fullmatch(r"-?\d+", d) and span[0] <= int(d) <= span[1]):
+                    sys.exit("windowsarcadeloader: %s's %s default %s is out of range" % (gid, key, d))
+                words.append("%%%s=%s:%s" % (key, d, "|".join(choices) if choices is not None
+                                             else "%d-%d" % span))
+            own_pad = any(k in PAD for k in keys["gamepad"])
+            games[gid] = (bool(re.match(r"(works|user)\b", st)), mark(keys, merged, head, notes, comments, st),
+                          prefix.split("/")[-1], verbs, words, own_pad)
+    # The runner's folder, the same for every game (defaults.yaml's runner).
+    runner = defaults.get("runner", "")
+    if not isinstance(runner, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", runner):
+        sys.exit("windowsarcadeloader: defaults.yaml names no runner")
+    print("!runner " + runner)
+    for gid, (works, flag, prefix, verbs, words, own_pad) in sorted(games.items()):
+        print(" ".join(["%s %s %s%s ~%s:%s" % (gid, "w" if works else "n", flag, " pad" if own_pad else "",
+                                               prefix, ",".join(verbs))] + words))
+
+    # THE FILES EACH VERB DOWNLOADS, from winetricks' own source: its
+    # load_<verb>, every helper that body calls and every verb it w_calls,
+    # each w_download (into the verb's own cache folder, W_PACKAGE, which a
+    # w_call sets to the verb called) and w_download_to (into the folder it
+    # names), the file named by its URL unless the call names it. The whole
+    # body is read, both architectures' branches, since the prefix is 64-bit,
+    # and the fallbacks: 7-Zip for Windows, which w_try_7z and w_try_unzip
+    # fetch only when the image's 7z or unzip is missing or fails.
+    # dotnet11 is the launcher's own (wine.rs, dotnet11.rs), its file read
+    # from there: winetricks' cache folder dotnet11/, its URL and SHA-256.
+    wt = open(winetricks, encoding="utf-8").read().split("\n")
+    funcs, name = {}, None
+    for l in wt:
+        m = re.match(r"^([A-Za-z_]\w*)\(\)\s*\{?\s*$", l)
+        if m:
+            name = m.group(1)
+            funcs[name] = []
+        elif name and l.startswith("}"):
+            name = None
+        elif name and not l.strip().startswith("#"):
+            funcs[name].append(l)
+    for need in ("w_download", "w_download_to", "w_call"):
+        if need not in funcs:
+            sys.exit("windowsarcadeloader: winetricks has no %s()" % need)
+    # w_download_to <folder> <url> <sha256> [file]; w_download <url> <sha256>
+    # [file], into "${W_PACKAGE}" (winetricks' own definitions, asserted).
+    if not any(re.search(r'_W_packagename="\$1"', l) for l in funcs["w_download_to"]) or \
+            not any('w_download_to "${W_PACKAGE}" "$@"' in l for l in funcs["w_download"]) or \
+            not any('_W_file=$(basename "${_W_url}")' in l for l in funcs["w_download_to"]):
+        sys.exit("windowsarcadeloader: winetricks' w_download_to or w_download changed form")
+    PLUMBING = {"w_download", "w_download_to", "w_call", "w_do_call"}
+    calls_cache = {}
+
+    def downloads(fname):
+        # Whether a function downloads, or calls one that does.
+        if fname not in calls_cache:
+            calls_cache[fname] = False
+            body = " ".join(funcs[fname])
+            calls_cache[fname] = bool(re.search(r"\bw_(download|download_to|call)\b", body)) or any(
+                downloads(w) for w in set(re.findall(r"\b([A-Za-z_]\w*)\b", body))
+                if w in funcs and w not in PLUMBING and w != fname)
+        return calls_cache[fname]
+
+    def words(rest):
+        return [unquote(w) for w in re.findall(r'"[^"]*"|\S+', rest)]
+
+    def walk(fname, package, seen, out):
+        if (fname, package) in seen:
+            return
+        seen.add((fname, package))
+        for l in funcs[fname]:
+            for m in re.finditer(r"\bw_download_to\s+(.*)$", l):
+                a = words(m.group(1))
+                out.append((a[0], a[1], a[2], a[3] if len(a) > 3 and not a[3].startswith(("$", "#", ";", "|", "&")) else None))
+            for m in re.finditer(r"\bw_download\s+(?!_to)(.*)$", l):
+                a = words(m.group(1))
+                out.append((package, a[0], a[1], a[2] if len(a) > 2 and not a[2].startswith(("$", "#", ";", "|", "&")) else None))
+            for m in re.finditer(r"\bw_call\s+([a-z0-9_]+)", l):
+                if "load_" + m.group(1) not in funcs:
+                    sys.exit("windowsarcadeloader: winetricks has no load_%s" % m.group(1))
+                walk("load_" + m.group(1), m.group(1), seen, out)
+            for w in set(re.findall(r"\b([A-Za-z_]\w*)\b", l)):
+                if w in funcs and w not in PLUMBING and w != fname and not w.startswith("load_") and downloads(w):
+                    walk(w, package, seen, out)
+
+    dotnet11 = open(os.path.join(launcher, "wine/dotnet11.rs"), encoding="utf-8").read()
+    wine_rs = open(os.path.join(launcher, "wine.rs"), encoding="utf-8").read()
+    own = re.findall(r'verb == "([a-z0-9_]+)"', wine_rs)
+    if own != ["dotnet11"]:
+        sys.exit("windowsarcadeloader: the launcher installs %s itself, the code here reads dotnet11" % own)
+    url = re.search(r'^const URL: &str = "([^"]+)";$', dotnet11, re.M)
+    sha = re.search(r'^const SHA256: &str = "([0-9a-f]{64})";$', dotnet11, re.M)
+    if not (url and sha and '.join("winetricks/dotnet11");' in dotnet11
+            and 'let file = cache.join("dotnetfx.exe");' in dotnet11):
+        sys.exit("windowsarcadeloader: dotnet11.rs no longer names its file as read here")
+    rows = set()
+    for verb in sorted({v for g in games.values() for v in g[3]}):
+        if verb == "dotnet11":
+            found = [("dotnet11", url.group(1), sha.group(1), "dotnetfx.exe")]
+        else:
+            if "load_" + verb not in funcs:
+                sys.exit("windowsarcadeloader: winetricks has no verb %s" % verb)
+            found = []
+            walk("load_" + verb, verb, set(), found)
+        for folder, u, s, f in found:
+            f = f or u.rsplit("/", 1)[-1]
+            for what, value in (("folder", folder), ("URL", u), ("checksum", s), ("file", f)):
+                if "$" in value or " " in value:
+                    sys.exit("windowsarcadeloader: %s's %s %r is not plain text" % (verb, what, value))
+            if not re.fullmatch(r"[0-9a-f]{64}", s) or not u.startswith("https://") or "/" in f:
+                sys.exit("windowsarcadeloader: %s downloads %s %s, a form not read here" % (verb, u, s))
+            rows.add((verb, folder + "/" + f, s, u))
+    seen_path = {}
+    for verb, path, s, u in rows:
+        if seen_path.setdefault(path, (s, u)) != (s, u):
+            sys.exit("windowsarcadeloader: two files at %s in winetricks' cache" % path)
+    with open(os.environ["WAL_FILES_OUT"], "w", encoding="utf-8") as out:
+        # Its first line is the loader's pin alone: the admin's script reads it
+        # (tools/windows-arcade-admin.sh) to fetch the loader at the same commit.
+        out.write("# windowsarcadeloader %s\n"
+                  "# Each verb's downloads, from winetricks at %s and the loader at\n"
+                  "# that commit (cores/arcade-sets.sh). Made, never typed:\n"
+                  "# <verb> <cache folder>/<file> <sha256> <url>\n"
+                  % (os.environ["WAL_COMMIT"], hashlib.sha256(open(winetricks, "rb").read()).hexdigest()))
+        for r in sorted(rows):
+            out.write(" ".join(r) + "\n")
+    print("! %d profiles (%d with a pad layout of their own), %d verbs, %d files (%d lines)" % (
+        len(games), sum(g[5] for g in games.values()), len({v for g in games.values() for v in g[3]}),
+        len(seen_path), len(rows)), file=sys.stderr)
 PY
 } > "${file}"
 
@@ -810,8 +1265,19 @@ PY
 count=$(grep -vc '^[#!]' "${file}")
 (( count >= LEAST )) ||
     { echo "${CORE}: only ${count} sets read, fewer than ${LEAST}" >&2; exit 1; }
-bad=$(grep -v '^[#!]' "${file}" |
-    grep -vcE '^[a-z0-9_.]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*( =[A-Z0-9]{4}:[a-z0-9_]+)?$' || true)
+FORM='^[a-z0-9_.]+ [wn] [-gx]( b[0-9]+)?( [0-9a-f]{8}:[0-9]+)*( @[^ :]+:[0-9a-f]*)*( =[A-Z0-9]{4}:[a-z0-9_]+)?$'
+# windowsarcadeloader's: a game id (dashes in it), then its Windows setup.
+[[ "${CORE}" == windowsarcadeloader ]] &&
+    FORM='^[a-z0-9][a-z0-9-]* [wn] [-gx]( pad)? ~[a-z0-9][a-z0-9_-]*:[a-z0-9_]+(,[a-z0-9_]+)*( %[A-Z0-9_]+=[A-Za-z0-9.]+:([A-Za-z0-9.]+(\|[A-Za-z0-9.]+)*|-?[0-9]+--?[0-9]+))*$'
+bad=$(grep -v '^[#!]' "${file}" | grep -vcE "${FORM}" || true)
 (( bad == 0 )) || { echo "${CORE}: ${bad} lines are not in the catalogue's form" >&2; exit 1; }
+if [[ "${CORE}" == windowsarcadeloader ]]; then
+    files=$(grep -vc '^#' "${WAL_FILES_OUT}")
+    bad=$(grep -v '^#' "${WAL_FILES_OUT}" |
+        grep -vcE '^[a-z0-9_]+ [a-z0-9_]+/[^ /]+ [0-9a-f]{64} https://[^ ]+$' || true)
+    (( files >= 25 && bad == 0 )) ||
+        { echo "${CORE}: ${WAL_FILES_OUT} has ${files} lines, ${bad} not in its form" >&2; exit 1; }
+    echo "${CORE}: ${files} files the verbs download -> ${WAL_FILES_OUT}"
+fi
 empty=$(grep -v '^[#!]' "${file}" | grep -cE '^[a-z0-9_]+ [wn] [-gx]( b[0-9]+)?$' || true)
 echo "${CORE}: ${count} sets (${empty} with nothing to check) at ${COMMIT} -> ${file}"

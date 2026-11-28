@@ -60,7 +60,7 @@ graphics under Linux:
 - **A Wii Remote will not pair.** Press the red sync button inside the battery
   cover, not the 1 and 2 buttons.
 - **No pause menu with the keyboard.** In PS2 games, and in Switch, PS3, Xbox,
-  Xbox 360, Wii U, PS Vita, Model 2 and Model 3 games, use a pad: both sticks
+  Xbox 360, Wii U, PS Vita, Model 2, Model 3, Chihiro, Lindbergh and Windows Arcade games, use a pad: both sticks
   pressed together.
 
 ## The screen

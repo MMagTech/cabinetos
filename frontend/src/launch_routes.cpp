@@ -1,10 +1,11 @@
 // The worker a launch runs, off the frame thread: the firmware step every
-// launch runs first, then one of five routes in a fixed order: a game on
+// launch runs first, then one of six routes in a fixed order: a game on
 // several discs, a game installed before it runs (PS3, Vita, original Xbox), a
-// Lindbergh game's whole folder, a folder of files, one file. The disc route
-// falls through to the others below two discs; the other four always end the
-// worker, by fetching the game's saves from RomM (finish) before the job is
-// Ready. beginLaunch (launch.cpp) starts it.
+// Lindbergh game's whole folder, a Windows arcade game's whole folder, a
+// folder of files, one file. The disc route falls through to the others below
+// two discs; the other five always end the worker, by fetching the game's
+// saves from RomM (finish) before the job is Ready. beginLaunch (launch.cpp)
+// starts it.
 // Moved out of main.cpp in the restructure (#398).
 
 #include "launch.h"
@@ -254,47 +255,85 @@ static void finish(LaunchJob& job, romm::Client& client, const storage::User& us
     job.stage = LaunchJob::Stage::Ready;
 }
 
-// A LINDBERGH GAME, FETCHED WHOLE (#620): its hard drive's folder, subfolders
-// and all, kept in RomM as that folder, or as a zip or 7z of it. Either way
-// one file comes down, the zip RomM makes of a folder game or the archive
-// it keeps, unpacked here in the folders it gives (romfile::prepareFile) and
-// then deleted. Not file by file,
+// A LINDBERGH GAME OR A WINDOWS ARCADE GAME, FETCHED WHOLE (#620, #762): its
+// folder, subfolders and all (a Lindbergh game's hard drive, a Windows game's
+// folder with its .windowsloader file), kept in RomM as that folder, or as a
+// zip or 7z of it. Either way one file comes down, the zip RomM makes of a
+// folder game or the archive it keeps, unpacked here in the folders it gives
+// (romfile::prepareFile) and then deleted. Not file by file,
 // as other folder games come: RomM lists every file of the folder, and Hummer
 // Extreme's TeknoParrot copy holds 124,777, which made its entry from RomM
 // 104 MB and 25 s on the write-test server (2026-11-26), against one zip of
 // 3.04 GB in 116 s. Once it is all on the drive, a note in the folder says so
 // with the size RomM gave the game, and a start with that note asks RomM
-// nothing about the folder; one RomM gives a new size comes down again. The
-// program Linux Loader will start in it is then found as the loader finds it,
-// checked by the loader's fingerprint (arcadematch.h), and made executable
-// with every program beside it, a bit a zip does not carry.
+// nothing about the folder; one RomM gives a new size comes down again.
 //
-// What the loader and the games write into the folder later (converted
+// What the emulator and the games write into the folder later (converted
 // shaders, the games' own files) stays in it and goes when the cache evicts
 // it (cache.h).
 static constexpr const char* kWholeNote = ".cabinetos-whole";
 
-static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
-                            const std::string& fsName, const std::string& entryPath,
-                            const std::string& location, const int64_t expectedSize,
-                            const storage::User& user) {
+// What a Windows game's setup answered, said on the page: true when it is
+// ready, else the job failed with the words for what is missing.
+static bool windowsSetupSays(LaunchJob& job, const cab::standalone::WindowsSetup setup,
+                             const std::string& gameId, const std::string& detail) {
+    if (!detail.empty())
+        std::fprintf(stderr, "[windows] setup for %s: %s\n", gameId.c_str(), detail.c_str());
+    switch (setup) {
+        case cab::standalone::WindowsSetup::Ready:
+            return true;
+        case cab::standalone::WindowsSetup::NoFiles:
+            job.message = "No Windows files on the server";
+            break;
+        case cab::standalone::WindowsSetup::FilesMissing:
+            job.message = "The Windows files on the server are out of date";
+            break;
+        case cab::standalone::WindowsSetup::Failed:
+            job.message = "Couldn't set up Windows";
+            break;
+    }
+    job.stage = LaunchJob::Stage::Failed;
+    return false;
+}
+
+// The whole folder on the drive, for either kind. A GUN GAME OR A PANEL'S IS
+// SAID FIRST, before any download, by the name RomM's list of its files gives
+// (lindberghprograms.h), asked here when no read has asked yet; the folder on
+// the disk confirms it after. False when the job has ended, Failed.
+static bool wholeFolder(LaunchJob& job, romm::Client& client, const lindberghprograms::Kind kind,
+                        const int id, const std::string& fsName, const std::string& entryPath,
+                        const std::string& location, const int64_t expectedSize) {
     struct stat est;
     if (::lstat(entryPath.c_str(), &est) == 0 && !S_ISDIR(est.st_mode))
         storage::removeEntry(entryPath);
     storage::makeDirs(entryPath);
-    // A GUN GAME OR A PANEL'S IS SAID BEFORE ANY DOWNLOAD, by the program
-    // RomM's list of its files names (lindberghprograms.h), asked here when
-    // no read has asked yet; the fingerprint below confirms it once here.
     {
-        std::string program, lerr;
-        bool knownNow = lindberghprograms::known(id, expectedSize, &program);
+        const bool windows = kind == lindberghprograms::Kind::Windows;
+        std::string name, lerr;
+        // Kept on the disk, else asked of RomM, so a game RomM listed nothing
+        // inside earlier in this run starts once RomM has read it; else what
+        // this run already knows.
+        bool knownNow = lindberghprograms::kept(kind, id, expectedSize, &name);
         if (!knownNow && !romm::serverAway())
-            knownNow = lindberghprograms::learn(client, id, expectedSize, &program, &lerr);
+            knownNow = lindberghprograms::learn(client, kind, id, expectedSize, &name, &lerr);
+        if (!knownNow) knownNow = lindberghprograms::known(kind, id, expectedSize, &name);
         if (knownNow) {
-            const arcadematch::Answer a = arcadematch::byProgram(program);
-            if (!pickArcade(job, fsName, a, "its program, " + (program.empty() ? "none" : program)))
-                return;
+            const arcadematch::Answer a =
+                windows ? arcadematch::byWindowsId(name) : arcadematch::byProgram(name);
+            const std::string by =
+                std::string(windows ? "its .windowsloader file, " : "its program, ") +
+                (name.empty() ? "none" : name);
+            if (!pickArcade(job, fsName, a, by)) return false;
             job.arcadePicked = false;
+            // A WINDOWS GAME WHOSE WINDOWS SETUP IS NEITHER THERE NOR ABLE TO
+            // BE BUILT says so now, before the game comes down: the firmware
+            // step above has already fetched whatever file RomM has.
+            if (windows) {
+                std::string detail;
+                if (!windowsSetupSays(job, cab::standalone::windowsSetupReady(name, &detail),
+                                      name, detail))
+                    return false;
+            }
         }
     }
     const std::string note = entryPath + "/" + kWholeNote;
@@ -308,55 +347,92 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
                      entryPath.c_str());
         job.message = "Couldn't download this game";
         job.stage = LaunchJob::Stage::Failed;
-        return;
+        return false;
     } else {
         ::unlink(note.c_str());
-        // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks.
-        const int64_t need =
-            2 * expectedSize +
-            static_cast<int64_t>(static_cast<double>(expectedSize) * cache::kOverheadFraction);
+        // WHAT AN UNPACKING THAT FAILED LEFT goes first, from a cache folder
+        // that is not whole, so it never holds the room asked next, nor has
+        // other games evicted for it (lindberghprograms.h, emptiesBeforeRoom).
+        if (lindberghprograms::emptiesBeforeRoom(
+                entryPath, storage::cacheDir(location), whole,
+                cache::holdsSavesInPlay(entryPath),
+                cab::standalone::gameFolderMounted(entryPath))) {
+            const int64_t left = storage::treeBytes(entryPath);
+            if (left > 0) {
+                storage::removeEntry(entryPath);
+                storage::makeDirs(entryPath);
+                cab::syncDrive(location);
+                std::fprintf(stderr, "[launch] emptied %s of %lld bytes an earlier try left\n",
+                             entryPath.c_str(), static_cast<long long>(left));
+            }
+        }
+        // ROOM FOR THE ZIP AND THE FOLDER AT ONCE, while it unpacks: what the
+        // zip or 7z holds unpacked when RomM listed its members, which is far
+        // more than the archive (Wangan Midnight Maximum Tune 6: 10.0 GB
+        // zipped, 17.6 GB unpacked), else the download's own size again
+        // (lindberghprograms.h, roomToUnpack).
+        const int64_t need = lindberghprograms::roomToUnpack(
+            expectedSize, lindberghprograms::unpackedKept(kind, id, expectedSize));
+        std::fprintf(stderr, "[launch] room for the download and its unpacking: %lld bytes\n",
+                     static_cast<long long>(need));
         if (cache::freeBytes(location) < need) {
             cache::evictUntilFree(location, need, id);
             if (cache::freeBytes(location) < need) {
                 job.message = "Not enough space";
                 job.stage = LaunchJob::Stage::Failed;
-                return;
+                return false;
             }
         }
-        if (cancelled(job)) return;
+        if (cancelled(job)) return false;
         // The folder as RomM zips it, or the zip or 7z RomM keeps: one file
         // either way, unpacked by what it is (romfile.h).
         const std::string zip = entryPath + "/.cabinetos-download";
         std::string err;
         job.stage = LaunchJob::Stage::Downloading;
-        if (!client.fetchToFile(
+        if (bool noRoom = false; !client.fetchToFile(
                 "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName), zip,
                 [&job](int64_t got, int64_t total) {
                     job.got = got;
                     job.total = total;
                     return !job.cancel.load();
                 },
-                &err)) {
+                &err, &noRoom)) {
             std::fprintf(stderr, "[launch] download %s: %s\n", fsName.c_str(), err.c_str());
             ::unlink(zip.c_str());
-            job.message = "Couldn't download this game";
+            job.message = noRoom ? "Not enough space" : "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
-            return;
+            return false;
         }
         job.got = 0;
         job.total = 0;
-        if (cancelled(job)) return;
+        if (cancelled(job)) return false;
+        // THE SECOND CHECK, by the archive's own index, as for one file: what
+        // it unpacks to beside it, which RomM may not have listed (an archive
+        // it gave up reading inside).
+        const int64_t holds = romfile::unpackedSize(zip, "", false);
+        const int64_t room =
+            holds + static_cast<int64_t>(static_cast<double>(holds) * cache::kOverheadFraction);
+        if (room > 0 && cache::freeBytes(location) < room) {
+            cache::evictUntilFree(location, room, id);
+            if (cache::freeBytes(location) < room) {
+                ::unlink(zip.c_str());
+                job.message = "Not enough space";
+                job.stage = LaunchJob::Stage::Failed;
+                return false;
+            }
+        }
         job.stage = LaunchJob::Stage::Unpacking;
         std::string primary;
-        romfile::Kind kind = romfile::Kind::Plain;
-        const bool unpacked = romfile::prepareFile(zip, entryPath, "", false, &primary, &kind,
-                                                   &err, job.cancel);
+        romfile::Kind unpackedAs = romfile::Kind::Plain;
+        bool noRoom = false;
+        const bool unpacked = romfile::prepareFile(zip, entryPath, "", false, &primary,
+                                                   &unpackedAs, &err, job.cancel, &noRoom);
         ::unlink(zip.c_str());
         if (!unpacked) {
             std::fprintf(stderr, "[launch] unpack %s: %s\n", fsName.c_str(), err.c_str());
-            job.message = "Couldn't open this game's file";
+            job.message = noRoom ? "Not enough space" : "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
-            return;
+            return false;
         }
         // THE NOTE ONLY ONCE THE DRIVE HAS IT ALL, so a power cut before
         // that unpacks it again at the next start (unsettled.h).
@@ -367,7 +443,20 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
         }
         std::fprintf(stderr, "[launch] fetched and unpacked %s whole\n", fsName.c_str());
     }
-    if (cancelled(job)) return;
+    return !cancelled(job);
+}
+
+// A LINDBERGH GAME (#620), its whole folder (wholeFolder). The program Linux
+// Loader will start in it is then found as the loader finds it, checked by
+// the loader's fingerprint (arcadematch.h), and made executable with every
+// program beside it, a bit a zip does not carry.
+static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
+                            const std::string& fsName, const std::string& entryPath,
+                            const std::string& location, const int64_t expectedSize,
+                            const storage::User& user) {
+    if (!wholeFolder(job, client, lindberghprograms::Kind::Lindbergh, id, fsName, entryPath,
+                     location, expectedSize))
+        return;
     const std::string program = arcadematch::lindberghProgram(entryPath);
     uint32_t crc = 0;
     if (program.empty() || !arcadematch::lindberghFingerprint(program, &crc)) {
@@ -399,6 +488,54 @@ static void lindberghFolder(LaunchJob& job, romm::Client& client, const int id,
     }
     job.romPath = program;
     finish(job, client, user);
+}
+
+// A WINDOWS ARCADE GAME (#762), its whole folder (wholeFolder). The game is
+// the `<gameid>.windowsloader` file at the top of the folder or one folder
+// down (arcadematch::windowsLoaderFile), which windowsarcadeloader is handed,
+// confirmed by its id against the loader's lists. Then the game's Windows
+// setup is built, once, from the Windows files the firmware step brought
+// down (standalone.h, windowsSetup), with words of its own on the page while
+// it is.
+static void windowsFolder(LaunchJob& job, romm::Client& client, const int id,
+                          const std::string& fsName, const std::string& entryPath,
+                          const std::string& location, const int64_t expectedSize,
+                          const storage::User& user) {
+    if (!wholeFolder(job, client, lindberghprograms::Kind::Windows, id, fsName, entryPath,
+                     location, expectedSize))
+        return;
+    const std::string file = arcadematch::windowsLoaderFile(entryPath);
+    if (file.empty()) {
+        std::fprintf(stderr, "[arcade] %s: no .windowsloader file\n", entryPath.c_str());
+        job.message = "Not supported";
+        job.stage = LaunchJob::Stage::Failed;
+        return;
+    }
+    const std::string gameId = arcadematch::windowsGameId(file);
+    if (!pickArcade(job, baseName(file), arcadematch::byWindowsId(gameId),
+                    "its .windowsloader file, " + gameId))
+        return;
+    job.romPath = file;
+    // ROOM FOR THE WINDOWS SETUP, on the console's own storage where it is
+    // built, asked as every fetch asks: other games out of the cache there
+    // first, this one kept.
+    const int64_t setupRoom = cab::standalone::windowsSetupRoom(gameId);
+    if (setupRoom > 0 && cache::freeBytes(storage::root()) < setupRoom) {
+        cache::evictUntilFree(storage::root(), setupRoom, id);
+        if (cache::freeBytes(storage::root()) < setupRoom) {
+            std::fprintf(stderr, "[windows] no room for the setup: %lld bytes asked\n",
+                         static_cast<long long>(setupRoom));
+            job.message = "Not enough space";
+            job.stage = LaunchJob::Stage::Failed;
+            return;
+        }
+    }
+    job.stage = LaunchJob::Stage::SettingUpWindows;
+    std::string detail;
+    const cab::standalone::WindowsSetup setup =
+        cab::standalone::windowsSetup(gameId, job.cancel, &detail);
+    if (cancelled(job)) return;
+    if (windowsSetupSays(job, setup, gameId, detail)) finish(job, client, user);
 }
 
 // The copies are const, as the lambda's were.
@@ -439,6 +576,30 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         if (away) ferr = "the server is away; using what is in bios/";
         const bool listed = !away && client.fetchFirmware(platformId, &firmware, &ferr);
         if (listed) {
+            // ROOM FOR WHAT IS MISSING FIRST, asked as every fetch asks, on the
+            // console's own drive where bios/ is: other games out of the cache
+            // there, this one kept. Without it a full drive failed the fetch
+            // with no word, and the game then said its files were not on the
+            // server (cache::roomForMissing).
+            std::vector<std::pair<int64_t, int64_t>> wantHave;
+            for (const auto& f : firmware) {
+                struct stat fst;
+                const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
+                wantHave.push_back({f.sizeBytes, ::stat(fdest.c_str(), &fst) == 0
+                                                     ? static_cast<int64_t>(fst.st_size)
+                                                     : -1});
+            }
+            const int64_t need = cache::roomForMissing(wantHave);
+            if (need > 0 && cache::freeBytes(biosDir) < need) {
+                cache::evictUntilFree(storage::root(), need, id);
+                if (cache::freeBytes(biosDir) < need) {
+                    std::fprintf(stderr, "[firmware] no room: %lld bytes asked\n",
+                                 static_cast<long long>(need));
+                    job.message = "Not enough space";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
+                }
+            }
             for (const auto& f : firmware) {
                 if (job.cancel.load()) break;
                 const std::string fdest = biosDir + "/" + storage::safeSegment(f.fileName);
@@ -453,15 +614,22 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                 const std::string fpath = "/api/firmware/" + std::to_string(f.id) +
                                           "/content/" + romm::encodeSegment(f.fileName);
                 std::string derr;
+                bool noRoom = false;
                 if (client.fetchToFile(fpath, fdest,
                         [&job](int64_t got, int64_t total) {
                             job.got = got;
                             job.total = total;
                             return !job.cancel.load();
-                        }, &derr)) {
+                        }, &derr, &noRoom)) {
                     std::fprintf(stderr, "[firmware] %s (%lld bytes)\n",
                                  f.fileName.c_str(),
                                  static_cast<long long>(f.sizeBytes));
+                } else if (noRoom) {
+                    std::fprintf(stderr, "[firmware] %s: %s\n", f.fileName.c_str(),
+                                 derr.c_str());
+                    job.message = "Not enough space";
+                    job.stage = LaunchJob::Stage::Failed;
+                    return;
                 } else {
                     // Not fatal here. WHICH BIOS a core needs is the core's
                     // business and most platforms need none, so a refusal
@@ -654,15 +822,16 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             for (const auto& [f, d] : fetch) {
                 std::string derr;
                 const int64_t before = done;
-                if (!client.fetchToFile(romm::Client::romFilePath(id, f), d,
+                if (bool noRoom = false;
+                    !client.fetchToFile(romm::Client::romFilePath(id, f), d,
                         [&job, before, fetchBytes](int64_t got, int64_t) {
                             job.got = before + got;
                             job.total = fetchBytes;
                             return !job.cancel.load();
-                        }, &derr)) {
+                        }, &derr, &noRoom)) {
                     std::fprintf(stderr, "[launch] download %s: %s\n", f.fileName.c_str(),
                                  derr.c_str());
-                    job.message = "Couldn't download this game";
+                    job.message = noRoom ? "Not enough space" : "Couldn't download this game";
                     job.stage = LaunchJob::Stage::Failed;
                     return;
                 }
@@ -761,15 +930,16 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         for (const auto& [f, d] : fetch) {
             std::string derr;
             const int64_t before = done;
-            if (!client.fetchToFile(romm::Client::romFilePath(id, *f), d,
+            if (bool noRoom = false;
+                !client.fetchToFile(romm::Client::romFilePath(id, *f), d,
                     [&job, before, fetchBytes](int64_t got, int64_t) {
                         job.got = before + got;
                         job.total = fetchBytes;
                         return !job.cancel.load();
-                    }, &derr)) {
+                    }, &derr, &noRoom)) {
                 std::fprintf(stderr, "[launch] download %s: %s\n", f->fileName.c_str(),
                              derr.c_str());
-                job.message = "Couldn't download this game";
+                job.message = noRoom ? "Not enough space" : "Couldn't download this game";
                 job.stage = LaunchJob::Stage::Failed;
                 return;
             }
@@ -793,6 +963,12 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
     // A LINDBERGH GAME (Linux Loader's), its whole folder (lindberghFolder).
     if (emu && std::strcmp(emu->core, "linuxloader") == 0) {
         lindberghFolder(job, client, id, fsName, entryPath, location, expectedSize, user);
+        return;
+    }
+    // A WINDOWS ARCADE GAME (windowsarcadeloader's), its whole folder too
+    // (windowsFolder).
+    if (emu && std::strcmp(emu->core, "windowsarcadeloader") == 0) {
+        windowsFolder(job, client, id, fsName, entryPath, location, expectedSize, user);
         return;
     }
 
@@ -888,15 +1064,16 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             for (const auto& [f, d] : fetch) {
                 std::string derr;
                 const int64_t before = done;
-                if (!client.fetchToFile(romm::Client::romFilePath(id, *f), d,
+                if (bool noRoom = false;
+                    !client.fetchToFile(romm::Client::romFilePath(id, *f), d,
                         [&job, before, fetchBytes](int64_t got, int64_t) {
                             job.got = before + got;
                             job.total = fetchBytes;
                             return !job.cancel.load();
-                        }, &derr)) {
+                        }, &derr, &noRoom)) {
                     std::fprintf(stderr, "[launch] download %s: %s\n",
                                  f->fileName.c_str(), derr.c_str());
-                    job.message = "Couldn't download this game";
+                    job.message = noRoom ? "Not enough space" : "Couldn't download this game";
                     job.stage = LaunchJob::Stage::Failed;
                     return;
                 }
@@ -997,10 +1174,11 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         // unpacked again (#530), as for a game of one file below.
         if (romfile::alreadyUnpacked(boot, entry, validExts, blockExtract, &primary)) {
             std::fprintf(stderr, "[launch] already unpacked\n");
-        } else if (!romfile::prepareFile(boot, entry, validExts, blockExtract, &primary,
-                                         &kind, &err, job.cancel)) {
+        } else if (bool noRoom = false;
+                   !romfile::prepareFile(boot, entry, validExts, blockExtract, &primary, &kind,
+                                         &err, job.cancel, &noRoom)) {
             std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
-            job.message = "Couldn't open this game's file";
+            job.message = noRoom ? "Not enough space" : "Couldn't open this game's file";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
@@ -1092,7 +1270,9 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
             "/api/roms/" + std::to_string(id) + "/content/" + romm::encodeSegment(fsName);
         // NO SIZE FROM RomM, NO ROOM CHECK ABOVE (#484, LAUNCH-11's other
         // half): the same check, once, when the server declares the length.
-        bool roomAsked = expectedSize > 0, noRoom = false;
+        // `noRoom` when the room the declared length needs is not there;
+        // `wroteNoRoom` when the drive refused a write for want of room.
+        bool roomAsked = expectedSize > 0, noRoom = false, wroteNoRoom = false;
         const bool ok = client.fetchToFile(path, dest,
             [&job, &roomAsked, &noRoom, &location, id](int64_t got, int64_t total) {
                 job.got = got;
@@ -1108,10 +1288,11 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
                     }
                 }
                 return !job.cancel.load() && !noRoom;
-            }, &err);
+            }, &err, &wroteNoRoom);
         if (!ok) {
             std::fprintf(stderr, "[launch] download: %s\n", err.c_str());
-            job.message = noRoom ? "Not enough space" : "Couldn't download this game";
+            job.message =
+                noRoom || wroteNoRoom ? "Not enough space" : "Couldn't download this game";
             job.stage = LaunchJob::Stage::Failed;
             return;
         }
@@ -1203,10 +1384,10 @@ void launchWorker(LaunchJob& job, romm::Client& client, const int id, const int 
         }
     }
 
-    if (!romfile::prepareFile(dest, entryPath, validExts, blockExtract, &primary,
-                              &kind, &err, job.cancel)) {
+    if (bool noRoom = false; !romfile::prepareFile(dest, entryPath, validExts, blockExtract,
+                                                   &primary, &kind, &err, job.cancel, &noRoom)) {
         std::fprintf(stderr, "[launch] file: %s\n", err.c_str());
-        job.message = "Couldn't open this game's file";
+        job.message = noRoom ? "Not enough space" : "Couldn't open this game's file";
         job.stage = LaunchJob::Stage::Failed;
         return;
     }

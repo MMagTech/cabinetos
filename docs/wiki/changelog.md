@@ -4,6 +4,32 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## 2026.11.28 {#v2026-11-28}
+
+- **New:** Windows Arcade, games from arcade boards that run Windows, played
+  in windowsarcadeloader. It is very experimental: some games will not
+  start, and some will start and not play right. Your library's owner sets
+  it up first: they run CabinetOS's script on their computer once to make
+  the Windows files and put them in RomM, then once for each game, and put
+  the games under RomM's TeknoParrot platform. The first game you start sets up
+  Windows on the console, which takes a few minutes. Select puts in a coin,
+  Start starts, and holding **R3** opens a game's operator settings where it
+  has them. On a pad a game's buttons are on **A**, **B**, **X** and **Y** as
+  in the other arcade games, unless the game has a pad layout of its own. See [Arcade](arcade.md#windows-arcade).
+  ([#762](https://github.com/MMagTech/cabinetos/issues/762))
+- **Fixed:** on a console whose drive was full of games, a system's first
+  start could say its BIOS or firmware was not on the server when it was.
+  The console now makes room for those files as it does for a game, and
+  says *Not enough space* only when there is none.
+- **Fixed:** a Lindbergh game could run out of room while it unpacked on a
+  full drive, and say *Couldn't open this game's file* at every try. The
+  console now asks for all the room a game unpacks to, clears a half-unpacked
+  game before the next try, and says *Not enough space* when that is the
+  reason, on every system.
+- **Fixed:** a Lindbergh game kept as one large zip that RomM could not read
+  inside stayed *Not supported* after RomM had read it. It is asked about
+  again by itself.
+
 ## 2026.11.26.4 {#v2026-11-26-4}
 
 - **New:** Sega Lindbergh arcade games, as an experiment: Hummer, Initial D,

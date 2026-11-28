@@ -196,3 +196,25 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: python3 -I ci/check-code-and-docs-agree.py "${BASE}" "${HEAD}"
+
+  # WINDOWS ARCADE'S FILES LIST (#762): the admin's script reads the tracked
+  # cores/windows-arcade-files.txt, the console the one the image's pins make
+  # (cores/arcade-sets.sh windowsarcadeloader, from the loader's and
+  # winetricks' own source). The two must be the same list. It fetches the
+  # loader's profiles and winetricks from GitHub, as the image build does.
+  windows-arcade-files:
+    name: Windows Arcade files list
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+
+      - name: The tracked files list is the one the pins make
+        run: |
+          set -euo pipefail
+          out=$(mktemp -d)
+          cores/arcade-sets.sh windowsarcadeloader "${out}"
+          if ! diff -u cores/windows-arcade-files.txt "${out}/windowsarcadeloader.files"; then
+            echo "::error::cores/windows-arcade-files.txt is not the list the pins make: copy windowsarcadeloader.files over it (cores/arcade-sets.sh windowsarcadeloader <dir>)"
+            exit 1
+          fi

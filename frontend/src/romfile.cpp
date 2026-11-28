@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstring>
 #include <set>
 
@@ -321,7 +322,8 @@ int64_t unpackedSize(const std::string& path, const std::string& validExtensions
 bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                  const std::string& validExtensions, bool blockExtract,
                  std::string* primaryPath, Kind* kindOut, std::string* err,
-                 const std::atomic<bool>& cancel) {
+                 const std::atomic<bool>& cancel, bool* noRoomOut) {
+    if (noRoomOut) *noRoomOut = false;
     const Kind k = sniffFile(downloadedPath, err);
     if (kindOut) *kindOut = k;
     if (handsOver(k, validExtensions, blockExtract)) {
@@ -342,14 +344,22 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
     // start unpacks it again.
     struct stat from;
     std::vector<std::string> closed;
+    // The error the failed write got, read before anything else can change it.
+    int failed = 0;
+    auto because = [&] { return failed ? std::string(": ") + std::strerror(failed) : std::string(); };
     const std::string primary = eachMember(downloadedPath, k, outDir, validExtensions, err,
         [&](struct archive* a, struct archive_entry*, const std::string& out) -> int64_t {
             if (!storage::makeDirs(out.substr(0, out.find_last_of('/')))) {
-                if (err) *err = "cannot make the folder for " + out;
+                failed = errno;
+                if (err) *err = "cannot make the folder for " + out + because();
                 return -1;
             }
             FILE* f = std::fopen(out.c_str(), "wb");
-            if (!f) { if (err) *err = "cannot write " + out; return -1; }
+            if (!f) {
+                failed = errno;
+                if (err) *err = "cannot write " + out + because();
+                return -1;
+            }
 
             int64_t written = 0;
             std::vector<char> buf(256 * 1024);
@@ -369,16 +379,26 @@ bool prepareFile(const std::string& downloadedPath, const std::string& outDir,
                 if (got == 0) break;
                 if (std::fwrite(buf.data(), 1, static_cast<size_t>(got), f) !=
                     static_cast<size_t>(got)) {
+                    failed = errno;
                     std::fclose(f);
-                    if (err) *err = "short write to " + out;
+                    if (err) *err = "short write to " + out + because();
                     return -1;
                 }
                 written += got;
             }
-            if (std::fclose(f) == 0) closed.push_back(out);
+            if (std::fclose(f) == 0) {
+                closed.push_back(out);
+            } else if (cab::noRoom(errno)) {
+                failed = errno;
+                if (err) *err = "cannot finish " + out + because();
+                return -1;
+            }
             return written;
         });
-    if (primary.empty()) return false;
+    if (primary.empty()) {
+        if (noRoomOut) *noRoomOut = cab::noRoom(failed);
+        return false;
+    }
     if (::stat(downloadedPath.c_str(), &from) == 0 &&
         (cab::keepsSizeWithBytes(outDir) || unsettled::note(closed) || cab::syncDrive(outDir))) {
         const struct timespec when[2] = {{0, UTIME_OMIT}, from.st_mtim};

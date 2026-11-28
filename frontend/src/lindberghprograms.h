@@ -1,6 +1,7 @@
-// Which program each Lindbergh game in RomM holds, learned once from RomM and
-// kept on the console, so a grid can tell a game played on a pad from a gun
-// game before anything is downloaded (#620; arcadematch.h).
+// What each Lindbergh game and each Windows arcade game in RomM holds, learned
+// once from RomM and kept on the console, so a grid can tell a game played on
+// a pad from a gun game before anything is downloaded (#620, #762;
+// arcadematch.h): a Lindbergh game's program, a Windows game's id.
 //
 // WHY A STORE OF ITS OWN. A Lindbergh game is its hard drive's folder, kept in
 // RomM as that folder or as a zip or 7z of it, and Linux Loader knows it by the
@@ -8,14 +9,32 @@
 // game's own entry, which does, can be large: Hummer Extreme's TeknoParrot
 // copy holds 124,777 files, and its entry was 104 MB and 25 s on the
 // write-test server (2026-11-26). So each game's entry is asked for once, the
-// program its files name is kept here with the size RomM gave the game, and
-// asked again only when that size changes. Not in the game's record
+// name its files give is kept here with the size RomM gave the game, and
+// asked again only when that size changes.
+//
+// NOTHING IS WRITTEN WHEN RomM GAVE NOTHING TO READ IT FROM: a game that is
+// one zip or 7z of which RomM listed no member. RomM gives up opening an
+// archive after its SEVEN_ZIP_TIMEOUT (180 s by default) and records it as
+// one file with no members (a 10 GB zip of 37,002 files, 2026-11-27), so a
+// name kept as none on the disk would outlast the owner's rescan with a
+// longer limit. Its answer, none, is held in memory instead, so the grid and
+// the game's page say Not supported at once as for any game whose files give
+// none; and every library load, and every Play, asks RomM again, until RomM
+// lists its members and the name they give is kept on the disk. Not in the game's record
 // (cache.h), which is kept only for a game on the console and is what the
-// console shows with no server.
+// console shows with no server. A Windows arcade game is kept in RomM the
+// same three ways, and windowsarcadeloader knows it by the name of the
+// `<gameid>.windowsloader` file inside, so it is learned and kept the same
+// way, in a file of its own.
 //
 // WHERE: `config/lindbergh-programs.json`, `{"<rom id>": {"size": <bytes>,
-// "program": "hummer_Master.elf"}}`, an empty program for a game whose files
-// name none of the loader's programs. Safe from any thread.
+// "program": "hummer_Master.elf", "unpacked": <bytes>}}`, and
+// `config/windows-arcade-games.json`, `{"<rom id>": {"size": <bytes>, "game":
+// "<gameid>", "unpacked": <bytes>}}`; an empty name for a game whose listed
+// files give none. `unpacked` is what a game kept as one zip or 7z holds
+// unpacked (unpackedIn), the room its unpacking takes (roomToUnpack); 0, or
+// not there in an entry kept before it was, when that is not known. Safe
+// from any thread.
 
 #pragma once
 
@@ -28,24 +47,80 @@
 
 namespace lindberghprograms {
 
-// The program kept for the game at RomM's size of it. False when none is
-// kept at that size; true with an empty `program` when its files name none.
-bool known(int romId, int64_t size, std::string* program);
+// Which name is kept: a Lindbergh game's program, or a Windows arcade game's
+// id.
+enum class Kind { Lindbergh, Windows };
 
-// Asks RomM for the game's entry and keeps the program its files name: the
-// first of Linux Loader's names, in its order, among the folder's files or
-// what RomM lists inside its zip or 7z (arcadematch::lindberghProgramNamed).
+// The name known for the game at RomM's size of it: kept on the disk, or,
+// for a game RomM listed nothing inside, none, held in memory since RomM was
+// last asked in this run. False when neither is at that size; true with an
+// empty `name` when its files give none.
+bool known(Kind kind, int romId, int64_t size, std::string* name);
+
+// The same, kept on the disk only: what is never asked of RomM again.
+bool kept(Kind kind, int romId, int64_t size, std::string* name);
+
+// RomM's list of a game's files, as Client::fetchRomFiles gives it. False
+// with `err` when RomM did not answer.
+using Fetch = std::function<bool(int romId, std::vector<romm::RomFile>* files, std::string* err)>;
+
+// Asks RomM for the game's entry and keeps the name its files give
+// (namedIn) on the disk; for a game RomM listed nothing inside (listed), it
+// holds none in memory instead, and one kept on the disk later clears it.
 // False with `err` when RomM did not answer; nothing is kept then.
-bool learn(romm::Client& client, int romId, int64_t size, std::string* program,
+bool learn(romm::Client& client, Kind kind, int romId, int64_t size, std::string* name,
            std::string* err);
 
-// Each of a Lindbergh folder's `games` not known at its size, learned in
-// turn, until `over` says to stop. On the library read's worker.
-void learnAll(romm::Client& client, const std::vector<romm::Game>& games,
+// Each of a folder's `games` not kept on the disk at its size, learned in
+// turn, until `over` says to stop: a game held only in memory is asked
+// again. On the library read's worker. The second form takes RomM's answers
+// from `fetch` (the self-test's).
+void learnAll(romm::Client& client, Kind kind, const std::vector<romm::Game>& games,
+              const std::function<bool()>& over);
+void learnAll(const Fetch& fetch, Kind kind, const std::vector<romm::Game>& games,
               const std::function<bool()>& over);
 
-// The program a game's files name, from RomM's list of them: each file's own
-// name, and the last part of each name inside an archive.
-std::string namedIn(const std::vector<romm::RomFile>& files);
+// The name a game's files give, from RomM's list of them (each file's own
+// name, and the last part of each name inside an archive): for Lindbergh the
+// first of Linux Loader's program names, in its order
+// (arcadematch::lindberghProgramNamed); for Windows the id of the first
+// `.windowsloader` file (arcadematch::windowsIdNamed).
+std::string namedIn(Kind kind, const std::vector<romm::RomFile>& files);
+
+// Whether RomM's list of a game's files gives anything to read its name
+// from: false when the game is one zip or 7z (arcadematch::isArchive) of
+// which RomM listed no member, true for any other list, a folder's files
+// and an archive whose members are listed among them, even when none of
+// them is a program or a loader file.
+bool listed(const std::vector<romm::RomFile>& files);
+
+// What a game that is one zip or 7z holds unpacked: the sum of the sizes
+// RomM listed for its members, which are the sizes they unpack to (RomM reads
+// them from the archive's own index). 0 for any other list: a folder, which
+// RomM zips for the download at about its own size, and an archive RomM
+// listed nothing inside.
+int64_t unpackedIn(const std::vector<romm::RomFile>& files);
+
+// The unpacked size kept for the game at that size (above), or 0.
+int64_t unpackedKept(Kind kind, int romId, int64_t size);
+
+// THE ROOM A WHOLE GAME TAKES AT ONCE while it comes down and unpacks: the
+// file downloaded and what it unpacks to, both on the drive until the
+// download is deleted, and cache::kOverheadFraction of the download on top.
+// With `unpackedBytes` 0 (not known) what it unpacks to is taken as the
+// download's own size, right for a folder RomM zips for the download; the
+// route asks again by the archive's own index once it is down
+// (launch_routes.cpp, wholeFolder).
+int64_t roomToUnpack(int64_t downloadBytes, int64_t unpackedBytes);
+
+// WHETHER A GAME'S FOLDER IS EMPTIED BEFORE ITS ROOM IS ASKED, so what an
+// unpacking that failed left in it never holds the room the next try needs,
+// nor makes the console evict other games for it: only a folder that is not
+// `whole` (no note that it came down and unpacked whole), in the cache
+// (under `cacheDir`, never a kept game's folder under roms/), holding no
+// save still only in it (`holdsSaves`, cache::holdsSavesInPlay), and that no
+// game is mounted from (`mounted`, standalone::gameFolderMounted).
+bool emptiesBeforeRoom(const std::string& entryPath, const std::string& cacheDir, bool whole,
+                       bool holdsSaves, bool mounted);
 
 }  // namespace lindberghprograms

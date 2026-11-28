@@ -365,9 +365,13 @@ public:
     // returns false to abort — that is how a cancel reaches a download that is
     // already running. It is called on whatever thread drove the request, so it
     // must not touch the UI directly.
+    //
+    // `noRoom`, when given, says whether it failed for want of room on the
+    // drive (cab::noRoom), by the error its own write, flush or close got.
     using ProgressFn = std::function<bool(int64_t got, int64_t total)>;
     bool fetchToFile(const std::string& path, const std::string& destPath,
-                     const ProgressFn& onProgress, std::string* err) const;
+                     const ProgressFn& onProgress, std::string* err,
+                     bool* noRoom = nullptr) const;
 
 private:
     // Gives every Wii and GameCube game in `games` from `first` on a code:

@@ -8,7 +8,7 @@ The same menu in every game, on every system.
 
 - **Press both sticks in together (L3 + R3).** Always, on any pad.
 - **Escape** on a USB keyboard. In PS2 games, and in Switch, PS3, Xbox,
-  Xbox 360, Wii U, PS Vita, Model 2 and Model 3 games, the keyboard does not
+  Xbox 360, Wii U, PS Vita, Model 2, Model 3, Chihiro, Lindbergh and Windows Arcade games, the keyboard does not
   reach the menu: use a pad.
 - A tap of the **shortcut button** (Home, unless you chose another), when
   [In-game shortcuts](navigation.md#in-game-shortcuts) are on.
@@ -41,11 +41,12 @@ Remote Play stream starts or ends.
 Rows appear only where they apply:
 
 - **Save state** and **Load latest state**: not on PS2, GameCube or Wii, and
-  not in Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita, Model 2 and Model 3
-  games, which have no save states. A 3DS state may not load after an update
+  not in Switch, PS3, Xbox, Xbox 360, Wii U, PS Vita, Model 2, Model 3,
+  Chihiro, Lindbergh and Windows Arcade games, which have no save states. A 3DS state may not load after an update
   changes the emulator.
-- **Picture**: only on systems with picture levels, and only for the owner
-  when a PIN is set.
+- **Picture**: only on systems with picture levels, and in Windows Arcade
+  only in a game that offers a picture size, and only for the owner when a
+  PIN is set.
 - **Widescreen**: only on PS2 games that have a widescreen patch.
 - **Look**: only on systems that have looks. See [Display and Sound](picture.md#screen-looks).
 - **Overlays**: only on a Vectrex game that has a screen sheet.

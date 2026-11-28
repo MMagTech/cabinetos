@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include "catalog_internal.h"
+#include "standalone.h"
 #include "wii.h"
 
 namespace catalog {
@@ -174,10 +175,14 @@ bool snapshotsAllowed(const char* core) {
     // emulator run as a program of its own, sm2-emu's Model 2, Supermodel's
     // Model 3 and xemu-chihiro's Chihiro among them, whose pause menu has
     // no Save state or Load latest state (MMagTech, 2026-10-29; Chihiro
-    // 2026-11-25, #619), and Linux Loader's Lindbergh (2026-11-26, #620).
+    // 2026-11-25, #619), Linux Loader's Lindbergh (2026-11-26, #620) and
+    // windowsarcadeloader's Windows arcade boards (2026-11-26, #762: a Windows
+    // program under Wine cannot be frozen and put back as an emulated machine
+    // can).
     static const char* const kNoSnapshots[] = {"pcsx2", "dolphin", "eden", "rpcs3", "xemu",
                                                "xenia", "cemu", "vita3k", "sm2emu",
-                                               "supermodel", "xemu-chihiro", "linuxloader"};
+                                               "supermodel", "xemu-chihiro", "linuxloader",
+                                               "windowsarcadeloader"};
     for (const char* c : kNoSnapshots)
         if (std::strcmp(c, core) == 0) return false;
     return true;
@@ -290,6 +295,15 @@ const char* saveTag(const char* core) {
         // folder for them. Sigil has no row for Lindbergh. The loader's own
         // name, as Batocera's.
         {"linuxloader", "linuxloader"},
+        // Windows arcade boards, in windowsarcadeloader: what the game wrote
+        // into its own folder (`game/`: a board's memory, an Unreal game's
+        // saves), into its run folder in the Windows setup and into Wine's
+        // user folders (`prefix/drive_c/wal/`, `prefix/drive_c/users/`), as
+        // one zip of those folders, the way MAME 0.289's and Model 2's
+        // travel (#762; standalone_windows.cpp). Another windowsarcadeloader
+        // reads them from the same three places. Sigil has no row for these
+        // boards. The loader's own name.
+        {"windowsarcadeloader", "windowsarcadeloader"},
         //
         // Nintendo 3DS has states, so its save tag comes from emulatorTag
         // above: a zip of the emulated SD card's `Nintendo 3DS` folder
@@ -456,6 +470,11 @@ bool inDirectorySave(const char* core, const std::string& platformSlug,
     // game, the board's two files and a player's cards, all at its top
     // (standalone_lindbergh.cpp).
     if (core && manifestName(core) == "linuxloader") return relPath.find('/') == std::string::npos;
+    // Windows arcade boards: what the game wrote under this person's two
+    // layers, and nothing Wine or the loader wrote there for itself
+    // (standalone_windows.cpp).
+    if (core && manifestName(core) == "windowsarcadeloader")
+        return cab::standalone::windowsSaveFile(relPath);
     if (!core || manifestName(core) != "dolphin" || platformSlug != "wii") return true;
     // The Mii Channel's root is `User/Wii`: its Mii list, and under `title/`
     // the same rule as every other game.
