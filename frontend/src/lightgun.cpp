@@ -180,6 +180,11 @@ struct Device {
     int rawX = 16384, rawY = 16384;
     uint16_t held = 0;               // as pressed now
     uint16_t pushed = 0;             // what the menus were told is down
+    // HELD ACROSS THE CHANGE between the menus and a game, kept from the
+    // side it was not pressed on until it is let go (as a pad's are, #103):
+    // the trigger held as the pause menu opens is no Select, and the one
+    // that pressed Resume is no shot.
+    uint16_t keptFromMenus = 0, keptFromGame = 0;
     RearRight rear;
 };
 
@@ -231,7 +236,7 @@ void pushButton(int slot, SDL_GamepadButton b, bool down) {
 // down in a game is never a menu press, and one the menus were told is down
 // is let go as the game takes the gun back.
 void tellMenus(Device& d) {
-    const uint16_t want = gInMenus ? d.held : 0;
+    const uint16_t want = gInMenus ? static_cast<uint16_t>(d.held & ~d.keptFromMenus) : 0;
     for (const MenuPress& m : kMenu) {
         const bool now = (want & m.bit) != 0, was = (d.pushed & m.bit) != 0;
         if (now && !was && gInMenus) {
@@ -386,8 +391,13 @@ void handle(Device& d, const input_event& ev, int64_t t) {
     const bool down = ev.value != 0;
     if (down && !gInMenus) gPressInGame = true;
     if (b == kCoin) rearRightPress(d.rear, down, t, gInGame && !gInMenus);
-    if (down) d.held |= b;
-    else d.held &= static_cast<uint16_t>(~b);
+    if (down) {
+        d.held |= b;
+    } else {
+        d.held &= static_cast<uint16_t>(~b);
+        d.keptFromMenus &= static_cast<uint16_t>(~b);
+        d.keptFromGame &= static_cast<uint16_t>(~b);
+    }
 }
 
 // A node that dropped events (SYN_DROPPED) is read whole again.
@@ -403,6 +413,9 @@ void resync(Device& d, int fd) {
             if (down) d.held |= b;
             else d.held &= static_cast<uint16_t>(~b);
         }
+        // A button let go while events were dropped is no longer kept.
+        d.keptFromMenus &= d.held;
+        d.keptFromGame &= d.held;
     }
     if (fd == d.aimFd) readRanges(d);
 }
@@ -495,7 +508,7 @@ Gun gun(int n) {
                          0.0f, 1.0f);
         g.y = std::clamp(static_cast<float>(d.rawY - d.minY) / static_cast<float>(d.maxY - d.minY),
                          0.0f, 1.0f);
-        g.buttons = static_cast<uint16_t>(d.held & ~kCoin);
+        g.buttons = static_cast<uint16_t>(d.held & ~d.keptFromGame & ~kCoin);
         if (coinOn(d.rear, t)) g.buttons |= kCoin;
     }
     return g;
@@ -506,6 +519,8 @@ void setInMenus(bool inMenus) {
     std::lock_guard<std::mutex> lk(gLock);
     for (Device& d : gDevices) {
         if (d.slot < 0) continue;
+        if (inMenus) d.keptFromMenus = d.held;
+        else d.keptFromGame = d.held;
         tellMenus(d);
         // A hold that began in the menus or in the game is over for the
         // other: nothing it started carries across.
