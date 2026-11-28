@@ -121,6 +121,10 @@ for expected in \
     /usr/lib/udev/rules.d/71-cabinetos-motion-devices.rules \
     /usr/lib/udev/rules.d/72-cabinetos-wii-remote.rules \
     /usr/lib/udev/rules.d/99-cabinetos-wii-remote.rules \
+    /usr/lib/udev/rules.d/73-cabinetos-sinden.rules \
+    /usr/lib/systemd/system/cabinetos-sinden@.service \
+    /usr/libexec/cabinetos-sinden \
+    /usr/lib/cabinetos/sinden/LightgunMono.exe \
     /etc/ssh/sshd_config.d/30-cabinetos.conf \
     /usr/lib/NetworkManager/dispatcher.d/50-cabinetos-wifi-scans \
     /usr/lib/NetworkManager/conf.d/50-cabinetos-wifi.conf
@@ -247,6 +251,10 @@ log "base image has $(wc -l < /usr/share/cabinetos/packages-before-strip.txt) pa
 
 # What LinkUp needs (#654), for the same reason.
 /ctx/install-linkup.sh
+
+# What Sinden's light-gun software needs (#575), Mono, for the same reason;
+# and a check that Sinden's files, its launcher, unit and rule all landed.
+/ctx/install-sinden.sh
 
 # The 32-bit packages Linux Loader uses for Lindbergh (#620), named so they
 # stay whatever brought them, and the 32-bit half of pipewire-alsa. The loader

@@ -188,6 +188,9 @@ here. See `frontend/src/catalog.cpp`.
 | **Tailscale** (Remote Play away from home), `/usr/bin/tailscale` and `/usr/sbin/tailscaled` | already in the Bazzite base (1.102.4); nothing is bundled, only its service given CabinetOS's settings | BSD 3-Clause |
 | **miniupnpc**, Sunshine's one library the base lacks | Fedora 44's package, installed as Sunshine's dependency | BSD 3-Clause |
 | **The Remote Play tile**, `/usr/share/cabinetos/remoteplay/cabinetos.png` | drawn by this project's `tools/make-remoteplay-tile.py` (the boot logo's cabinet, redrawn), the name set in Noto Sans | MIT, as CabinetOS; Noto Sans is OFL 1.1, which places no condition on a picture drawn with it |
+| **Sinden's light-gun software**, in `/usr/lib/cabinetos/sinden` (`LightgunMono.exe`, its settings file, `readme.txt` and `License.txt`) | Sinden Technology's Linux software 2.05, its Ubuntu 22.04 beta build (`LightgunUbuntu_22_04`), from Sinden's 2.07b package (`SindenLightgunSoftwareReleaseV2.07b.zip`), unchanged and pinned by checksum in `build_files/install-sinden.sh`; one copy runs for each gun plugged in, with its own copy of the settings file (`/usr/libexec/cabinetos-sinden`). Left out: the package's `libSdlInterface.so`, for Sinden's own calibration window, which the console never opens | **Sinden's own licence, not an open one** (`License.txt` beside it): only Sinden Technology may distribute the software, it is for use with Sinden's guns only, and it may not be changed or taken apart. Sinden Technology gave this project permission to ship it in the image, unchanged and with that file (`docs/decisions/2026-11-02-sinden-software-in-the-image.md`) |
+| **Its camera library**, `/usr/lib/cabinetos/sinden/libCameraInterface.so` | built for Fedora by this project from source Sinden Technology sent, against Fedora 44's libjpeg-turbo, and stripped, because the package's own needs Ubuntu's libjpeg8; that source is shared nowhere, and only the built library is here | Sinden's, as the software above, by the same permission |
+| **Mono** and **libgdiplus**, which run Sinden's software | Fedora 44's `mono-core` and `libgdiplus` packages, with the seven of Mono's own that `mono-core` requires (`mono-data`, `mono-data-sqlite`, `mono-extras`, `mono-mvc`, `mono-wcf`, `mono-web`, `mono-winforms`), installed by `build_files/install-sinden.sh` | MIT (Fedora's packages say so for all nine) |
 
 PSP is the only platform whose "firmware" ships with the emulator rather than
 coming from RomM. Every other system's BIOS is fetched at runtime from the
@@ -362,7 +365,9 @@ asserted there rather than assumed: this page, CabinetOS's own licence, and
 one file each, fetched at the exact revision the image is built from by
 `tools/fetch-licences.py` (the list, with each file's path, is
 `licences/SOURCES`). The base image's packages keep theirs where Fedora puts
-them, in the same folder. **Not on the television** (MMagTech, 2026-09-25):
+them, in the same folder. Sinden's licence, which has no pinned source to
+fetch it from, is where Sinden puts it: `License.txt`, beside its software in
+`/usr/lib/cabinetos/sinden`. **Not on the television** (MMagTech, 2026-09-25):
 Settings, About, Credits and licenses names each project and its licence in
 one line. The person most likely to redistribute this
 image is the one who pulls it and never sees this repository, so the terms

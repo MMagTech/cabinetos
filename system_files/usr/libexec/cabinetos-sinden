@@ -1,0 +1,381 @@
+#!/usr/bin/env bash
+#
+# One Sinden light gun's own copy of Sinden's software (#575).
+#
+#   cabinetos-sinden ttyACM<N>
+#
+# Run by cabinetos-sinden@ttyACM<N>.service, which udev starts for each Sinden
+# gun's serial port (73-cabinetos-sinden.rules) and stops when the port goes.
+# Sinden's software is in /usr/lib/cabinetos/sinden, unchanged; it needs Mono
+# (build_files/install-sinden.sh). WHY ONE COPY PER GUN:
+# docs/decisions/2026-11-27-one-sinden-copy-per-gun.md.
+#
+# Sinden's software numbers the guns it finds by serial port order and pairs
+# the Nth port with the Nth camera, so one copy for two guns can drive one gun
+# twice or give each gun the other's camera after a replug (#575, the first
+# day). So each copy runs in a world holding only its own gun:
+#
+#   - a /dev of its own with only the gun's serial port, its camera's nodes
+#     and the links udev lists for them (Sinden's software reads the by-id
+#     folders, and quits without them);
+#   - the system's /sys with every other Sinden gun and camera covered over,
+#     and every folder that lists devices of its gun's and camera's kinds
+#     fixed as it was when the copy started, without the others. Sinden's
+#     software looks for guns again every second, and a gun that came back
+#     on USB after a copy started was found in /sys/class/tty and broke that
+#     copy (#575, 2026-11-28). So it counts one gun and calls it gun 1,
+#     whatever is plugged in later; its own /dev is what keeps it off
+#     another gun's port even if it saw one;
+#   - udev's records of its own gun and camera and none other, and the
+#     console's list of input devices (/proc/bus/input/devices) as it was at
+#     the start, without the other guns' and cameras';
+#   - no network, no /var and no /home: it reads only /usr, /etc, /sys and
+#     those records, and writes nothing but the runtime folder systemd gives
+#     this unit.
+#
+# And the launcher stays to watch it use its camera (THE WATCH, at the end).
+#
+# Its settings are Sinden's own file with the keys set_key names below: the
+# gun and camera of this world, recoil off with its switch-on shortcut held
+# back (docs/decisions/2026-11-02-sinden-software-in-the-image.md promises it
+# is never on by default), and its log quiet. Every other line is as Sinden
+# ships it, so the gun's buttons and the hold-left calibration are Sinden's.
+
+set -euo pipefail
+
+readonly SINDEN=/usr/lib/cabinetos/sinden
+readonly CONFIG_NAME=LightgunMono.exe.config
+
+tty=${1:-}
+if [[ ! "${tty}" =~ ^ttyACM[0-9]+$ ]]; then
+    echo "not a serial port name: '${tty}'" >&2
+    exit 2
+fi
+# systemd makes it from RuntimeDirectory=, owned by this unit's user, keeps
+# it when the unit restarts itself and removes it when the unit stops.
+runtime=${RUNTIME_DIRECTORY:?run me from cabinetos-sinden@.service}
+
+# THE WAIT BEFORE A START. Each start counts as failed, in a file in the
+# runtime folder, until its copy has streamed from its camera for 30 s (THE
+# WATCH, at the end); the unit's stopping, as at a replug, starts the count
+# again. After two failed starts in a row each start waits first: 5 s, then
+# 10, 20 and 40, then a minute each time. So a gun that can never work is
+# tried once a minute, and one that drops off USB now and then, or whose
+# copy stops, is back at once each time.
+readonly FAILED_STARTS=${runtime}/failed-starts
+failed=0
+read -r failed 2>/dev/null < "${FAILED_STARTS}" || true
+[[ "${failed}" =~ ^[0-9]+$ ]] || failed=0
+if ((failed >= 2)); then
+    pause=$((5 << (failed > 6 ? 4 : failed - 2)))
+    ((pause <= 60)) || pause=60
+    echo "the last ${failed} starts on ${tty} failed; waiting ${pause} s" >&2
+    sleep "${pause}"
+fi
+echo $((failed + 1)) > "${FAILED_STARTS}"
+
+# THE GUN: the USB device the serial port belongs to. THE CAMERA: the
+# SindenCam beside it on the gun's own hub. Never by device numbers or order,
+# which a replug reshuffles; and both of Sinden's guns here report the same
+# serial number, so /dev/serial/by-id cannot tell them apart either.
+iface=$(readlink -f "/sys/class/tty/${tty}/device")
+gun=${iface%/*}
+hub=${gun%/*}
+if [[ "$(cat "${gun}/product" 2>/dev/null)" != SindenLightgun ]]; then
+    echo "${tty} is not a Sinden light gun's port" >&2
+    exit 2
+fi
+
+# The gun's hub brings up its camera and its gun one after the other, in
+# either order as far as this script knows; give the camera ten seconds.
+camera=""
+capture=""
+videos=()
+for _ in $(seq 40); do
+    camera=""
+    capture=""
+    videos=()
+    for v in /sys/class/video4linux/video*; do
+        [[ -e "${v}/device" ]] || continue
+        dev=$(readlink -f "${v}/device")
+        dev=${dev%/*}
+        [[ "${dev%/*}" == "${hub}" ]] || continue
+        [[ "$(cat "${dev}/product" 2>/dev/null)" == SindenCam* ]] || continue
+        if [[ -n "${camera}" && "${camera}" != "${dev}" ]]; then
+            echo "two cameras beside ${tty} (${camera##*/}, ${dev##*/}); not guessing which is the gun's" >&2
+            exit 1
+        fi
+        camera=${dev}
+        videos+=("/dev/${v##*/}")
+        [[ "$(cat "${v}/index" 2>/dev/null)" == 0 ]] && capture="/dev/${v##*/}"
+    done
+    [[ -n "${capture}" ]] && break
+    sleep 0.25
+done
+if [[ -z "${capture}" ]]; then
+    echo "no camera beside the gun on ${tty} (USB ${gun##*/})" >&2
+    exit 1
+fi
+# A hub holding two guns is not one gun's own: its camera could be either's.
+for u in /sys/bus/usb/devices/*; do
+    [[ "$(cat "${u}/product" 2>/dev/null)" == SindenLightgun ]] || continue
+    r=$(readlink -f "${u}")
+    if [[ "${r}" != "${gun}" && "${r%/*}" == "${hub}" ]]; then
+        echo "two guns on one hub beside ${tty} (${gun##*/}, ${r##*/}); not guessing which camera is whose" >&2
+        exit 1
+    fi
+done
+echo "gun on ${tty} (USB ${gun##*/}), camera ${capture} (USB ${camera##*/})"
+
+# EVERY NODE OF THE GUN AND ITS CAMERA, and udev done with each. Plugged in,
+# the gun's port can come up before udev has finished the camera: its node
+# not yet given its group, its links not yet in udev's list. Ten seconds more.
+nodes=()
+for e in "${gun}"/*:*/tty/* "${gun}"/*:*/*/input/input*/event* "${gun}"/*:*/*/input/input*/mouse* \
+         "${gun}"/*:*/*/hidraw/hidraw* "${camera}"/*:*/video4linux/*; do
+    [[ -e "${e}" ]] || continue
+    case "${e}" in
+        */input/*) nodes+=("/dev/input/${e##*/}") ;;
+        *) nodes+=("/dev/${e##*/}") ;;
+    esac
+done
+if ! udevadm wait --timeout=10 "${nodes[@]}"; then
+    echo "udev did not finish the gun on ${tty} in time (${nodes[*]})" >&2
+    exit 1
+fi
+
+# THE SETTINGS. Each key is Sinden's own, read from its file's comments;
+# each change is checked, so a Sinden file that names a key otherwise stops
+# here instead of starting with that line unchanged.
+config="${runtime}/${CONFIG_NAME}"
+cp "${SINDEN}/${CONFIG_NAME}" "${config}"
+set_key() {
+    local key=$1 value=$2
+    if [[ "$(grep -c "key=\"${key}\" value=\"" "${config}")" != 1 ]]; then
+        echo "Sinden's ${CONFIG_NAME} has no single ${key}; not starting" >&2
+        exit 1
+    fi
+    sed -i -E "s|(key=\"${key}\" value=\")[^\"]*\"|\1${value}\"|" "${config}"
+    if [[ "$(grep -c "key=\"${key}\" value=\"${value}\"" "${config}")" != 1 ]]; then
+        echo "could not set ${key} to '${value}' in ${CONFIG_NAME}; not starting" >&2
+        exit 1
+    fi
+}
+# Its gun: "the first (lowest) ttyACM device that is a Sinden Lightgun", the
+# only one in its world. As shipped; checked, because the world depends on it.
+set_key SerialPortWrite 0
+# Its camera, by name, though it is the only one in this world: Sinden's own
+# search is what gave guns each other's cameras (#575, the first day).
+set_key VideoDevice "${capture}"
+# Recoil off, and its D-pad up shortcut with it: "Enable recoil system so
+# dpad up toggle works and recoil can be enabled", the file says. Gun 2's
+# too, though no world here has a second gun.
+set_key EnableRecoil 0
+set_key EnableRecoilP2 0
+set_key IAgreeRecoilTermsInLicense 0
+set_key IAgreeRecoilTermsInLicenseP2 0
+# Quiet: 2, as shipped, logs every camera frame, about a hundred lines a
+# second; 0 logs its start and nothing after.
+set_key ConsoleOutputVerbose0to2 0
+
+# THE WORLD. Read-only but for the runtime folder; the gun's serial port and
+# camera are the only devices; nothing of the network.
+args=(
+    --ro-bind /usr /usr
+    --symlink usr/bin /bin
+    --symlink usr/sbin /sbin
+    --symlink usr/lib /lib
+    --symlink usr/lib64 /lib64
+    --ro-bind /etc /etc
+    --proc /proc
+    --dev /dev
+    --ro-bind /sys /sys
+    --tmpfs /run
+    --bind "${runtime}" "${runtime}"
+    --ro-bind "${config}" "${SINDEN}/${CONFIG_NAME}"
+    --tmpfs /tmp
+    --setenv HOME "${runtime}"
+    --chdir "${SINDEN}"
+    --unshare-all
+    --die-with-parent
+    --new-session
+)
+for node in "/dev/${tty}" "${videos[@]}"; do
+    args+=(--dev-bind "${node}" "${node}")
+done
+# The links udev keeps for this gun's nodes and its camera's, made again in
+# its /dev, pointing where they point outside. udev's list holds each one the
+# node wants even where another gun won the name, as with by-id here.
+for node in "${nodes[@]}"; do
+    for link in $(udevadm info -q symlink -n "${node}" 2>/dev/null); do
+        args+=(--symlink "$(realpath -m --relative-to="$(dirname "/dev/${link}")" "${node}")" "/dev/${link}")
+    done
+done
+# Every other Sinden gun and camera, out of sight. Kept as paths under /sys,
+# without it, the way the links in /sys name them.
+hidden=()
+for u in /sys/bus/usb/devices/*; do
+    product=$(cat "${u}/product" 2>/dev/null) || continue
+    case "${product}" in
+        SindenLightgun | SindenCam*) ;;
+        *) continue ;;
+    esac
+    r=$(readlink -f "${u}")
+    [[ "${r}" == "${gun}" || "${r}" == "${camera}" ]] && continue
+    args+=(--tmpfs "${r}")
+    hidden+=("${r#/sys/}")
+done
+is_hidden() {
+    local h
+    for h in "${hidden[@]}"; do
+        [[ "$1" == "${h}" || "$1" == "${h}/"* ]] && return 0
+    done
+    return 1
+}
+
+# Every folder that lists devices of a kind the gun or its camera has (the
+# class or bus of each of their devices: tty, input, video4linux and the
+# rest), and /sys/dev/char, which lists every device node by its number:
+# fixed. Each becomes a folder of its own holding the links it holds now,
+# but those into another Sinden gun or camera, read-only; a device that
+# comes later is in none of them.
+declare -A lists=([dev/char]=1)
+declare -A kind=()
+while IFS=$'\t' read -r dir link; do
+    kind[${dir}]=${link##*/}
+    case "${link}" in
+        */class/*) lists[class/${link##*/}]=1 ;;
+        */bus/*) lists[bus/${link##*/}/devices]=1 ;;
+    esac
+done < <(find "${gun}" "${camera}" -name subsystem -type l -printf '%h\t%l\n' 2>/dev/null)
+for list in "${!lists[@]}"; do
+    [[ -d "/sys/${list}" ]] || continue
+    args+=(--tmpfs "/sys/${list}")
+    while IFS=$'\t' read -r name link; do
+        is_hidden "${link##*../}" && continue
+        args+=(--symlink "${link}" "/sys/${list}/${name}")
+    done < <(find "/sys/${list}/" -mindepth 1 -maxdepth 1 -type l -printf '%f\t%l\n')
+    args+=(--remount-ro "/sys/${list}")
+done
+
+# udev's record of each device of the gun and its camera, under the name
+# udev gives it: c<major>:<minor> for a node, +<subsystem>:<name> otherwise.
+for dir in "${!kind[@]}"; do
+    if [[ -r "${dir}/dev" ]]; then
+        read -r number < "${dir}/dev"
+        record=c${number}
+    else
+        record=+${kind[${dir}]}:${dir##*/}
+    fi
+    [[ -e "/run/udev/data/${record}" ]] || continue
+    args+=(--ro-bind "/run/udev/data/${record}" "/run/udev/data/${record}")
+done
+
+# The console's input devices as they are now, but the other guns' and
+# cameras': one block for each device, its folder in /sys on its S: line.
+awk -v RS= -v ORS='\n\n' -v hidden="${hidden[*]}" '
+    BEGIN { n = split(hidden, h, " ") }
+    { for (i = 1; i <= n; i++) if (index($0, "S: Sysfs=/" h[i] "/")) next; print }
+' /proc/bus/input/devices > "${runtime}/input-devices"
+args+=(--ro-bind "${runtime}/input-devices" /proc/bus/input/devices)
+
+# THE WATCH. A copy has stopped before starting its camera, using no CPU,
+# its gun shooting but not aiming, until it was started again; and a gun's
+# hub can drop off USB and come back in under a second, while Sinden's
+# software gives a gun up at its first failed camera read and never opens
+# the camera again (#575, both on the reference console, 2026-11-28). So
+# every 2 seconds the launcher looks:
+#   - at the camera: when its USB device or its capture node is no longer
+#     the one this world was built with, the copy is stopped at once;
+#   - for the camera's capture buffers mapped into a process of this copy,
+#     which Sinden's software has only while it streams from the camera
+#     (measured: a copy that could not have the camera opened it but never
+#     mapped it), and for that process having used CPU since the look
+#     before (from 6% to 25% of a core while it streams, measured; none
+#     while stuck). The copy is stopped when that has not been so at 10
+#     looks in a row (20 s) from its start, which streams within 3 s
+#     (measured), or at 3 in a row (6 s) once it has streamed.
+# Stopping a copy, the launcher exits 1 and the unit starts it again a
+# second later; THE WAIT BEFORE A START, above, keeps that from being
+# often. A copy that streams for 15 looks (30 s) sets the count of failed
+# starts back to 0.
+readonly LOOK_EVERY=2 LOOKS_TO_STREAM=10 LOOKS_LOST=3 LOOKS_GOOD=15 MIN_TICKS=2
+read -r cgroup < /proc/self/cgroup
+procs=/sys/fs/cgroup${cgroup#0::}/cgroup.procs
+capture_inode=$(stat -c %i "${capture}")
+read -r camera_number < "${camera}/devnum"
+
+# Whether the camera is gone, or is not the one this world was built with.
+camera_changed() {
+    local number="" inode=""
+    read -r number 2>/dev/null < "${camera}/devnum" || true
+    inode=$(stat -c %i "${capture}" 2>/dev/null) || true
+    [[ "${number}" != "${camera_number}" || "${inode}" != "${capture_inode}" ]]
+}
+
+# The process of this copy that has the camera's buffers mapped, if any.
+# grep's status is not used: a process that ends while it reads is an error
+# to grep even when another file matched.
+camera_user() {
+    local maps=() pid hit
+    while read -r pid; do
+        maps+=("/proc/${pid}/maps")
+    done < "${procs}"
+    hit=$(grep -lsE " ${capture_inode} +${capture}\$" "${maps[@]}") || true
+    [[ -n "${hit}" ]] || return 1
+    hit=${hit%%$'\n'*}
+    hit=${hit#/proc/}
+    echo "${hit%/maps}"
+}
+# The CPU the process $1 has used, in clock ticks: its user and system time,
+# fields 14 and 15 of its stat, counted from the end of its name.
+cpu_ticks() {
+    local stat fields
+    read -r stat < "/proc/$1/stat" || return 1
+    read -ra fields <<< "${stat##*") "}"
+    echo $((fields[11] + fields[12]))
+}
+stop_copy() {
+    echo "$1; stopping Sinden's software on ${tty} to start it again" >&2
+    kill -TERM "${copy}" 2>/dev/null || true
+    wait "${copy}" || true
+    exit 1
+}
+
+bwrap "${args[@]}" /usr/bin/mono "${SINDEN}/LightgunMono.exe" &
+copy=$!
+stopping=""
+trap 'stopping=1; kill -TERM "${copy}" 2>/dev/null' TERM INT HUP
+user=""
+ticks=0
+bad=0
+good=0
+while [[ -z "${stopping}" ]] && kill -0 "${copy}" 2>/dev/null; do
+    sleep "${LOOK_EVERY}" &
+    wait "$!" || true
+    [[ -z "${stopping}" ]] || break
+    if camera_changed; then
+        stop_copy "its camera ${capture} is gone or is a new device"
+    fi
+    was=${user}
+    was_ticks=${ticks}
+    user=$(camera_user) || user=""
+    ticks=0
+    [[ -z "${user}" ]] || ticks=$(cpu_ticks "${user}") || ticks=0
+    if [[ -n "${user}" && "${user}" == "${was}" ]] && ((ticks - was_ticks >= MIN_TICKS)); then
+        bad=0
+        good=$((good + 1))
+        ((good != LOOKS_GOOD)) || echo 0 > "${FAILED_STARTS}"
+        continue
+    fi
+    bad=$((bad + 1))
+    if ((good > 0 && bad >= LOOKS_LOST)); then
+        stop_copy "it has stopped streaming from its camera ${capture}"
+    elif ((bad >= LOOKS_TO_STREAM)); then
+        stop_copy "it has not streamed from its camera ${capture} in $((LOOKS_TO_STREAM * LOOK_EVERY)) s"
+    fi
+done
+status=0
+wait "${copy}" || status=$?
+[[ -z "${stopping}" ]] || exit 0
+exit "${status}"
