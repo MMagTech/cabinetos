@@ -253,6 +253,30 @@ Decided with MMagTech 2026-09-26, from the things people will actually do.
   pad. B cancels. A button games or the shortcuts need is ignored, and it goes
   on listening; Select, Start, L3 and R3 are refused, and the row says why
   ("Games use Select"). **Built.**
+- **Light guns' two settings, the last two rows, only while a Sinden light
+  gun is plugged in** (#575 rule 2): with none, neither does anything, and
+  last, nothing above them moves when a gun comes or goes. Their names, place
+  and the rows hidden with no gun were the build session's call (2026-11-28),
+  for MMagTech to judge on the TV. **Built; not yet judged on the TV.**
+  - **Light gun calibration** opens the calibration screen: black, the
+    border around it, a target at its middle. "Shoot the middle" (the shot
+    says which gun); then "Keep aiming at the middle" while the console tries
+    the camera at eleven exposures, about four seconds, and keeps the middle
+    of those it saw the border at, for that gun and TV; then the gun's aim as
+    a dot and "Press (A) to continue", or "Couldn't see the screen" and
+    "Press (A) to try again". The pump or B leaves at any step. A gun's
+    D-pad held left three seconds, Sinden's own calibration, opens the same
+    screen in the menus and over a game, which it pauses; then the shot also
+    sets Sinden's calibration, kept in the gun. Nothing on the console says
+    so; the wiki does (docs/wiki/controllers.md;
+    docs/decisions/2026-11-28-light-gun-calibration-screen.md). The console
+    also keeps the camera at that exposure while a gun game plays, and tries
+    again by itself when the gun keeps losing the border
+    (docs/decisions/2026-11-28-light-gun-camera-sets-itself.md).
+  - **Light gun recoil: Off / On, off by default** (rule 14;
+    docs/decisions/2026-11-02-sinden-software-in-the-image.md). On is the
+    same in every game: a tap kicks once and a hold keeps kicking. Sinden's
+    software starts again for it, so a gun aims again a few seconds after.
 
 ## Network
 

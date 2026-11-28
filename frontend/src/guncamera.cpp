@@ -44,9 +44,13 @@ std::string readText(const std::string& path) {
     return s;
 }
 
+// The whole file, read to its end: not cab::readBytes, which takes the size
+// the file reports, and sysfs reports 0 for a TV's EDID.
 std::string bytesOf(const std::string& path) {
-    const std::vector<uint8_t> b = cab::readBytes(path);
-    return std::string(b.begin(), b.end());
+    std::ifstream in(path, std::ios::binary);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
 }
 
 std::string parentOf(const std::string& p) {
@@ -256,12 +260,16 @@ void tickGun(int n, int64_t t, bool follow) {
     if (ask == Ask::Calibrate) startSweep(n, g, t, true);
 
     if (g.sweeping) {
+        if (g.sweep.tick(t, lightgun::sight(n, g.sweep.lookFrom()))) {
+            finishSweep(n, g, t);
+            return;
+        }
+        // The rung the sweep is on, given as soon as it begins.
         if (g.given != g.sweep.exposure()) {
             g.given = g.sweep.exposure();
             give(n, g, g.given, nullptr);
         }
-        if (g.sweep.tick(t, lightgun::sight(n, g.sweep.lookFrom()))) finishSweep(n, g, t);
-        else if (g.forCalibration) show(n, Progress{true, false, g.sweep.progress(), -1, false});
+        if (g.forCalibration) show(n, Progress{true, false, g.sweep.progress(), -1, false});
         return;
     }
     // KEPT: the camera is set again when it is not at the exposure kept, as
@@ -658,6 +666,12 @@ int test() {
               "a TV is its EDID's maker, product code and serial number");
         check(tvKey(edid.substr(0, 100)).empty() && tvKey(std::string(128, 'x')).empty(),
               "and a file that is no EDID is no TV");
+        // The kernel's EDID reports a size of 0, as /proc's files do: read by
+        // the size a file reports, it was empty, and only gamescope's copy
+        // was ever used (found 2026-11-28 by a check on the reference
+        // console).
+        check(!bytesOf("/proc/self/status").empty() && cab::readBytes("/proc/self/status").empty(),
+              "a file that reports no size, as the kernel's copy of the EDID does, is read whole");
 
         char tmpl[] = "/tmp/cabinetos-guncam-XXXXXX";
         const char* made = ::mkdtemp(tmpl);

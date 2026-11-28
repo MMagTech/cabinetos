@@ -59,6 +59,7 @@ and **A** steps through it.
 | Power button | The Power menu, with **Resume** first |
 | Hold **HOME** (Wii Remote) | The pause menu, in every game |
 | Hold the **rear right** button (Sinden light gun) | The pause menu, in every game. A tap is a coin in an arcade light-gun game |
+| Hold the **D-pad left** three seconds (Sinden light gun) | The game pauses for [calibration](controllers.md#sinden-light-guns); the same in the menus |
 | Hold **Select** (Remote Play device) | The pause menu |
 | Tap **Home** ([8BitDo Arcade Stick](controllers.md#fight-sticks)) | The pause menu, in every game |
 

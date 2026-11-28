@@ -169,6 +169,37 @@ controller is on. While no Remote is on, a Wii game that needs one says
 *Needs a Wii Remote*, and Play on it says the same:
 turn a Remote on, then press Play.
 
+## Sinden light guns
+
+Plug in one or two Sinden light guns and play light-gun games: nothing to
+install or set up. The first gun plugged in is player 1. They can stay plugged
+in; in a game that is not a light-gun game, a gun only opens the pause menu.
+
+| Button | In the menus | In a light-gun game |
+|---|---|---|
+| Trigger | Select | Shoot |
+| Pump, or front left | Back | The game's second button |
+| Front right | | The game's third button |
+| Rear left | Start | Start |
+| Rear right | | Coin. Hold it a second for the [pause menu](pause-menu.md), in any game |
+| D-pad | Moves | The game's D-pad |
+
+**The camera sets itself.** The console keeps each gun's camera at a setting
+it sees the white border at, remembered for each gun and TV, and finds a new
+one by itself when the gun keeps losing the border, as when the room gets
+brighter.
+
+**Calibration.** Settings, Controllers, **Light gun calibration**: shoot the
+middle, then keep aiming at it for a few seconds while the console sets the
+camera. A dot shows where the gun lands. To re-aim the gun itself, **hold its
+D-pad left for three seconds**, anywhere: in a game, the game pauses and the
+same screen opens, and the shot at the middle sets the gun's aim (Sinden's own
+calibration, kept in the gun) as well as its camera. The pump cancels.
+
+**Recoil** is off to start: Settings, Controllers, **Light gun recoil**. On,
+it is the same in every game: a tap kicks once and holding the trigger keeps
+kicking. Sinden's licence advises against recoil for anyone under 18.
+
 ## In-game shortcuts
 
 Off to start with. Turn on **In-game shortcuts** in Settings, Controllers, and

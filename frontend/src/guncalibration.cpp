@@ -70,6 +70,9 @@ void App::openGunCalibration(int gun) {
     gunCal.gun = gun;
     gunCal.waitForSinden = false;
     if (!was) {
+        // A direction held in the menus as the D-pad was held left stops
+        // repeating behind the screen; every press is the screen's now.
+        letGoOfHeld();
         gunCal.shown.retarget(1.0f, kFocusDuration);
         sound::play(sound::Cue::Activate);
     }
@@ -95,8 +98,8 @@ void App::followGunCalibration(float dt) {
     gunCal.shown.tick(dt);
     if (!gunCal.open() || gunCal.capture) return;
     const int n = gunCal.gun;
-    if (n >= 0 && !(lightgun::plugged() & (1u << n))) {
-        closeGunCalibration("the gun left");
+    if (n >= 0 ? !(lightgun::plugged() & (1u << n)) : lightgun::plugged() == 0) {
+        closeGunCalibration(n >= 0 ? "the gun left" : "no gun is plugged in");
         return;
     }
     if (gunCal.step == Step::Shoot && n >= 0 && gunCal.waitForSinden) {
@@ -159,18 +162,24 @@ bool App::gunCalibrationTakes(const SDL_Event& e) {
     }
     if (!a && !b) return true;
     const int n = gunCal.gun;
-    // A GUN SINDEN'S SOFTWARE IS CALIBRATING ends only from that gun.
-    const bool held = n >= 0 && lightgun::parked(n);
+    // A GUN SINDEN'S SOFTWARE IS CALIBRATING ends only from that gun: the
+    // one this screen calibrates, or before a shot, any whose aim is held.
+    int heldBy = -1;
+    for (int g = 0; g < lightgun::kMaxGuns && heldBy < 0; ++g)
+        if ((n < 0 || g == n) && lightgun::parked(g)) heldBy = g;
     if (b) {
-        if (held && from != n) return true;
+        if (heldBy >= 0 && from != heldBy) return true;
         sound::play(sound::Cue::Back);
         closeGunCalibration(from >= 0 ? "the gun's pump" : "Back");
         return true;
     }
     switch (gunCal.step) {
         case Step::Shoot:
-            // Only a gun shoots, and once one has, only that gun.
-            if (from < 0 || (n >= 0 && from != n) || gunCal.waitForSinden) return true;
+            // Only a gun shoots, and once one has, only that gun; while
+            // Sinden's software holds a gun's aim, only that one.
+            if (from < 0 || (n >= 0 && from != n) || (heldBy >= 0 && from != heldBy) ||
+                gunCal.waitForSinden)
+                return true;
             gunCal.gun = from;
             sound::play(sound::Cue::Activate);
             if (lightgun::parked(from)) {

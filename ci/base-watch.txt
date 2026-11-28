@@ -290,6 +290,12 @@ log: gamescope draws with the GPU's Vulkan driver, not software :: journalctl -b
 # screenshot of a game run as a program (states.cpp). ci/check-gamescope-flags.sh
 # checks the command line; this checks the names.
 log: gamescope still knows every setting and name the console uses :: command -v strings >/dev/null || { echo "no strings (binutils) to read gamescope with"; exit 1; }; s=$(strings -a "$(command -v gamescope)"); c=$(strings -a "$(command -v gamescopectl)"); out=$(for n in drm_sleep_external_screen touch_click_mode composite_force GAMESCOPE_PATCHED_EDID_FILE GAMESCOPE_MODE_SAVE_FILE; do grep -qxF "$n" <<<"$s" || echo "gamescope has no $n"; done; grep -qxF take_screenshot <<<"$c" || echo "gamescopectl has no take_screenshot"; command -v gamescopereaper >/dev/null || echo "no gamescopereaper"); [ -z "$out" ] || { echo "$out"; exit 1; }
+# gamescope's copy of the TV's EDID (GAMESCOPE_PATCHED_EDID_FILE) is also
+# which TV a light gun's camera is kept for while no TV answers (#575,
+# guncamera.cpp, tvNow): its maker, product code and serial number, bytes 8 to
+# 15, must be the TV's own. Passes with no TV answering. Seen to fail on the
+# reference console with a byte changed in a copy, and with no copy.
+log: gamescope's copy of the TV's EDID names the TV as the TV does :: c=""; for d in /sys/class/drm/card*-*; do [ "$(cat "$d/status" 2>/dev/null)" = connected ] && [ -n "$(od -An -N8 "$d/edid" 2>/dev/null)" ] && { c=$d/edid; break; }; done; [ -n "$c" ] || exit 0; g=$HOME/.local/state/cabinetos/gamescope/edid.bin; t=$(od -An -tx1 -j8 -N8 "$c"); k=$(od -An -tx1 -j8 -N8 "$g" 2>/dev/null); [ "$t" = "$k" ] || { echo "the TV says$t, gamescope's copy${k:- nothing}"; exit 1; }
 tv: Picture: after the restart Home comes up on the TV, sharp
 tv: One heavy game: a PS2 or GameCube game plays smoothly for a minute, with sound
 tv: The pause menu over a PS2 game: L3 + R3 opens it, the pad moves in it, and after Resume the game has the pad
