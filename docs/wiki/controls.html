@@ -113,6 +113,18 @@
   .systems h2 .tag { background: #9cc8f2; }
   .keyboard { background: #f5f1fc; border-color: #ddd3f0; }
   .keyboard h2 .tag { background: #d6c8f3; }
+  .gun { background: #fff3fa; border-color: #ffcce8; }
+  .gun h2 .tag { background: #ffb3df; }
+
+  /* The controller, and beside it the light gun's buttons. The controller's
+     picture is cut to what it draws, so it keeps its size beside the card. */
+  .padrow { display: flex; align-items: center; gap: 12px; }
+  .padrow .pad { flex: none; width: auto; height: 169px; margin: 0; }
+  .padrow .gun { flex: 1; padding: 10px 14px 11px; }
+  .gun h2 { margin-bottom: 5px; }
+  .gun .list { row-gap: 2px; }
+  .gun .list .keys { font-size: 11px; }
+  .gun .m { color: var(--dim); font-size: 11px; }
 
   /* Rows of keys and what they do. */
   .list { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 4px; align-items: center; }
@@ -222,7 +234,8 @@
     <div class="where"><b>cabinetos.mmagtech.com/wiki</b>Everything else is in the wiki</div>
   </header>
 
-  <svg class="pad" viewBox="0 0 728 238" width="728" height="238" role="img" aria-label="A controller with every button named">
+  <div class="padrow">
+  <svg class="pad" viewBox="110 0 540 238" width="383" height="169" role="img" aria-label="A controller with every button named">
     <defs>
       <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#f1ecfb"/>
@@ -304,6 +317,19 @@
     <text x="546" y="131" text-anchor="start" class="name">Right stick</text>
     <text x="546" y="145" text-anchor="start" class="note">Press it in: R3</text>
   </svg>
+
+  <section class="card gun">
+    <h2><span class="tag">Sinden light gun</span><small>In light-gun games</small></h2>
+    <div class="list">
+      <span class="keys"><b>Trigger</b></span><span>Shoot <span class="m">· Select in menus</span></span>
+      <span class="keys"><b>Pump</b></span><span>Second button <span class="m">· Back in menus</span></span>
+      <span class="keys"><b>Front right</b></span><span>Third button</span>
+      <span class="keys"><b>Rear left</b></span><span>Start</span>
+      <span class="keys"><b>Rear right</b></span><span>Coin. Hold a second: pause menu</span>
+      <span class="keys"><b>D-pad</b></span><span>D-pad <span class="m">· Moves in menus</span></span>
+    </div>
+  </section>
+  </div>
 
   <div class="row">
     <section class="pause">

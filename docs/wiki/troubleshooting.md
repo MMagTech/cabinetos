@@ -24,7 +24,7 @@ The system's name in a message is RomM's name for the platform.
 | *Couldn't download this game* | The console could not fetch the game. Check that the server answers (the top bar says *Offline* when it does not) and try again. |
 | *Needs a controller* | Only Wii Remotes are on, and this is not a Wii game. Turn on a pad, or see [Wii Remotes](controllers.md#wii-remotes). |
 | *Not supported* (an arcade game) | No emulator here plays it. See [Arcade](arcade.md). |
-| *Needs a light gun* (an arcade game) | The game is made for a light gun. See [Arcade](arcade.md). |
+| *Needs a light gun* (an arcade game) | The game is made for a light gun. Plug in a Sinden light gun: FinalBurn Neo's gun games then play. Gun games in the other emulators stay greyed. See [Arcade](arcade.md). |
 | *Can't connect* (changing the RomM server's address) | Nothing answered at that address. Check the address and its port. |
 
 ## A game crashes, freezes or looks wrong

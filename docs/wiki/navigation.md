@@ -141,3 +141,18 @@ field.
 | In a game: Z, X, Return, Right Shift | The bottom and right face buttons, Start and Select (built-in emulators except PS2) |
 
 A mouse works too: point and click.
+
+## A Sinden light gun
+
+| Button | In the menus | In a light-gun game |
+|---|---|---|
+| Trigger | Select | Shoot |
+| Pump (or front left) | Back | The second button |
+| Front right | Nothing | The third button |
+| Rear left | Start | Start |
+| Rear right | Nothing | A tap: a coin. Held a second: the [pause menu](pause-menu.md), and held again it closes |
+| D-pad | Move | The D-pad |
+
+In any other game the gun does nothing but open the pause menu with the rear
+right button. The pause menu answers it as it does a pad: the D-pad moves,
+the trigger selects, the pump goes back.
