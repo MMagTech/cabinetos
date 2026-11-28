@@ -57,8 +57,8 @@ if [[ "$(cat "${gun}/product" 2>/dev/null)" != SindenLightgun ]]; then
     exit 2
 fi
 
-# The camera usually comes up before the gun's port, and after it when the
-# gun has just been plugged in; give it ten seconds.
+# The gun's hub brings up its camera and its gun one after the other, in
+# either order as far as this script knows; give the camera ten seconds.
 camera=""
 capture=""
 videos=()
@@ -135,7 +135,8 @@ set_key() {
 # Its gun: "the first (lowest) ttyACM device that is a Sinden Lightgun", the
 # only one in its world. As shipped; checked, because the world depends on it.
 set_key SerialPortWrite 0
-# Its camera, by name: Sinden's own search takes the first it finds.
+# Its camera, by name, though it is the only one in this world: Sinden's own
+# search is what gave guns each other's cameras (#575, the first day).
 set_key VideoDevice "${capture}"
 # Recoil off, and its D-pad up shortcut with it: "Enable recoil system so
 # dpad up toggle works and recoil can be enabled", the file says. Gun 2's
