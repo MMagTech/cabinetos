@@ -12,6 +12,7 @@
 #include <zlib.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -326,21 +327,41 @@ bool marked(const std::vector<Candidate>& c, char flag) {
 }
 bool noController(const std::vector<Candidate>& c) { return marked(c, 'x'); }
 bool needsGun(const std::vector<Candidate>& c) { return marked(c, 'g'); }
-Answer gunAnswer(const Candidate& c) { return {Verdict::NeedsGun, c.core, "Needs a light gun"}; }
+Answer gunAnswer(const Candidate& c) {
+    return {Verdict::NeedsGun, c.core, "Needs a light gun", true};
+}
+
+std::atomic<GunReady> gGunReady{nullptr};
+
+bool gunReady(const char* core) {
+    const GunReady ready = gGunReady.load();
+    return ready && core && ready(core);
+}
+
+// A LIGHT-GUN GAME PLAYS ONLY WHERE A GUN CAN PLAY IT NOW: the emulators
+// without a gun to hand are left out of `c`. False when that leaves none,
+// which is "Needs a light gun".
+bool keepGunReady(std::vector<Candidate>& c) {
+    c.erase(std::remove_if(c.begin(), c.end(), [](const Candidate& k) { return !gunReady(k.core); }),
+            c.end());
+    return !c.empty();
+}
 
 Answer byNameIn(const Catalogue* cats, const std::string& fileName, bool dreamcast) {
-    const std::vector<Candidate> c = candidates(cats, fileName, dreamcast);
+    std::vector<Candidate> c = candidates(cats, fileName, dreamcast);
     if (c.empty() || noController(c)) return notSupported();
-    if (needsGun(c)) return gunAnswer(c.front());
-    return {Verdict::Plays, c.front().core, {}};
+    const bool gun = needsGun(c);
+    if (gun && !keepGunReady(c)) return gunAnswer(c.front());
+    return {Verdict::Plays, c.front().core, {}, gun};
 }
 
 Answer byFilesIn(const Catalogue* cats, const std::string& fileName,
                  const std::vector<Member>& members, const std::vector<Disc>& discs,
                  bool dreamcast) {
-    const std::vector<Candidate> c = candidates(cats, fileName, dreamcast);
+    std::vector<Candidate> c = candidates(cats, fileName, dreamcast);
     if (c.empty() || noController(c)) return notSupported();
-    if (needsGun(c)) return gunAnswer(c.front());
+    const bool gun = needsGun(c);
+    if (gun && !keepGunReady(c)) return gunAnswer(c.front());
     std::set<std::pair<uint32_t, int64_t>> have;
     std::set<uint32_t> crcs;
     for (const Member& m : members) {
@@ -381,20 +402,22 @@ Answer byFilesIn(const Catalogue* cats, const std::string& fileName,
             fail({Verdict::DiscDiffers, k.core, "Its disc image doesn't match its set"});
             continue;
         }
-        return {Verdict::Plays, k.core, {}};
+        return {Verdict::Plays, k.core, {}, gun};
     }
+    first.gun = gun;
     return first;
 }
 
 // A game by its key in one emulator's catalogue, the whole answer its line
 // gives: one not there, not marked working or made for anything but a
-// controller is not supported, a gun game needs a light gun.
+// controller is not supported, a gun game needs a light gun that plays in it.
 Answer byKey(const Catalogue* cats, const char* core, const std::string& key) {
     const Catalogue& c = cats[indexOf(core)];
     const auto it = c.sets.find(key);
     if (it == c.sets.end() || !it->second.works || it->second.flag == 'x') return notSupported();
-    if (it->second.flag == 'g') return {Verdict::NeedsGun, core, "Needs a light gun"};
-    return {Verdict::Plays, core, {}};
+    const bool gun = it->second.flag == 'g';
+    if (gun && !gunReady(core)) return {Verdict::NeedsGun, core, "Needs a light gun", true};
+    return {Verdict::Plays, core, {}, gun};
 }
 
 // A Lindbergh game by a key of Linux Loader's catalogue: a program's name in
@@ -493,15 +516,16 @@ std::vector<std::string> loaderFilesIn(const std::string& dir) {
 }
 
 Answer byImageIn(const Catalogue* cats, const std::string& fileName, const std::string& id) {
-    const std::vector<Candidate> c = candidates(cats, fileName, false);
+    std::vector<Candidate> c = candidates(cats, fileName, false);
     if (c.empty() || noController(c)) return notSupported();
-    if (needsGun(c)) return gunAnswer(c.front());
+    const bool gun = needsGun(c);
+    if (gun && !keepGunReady(c)) return gunAnswer(c.front());
     std::string base = fileName;
     if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
         base.erase(0, slash + 1);
     for (const Candidate& k : c)
-        if (!id.empty() && k.entry->id == id) return {Verdict::Plays, k.core, {}};
-    return {Verdict::FilesDiffer, c.front().core, base + " doesn't match its set"};
+        if (!id.empty() && k.entry->id == id) return {Verdict::Plays, k.core, {}, gun};
+    return {Verdict::FilesDiffer, c.front().core, base + " doesn't match its set", gun};
 }
 
 uint32_t le32(const unsigned char* p) {
@@ -639,6 +663,8 @@ bool isArchive(const std::string& fileName) {
 bool asksDreamcast(const std::string& fileName) { return isArchive(fileName); }
 
 void setDirectory(const std::string& dir) { gDir = dir; }
+
+void setGunReady(GunReady ready) { gGunReady = ready; }
 
 Answer byName(const std::string& fileName, bool dreamcast) {
     load();
@@ -1160,6 +1186,35 @@ int test() {
           "by files too, a light-gun game needs a light gun");
     check(files("vliner.zip", {{"v", 0x40, 10}}).verdict == Verdict::NotSupported,
           "and a game no controller plays is not supported, whatever its files");
+
+    // A GUN PLUGGED IN (#575 rule 8): a light-gun game plays on an emulator
+    // the console hands the gun to, and only there; unplugged it greys again.
+    setGunReady([](const char* c) { return std::strcmp(c, "fbneo_libretro") == 0; });
+    check(name("opwolf.zip").verdict == Verdict::Plays &&
+              core(name("opwolf.zip")) == "fbneo_libretro" && name("opwolf.zip").gun,
+          "with a gun plugged in that FinalBurn Neo is handed, its light-gun game plays there, as "
+          "a gun game");
+    check(name("zombraid.zip").verdict == Verdict::Plays &&
+              core(name("zombraid.zip")) == "fbneo_libretro" && name("zombraid.zip").gun,
+          "and a game one list marks a gun game plays as one, though another list does not");
+    check(name("borntofi.zip").verdict == Verdict::NeedsGun && name("borntofi.zip").gun,
+          "a gun game only emulators with no gun to hand have working still needs a light gun");
+    check(name("sf2.zip").verdict == Verdict::Plays && !name("sf2.zip").gun,
+          "a game that is no gun game plays as before, and not as a gun game");
+    const Answer fits = files("opwolf.zip", {{"o", 0xa, 10}});
+    check(fits.verdict == Verdict::Plays && fits.gun,
+          "by files too, a light-gun game plays with a gun plugged in");
+    const Answer differs = files("opwolf.zip", {{"o", 0xb, 10}});
+    check(differs.verdict == Verdict::FilesDiffer && differs.gun,
+          "and one whose files do not fit its set says so");
+    check(files("hotd2.zip", {{"r", 0xb23d1a0c, 1}}).verdict == Verdict::NeedsGun,
+          "a Naomi gun game still needs a light gun: Flycast is handed none");
+    check(byLoaderKey(cats, "hod4m.elf").verdict == Verdict::NeedsGun &&
+              byLoaderKey(cats, "hod4m.elf").gun,
+          "nor is Linux Loader, so a Lindbergh gun game still needs one");
+    setGunReady(nullptr);
+    check(name("opwolf.zip").verdict == Verdict::NeedsGun && name("opwolf.zip").gun,
+          "with the gun unplugged, a light-gun game needs a light gun again");
     check(cats[0].bios.count("naomi") && cats[0].bios.count("awbios"),
           "Flycast's BIOS zips are read from its !bios line");
     check(isArcadeSlug("arcade") && isArcadeSlug("cps2") && isArcadeSlug("neogeomvs"),

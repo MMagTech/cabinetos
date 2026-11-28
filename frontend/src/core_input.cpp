@@ -1,7 +1,8 @@
 // The pads as the core sees them: the players and their ports, the answer to
-// inputState, the keys held on the core's keyboard, the rumble and sensor
-// interfaces, the port count and the button names a core declares, kept per
-// port (environmentInput), and the Core calls that set and read them. Moved
+// inputState (a pad's, and a light gun's, #575), the keys held on the core's
+// keyboard, the rumble and sensor interfaces, the ports and the devices a core
+// offers on each, and the button names it declares, kept per port
+// (environmentInput), and the Core calls that set and read them. Moved
 // out of core.cpp in the restructure (#398). Telling the core what is plugged
 // in stays in Core::loadGame (core.cpp), after retro_load_game, because that
 // is when the core has said how many ports it has.
@@ -19,6 +20,7 @@
 
 #include "libretro.h"
 #include "guitar.h"
+#include "lightgun.h"
 #include "ps2.h"
 #include "rumble.h"
 #include "tilt.h"
@@ -29,12 +31,19 @@ namespace corestate {
 // Four players (players.h). PlayStation 2's own host takes two of them.
 constexpr int kMaxPorts = 4;
 PadState gPads[kMaxPorts];
-// How many players the app says there are, and how many ports the core has
-// been told hold a controller.
+// How many players the app says there are.
 int gPlayers = 1;
-unsigned gPortsPlugged = 0;
+// WHAT EACH PORT HAS BEEN TOLD IT HOLDS, since the game loaded: a pad's
+// device, a light gun's, a real Wii Remote, or nothing (Core::loadGame,
+// setPlayers, plugGun).
+unsigned gPortDevice[kMaxPorts] = {};
 // What goes into each player's port. See Core::setPadDevice.
 unsigned gPadDevice = RETRO_DEVICE_JOYPAD;
+// A light gun's device, and the ports that have one as the game loads. See
+// Core::setGunDevice.
+unsigned gGunDevice = 0;
+unsigned gGunPorts = 0;
+GunState gGuns[kMaxPorts];
 // The first port given to real Wii Remotes, or -1 for none. See
 // Core::setRealRemotesFrom.
 int gRealRemotesFrom = -1;
@@ -44,6 +53,24 @@ int gRealRemotesFrom = -1;
 // the answer comes from the core rather than from a number chosen here — see
 // the note in loadGame about telling a core what is plugged in.
 unsigned gCorePorts = 0;
+// AND THE DEVICES IT OFFERS ON EACH, from the same call, so a light gun is put
+// only in a port whose core says a gun goes there (#575). Emptied when a core
+// loads, replaced whole each time the core says it again.
+std::vector<unsigned> gPortOffers[kMaxPorts];
+
+void forgetPortOffers() {
+    for (auto& o : gPortOffers) o.clear();
+}
+
+bool offers(unsigned port, unsigned device) {
+    return port < kMaxPorts && std::find(gPortOffers[port].begin(), gPortOffers[port].end(),
+                                         device) != gPortOffers[port].end();
+}
+
+// Whether `port` gets the light gun as the game loads.
+bool gunPortAtLoad(unsigned port) {
+    return gGunDevice && port < kMaxPorts && (gGunPorts >> port) & 1u && offers(port, gGunDevice);
+}
 
 // Once per game, like the rotation line. Cleared in loadGame.
 bool gInputDescriptorsLogged = false;
@@ -169,6 +196,43 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
     }
     if (device == RETRO_DEVICE_KEYBOARD)
         return port == 0 && id < gKeys.size() && gKeys[id] ? 1 : 0;
+    if (device == RETRO_DEVICE_LIGHTGUN) {
+        // A LIGHT GUN (#575 rule 10): the aim on the picture or off it, and
+        // its buttons as the rule's table gives them in a game. A pad in the
+        // same port keeps its Start, Select and D-pad, so a player who also
+        // holds a pad can coin up and start with it (rule 4). A port whose
+        // gun is away answers off the picture with nothing pressed.
+        const GunState& gun = gGuns[port];
+        auto has = [&](uint16_t b) -> int16_t { return (gun.buttons & b) ? 1 : 0; };
+        auto padHas = [&](unsigned id) -> int16_t { return (pad.buttons >> id) & 1u; };
+        switch (id) {
+            case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X: return gun.onPicture ? gun.x : -0x8000;
+            case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y: return gun.onPicture ? gun.y : -0x8000;
+            case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN: return gun.onPicture ? 0 : 1;
+            case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return has(lightgun::kTrigger);
+            // The pump is the second button, and the reload a core may ask
+            // for by its own name.
+            case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:
+            case RETRO_DEVICE_ID_LIGHTGUN_AUX_A: return has(lightgun::kSecond);
+            case RETRO_DEVICE_ID_LIGHTGUN_AUX_B: return has(lightgun::kThird);
+            case RETRO_DEVICE_ID_LIGHTGUN_START:
+                return has(lightgun::kStart) | padHas(RETRO_DEVICE_ID_JOYPAD_START);
+            case RETRO_DEVICE_ID_LIGHTGUN_SELECT:
+                return has(lightgun::kCoin) | padHas(RETRO_DEVICE_ID_JOYPAD_SELECT);
+            case RETRO_DEVICE_ID_LIGHTGUN_DPAD_UP:
+                return has(lightgun::kUp) | padHas(RETRO_DEVICE_ID_JOYPAD_UP);
+            case RETRO_DEVICE_ID_LIGHTGUN_DPAD_DOWN:
+                return has(lightgun::kDown) | padHas(RETRO_DEVICE_ID_JOYPAD_DOWN);
+            case RETRO_DEVICE_ID_LIGHTGUN_DPAD_LEFT:
+                return has(lightgun::kLeft) | padHas(RETRO_DEVICE_ID_JOYPAD_LEFT);
+            case RETRO_DEVICE_ID_LIGHTGUN_DPAD_RIGHT:
+                return has(lightgun::kRight) | padHas(RETRO_DEVICE_ID_JOYPAD_RIGHT);
+            // The fourth button (AUX_C) is none of the gun's, and the relative
+            // X and Y and Pause are libretro's old names, which no gun here
+            // answers.
+            default: return 0;
+        }
+    }
     return 0;
 }
 
@@ -246,14 +310,19 @@ std::optional<bool> environmentInput(unsigned cmd, void* data) {
             return true;
 
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
-            // Acknowledged before, and the data thrown away. It is the only
-            // place a core says how many ports it has, and loadGame has to
-            // know: a core that is told about some of its ports and not the
-            // rest can sit waiting for the rest forever. The array is
-            // terminated by an entry with no types.
+            // It is the only place a core says how many ports it has, and
+            // loadGame has to know: a core that is told about some of its
+            // ports and not the rest can sit waiting for the rest forever.
+            // The array is terminated by an entry with no types. The devices
+            // each port offers are kept too, for a light gun (gunPortAtLoad).
             gCorePorts = 0;
+            forgetPortOffers();
             if (const auto* info = static_cast<const retro_controller_info*>(data))
-                while (info[gCorePorts].types || info[gCorePorts].num_types) ++gCorePorts;
+                for (; info[gCorePorts].types || info[gCorePorts].num_types; ++gCorePorts) {
+                    if (gCorePorts >= kMaxPorts || !info[gCorePorts].types) continue;
+                    for (unsigned t = 0; t < info[gCorePorts].num_types; ++t)
+                        gPortOffers[gCorePorts].push_back(info[gCorePorts].types[t].id);
+                }
             return true;
         }
 
@@ -332,19 +401,43 @@ void Core::setPlayers(int n) {
     gPlayers = std::clamp(n, 1, kMaxPorts);
     // A player who arrived mid-game: plug their port in now. libretro allows
     // it at any time, and it is what a person plugging a pad into the real
-    // machine did.
+    // machine did. A port that already holds something (a light gun, a real
+    // Wii Remote) keeps it.
     if (!gameLoaded_ || !g.set_controller_port_device || gIsPs2) return;
-    const unsigned ports = std::max(gCorePorts, 1u);
+    const unsigned ports = std::min(std::max(gCorePorts, 1u), static_cast<unsigned>(kMaxPorts));
     const unsigned want = std::min(static_cast<unsigned>(gPlayers), ports);
-    while (gPortsPlugged < want) {
-        g.set_controller_port_device(gPortsPlugged, gPadDevice);
-        std::fprintf(stderr, "[input] controller plugged into port %u\n", gPortsPlugged + 1);
-        ++gPortsPlugged;
+    for (unsigned p = 0; p < want; ++p) {
+        if (gPortDevice[p] != RETRO_DEVICE_NONE) continue;
+        g.set_controller_port_device(p, gPadDevice);
+        gPortDevice[p] = gPadDevice;
+        std::fprintf(stderr, "[input] controller plugged into port %u\n", p + 1);
     }
 }
 
 void Core::setPadDevice(unsigned device) {
     gPadDevice = device ? device : RETRO_DEVICE_JOYPAD;
+}
+
+void Core::setGunDevice(unsigned device, unsigned portsWithGun) {
+    gGunDevice = device;
+    gGunPorts = device ? portsWithGun : 0;
+}
+
+void Core::plugGun(int port) {
+    if (!gameLoaded_ || !g.set_controller_port_device || gIsPs2 || !gGunDevice || port < 0 ||
+        port >= kMaxPorts)
+        return;
+    const unsigned p = static_cast<unsigned>(port);
+    if (p >= std::max(gCorePorts, 1u) || gPortDevice[p] == gGunDevice || !offers(p, gGunDevice))
+        return;
+    g.set_controller_port_device(p, gGunDevice);
+    gPortDevice[p] = gGunDevice;
+    std::fprintf(stderr, "[input] light gun plugged into port %u\n", p + 1);
+}
+
+void Core::setGun(int port, const GunState& gun) {
+    if (port < 0 || port >= kMaxPorts) return;
+    gGuns[port] = gun;
 }
 
 void Core::setRealRemotesFrom(int firstPort) { gRealRemotesFrom = firstPort; }

@@ -290,7 +290,18 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // leaves it to a BIOS DIP switch. FinalBurn Neo declares this option only
     // with a Neo Geo game loaded; a set carries its own BIOS (measured on the
     // A9, 2026-10-28).
-    if (coreName == "fbneo_libretro") return {{"fbneo-neogeo-mode", "MVS_EUR"}};
+    //
+    // AND NO CROSSHAIR (#575): a light gun aims for real, on the player's
+    // own picture. The declared default, "hide with lightgun device", hides
+    // it only on a port holding a gun and draws one for every other player
+    // of a gun game, an absent player 2 among them (FinalBurn Neo's
+    // RefreshLightgunCrosshair and BurnGunDrawTargets at our pin). "always
+    // hide" draws none.
+    if (coreName == "fbneo_libretro")
+        return {
+            {"fbneo-neogeo-mode", "MVS_EUR"},
+            {"fbneo-lightgun-crosshair-emulation", "always hide"},
+        };
     if (coreName == "mgba") return {{"mgba_interframe_blending", "mix_smart"}};
     if (coreName == "stella2014") return {{"stella2014_mix_frames", "ghost_75"}};
 

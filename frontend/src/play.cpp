@@ -15,6 +15,7 @@
 #include "core.h"
 #include "discs.h"
 #include "fightstick.h"
+#include "lightgun.h"
 #include "ps2.h"
 #include "savepush.h"
 #include "saves.h"
@@ -260,6 +261,39 @@ void App::followRemotesInGame() {
     wiiremote::setGameRunning(playing && session.platformSlug == "wii");
     wiiremote::setInGame(playing || standaloneRun.active());
     if (!wiiremote::takeHomeHold()) return;
+    if (standaloneRun.active() && !standalonePaused) openStandaloneMenu();
+    else if (playing || overlayOpen) toggleOverlay();
+}
+
+// LIGHT GUNS (#575, lightgun.h). Where their presses go: the menus while
+// nothing plays, the pause menu is up, or a loaded state waits on "Press (A)
+// to continue", which the trigger answers as a pad's A does; the game
+// otherwise. A press in a
+// game is a press for the screen's dim and time played, as a pad's is. The
+// rear right button held a second opens the pause menu in every game, an
+// emulator of its own included, and closes it, as a Wii Remote's HOME held
+// does (rule 3). In a light-gun game a gun plugged in mid-game goes into its
+// player's port, and once a gun has been in, the border stays for the game.
+// The frame loop calls this, and watchStandalone does while an emulator of
+// its own has the screen.
+void App::followGunsInGame() {
+    const bool inGame = playing || standaloneRun.active();
+    lightgun::setInMenus(!inGame || overlayOpen || standalonePaused || stateHold);
+    lightgun::setInGame(inGame);
+    if (lightgun::takePressInGame()) {
+        playClock.touch();
+        idleWatch.input(clockSeconds());
+    }
+    if (playing && session.gunDevice) {
+        const unsigned plugged = lightgun::plugged();
+        for (int n = 0; n < lightgun::kMaxGuns; ++n)
+            if (plugged & (1u << n)) cab::Core::shared().plugGun(n);
+        if (plugged && !session.gunBorder) {
+            session.gunBorder = true;
+            std::fprintf(stderr, "[lightgun] the border is up for %s\n", session.title.c_str());
+        }
+    }
+    if (!lightgun::takePauseHold()) return;
     if (standaloneRun.active() && !standalonePaused) openStandaloneMenu();
     else if (playing || overlayOpen) toggleOverlay();
 }
@@ -520,6 +554,21 @@ bool App::readGameInput(cab::Core& core) {
             arcadesettings::keepClicks(session.arcadeCore(), st.buttons);
         core.setPad(p, st);
     }
+    // THE LIGHT GUNS (#575), in a light-gun game on a core that takes them:
+    // gun n in port n, its aim laid onto the picture where it was drawn last
+    // frame. In any other game a gun plays nothing.
+    for (int n = 0; n < lightgun::kMaxGuns; ++n) {
+        cab::GunState g;
+        if (session.gunDevice) {
+            const lightgun::Gun gun = lightgun::gun(n);
+            g.present = gun.present;
+            g.buttons = gun.buttons;
+            g.onPicture = gun.present &&
+                          lightgun::onPicture(gun.x, gun.y, gunPicture[0], gunPicture[1],
+                                              gunPicture[2], gunPicture[3], &g.x, &g.y);
+        }
+        core.setGun(n, g);
+    }
 
     // Wall-clock pacing is the product's, and it is wrong for a
     // capture. `--frames 180` asks for 180 drawn frames, and with
@@ -685,8 +734,19 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // settled.
         const bool integerScale =
             integerScaling && !core.hardwareRendered() && !quarterTurn;
-        float scale = std::min(ui::kCanvasWidth / (shownRows * shownAspect),
-                               ui::kCanvasHeight / shownRows);
+        // THE LIGHT GUN'S BORDER (#575 rule 9): white, 2% of the screen's
+        // height, around the whole screen, in a light-gun game once a gun
+        // has been plugged in (followGunsInGame). The picture is drawn inside
+        // it, by the same rule as always, in what the border leaves.
+        const bool border = session.gunDevice && session.gunBorder;
+        const float edge = border
+                               ? (dh > 0 ? std::round(lightgun::kBorderShare * dh) /
+                                               (static_cast<float>(dh) / ui::kCanvasHeight)
+                                         : lightgun::kBorderShare * ui::kCanvasHeight)
+                               : 0.0f;
+        const float roomW = ui::kCanvasWidth - 2.0f * edge;
+        const float roomH = ui::kCanvasHeight - 2.0f * edge;
+        float scale = std::min(roomW / (shownRows * shownAspect), roomH / shownRows);
         if (integerScale) {
             // COUNTED IN THE SCREEN'S OWN ROWS, not the 1080-point
             // canvas (2026-10-02). On a 2160-line TV the canvas made
@@ -781,6 +841,28 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         else
             ui::drawImageTexture(renderer, core.texture(), px, py, dw, dh, u0, v0, u1,
                                  v1, true, static_cast<int>(core.rotation()));
+        // Where the picture is, for a light gun's aim (readGameInput).
+        gunPicture[0] = px / ui::kCanvasWidth;
+        gunPicture[1] = py / ui::kCanvasHeight;
+        gunPicture[2] = dw / ui::kCanvasWidth;
+        gunPicture[3] = dh / ui::kCanvasHeight;
+        // THE BORDER, AND NOTHING ELSE OF THE CONSOLE'S OVER THE GAME: no
+        // screen sheet and no glow in the bars, so the border is the one
+        // bright frame the gun's camera looks for (rule 9).
+        if (border) {
+            // Each side reaches as far again past the screen's edge, so the
+            // shape's soft edge falls off the screen and the outermost row of
+            // pixels is as white as the rest (measured at 4K: 119 of 255
+            // when it ended on the edge).
+            const ui::Color white = ui::Color::white(1.0f);
+            const float w = ui::kCanvasWidth, h = ui::kCanvasHeight;
+            renderer.draw(ui::Rect{-edge, -edge, w + 2.0f * edge, 2.0f * edge, 0, white});
+            renderer.draw(ui::Rect{-edge, h - edge, w + 2.0f * edge, 2.0f * edge, 0, white});
+            renderer.draw(ui::Rect{-edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
+            renderer.draw(ui::Rect{w - edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
+            linkupTellPlace(px, py, dw, dh);
+            return;
+        }
         // A VECTREX GAME'S SCREEN SHEET (#224), over exactly the picture, as
         // the printed sheet sat over the tube: stretched with it, and drawn
         // only for a Vectrex game with a sheet and Overlays on.

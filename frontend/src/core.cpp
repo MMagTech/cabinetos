@@ -289,6 +289,10 @@ bool Core::load(const std::string& soPath) {
     // restoreBeforeLoad sets a Wii game's after that.
     gPadDevice = RETRO_DEVICE_JOYPAD;
     gRealRemotesFrom = -1;
+    gGunDevice = 0;
+    gGunPorts = 0;
+    // And the devices each port offers are the new core's to say.
+    forgetPortOffers();
 
     // The emulator is recognised by its filename, the same way every core is.
     // catalog::coreFileName produces this for the `ps2` platform.
@@ -588,23 +592,34 @@ bool Core::loadGame(const std::string& romPath, const std::string& systemDir,
     // Flycast create four memory cards for a console with one player, three
     // of which nothing would ever sync and all of which would sit in the
     // system directory.
-    gPortsPlugged = 0;
+    //
+    // A LIGHT GUN IN THE PORT OF EACH PLAYER HOLDING ONE, in a light-gun game
+    // (#575, Core::setGunDevice), in place of a pad: gun 1 in port 1, gun 2
+    // in port 2. A pad in such a port keeps its Start, Select and D-pad
+    // through the gun's answer (core_input.cpp).
+    for (unsigned& d : gPortDevice) d = RETRO_DEVICE_NONE;
     if (g.set_controller_port_device) {
         const unsigned ports = std::max(gCorePorts, 1u);
         const unsigned players = std::clamp<unsigned>(static_cast<unsigned>(gPlayers), 1u, ports);
+        auto tell = [&](unsigned p, unsigned device) {
+            g.set_controller_port_device(p, device);
+            if (p < 4) gPortDevice[p] = device;
+        };
         if (gRealRemotesFrom >= 0) {
             // Pads first, in the console's order, then a real Remote in every
             // port left: a Remote that connects mid-game takes the next one.
             const unsigned pads = std::min(players, static_cast<unsigned>(gRealRemotesFrom));
-            for (unsigned p = 0; p < ports; ++p)
-                g.set_controller_port_device(p, p < pads ? gPadDevice : kRealWiiRemote);
-            gPortsPlugged = ports;
+            for (unsigned p = 0; p < ports; ++p) tell(p, p < pads ? gPadDevice : kRealWiiRemote);
             std::fprintf(stderr, "[input] %u pad port(s) holding device %u, %u real Wii Remote port(s)\n",
                          pads, gPadDevice, ports - pads);
         } else {
-            for (unsigned p = 0; p < ports; ++p)
-                g.set_controller_port_device(p, p < players ? gPadDevice : RETRO_DEVICE_NONE);
-            gPortsPlugged = players;
+            for (unsigned p = 0; p < ports; ++p) {
+                const bool gun = gunPortAtLoad(p);
+                tell(p, gun ? gGunDevice : p < players ? gPadDevice : RETRO_DEVICE_NONE);
+                if (gun) std::fprintf(stderr, "[input] port %u holds a light gun\n", p + 1);
+            }
+            if (gGunDevice && gGunPorts && !gunPortAtLoad(0) && !gunPortAtLoad(1))
+                std::fprintf(stderr, "[input] the core offers no light gun on the guns' ports\n");
             if (gPadDevice != RETRO_DEVICE_JOYPAD)
                 std::fprintf(stderr, "[input] each player's port holds device %u\n", gPadDevice);
         }
@@ -716,6 +731,9 @@ void Core::unloadGame() {
     gameLoaded_ = false;
     gPadDevice = RETRO_DEVICE_JOYPAD;   // the next game says its own
     gRealRemotesFrom = -1;
+    gGunDevice = 0;
+    gGunPorts = 0;
+    for (GunState& gun : gGuns) gun = {};
     gHWFrame = false;
     destroyHWTarget();
     closeDesktopContext();

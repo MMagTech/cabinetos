@@ -1029,7 +1029,8 @@ Network, since 2026-11-15.
 - **How to** (#314, built 2026-10-10, judged on the TV): the controls, in
   Settings' own shape, a section per row on the left and its lines as rows
   on the right, nothing to press. In a game (pause menu by both sticks, a
-  Wii Remote's HOME, Remote Play's Select; leaving; the Power menu),
+  Wii Remote's HOME, a light gun's rear right button, Remote Play's Select;
+  leaving; the Power menu),
   Systems (what works in one kind of game only: an arcade game's own
   settings, the DS and 3DS screens and touch screen, the DS lid, the PS1
   analog button; split out of In a

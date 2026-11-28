@@ -1,0 +1,15 @@
+# Sinden light guns (#575): the console reads each gun's two input devices
+# itself (frontend/src/lightgun.cpp), so nothing else may. libinput, under
+# gamescope, would make the gun's absolute mouse a pointer and its keyboard's
+# arrow keys player 1's D-pad in every game; SDL would seat a gun in Sinden's
+# joystick mode as a player's pad. Told by the USB product string the guns
+# carry, "SindenLightgun" (read on the reference console, 2026-11-27), never
+# by an id: two guns can share one.
+#
+# The seat's user gets read access, as systemd gives a pad: a mouse is the
+# input group's alone by default. After 60-input-id.rules, which sets
+# ID_INPUT_*, and 70-uaccess.rules; before 73-seat-late.rules, which turns the
+# tag into the grant. The gun's serial port and camera, which Sinden's own
+# software drives, are not matched here.
+SUBSYSTEM=="input", ATTRS{product}=="SindenLightgun", ENV{LIBINPUT_IGNORE_DEVICE}="1", \
+  ENV{ID_INPUT_JOYSTICK}="", TAG+="uaccess"

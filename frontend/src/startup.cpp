@@ -24,6 +24,7 @@
 #include <thread>
 #include <utility>
 
+#include "arcadematch.h"
 #include "capture.h"
 #include "catalog.h"
 #include "core.h"
@@ -35,6 +36,7 @@
 #include "firstrun.h"
 #include "gonegames.h"
 #include "gpu.h"
+#include "lightgun.h"
 #include "offline_sync.h"
 #include "overlaywin.h"
 #include "prefs.h"
@@ -162,6 +164,13 @@ std::optional<int> App::startDisplay() {
     // Real Wii Remotes (#200): whether one is paired, before the library is
     // drawn, and the thread that sets each up as it connects.
     wiiremote::start();
+    // Light guns (#575): the thread that finds and reads them, and the rule
+    // that an arcade light-gun game plays while a gun its emulator is handed
+    // is plugged in, and greys otherwise (rule 8).
+    lightgun::start();
+    arcadematch::setGunReady([](const char* core) {
+        return lightgun::count() > 0 && lightgun::deviceFor(core) != 0;
+    });
     // Each controller's battery, from the kernel, for Home's row (#293).
     battery::start();
 
@@ -697,6 +706,21 @@ std::optional<int> App::startDeveloperLaunch() {
             return 1;
         }
         core.setPlayers(players::count());
+        // AN ARCADE LIGHT-GUN GAME gets the guns as from the library (#575):
+        // by its zip's name, on a core that takes a gun.
+        {
+            std::string stem = corePath;
+            stem.erase(0, stem.find_last_of('/') + 1);
+            if (const size_t dot = stem.rfind(".so"); dot != std::string::npos) stem.erase(dot);
+            std::string zip = romPath;
+            zip.erase(0, zip.find_last_of('/') + 1);
+            const unsigned gun = lightgun::deviceFor(stem);
+            if (gun && arcadematch::byName(zip, false).gun) {
+                session.gunDevice = gun;
+                core.setGunDevice(gun, lightgun::plugged());
+                std::fprintf(stderr, "[frontend] %s is a light-gun game\n", zip.c_str());
+            }
+        }
         if (!core.loadGame(romPath, storage::biosDir(), saveDir)) {
             std::fprintf(stderr, "[frontend] %s\n", core.error().c_str());
             return 1;

@@ -132,6 +132,9 @@ struct LaunchJob {
     bool arcade = false;
     bool arcadePicked = false;
     bool coreChanged = false;
+    // A LIGHT-GUN GAME by the arcade lists (arcadematch::Answer::gun), set
+    // with the pick: the guns go to its emulator (#575, lightgun.h).
+    bool lightGunGame = false;
     std::string title;
     std::string message;
     // THE GAME'S SAVE AS RomM HOLDS IT, fetched by the worker once the game

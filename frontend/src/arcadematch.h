@@ -43,8 +43,8 @@
 // (byName), since a list carries no file's contents: a set no emulator here
 // has, or every one that has it marks not working, is greyed, and so is one
 // any list marks as made for anything but a controller (a touchscreen, a
-// mahjong panel, a gambling machine...), and a light-gun game until light
-// guns are supported. Play asks by the files (byFiles), from
+// mahjong panel, a gambling machine...), and a light-gun game while no gun
+// it can be played with is plugged in (setGunReady). Play asks by the files (byFiles), from
 // RomM's list of what a loose zip holds, or from the archive itself for one
 // inside a folder game; a set whose files do not fit says so then.
 //
@@ -118,7 +118,7 @@ struct Disc {
 enum class Verdict {
     Plays,          // `core` plays it
     NotSupported,   // no emulator here has it working, or it is no controller's game
-    NeedsGun,       // a light-gun game (until #575)
+    NeedsGun,       // a light-gun game, and no gun to play it with (setGunReady)
     FilesDiffer,    // the zip does not hold the files of the set it is named for
     DiscMissing,    // its set has a disc and no CHD of that name is beside it
     DiscDiffers,    // the CHD is there and is not the one the set lists
@@ -131,7 +131,18 @@ struct Answer {
     const char* core = nullptr;
     // The words a game's page shows in place of Play, when it does not play.
     std::string why;
+    // A LIGHT-GUN GAME, by any list (a 'g' on its line), whether it plays or
+    // not: the launch gives the guns to its emulator (lightgun.h).
+    bool gun = false;
 };
+
+// WHETHER A LIGHT-GUN GAME PLAYS NOW (#575 rule 8): true for an emulator the
+// console hands a gun to while one is plugged in. A gun game plays on the
+// first such emulator that has it working, and is "Needs a light gun"
+// otherwise; with none set, every gun game is. Set once at start-up
+// (startup.cpp), asked by every answer, from any thread.
+using GunReady = bool (*)(const char* core);
+void setGunReady(GunReady ready);
 
 // By the set's name alone (`fileName` is RomM's fs_name, `sf2.zip`).
 Answer byName(const std::string& fileName, bool dreamcast);

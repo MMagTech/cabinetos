@@ -183,7 +183,9 @@ static bool pickArcade(LaunchJob& job, const std::string& fileName, const arcade
         return false;
     }
     job.arcadePicked = true;
-    std::fprintf(stderr, "[arcade] %s: %s, by %s\n", fileName.c_str(), a.core, by.c_str());
+    job.lightGunGame = a.gun;
+    std::fprintf(stderr, "[arcade] %s: %s, by %s%s\n", fileName.c_str(), a.core, by.c_str(),
+                 a.gun ? ", a light-gun game" : "");
     if (job.coreName != a.core) {
         job.coreName = a.core;
         job.corePath = job.corePath.substr(0, job.corePath.find_last_of('/') + 1) +

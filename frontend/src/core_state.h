@@ -71,10 +71,15 @@ std::optional<bool> environmentOptions(unsigned cmd, void* data);
 
 // Defined in core_input.cpp.
 extern int gPlayers;
-extern unsigned gPortsPlugged;
+extern unsigned gPortDevice[4];
 extern unsigned gPadDevice;
+extern unsigned gGunDevice;
+extern unsigned gGunPorts;
+extern GunState gGuns[4];
 extern int gRealRemotesFrom;
 extern unsigned gCorePorts;
+void forgetPortOffers();
+bool gunPortAtLoad(unsigned port);
 extern bool gInputDescriptorsLogged;
 void clearInputDescriptors();
 void releaseKeys();
