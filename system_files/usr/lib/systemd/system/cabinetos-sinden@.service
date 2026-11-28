@@ -19,6 +19,11 @@
 #
 # Sinden's software stops on SIGTERM (measured, 250 ms); the 5 s and the
 # SIGKILL after them are for a copy that hangs.
+#
+# NOT ProtectKernelTunables= OR ProtectKernelLogs=: each covers a part of
+# /proc, and then bwrap cannot mount the /proc of the gun's world ("Can't
+# mount proc on /proc: Operation not permitted", tried 2026-11-28). The world
+# has no way to write to the kernel's tunables or read its log anyway.
 [Unit]
 Description=CabinetOS: Sinden's software for the light gun on %I
 Documentation=https://github.com/MMagTech/cabinetos/issues/575
@@ -43,9 +48,7 @@ DeviceAllow=char-video4linux rw
 PrivateNetwork=yes
 NoNewPrivileges=yes
 CapabilityBoundingSet=
-ProtectKernelTunables=yes
 ProtectKernelModules=yes
-ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 LockPersonality=yes
