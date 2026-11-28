@@ -614,6 +614,20 @@ log: Steam and its session are in the image :: command -v steam >/dev/null && [ 
 tv: Steam: its tile opens Big Picture, a game starts, and leaving Steam returns to Home
 steam
 
+# --- Sinden light guns (#575) ---------------------------------------------
+# One copy of Sinden's software for each gun (system_files/usr/libexec/
+# cabinetos-sinden). Mono is installed by build_files/install-sinden.sh, not
+# the base; the base gives the launcher udevadm and bwrap, the camera library
+# libjpeg-turbo, and Sinden's software the lsusb, udevadm and v4l2-ctl it
+# runs itself. The check passes on a console with no gun plugged in.
+area: Sinden light guns
+log: Each Sinden gun plugged in has its own copy of Sinden's software running :: out=$(for t in /sys/class/tty/ttyACM*; do [ -e "$t" ] || continue; [ "$(cat "$t/device/../product" 2>/dev/null)" = SindenLightgun ] || continue; u="cabinetos-sinden@${t##*/}.service"; systemctl is-active -q "$u" || echo "$u: $(systemctl is-active "$u")"; done); [ -z "$out" ] || { echo "$out"; exit 1; }
+usbutils
+v4l-utils
+libjpeg-turbo
+bubblewrap
+systemd-udev
+
 # --- Things CabinetOS removes ----------------------------------------------
 # Listed so that a base bump which renames, splits or drops a removal target
 # shows up as relevant. A strip list that has silently become a no-op is a

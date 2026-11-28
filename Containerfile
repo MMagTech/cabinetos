@@ -75,7 +75,11 @@ FROM ghcr.io/ublue-os/bazzite:44.20261026@sha256:ee82a885dbb77cd4604a5ffa8278a0e
 #
 #    1. the OS            70 MB  build.sh: Bazzite stripped and configured.
 #                                Moves on a base bump or a change to
-#                                build_files/ or system_files/.
+#                                build_files/ or system_files/. About 18
+#                                MB more with Mono for Sinden's light-gun
+#                                software (#575), not yet in an image:
+#                                Fedora's mono-core and libgdiplus
+#                                download sizes, 2026-11-27.
 #    2. the cores         95 MB  pinned, and PCSX2. Moves when one moves.
 #    3. MAME 0.289       126 MB  pinned, the core, its catalogue and its
 #                                plugins (in 2026.10.29.2, its first image).

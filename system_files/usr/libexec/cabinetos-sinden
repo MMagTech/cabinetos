@@ -8,7 +8,7 @@
 # gun's serial port (73-cabinetos-sinden.rules) and stops when the port goes.
 # Sinden's software is in /usr/lib/cabinetos/sinden, unchanged; it needs Mono
 # (build_files/install-sinden.sh). WHY ONE COPY PER GUN:
-# docs/decisions/2026-11-28-one-sinden-copy-per-gun.md.
+# docs/decisions/2026-11-27-one-sinden-copy-per-gun.md.
 #
 # Sinden's software numbers the guns it finds by serial port order and pairs
 # the Nth port with the Nth camera, so one copy for two guns can drive one gun

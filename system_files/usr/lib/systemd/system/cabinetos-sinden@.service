@@ -6,7 +6,7 @@
 # one. NO [Install]: nothing starts it but a gun.
 #
 # The launcher puts Sinden's software in a world holding only this gun
-# (/usr/libexec/cabinetos-sinden; why: docs/decisions/2026-11-28-one-sinden-copy-per-gun.md).
+# (/usr/libexec/cabinetos-sinden; why: docs/decisions/2026-11-27-one-sinden-copy-per-gun.md).
 #
 # ITS OWN USER, made for each start: Sinden's software is a closed program and
 # reads nothing of the player's. dialout and video are the groups of the gun's
@@ -22,7 +22,7 @@
 #
 # NOT ProtectKernelTunables= OR ProtectKernelLogs=: each covers a part of
 # /proc, and then bwrap cannot mount the /proc of the gun's world ("Can't
-# mount proc on /proc: Operation not permitted", tried 2026-11-28). The world
+# mount proc on /proc: Operation not permitted", tried 2026-11-27). The world
 # has no way to write to the kernel's tunables or read its log anyway.
 [Unit]
 Description=CabinetOS: Sinden's software for the light gun on %I
