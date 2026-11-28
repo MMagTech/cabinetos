@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <utility>
 
+#include "lightgun.h"
 #include "prefs.h"
 #include "quality.h"
 #include "rumble.h"
@@ -141,6 +142,20 @@ void App::buildSettings() {
                             !shortcutListen           ? shortcuts::label(gp)
                             : !shortcutRefused.empty() ? shortcutRefused + "\xE2\x80\xA6"
                                                        : "Press a spare button\xE2\x80\xA6"});
+        }
+        // LIGHT GUNS (#575 rule 2): their two settings, Calibration and
+        // Recoil, and nothing else. Only while a gun is plugged in, since
+        // neither means anything without one; last, so nothing above moves
+        // when a gun comes or goes (frame.cpp rebuilds the rows then).
+        // Calibration opens its screen (guncalibration.cpp); Recoil starts
+        // Off (docs/decisions/2026-11-02-sinden-software-in-the-image.md).
+        settingsGunsSeen = static_cast<int>(lightgun::plugged());
+        if (settingsGunsSeen != 0) {
+            rows.push_back({K::Action, SetGunCalibration, "Light gun calibration", "", ""});
+            Row r{K::Choice, SetGunRecoil, "Light gun recoil", "", ""};
+            r.choices = {"Off", "On"};
+            r.choice = lightgun::recoil() ? 1 : 0;
+            rows.push_back(r);
         }
         cats.push_back({"Controllers", std::move(rows)});
     }
@@ -538,6 +553,8 @@ void App::applySetting(const screens::Result& res) {
     } else if (res.value == SetWiiRemotes) {
         sound::play(sound::Cue::Activate);
         openWiiPanel();
+    } else if (res.value == SetGunCalibration) {
+        openGunCalibration(-1);
     } else if (res.value == SetShortcutButton) {
         // The pad that pressed A, which the row already names.
         const std::vector<players::Pad> pads = players::connected();
@@ -609,6 +626,10 @@ void App::applySettingChoice(const screens::Result& res) {
     }
     if (res.value == SetRumble) {
         rumble::setEnabled(settingsScreen.choiceOf(SetRumble) == 1);
+        sound::play(sound::Cue::Move);
+    }
+    if (res.value == SetGunRecoil) {
+        lightgun::setRecoil(settingsScreen.choiceOf(SetGunRecoil) == 1);
         sound::play(sound::Cue::Move);
     }
 

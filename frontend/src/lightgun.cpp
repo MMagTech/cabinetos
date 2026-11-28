@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -206,6 +207,7 @@ uint16_t buttonOf(unsigned code) {
 struct Device {
     std::string usb;       // its USB device in sysfs
     std::string port;      // portKey
+    std::string id;        // its USB id, "16c0:0f01"
     int slot = -1;
     // The node with the aim (ABS_X, ABS_Y) and the one with the keys; the
     // trigger and the pump are on the first.
@@ -221,7 +223,58 @@ struct Device {
     // that pressed Resume is no shot.
     uint16_t keptFromMenus = 0, keptFromGame = 0;
     RearRight rear;
+    // THE SIGHT (lightgun.h, Sight): each change between a reading on the
+    // screen and one at its edge, oldest first, as (when, on the screen); the
+    // latest is how it is now. And each trigger pull, with how it was then.
+    // Kept for kSightKeepMs, with the change before them.
+    std::deque<std::pair<int64_t, bool>> seen, shots;
+    // The D-pad held left since then, -1 while it is not; and whether this
+    // hold has been told (takeCalibrateHold).
+    int64_t leftSince = -1;
+    bool leftTold = false;
 };
+
+// ON THE SCREEN: in between on both axes. Sinden's readings off the border's
+// frame, or with the border not seen, are exactly the ends of an axis.
+bool onScreen(int x, int y, int minX, int maxX, int minY, int maxY) {
+    return x > minX && x < maxX && y > minY && y < maxY;
+}
+bool onScreen(const Device& d) { return onScreen(d.rawX, d.rawY, d.minX, d.maxX, d.minY, d.maxY); }
+
+// AT THE MIDDLE to within one step on both axes: 16383 or 16384 of 0..32767.
+bool atMiddle(int x, int y, int minX, int maxX, int minY, int maxY) {
+    return std::abs(2 * x - (minX + maxX)) <= 2 && std::abs(2 * y - (minY + maxY)) <= 2;
+}
+
+// The latest reading's class into the time line, and what is older than
+// kSightKeepMs out of it (but the change the window starts in).
+void noteSight(Device& d, int64_t t) {
+    const bool on = onScreen(d);
+    if (d.seen.empty() || d.seen.back().second != on) d.seen.emplace_back(t, on);
+    while (d.seen.size() > 1 && d.seen[1].first <= t - kSightKeepMs) d.seen.pop_front();
+    while (!d.shots.empty() && d.shots.front().first <= t - kSightKeepMs) d.shots.pop_front();
+}
+
+// A gun's sight from `from` to `now`, out of its time line: before its first
+// reading nothing is counted, either way.
+Sight sightOf(const std::deque<std::pair<int64_t, bool>>& seen,
+              const std::deque<std::pair<int64_t, bool>>& shots, int64_t from, int64_t now) {
+    Sight s;
+    for (size_t i = 0; i < seen.size(); ++i) {
+        const int64_t a = std::max(seen[i].first, from);
+        const int64_t b = i + 1 < seen.size() ? std::min(seen[i + 1].first, now) : now;
+        if (b > a) (seen[i].second ? s.onMs : s.offMs) += b - a;
+        if (i > 0 && !seen[i].second && seen[i - 1].second && seen[i].first >= from &&
+            seen[i].first <= now)
+            ++s.flips;
+    }
+    for (const auto& [t, on] : shots) {
+        if (t < from || t > now) continue;
+        ++s.shots;
+        if (!on) ++s.shotsOff;
+    }
+    return s;
+}
 
 std::mutex gLock;
 std::vector<Device> gDevices;
@@ -231,6 +284,10 @@ std::atomic<bool> gInMenus{true};
 std::atomic<bool> gInGame{false};
 std::atomic<bool> gPauseHold{false};
 std::atomic<bool> gPressInGame{false};
+// The gun whose D-pad was held left long enough, not yet taken; -1 for none.
+std::atomic<int> gCalibrateHold{-1};
+// The guns a capture says are in (pretendForCapture); 0 for the real ones.
+std::atomic<unsigned> gPretend{0};
 std::once_flag gStarted;
 // Each gun's node that could not be opened yet, and when it was first
 // refused, while it is there (scanEvery). Under gLock.
@@ -400,13 +457,17 @@ void rescan() {
             Device n;
             n.usb = usb;
             n.port = portKey(usb);
+            n.id = readFile(usb + "/idVendor") + ":" + readFile(usb + "/idProduct");
             gDevices.push_back(std::move(n));
             d = gDevices.end() - 1;
             arrived.push_back(d->port);
         }
         (aim ? d->aimFd : d->keysFd) = fd;
         (aim ? d->aimNode : d->keysNode) = node;
-        if (aim) readRanges(*d);
+        if (aim) {
+            readRanges(*d);
+            noteSight(*d, nowMs());
+        }
         changed = true;
     }
     ::closedir(dir);
@@ -439,6 +500,10 @@ void rescan() {
 }
 
 void handle(Device& d, const input_event& ev, int64_t t) {
+    if (ev.type == EV_SYN) {
+        if (ev.code == SYN_REPORT) noteSight(d, t);
+        return;
+    }
     if (ev.type == EV_ABS) {
         if (ev.code == ABS_X) d.rawX = ev.value;
         if (ev.code == ABS_Y) d.rawY = ev.value;
@@ -450,6 +515,11 @@ void handle(Device& d, const input_event& ev, int64_t t) {
     const bool down = ev.value != 0;
     if (down && !gInMenus) gPressInGame = true;
     if (b == kCoin) rearRightPress(d.rear, down, t, gInGame && !gInMenus);
+    if (b == kTrigger && down) d.shots.emplace_back(t, onScreen(d));
+    if (b == kLeft) {
+        d.leftSince = down ? t : -1;
+        d.leftTold = false;
+    }
     if (down) {
         d.held |= b;
     } else {
@@ -457,6 +527,13 @@ void handle(Device& d, const input_event& ev, int64_t t) {
         d.keptFromMenus &= static_cast<uint16_t>(~b);
         d.keptFromGame &= static_cast<uint16_t>(~b);
     }
+}
+
+// True once per hold, as the D-pad has been held left kCalibrateHoldMs.
+bool heldLeft(Device& d, int64_t t) {
+    if (d.leftSince < 0 || d.leftTold || t - d.leftSince < kCalibrateHoldMs) return false;
+    d.leftTold = true;
+    return true;
 }
 
 // A node that dropped events (SYN_DROPPED) is read whole again.
@@ -478,7 +555,12 @@ void resync(Device& d, int fd) {
         d.keptFromMenus &= d.held;
         d.keptFromGame &= d.held;
     }
-    if (fd == d.aimFd) readRanges(d);
+    if (fd == d.aimFd) {
+        readRanges(d);
+        noteSight(d, nowMs());
+    }
+    // The D-pad let go of while events were dropped is no longer held.
+    if (!(d.held & kLeft)) d.leftSince = -1;
 }
 
 // Reads what is waiting; false when the node has gone (unplugged).
@@ -537,6 +619,14 @@ void run() {
                 gPauseHold = true;
                 std::fprintf(stderr, "[lightgun] rear right held on gun %d\n", d.slot + 1);
             }
+            if (heldLeft(d, t)) {
+                gCalibrateHold = d.slot;
+                std::fprintf(stderr, "[lightgun] D-pad held left %lld ms on gun %d; aim %s\n",
+                             static_cast<long long>(kCalibrateHoldMs), d.slot + 1,
+                             atMiddle(d.rawX, d.rawY, d.minX, d.maxX, d.minY, d.maxY)
+                                 ? "at the middle"
+                                 : "not at the middle");
+            }
             tellMenus(d);
         }
     }
@@ -550,9 +640,13 @@ void start() {
     std::call_once(gStarted, [] { std::thread(run).detach(); });
 }
 
-int count() { return gCount; }
+int count() {
+    if (const unsigned p = gPretend) return __builtin_popcount(p);
+    return gCount;
+}
 
 unsigned plugged() {
+    if (const unsigned p = gPretend) return p;
     unsigned bits = 0;
     std::lock_guard<std::mutex> lk(gLock);
     for (const Device& d : gDevices)
@@ -601,7 +695,52 @@ bool takePauseHold() { return gPauseHold.exchange(false); }
 
 bool takePressInGame() { return gPressInGame.exchange(false); }
 
-bool isGun(uint32_t padId) { return padId >= kGunId && padId < kGunId + kMaxGuns; }
+bool isGun(uint32_t padId) { return gunOf(padId) >= 0; }
+
+int gunOf(uint32_t padId) {
+    return padId >= kGunId && padId < kGunId + kMaxGuns ? static_cast<int>(padId - kGunId) : -1;
+}
+
+void pretendForCapture(unsigned plugged) { gPretend = plugged & ((1u << kMaxGuns) - 1); }
+
+int64_t clockMs() { return nowMs(); }
+
+Sight sight(int n, int64_t fromMs) {
+    std::lock_guard<std::mutex> lk(gLock);
+    for (const Device& d : gDevices) {
+        if (d.slot != n || d.aimFd < 0) continue;
+        Sight s = sightOf(d.seen, d.shots, fromMs, nowMs());
+        s.present = true;
+        return s;
+    }
+    return {};
+}
+
+bool takeCalibrateHold(int* n) {
+    const int g = gCalibrateHold.exchange(-1);
+    if (g < 0) return false;
+    *n = g;
+    return true;
+}
+
+bool parked(int n) {
+    std::lock_guard<std::mutex> lk(gLock);
+    for (const Device& d : gDevices)
+        if (d.slot == n && d.aimFd >= 0)
+            return atMiddle(d.rawX, d.rawY, d.minX, d.maxX, d.minY, d.maxY);
+    return false;
+}
+
+Where where(int n) {
+    std::lock_guard<std::mutex> lk(gLock);
+    for (const Device& d : gDevices)
+        if (d.slot == n && d.aimFd >= 0) return {d.usb, d.port, d.id};
+    return {};
+}
+
+bool recoil() { return prefs::get("lightgun_recoil", "off") == "on"; }
+
+void setRecoil(bool on) { prefs::set("lightgun_recoil", on ? "on" : "off"); }
 
 bool onPicture(float x, float y, float picX, float picY, float picW, float picH, int16_t* outX,
                int16_t* outY) {
@@ -713,6 +852,84 @@ int test() {
         check(!onPicture(0.5f, 0.005f, px, py, w, h, &x, &y),
               "and so is aiming at the border");
         check(!onPicture(0.5f, 0.5f, 0, 0, 0, 0, &x, &y), "no picture drawn is off the picture");
+    }
+
+    // ---- The sight: a reading on the screen or at its edge (#575 rule 12)
+    {
+        check(onScreen(1, 1, 0, 32767, 0, 32767) && onScreen(32766, 16000, 0, 32767, 0, 32767) &&
+                  !onScreen(0, 16000, 0, 32767, 0, 32767) &&
+                  !onScreen(16000, 32767, 0, 32767, 0, 32767) &&
+                  !onScreen(32767, 0, 0, 32767, 0, 32767),
+              "a reading at either end of an axis is at the screen's edge, one in between on it");
+        check(atMiddle(16383, 16384, 0, 32767, 0, 32767) &&
+                  atMiddle(16384, 16383, 0, 32767, 0, 32767) &&
+                  !atMiddle(16385, 16384, 0, 32767, 0, 32767) &&
+                  !atMiddle(16383, 16381, 0, 32767, 0, 32767),
+              "the middle Sinden holds the aim at while it calibrates is 16383 or 16384 on both "
+              "axes, and nothing further");
+        using Line = std::deque<std::pair<int64_t, bool>>;
+        // On from 1000, lost at 1500, back at 1600, lost at 1700, back at 1900;
+        // shots at 1550 (lost), 1650 and 2100.
+        const Line seen = {{1000, true}, {1500, false}, {1600, true}, {1700, false}, {1900, true}};
+        const Line shots = {{1550, false}, {1650, true}, {2100, true}};
+        const Sight s = sightOf(seen, shots, 1200, 2200);
+        check(s.onMs == 700 && s.offMs == 300 && s.flips == 2 && s.shots == 3 && s.shotsOff == 1,
+              "a window's time on the screen and at its edge, its flips from one to the other and "
+              "its shots, from the changes the gun reported");
+        const Sight early = sightOf(seen, shots, 0, 900);
+        check(early.onMs == 0 && early.offMs == 0 && early.flips == 0 && early.shots == 0,
+              "before the gun's first reading nothing is counted either way");
+        const Sight still = sightOf(Line{{1000, true}}, Line{}, 2000, 9000);
+        check(still.onMs == 7000 && still.offMs == 0 && still.flips == 0,
+              "a gun held still on the screen reports nothing and is on it all the while");
+        Device d;
+        d.rawX = 16000;
+        d.rawY = 9000;
+        noteSight(d, 0);
+        d.rawX = 0;
+        noteSight(d, 4000);
+        noteSight(d, 4100);   // the same class: no new change
+        d.rawX = 20000;
+        noteSight(d, 12000);
+        const size_t at12 = d.seen.size();   // the window from 2000 starts in the first
+        noteSight(d, 15000);                 // from 5000: in the second
+        check(at12 == 3 && d.seen.size() == 2 && d.seen[0].first == 4000 && !d.seen[0].second &&
+                  d.seen[1].first == 12000 && d.seen[1].second,
+              "only changes are kept, and what is older than ten seconds goes but for the change "
+              "the window starts in");
+    }
+
+    // ---- The D-pad held left: Sinden's calibration (#575 rule 13)
+    {
+        Device d;
+        d.slot = 0;
+        input_event left{};
+        left.type = EV_KEY;
+        left.code = KEY_LEFT;
+        left.value = 1;
+        handle(d, left, 1000);
+        const bool early = heldLeft(d, 3999);
+        const bool on = heldLeft(d, 4000);
+        const bool again = heldLeft(d, 6000);
+        left.value = 0;
+        handle(d, left, 6100);
+        left.value = 1;
+        handle(d, left, 7000);
+        const bool tap = heldLeft(d, 7500);
+        left.value = 0;
+        handle(d, left, 7600);
+        const bool after = heldLeft(d, 11000);
+        check(!early && on && !again && !tap && !after,
+              "the D-pad held left three seconds is told once per hold, and a shorter press "
+              "never");
+        input_event pull{};
+        pull.type = EV_KEY;
+        pull.code = BTN_LEFT;
+        pull.value = 1;
+        d.rawX = 0;
+        handle(d, pull, 8000);
+        check(d.shots.size() == 1 && d.shots[0].first == 8000 && !d.shots[0].second,
+              "a trigger pull is kept with where the aim was: at the edge here");
     }
 
     // ---- The keys Sinden gives each of its two guns
@@ -843,8 +1060,10 @@ int test() {
     check(deviceFor("mame2003_plus") == 0 && deviceFor("fceumm") == 0 && deviceFor("") == 0,
           "no other emulator is given a gun yet");
     check(isGun(kGunId) && isGun(kGunId + 1) && !isGun(kGunId + 2) && !isGun(1) &&
-              !isGun(0x57494900),
-          "a gun's presses in the menus are told from a pad's and a Wii Remote's");
+              !isGun(0x57494900) && gunOf(kGunId) == 0 && gunOf(kGunId + 1) == 1 &&
+              gunOf(kGunId + 2) == -1 && gunOf(1) == -1,
+          "a gun's presses in the menus are told from a pad's and a Wii Remote's, and gun 1's "
+          "from gun 2's");
 
     std::printf("%s\n", failures ? "light-gun test FAILED" : "light-gun test passed");
     return failures ? 1 : 0;

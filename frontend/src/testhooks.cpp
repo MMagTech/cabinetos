@@ -80,6 +80,22 @@ void App::openScreenForCapture() {
         pollUpdate();
         buildSettings();
         settingsScreen.focusCategory(initialTile, initialRow > 0);
+    } else if (initialScreen && SDL_strcmp(initialScreen, "gun-calibration") == 0) {
+        // `--screen gun-calibration --tile N`: the light guns' calibration
+        // screen at its step N, 0 Shoot, 1 Sweep, 2 Done, 3 Missed
+        // (guncalibration.cpp). Its route needs a gun that shoots, so a
+        // capture opens it at the step and holds it there, with a sweep part
+        // way along and an aim a little off the middle, both made up.
+        using Step = GunCalibration::Step;
+        static constexpr Step kSteps[] = {Step::Shoot, Step::Sweep, Step::Done, Step::Missed};
+        openGunCalibration(0);
+        gunCal.capture = true;
+        gunCal.step = kSteps[std::clamp(initialTile, 0, 3)];
+        gunCal.along = 0.45f;
+        gunCal.aimShown = true;
+        gunCal.aim[0] = 0.53f;
+        gunCal.aim[1] = 0.46f;
+        gunCal.shown.settle(1.0f);
     } else if (initialScreen && SDL_strcmp(initialScreen, "search") == 0) {
         goToDestination(2);
         if (searchQuery) {

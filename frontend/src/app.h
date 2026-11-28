@@ -1384,6 +1384,26 @@ struct App {
     // never waits. The press that ends it is kept from the game.
     bool stateHold = false, stateHoldWaiting = false, stateHoldJustEnded = false;
 
+    // THE LIGHT GUNS' CALIBRATION SCREEN (#575 rules 12 and 13,
+    // guncalibration.cpp): over everything, a game paused under it while it
+    // is open, as under the pause menu. Its steps are guncalibration.cpp's.
+    struct GunCalibration {
+        enum class Step { Closed, Shoot, Sweep, Done, Missed };
+        Step step = Step::Closed;
+        int gun = -1;                // the gun it calibrates; -1 until one shoots
+        // The shot was taken with Sinden's software holding the gun's aim at
+        // the middle: the screen waits for it to let go (Sinden's set).
+        bool waitForSinden = false;
+        int64_t shotAt = 0;          // lightgun::clockMs()
+        float along = 0.0f;          // the sweep, 0 to 1
+        bool aimShown = false;       // Done: where the gun lands now
+        float aim[2] = {0, 0};
+        // Opened at a step by a capture (--screen gun-calibration): held there.
+        bool capture = false;
+        design::Animated shown;
+        bool open() const { return step != Step::Closed; }
+    } gunCal;
+
     // A GAME'S MANUAL, FETCHED (#364): into the `Manuals` folder beside the
     // game when the game is on a drive (cache.h), so it is there offline and
     // follows the game from then on; for a game that is not, into /tmp for as
@@ -1661,6 +1681,9 @@ struct App {
     // The controllers the Controllers rows were built from, to rebuild them
     // when one connects or goes (players::generation).
     int settingsPadsSeen = -1;
+    // The light guns plugged in when Settings was built (lightgun::plugged):
+    // its light gun rows show only while one is.
+    int settingsGunsSeen = -1;
     // The pad last pressed in Settings, whose row has the dot. Kept as the
     // pad, not its row: a swap moves it to another row.
     SDL_JoystickID settingsLastPad = 0;
@@ -2490,6 +2513,17 @@ struct App {
     void followGunsInGame();
     bool readGameInput(cab::Core& core);
     void drawGamePicture(cab::Core& core, int dh);
+    // The light gun's border (#575 rule 9): its width in canvas points on a
+    // screen `dh` pixels high, whole pixels; and drawn around the whole
+    // screen, by the game and by the calibration screen.
+    float gunBorderEdge(int dh) const;
+    void drawGunBorder(float edge);
+    // guncalibration.cpp
+    void openGunCalibration(int gun);
+    void closeGunCalibration(const char* why);
+    void followGunCalibration(float dt);
+    bool gunCalibrationTakes(const SDL_Event& e);
+    void drawGunCalibration(float sc);
     void leaveGameAtExit();
     void reportAndUnloadCore();
     // pace.cpp

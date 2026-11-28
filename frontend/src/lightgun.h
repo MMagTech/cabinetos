@@ -114,8 +114,15 @@ bool takePauseHold();
 // the pushed presses count by themselves (App::handleEvent).
 bool takePressInGame();
 
-// True for a press a gun made in the menus.
+// True for a press a gun made in the menus; and which gun, 0 or 1, -1 for
+// any other controller's.
 bool isGun(uint32_t padId);
+int gunOf(uint32_t padId);
+
+// FOR A CAPTURE ON A MACHINE WITH NO GUN (--light-guns-for-capture): count()
+// and plugged() say these guns are in, so Settings shows its light gun rows.
+// Nothing else changes: no gun is read and no camera touched.
+void pretendForCapture(unsigned plugged);
 
 // WHERE THE AIM LANDS ON THE GAME'S PICTURE. `x`, `y` are the gun's aim as a
 // share of the screen (Gun::x, Gun::y); the picture is the rectangle it is
@@ -136,6 +143,63 @@ unsigned deviceFor(const std::string& core);
 // The share of the screen's height the border takes on each side (#575 rule
 // 9): white, 2%.
 constexpr float kBorderShare = 0.02f;
+
+// --- WHAT THE GUN'S CAMERA MAKES OF THE SCREEN (#575 rule 12) ---------------
+//
+// THE SIGNAL. Sinden's software reports the aim at exactly 0 or 32767 on an
+// axis when its camera does not see the border, and in between when it does
+// (measured on the reference console, 2026-11-28). The gun reports every
+// change of the aim and nothing else. Those two classes of reading share no
+// value, so going from one to the other is always a change, and always
+// reported: at every moment, the gun's latest reading says whether its camera
+// last saw the border, a gun held still included. What it cannot say is where
+// the gun was pointed: a gun put down, or aimed off the screen for a reload,
+// reads at the edge too. guncamera.h decides what the readings mean.
+struct Sight {
+    bool present = false;
+    int64_t onMs = 0;    // time in the window the latest reading was on the screen
+    int64_t offMs = 0;   // ... at its edge: off it, or the border not seen
+    int flips = 0;       // times it went from on the screen to its edge
+    int shots = 0;       // trigger pulls
+    int shotsOff = 0;    // ... with the latest reading at the edge
+};
+// Gun `n` from `fromMs` to now, on clockMs()'s clock. The readings of the
+// last kSightKeepMs are kept.
+Sight sight(int n, int64_t fromMs);
+constexpr int64_t kSightKeepMs = 10000;
+// The reader's clock, in milliseconds: steady, not the wall's.
+int64_t clockMs();
+
+// SINDEN'S CALIBRATION (#575 rule 13). The D-pad held left three seconds puts
+// Sinden's software in calibration: the gun's aim then stays at exactly the
+// middle of the screen until the trigger sets the calibration or the pump
+// cancels it (measured 2026-11-27). The console sees the hold itself, on the
+// gun's keys, so the screen opens whether or not Sinden's software saw it.
+constexpr int64_t kCalibrateHoldMs = 3000;
+// True once per hold, as the D-pad has been held left kCalibrateHoldMs on a
+// gun, in the menus or in a game; `*n` is which.
+bool takeCalibrateHold(int* n);
+// Whether gun `n`'s latest reading is the middle of the screen to within one
+// step on both axes, where Sinden's software holds the aim while it
+// calibrates.
+bool parked(int n);
+
+// WHERE GUN `n` IS: its USB device in sysfs (its camera hangs on the same hub,
+// guncamera.h), its port (the key that tells guns apart) and its USB id
+// ("16c0:0f01"). Empty while gun n is not plugged in.
+struct Where {
+    std::string usb, port, id;
+};
+Where where(int n);
+
+// THE RECOIL SWITCH (#575 rule 14), in Settings: saved as "lightgun_recoil" in
+// settings.json, "off" unless it says "on". The console does not kick the gun:
+// Sinden's software does, set at its start, and Sinden's launcher
+// (cabinetos-sinden, #575 phase 1) reads this word for each gun's copy and
+// starts the copy again when it changes. On is the same in every game: a tap
+// kicks once and a hold keeps kicking.
+bool recoil();
+void setRecoil(bool on);
 
 // --light-gun-test: the rules here with no gun and no screen.
 int test();

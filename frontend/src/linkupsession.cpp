@@ -708,7 +708,8 @@ void App::linkupPassToEmulator() {
 
 // True when the game alone is on this console's screen.
 bool App::linkupGameAloneOnScreen() const {
-    if (choiceScreen.isOpen() || pinScreen.isOpen() || keyboard.isOpen()) return false;
+    if (choiceScreen.isOpen() || pinScreen.isOpen() || keyboard.isOpen() || gunCal.open())
+        return false;
     if (standaloneRun.active())
         return !standalonePaused && !overlayOpen && overlayFade.value() <= 0.001f;
     return playing && !overlayOpen && overlayFade.value() <= 0.001f && !stateHold && !stateHoldWaiting &&

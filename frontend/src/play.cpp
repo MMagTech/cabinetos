@@ -15,6 +15,7 @@
 #include "core.h"
 #include "discs.h"
 #include "fightstick.h"
+#include "guncamera.h"
 #include "lightgun.h"
 #include "ps2.h"
 #include "savepush.h"
@@ -265,6 +266,27 @@ void App::followRemotesInGame() {
     else if (playing || overlayOpen) toggleOverlay();
 }
 
+// THE LIGHT GUN'S BORDER (#575 rule 9): 2% of the screen's height, in whole
+// pixels of the screen it is drawn on.
+float App::gunBorderEdge(int dh) const {
+    return dh > 0 ? std::round(lightgun::kBorderShare * static_cast<float>(dh)) /
+                        (static_cast<float>(dh) / ui::kCanvasHeight)
+                  : lightgun::kBorderShare * ui::kCanvasHeight;
+}
+
+// White around the whole screen. Each side reaches as far again past the
+// screen's edge, so the shape's soft edge falls off the screen and the
+// outermost row of pixels is as white as the rest (measured at 4K: 119 of 255
+// when it ended on the edge).
+void App::drawGunBorder(float edge) {
+    const ui::Color white = ui::Color::white(1.0f);
+    const float w = ui::kCanvasWidth, h = ui::kCanvasHeight;
+    renderer.draw(ui::Rect{-edge, -edge, w + 2.0f * edge, 2.0f * edge, 0, white});
+    renderer.draw(ui::Rect{-edge, h - edge, w + 2.0f * edge, 2.0f * edge, 0, white});
+    renderer.draw(ui::Rect{-edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
+    renderer.draw(ui::Rect{w - edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
+}
+
 // LIGHT GUNS (#575, lightgun.h). Where their presses go: the menus while
 // nothing plays, the pause menu is up, or a loaded state waits on "Press (A)
 // to continue", which the trigger answers as a pad's A does; the game
@@ -274,12 +296,30 @@ void App::followRemotesInGame() {
 // emulator of its own included, and closes it, as a Wii Remote's HOME held
 // does (rule 3). In a light-gun game a gun plugged in mid-game goes into its
 // player's port, and once a gun has been in, the border stays for the game.
+// A GUN'S D-PAD HELD LEFT three seconds opens the calibration screen, in the
+// menus and over any game the console draws, which it pauses (rule 13;
+// guncalibration.cpp); not yet over an emulator of its own, none of which is
+// handed a gun. AND THE CAMERAS (guncamera.h) are kept while a light-gun game
+// shows its border and is being played, and while the calibration screen is
+// open; at no other time are they touched.
 // The frame loop calls this, and watchStandalone does while an emulator of
 // its own has the screen.
 void App::followGunsInGame() {
     const bool inGame = playing || standaloneRun.active();
-    lightgun::setInMenus(!inGame || overlayOpen || standalonePaused || stateHold);
+    lightgun::setInMenus(!inGame || overlayOpen || standalonePaused || stateHold ||
+                         gunCal.open());
     lightgun::setInGame(inGame);
+    if (int n = -1; lightgun::takeCalibrateHold(&n)) {
+        if (standaloneRun.active() && !standalonePaused)
+            std::fprintf(stderr, "[guncal] gun %d's hold not taken: an emulator of its own has "
+                                 "the screen\n",
+                         n + 1);
+        else
+            openGunCalibration(n);
+    }
+    guncamera::setWanted(playing && session.gunDevice && session.gunBorder && !overlayOpen &&
+                             !stateHold && !stateHoldWaiting && !gunCal.open(),
+                         gunCal.open());
     if (lightgun::takePressInGame()) {
         playClock.touch();
         idleWatch.input(clockSeconds());
@@ -331,8 +371,8 @@ bool App::readGameInput(cab::Core& core) {
     // 2026-09-26 a game read only the first pad SDL listed, so a second
     // person's pad walked the menus and did nothing in a game.
     bool fastForward = false, rewinding = false;
-    const bool menuWasUp = overlayOpen || stateHold || menuUpAtLastRead;
-    menuUpAtLastRead = overlayOpen || stateHold;
+    const bool menuWasUp = overlayOpen || stateHold || gunCal.open() || menuUpAtLastRead;
+    menuUpAtLastRead = overlayOpen || stateHold || gunCal.open();
     for (int p = 0; p < players::kMax; ++p) {
         cab::PadState st = p == 0 ? pad : cab::PadState{};
         if (SDL_Gamepad* gp = players::gamepad(p)) {
@@ -739,11 +779,7 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // has been plugged in (followGunsInGame). The picture is drawn inside
         // it, by the same rule as always, in what the border leaves.
         const bool border = session.gunDevice && session.gunBorder;
-        const float edge = border
-                               ? (dh > 0 ? std::round(lightgun::kBorderShare * dh) /
-                                               (static_cast<float>(dh) / ui::kCanvasHeight)
-                                         : lightgun::kBorderShare * ui::kCanvasHeight)
-                               : 0.0f;
+        const float edge = border ? gunBorderEdge(dh) : 0.0f;
         const float roomW = ui::kCanvasWidth - 2.0f * edge;
         const float roomH = ui::kCanvasHeight - 2.0f * edge;
         float scale = std::min(roomW / (shownRows * shownAspect), roomH / shownRows);
@@ -850,16 +886,7 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // screen sheet and no glow in the bars, so the border is the one
         // bright frame the gun's camera looks for (rule 9).
         if (border) {
-            // Each side reaches as far again past the screen's edge, so the
-            // shape's soft edge falls off the screen and the outermost row of
-            // pixels is as white as the rest (measured at 4K: 119 of 255
-            // when it ended on the edge).
-            const ui::Color white = ui::Color::white(1.0f);
-            const float w = ui::kCanvasWidth, h = ui::kCanvasHeight;
-            renderer.draw(ui::Rect{-edge, -edge, w + 2.0f * edge, 2.0f * edge, 0, white});
-            renderer.draw(ui::Rect{-edge, h - edge, w + 2.0f * edge, 2.0f * edge, 0, white});
-            renderer.draw(ui::Rect{-edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
-            renderer.draw(ui::Rect{w - edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
+            drawGunBorder(edge);
             linkupTellPlace(px, py, dw, dh);
             return;
         }

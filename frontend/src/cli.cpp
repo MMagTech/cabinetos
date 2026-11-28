@@ -20,6 +20,7 @@
 #include "discs.h"
 #include "fightstick.h"
 #include "guitar.h"
+#include "guncamera.h"
 #include "lightgun.h"
 #include "files.h"
 #include "firstrun.h"
@@ -330,6 +331,13 @@ std::optional<int> App::parseCommandLine(int argc, char** argv) {
             return guitar::test();
         } else if (SDL_strcmp(argv[i], "--light-gun-test") == 0) {
             return lightgun::test();
+        } else if (SDL_strcmp(argv[i], "--gun-camera-test") == 0) {
+            return guncamera::test();
+        } else if (SDL_strcmp(argv[i], "--light-guns-for-capture") == 0 && i + 1 < argc) {
+            // As if these guns were plugged in (1 gun 1, 2 gun 2, 3 both),
+            // for a capture of Settings' light gun rows on a machine with
+            // none. lightgun.h, pretendForCapture.
+            lightgun::pretendForCapture(static_cast<unsigned>(SDL_atoi(argv[++i])));
         } else if (SDL_strcmp(argv[i], "--arcade-settings-test") == 0) {
             return arcadesettings::test();
         } else if (SDL_strcmp(argv[i], "--arcade-match-test") == 0) {

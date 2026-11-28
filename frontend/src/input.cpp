@@ -109,6 +109,9 @@ void App::handleEvent(const SDL_Event& e) {
     if (touched && (idleWatch.input(clockSeconds()) || power::justWoke()) &&
         owner != InputOwner::Game && !powerKey)
         return;
+    // THE LIGHT GUNS' CALIBRATION SCREEN takes every press while it is up
+    // (guncalibration.cpp), the power key's aside.
+    if (gunCalibrationTakes(e)) return;
     // THE PRESS THAT ENDS THE WAIT after a state loads: A, as the
     // prompt says (Return on a keyboard). It was any button, and
     // MMagTech: "it says press A to continue and any button works".

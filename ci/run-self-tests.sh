@@ -59,6 +59,7 @@ TESTS=(
     --fightstick-test
     --guitar-test
     --light-gun-test
+    --gun-camera-test
     --arcade-pad-test
     --arcade-settings-test
     --arcade-match-test

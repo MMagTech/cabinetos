@@ -17,7 +17,9 @@ using namespace design;   // NOLINT: the design system's names (design.h, motion
 
 // Every frame while a built-in game runs, after the pads are read (play.cpp).
 void App::runGameFrame(cab::Core& core, float dt, bool rewinding) {
-    const bool frozen = overlayOpen || stateHold || stateHoldWaiting;
+    // The light guns' calibration screen pauses the game under it, as the
+    // pause menu does (guncalibration.cpp).
+    const bool frozen = overlayOpen || stateHold || stateHoldWaiting || gunCal.open();
     core.setPaused(frozen);
     // Set when a paused frame was run only to redraw it; its sound is
     // dropped below, as rewind's is.

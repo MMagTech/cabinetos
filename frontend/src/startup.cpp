@@ -36,6 +36,7 @@
 #include "firstrun.h"
 #include "gonegames.h"
 #include "gpu.h"
+#include "guncamera.h"
 #include "lightgun.h"
 #include "offline_sync.h"
 #include "overlaywin.h"
@@ -168,6 +169,10 @@ std::optional<int> App::startDisplay() {
     // that an arcade light-gun game plays while a gun its emulator is handed
     // is plugged in, and greys otherwise (rule 8).
     lightgun::start();
+    // Each gun's camera kept at the exposure it sees the border at (#575 rule
+    // 12): the thread, which touches no camera until a gun game or the
+    // calibration screen asks.
+    guncamera::start();
     arcadematch::setGunReady([](const char* core) {
         return lightgun::count() > 0 && lightgun::deviceFor(core) != 0;
     });

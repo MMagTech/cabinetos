@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "core.h"
+#include "lightgun.h"
 #include "powerprofile.h"
 #include "storage.h"
 
@@ -65,7 +66,8 @@ void App::runFrameLoop() {
         // its state's "Press A to continue", and not frozen waiting for a
         // state picked on its page to arrive (#484, PLAY-16), which is when
         // the game itself stands still (pace.cpp).
-        const bool gameOnScreen = playing && !overlayOpen && !stateHold && !stateHoldWaiting;
+        const bool gameOnScreen =
+            playing && !overlayOpen && !stateHold && !stateHoldWaiting && !gunCal.open();
         idleFrame(dt, gameOnScreen || linkupHoldsScreen(), kScreenOff[screenOffIndex].seconds);
         // TIME PLAYED (#128): the same test the dim uses for "a game is on
         // screen". Written down once a minute, so a power cut loses at most
@@ -80,7 +82,9 @@ void App::runFrameLoop() {
         // its own too.
         players::setInGame(playing || standaloneRun.active());
         if (playing) cab::Core::shared().setPlayers(players::count());
-        if (here() == Screen::Settings && players::generation() != settingsPadsSeen)
+        if (here() == Screen::Settings &&
+            (players::generation() != settingsPadsSeen ||
+             static_cast<int>(lightgun::plugged()) != settingsGunsSeen))
             buildSettings();
 
         repeatHeld(dt);
@@ -88,6 +92,7 @@ void App::runFrameLoop() {
         evictTestHook();
         followRemotesInGame();
         followGunsInGame();
+        followGunCalibration(dt);
         if (playing) {
             cab::Core& core = cab::Core::shared();
             const bool rewinding = readGameInput(core);
@@ -311,6 +316,10 @@ void App::runFrameLoop() {
             pinScreen.draw(pctx);
             renderer.setContentAlpha(1.0f);
         }
+
+        // THE LIGHT GUNS' CALIBRATION SCREEN, over everything but the
+        // curtain: the camera must see nothing bright but its border.
+        drawGunCalibration(sc);
 
         drawCurtain(sc);
 
