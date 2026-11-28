@@ -621,11 +621,8 @@ void run() {
             }
             if (heldLeft(d, t)) {
                 gCalibrateHold = d.slot;
-                std::fprintf(stderr, "[lightgun] D-pad held left %lld ms on gun %d; aim %s\n",
-                             static_cast<long long>(kCalibrateHoldMs), d.slot + 1,
-                             atMiddle(d.rawX, d.rawY, d.minX, d.maxX, d.minY, d.maxY)
-                                 ? "at the middle"
-                                 : "not at the middle");
+                std::fprintf(stderr, "[lightgun] D-pad held left %lld ms on gun %d\n",
+                             static_cast<long long>(kCalibrateHoldMs), d.slot + 1);
             }
             tellMenus(d);
         }

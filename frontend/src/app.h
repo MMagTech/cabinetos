@@ -1395,6 +1395,11 @@ struct App {
         // the middle: the screen waits for it to let go (Sinden's set).
         bool waitForSinden = false;
         int64_t shotAt = 0;          // lightgun::clockMs()
+        // For the log, which tells whether Sinden's software saw the D-pad
+        // held (guncalibration.cpp): when the screen opened from a hold, and
+        // whether the gun's aim has been seen held at the middle since.
+        int64_t heldAt = -1;
+        bool sawHeld = false, saidHeld = false;
         float along = 0.0f;          // the sweep, 0 to 1
         bool aimShown = false;       // Done: where the gun lands now
         float aim[2] = {0, 0};

@@ -29,7 +29,9 @@
 // while the console holds the gun's input devices (unknown until a gun was in
 // hand): the console opens the screen from the hold it reads itself, and the
 // shot is Sinden's set only when the aim was held at the middle. The log says
-// which: "aim at the middle" or "aim not at the middle" on the hold's line.
+// which, within a second and a half of the hold: "held at the middle by
+// Sinden" or "not held at the middle". And if the gun reports no trigger
+// while Sinden calibrates, "moves again with no shot seen" says so.
 
 #include "app.h"
 
@@ -49,6 +51,10 @@ namespace {
 // How long a shot taken with the aim held at the middle waits for Sinden's
 // software to let go before the screen takes the shot as not Sinden's.
 constexpr int64_t kSindenSetsMs = 3000;
+// How long after the hold the log waits for Sinden's software to hold the
+// aim at the middle before it says Sinden is not calibrating: its own three
+// seconds start from the same press as the console's.
+constexpr int64_t kSindenHoldsMs = 1500;
 
 const char* stepName(App::GunCalibration::Step s) {
     switch (s) {
@@ -69,6 +75,8 @@ void App::openGunCalibration(int gun) {
     gunCal.step = Step::Shoot;
     gunCal.gun = gun;
     gunCal.waitForSinden = false;
+    gunCal.heldAt = gun >= 0 ? lightgun::clockMs() : -1;
+    gunCal.sawHeld = gunCal.saidHeld = false;
     if (!was) {
         // A direction held in the menus as the D-pad was held left stops
         // repeating behind the screen; every press is the screen's now.
@@ -102,11 +110,33 @@ void App::followGunCalibration(float dt) {
         closeGunCalibration(n >= 0 ? "the gun left" : "no gun is plugged in");
         return;
     }
+    // WHAT SINDEN'S SOFTWARE DID WITH THE HOLD, for the log.
+    if (n >= 0 && gunCal.step == Step::Shoot) {
+        const bool held = lightgun::parked(n);
+        if (held && !gunCal.sawHeld) {
+            gunCal.sawHeld = gunCal.saidHeld = true;
+            std::fprintf(stderr, "[guncal] gun %d's aim is held at the middle by Sinden: it is "
+                                 "calibrating\n",
+                         n + 1);
+        } else if (!held && !gunCal.saidHeld && gunCal.heldAt >= 0 &&
+                   lightgun::clockMs() - gunCal.heldAt >= kSindenHoldsMs) {
+            gunCal.saidHeld = true;
+            std::fprintf(stderr, "[guncal] gun %d's aim not held at the middle %lld ms after "
+                                 "the hold: Sinden is not calibrating\n",
+                         n + 1, static_cast<long long>(kSindenHoldsMs));
+        } else if (!held && gunCal.sawHeld && !gunCal.waitForSinden) {
+            gunCal.sawHeld = false;
+            std::fprintf(stderr, "[guncal] gun %d's aim moves again with no shot seen: Sinden "
+                                 "set or cancelled its calibration\n",
+                         n + 1);
+        }
+    }
     if (gunCal.step == Step::Shoot && n >= 0 && gunCal.waitForSinden) {
         if (!lightgun::parked(n)) {
             std::fprintf(stderr, "[guncal] gun %d's aim moves again: Sinden set its calibration\n",
                          n + 1);
             gunCal.waitForSinden = false;
+            gunCal.sawHeld = false;
             gunCal.step = Step::Sweep;
             guncamera::calibrate(n);
         } else if (lightgun::clockMs() - gunCal.shotAt >= kSindenSetsMs) {

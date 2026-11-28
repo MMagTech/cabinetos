@@ -133,6 +133,7 @@ struct PerGun {
     Cam cam;
     int64_t nextOpen = 0;     // when its camera is looked for again
     bool saidNoCamera = false;
+    std::string saidNode;     // the camera last said in the log
     int want = -1;            // the exposure kept, -1 for Sinden's own
     int64_t nextCheck = 0;
     Sweep sweep;
@@ -240,8 +241,10 @@ void tickGun(int n, int64_t t, bool follow) {
     if (g.cam.fd < 0 && t >= g.nextOpen) {
         const std::string node = cameraOf(w.usb);
         if (!node.empty() && openCam(g.cam, node)) {
-            std::fprintf(stderr, "[guncamera] gun %d's camera is %s (exposure %d to %d)\n", n + 1,
-                         node.c_str(), g.cam.min, g.cam.max);
+            if (node != g.saidNode)
+                std::fprintf(stderr, "[guncamera] gun %d's camera is %s (exposure %d to %d)\n",
+                             n + 1, node.c_str(), g.cam.min, g.cam.max);
+            g.saidNode = node;
             g.saidNoCamera = false;
             g.nextCheck = t;
         } else {
@@ -264,27 +267,40 @@ void tickGun(int n, int64_t t, bool follow) {
             finishSweep(n, g, t);
             return;
         }
-        // The rung the sweep is on, given as soon as it begins.
+        // The rung the sweep is on, given as soon as it begins. A camera
+        // that will not take it ends the sweep: judged blind, it would keep
+        // what the camera saw at another exposure.
         if (g.given != g.sweep.exposure()) {
             g.given = g.sweep.exposure();
-            give(n, g, g.given, nullptr);
+            if (!setExposure(g.cam, g.given)) {
+                std::fprintf(stderr, "[guncamera] gun %d's camera %s refused exposure %d: %s; "
+                                     "the sweep ends\n",
+                             n + 1, g.cam.node.c_str(), g.given, std::strerror(errno));
+                g.sweeping = false;
+                if (g.forCalibration) show(n, Progress{false, true, 1.0f, -1, true});
+                closeCam(g.cam);
+                g.nextOpen = t + 1000;
+                return;
+            }
         }
         if (g.forCalibration) show(n, Progress{true, false, g.sweep.progress(), -1, false});
         return;
     }
     // KEPT: the camera is set again when it is not at the exposure kept, as
-    // after Sinden's software starts again, which sets its own.
+    // after Sinden's software starts again, which sets its own. Looked at
+    // with nothing kept too: a camera that no longer answers, as after it
+    // dropped off USB and came back in the same port, is opened again.
     if (t >= g.nextCheck) {
         g.nextCheck = t + 1000;
+        const int now = getExposure(g.cam);
+        if (now < 0) {
+            std::fprintf(stderr, "[guncamera] gun %d's camera %s does not answer: %s\n", n + 1,
+                         g.cam.node.c_str(), std::strerror(errno));
+            closeCam(g.cam);
+            g.nextOpen = t + 1000;
+            return;
+        }
         if (g.want >= 0) {
-            const int now = getExposure(g.cam);
-            if (now < 0) {
-                std::fprintf(stderr, "[guncamera] gun %d's camera %s does not answer: %s\n",
-                             n + 1, g.cam.node.c_str(), std::strerror(errno));
-                closeCam(g.cam);
-                g.nextOpen = t + 1000;
-                return;
-            }
             if (now != g.want) {
                 char why[64];
                 std::snprintf(why, sizeof why, "it was at %d", now);

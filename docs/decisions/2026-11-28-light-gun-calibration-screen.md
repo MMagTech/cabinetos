@@ -17,7 +17,8 @@
   gun's next shot wherever it pointed. Reading the hold on the console's own
   side works whether or not Sinden's software sees the D-pad while the
   console holds the gun's input devices, which was not known before a gun
-  was in hand: the log's hold line says whether the aim was at the middle.
+  was in hand: the screen's log says whether the aim was held at the
+  middle.
   Not over an emulator run as a program yet: none is handed a gun.
 - **Numbers:** #575, "Sinden light guns: plug in and play gun games
   (waiting on the guns)".
