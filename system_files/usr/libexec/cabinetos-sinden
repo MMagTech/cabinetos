@@ -98,6 +98,23 @@ for u in /sys/bus/usb/devices/*; do
 done
 echo "gun on ${tty} (USB ${gun##*/}), camera ${capture} (USB ${camera##*/})"
 
+# EVERY NODE OF THE GUN AND ITS CAMERA, and udev done with each. Plugged in,
+# the gun's port can come up before udev has finished the camera: its node
+# not yet given its group, its links not yet in udev's list. Ten seconds more.
+nodes=()
+for e in "${gun}"/*:*/tty/* "${gun}"/*:*/*/input/input*/event* "${gun}"/*:*/*/input/input*/mouse* \
+         "${gun}"/*:*/*/hidraw/hidraw* "${camera}"/*:*/video4linux/*; do
+    [[ -e "${e}" ]] || continue
+    case "${e}" in
+        */input/*) nodes+=("/dev/input/${e##*/}") ;;
+        *) nodes+=("/dev/${e##*/}") ;;
+    esac
+done
+if ! udevadm wait --timeout=10 "${nodes[@]}"; then
+    echo "udev did not finish the gun on ${tty} in time (${nodes[*]})" >&2
+    exit 1
+fi
+
 # THE SETTINGS. Each key is Sinden's own, read from its file's comments;
 # each change is checked, so a Sinden file that names a key otherwise stops
 # here instead of starting with that line unchanged.
@@ -160,13 +177,7 @@ done
 # The links udev keeps for this gun's nodes and its camera's, made again in
 # its /dev, pointing where they point outside. udev's list holds each one the
 # node wants even where another gun won the name, as with by-id here.
-for e in "${gun}"/*:*/tty/* "${gun}"/*:*/*/input/input*/event* "${gun}"/*:*/*/input/input*/mouse* \
-         "${gun}"/*:*/*/hidraw/hidraw* "${camera}"/*:*/video4linux/*; do
-    [[ -e "${e}" ]] || continue
-    case "${e}" in
-        */input/*) node=/dev/input/${e##*/} ;;
-        *) node=/dev/${e##*/} ;;
-    esac
+for node in "${nodes[@]}"; do
     for link in $(udevadm info -q symlink -n "${node}" 2>/dev/null); do
         args+=(--symlink "$(realpath -m --relative-to="$(dirname "/dev/${link}")" "${node}")" "/dev/${link}")
     done
