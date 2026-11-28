@@ -71,6 +71,10 @@ constexpr Credit kCredits[] = {
     {"SDL3", "Input and audio \xC2\xB7 zlib"},
     {"SDL_GameControllerDB", "The controller list \xC2\xB7 zlib"},
     {"GameTDB", "Wii and Wii U pads \xC2\xB7 Its own terms"},
+    // Not an open licence: Sinden Technology's own (License.txt, beside its
+    // software in /usr/lib/cabinetos/sinden), shipped by its permission.
+    {"Sinden Lightgun software", "Light guns, Sinden Technology \xC2\xB7 Its own terms"},
+    {"Mono, libgdiplus", "Runs Sinden's software \xC2\xB7 MIT"},
     {"Mesa", "Graphics \xC2\xB7 MIT"},
     {"FreeType", "Text \xC2\xB7 FreeType License"},
     {"libjpeg-turbo, libpng", "Cover art \xC2\xB7 BSD, libpng"},
