@@ -17,6 +17,18 @@ one you install, so you only ever install the newest.
   has them. On a pad a game's buttons are on **A**, **B**, **X** and **Y** as
   in the other arcade games, unless the game has a pad layout of its own. See [Arcade](arcade.md#windows-arcade).
   ([#762](https://github.com/MMagTech/cabinetos/issues/762))
+- **Fixed:** on a console whose drive was full of games, a system's first
+  start could say its BIOS or firmware was not on the server when it was.
+  The console now makes room for those files as it does for a game, and
+  says *Not enough space* only when there is none.
+- **Fixed:** a Lindbergh game could run out of room while it unpacked on a
+  full drive, and say *Couldn't open this game's file* at every try. The
+  console now asks for all the room a game unpacks to, clears a half-unpacked
+  game before the next try, and says *Not enough space* when that is the
+  reason, on every system.
+- **Fixed:** a Lindbergh game kept as one large zip that RomM could not read
+  inside stayed *Not supported* after RomM had read it. It is asked about
+  again by itself.
 
 ## 2026.11.26.4 {#v2026-11-26-4}
 
