@@ -30,10 +30,12 @@
 # WHAT IT NEEDS: Mono, the runtime the program is built for, and libgdiplus,
 # Mono's System.Drawing: Fedora 44's own packages. Measured on the reference
 # console on 2026-11-27: both guns, both cameras at 66 frames a second, on
-# Fedora's Mono 6.14.1 and libgdiplus 6.2 with this camera library. Everything
-# else they need is already in the base (about 60 MB on disk, 18 MB to
-# download, read from Fedora's repository against the console's package list
-# the same night). And the commands the program runs itself, all in the base:
+# Fedora's Mono 6.14.1 and libgdiplus 6.2 with this camera library. mono-core
+# brings seven more of Mono's own packages it requires (mono-data,
+# mono-data-sqlite, mono-extras, mono-mvc, mono-wcf, mono-web, mono-winforms),
+# and everything else is already in the base: 94 MB on disk, 28 MB to
+# download, in the image build of 2026-11-28. And the commands the program
+# runs itself, all in the base:
 # lsusb, udevadm and v4l2-ctl (without either of the first two it quits
 # straight after its banner), grep and bash; and bwrap, which the launcher
 # builds each gun's world with. In the OS layer, from build.sh, after the
