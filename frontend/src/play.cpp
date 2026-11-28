@@ -848,12 +848,16 @@ void App::drawGamePicture(cab::Core& core, int dh) {
         // screen sheet and no glow in the bars, so the border is the one
         // bright frame the gun's camera looks for (rule 9).
         if (border) {
+            // Each side reaches as far again past the screen's edge, so the
+            // shape's soft edge falls off the screen and the outermost row of
+            // pixels is as white as the rest (measured at 4K: 119 of 255
+            // when it ended on the edge).
             const ui::Color white = ui::Color::white(1.0f);
-            renderer.draw(ui::Rect{0, 0, ui::kCanvasWidth, edge, 0, white});
-            renderer.draw(ui::Rect{0, ui::kCanvasHeight - edge, ui::kCanvasWidth, edge, 0, white});
-            renderer.draw(ui::Rect{0, edge, edge, ui::kCanvasHeight - 2.0f * edge, 0, white});
-            renderer.draw(ui::Rect{ui::kCanvasWidth - edge, edge, edge,
-                                   ui::kCanvasHeight - 2.0f * edge, 0, white});
+            const float w = ui::kCanvasWidth, h = ui::kCanvasHeight;
+            renderer.draw(ui::Rect{-edge, -edge, w + 2.0f * edge, 2.0f * edge, 0, white});
+            renderer.draw(ui::Rect{-edge, h - edge, w + 2.0f * edge, 2.0f * edge, 0, white});
+            renderer.draw(ui::Rect{-edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
+            renderer.draw(ui::Rect{w - edge, -edge, 2.0f * edge, h + 2.0f * edge, 0, white});
             linkupTellPlace(px, py, dw, dh);
             return;
         }
