@@ -266,7 +266,9 @@ void App::followRemotesInGame() {
 }
 
 // LIGHT GUNS (#575, lightgun.h). Where their presses go: the menus while
-// nothing plays or the pause menu is up, the game otherwise. A press in a
+// nothing plays, the pause menu is up, or a loaded state waits on "Press (A)
+// to continue", which the trigger answers as a pad's A does; the game
+// otherwise. A press in a
 // game is a press for the screen's dim and time played, as a pad's is. The
 // rear right button held a second opens the pause menu in every game, an
 // emulator of its own included, and closes it, as a Wii Remote's HOME held
@@ -276,7 +278,7 @@ void App::followRemotesInGame() {
 // its own has the screen.
 void App::followGunsInGame() {
     const bool inGame = playing || standaloneRun.active();
-    lightgun::setInMenus(!inGame || overlayOpen || standalonePaused);
+    lightgun::setInMenus(!inGame || overlayOpen || standalonePaused || stateHold);
     lightgun::setInGame(inGame);
     if (lightgun::takePressInGame()) {
         playClock.touch();
