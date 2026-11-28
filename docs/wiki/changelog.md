@@ -4,6 +4,20 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
+## Next
+
+- **New:** Sinden light guns. Plug in one or two and the light-gun arcade
+  games FinalBurn Neo plays start, each gun its player's, the first gun
+  plugged in player 1, with a white border around the screen for the gun to
+  aim by. Without a gun they stay greyed, *Needs a light gun*. Sinden's
+  software is already on the console, with recoil off. The trigger shoots,
+  the pump is the second button, the front right the third and the rear left
+  Start; a tap of the rear right puts in a coin, and holding it a second
+  opens the pause menu, in any game. In the menus the D-pad moves, the
+  trigger selects and the pump goes back. See
+  [Buttons and shortcuts](navigation.md#a-sinden-light-gun).
+  ([#575](https://github.com/MMagTech/cabinetos/issues/575))
+
 ## 2026.11.28 {#v2026-11-28}
 
 - **New:** Windows Arcade, games from arcade boards that run Windows, played
