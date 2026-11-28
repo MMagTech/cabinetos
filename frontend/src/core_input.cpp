@@ -210,9 +210,11 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
             case RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y: return gun.onPicture ? gun.y : -0x8000;
             case RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN: return gun.onPicture ? 0 : 1;
             case RETRO_DEVICE_ID_LIGHTGUN_TRIGGER: return has(lightgun::kTrigger);
-            // The pump is the second button, and the reload a core may ask
-            // for by its own name.
-            case RETRO_DEVICE_ID_LIGHTGUN_RELOAD:
+            // The pump is the second button, and only that: never libretro's
+            // RELOAD, a shot off the screen, which both MAMEs make a trigger
+            // pull (docs/decisions/2026-11-28-light-gun-pump-is-the-second-
+            // button.md). A game reloads as on the cabinet, by the trigger
+            // aimed off the picture.
             case RETRO_DEVICE_ID_LIGHTGUN_AUX_A: return has(lightgun::kSecond);
             case RETRO_DEVICE_ID_LIGHTGUN_AUX_B: return has(lightgun::kThird);
             case RETRO_DEVICE_ID_LIGHTGUN_START:
@@ -227,9 +229,9 @@ int16_t inputState(unsigned port, unsigned device, unsigned index, unsigned id) 
                 return has(lightgun::kLeft) | padHas(RETRO_DEVICE_ID_JOYPAD_LEFT);
             case RETRO_DEVICE_ID_LIGHTGUN_DPAD_RIGHT:
                 return has(lightgun::kRight) | padHas(RETRO_DEVICE_ID_JOYPAD_RIGHT);
-            // The fourth button (AUX_C) is none of the gun's, and the relative
-            // X and Y and Pause are libretro's old names, which no gun here
-            // answers.
+            // The fourth button (AUX_C) is none of the gun's, RELOAD is the
+            // pump's no longer (above), and the relative X and Y and Pause
+            // are libretro's old names, which no gun here answers.
             default: return 0;
         }
     }
