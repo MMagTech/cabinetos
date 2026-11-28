@@ -56,33 +56,38 @@ Sega Lindbergh games play in Linux Loader, as an experiment: some games may run 
 
 ### Setting it up, for the library's owner
 
-You do the first part on your own computer, a Mac, Linux, or Windows. Nothing from Windows runs on it: a script of CabinetOS's downloads files, checks them, packs them, and writes one small file into each game.
+You do the first part on your own computer. A Mac, Linux or Windows all work. A script of CabinetOS's downloads the files the games need, checks them, packs them into one file, and writes one small file into each game. It installs nothing on your computer.
+
+**First, open a terminal:**
+
+- **Mac:** open the Terminal app.
+- **Linux:** open a terminal.
+- **Windows:** open PowerShell as administrator, type `wsl --install`, restart, then open **Ubuntu** from the Start menu. Type everything below in that Ubuntu window.
 
 **Once, on your computer:**
 
-1. On Windows only: open PowerShell as administrator, type `wsl --install`, restart, then open **Ubuntu** from the Start menu. Do every step below in that window.
-2. Download the script:
+1. Download the script:
    `curl -LO https://raw.githubusercontent.com/MMagTech/cabinetos/main/tools/windows-arcade-admin.sh`
-3. Make it runnable: `chmod +x windows-arcade-admin.sh`
-4. Get the Windows files: `./windows-arcade-admin.sh files`. It downloads about 615 MB from Microsoft and a few other places, checks every file, and makes `windows-arcade-files.tar`. It takes a few minutes.
-5. If it says a file could not be downloaded, open the address it shows in your browser, put the file in the folder it names, and run step 4 again.
+2. Make it runnable: `chmod +x windows-arcade-admin.sh`
+3. Get the Windows files: `./windows-arcade-admin.sh files`. It downloads about 615 MB from Microsoft and a few other places, checks every file, and makes `windows-arcade-files.tar`. It takes a few minutes.
+4. If it says a file could not be downloaded, open the address it shows in your browser, put the file in the folder it names, and run step 3 again.
 
 **For each game:**
 
-6. Run `./windows-arcade-admin.sh games` followed by the game's folder, zip or 7z. You can drag it into the window to type its path. On Windows, your drive C: is `/mnt/c`, so your Downloads folder is `/mnt/c/Users/<your name>/Downloads`. A folder holding several games does them one after another.
-7. It shows the games whose names are closest. Press Enter if the first is right, type its number if another is, or type words from the game's name to search again.
-8. It shows the game's programs, the one it thinks starts the game first. Press Enter, or type another number.
-9. Put the game, as it is (folder, zip or 7z), in the `teknoparrot` folder of your RomM library (or the folder you mapped to TeknoParrot), beside your other arcade folders, then scan. Make the folder the first time.
+5. Run `./windows-arcade-admin.sh games` followed by the game's folder, zip or 7z. You can drag it into the window to type its path. On Windows, your drive C: is `/mnt/c`, so your Downloads folder is `/mnt/c/Users/<your name>/Downloads`. A folder holding several games does them one after another.
+6. It shows the games whose names are closest. Press Enter if the first is right, type its number if another is, or type words from the game's name to search again.
+7. It shows the game's programs, the one it thinks starts the game first. Press Enter, or type another number.
+8. Put the game, as it is (folder, zip or 7z), in the `teknoparrot` folder of your RomM library (or the folder you mapped to TeknoParrot), beside your other arcade folders, then scan. Make the folder the first time.
 
 If the script says it needs a program it does not find (`zip`, `unzip`, or 7-Zip for a 7z), install that program and run it again. Adding the file to a zip takes about a second, whatever its size; a 7z is copied once, so it needs free room as big as itself.
 
 **Once, in RomM:**
 
-10. Add `windows-arcade-files.tar` to the TeknoParrot platform's firmware, as you do for the other arcade BIOS files.
+9. Add `windows-arcade-files.tar` to the TeknoParrot platform's firmware, as you do for the other arcade BIOS files.
 
-After that, each new game is steps 6 to 9.
+After that, each new game is steps 5 to 8.
 
-**After a CabinetOS update,** a game may say *The Windows files on the server are out of date*. Download the script again, run step 4 again, and put the new `windows-arcade-files.tar` in RomM in place of the old one.
+**After a CabinetOS update,** a game may say *The Windows files on the server are out of date*. Download the script again, run step 3 again, and put the new `windows-arcade-files.tar` in RomM in place of the old one.
 
 **If a big game shows *Not supported*.** During a scan, RomM reads inside each zip, and gives up on one that takes longer than three minutes. A game it gave up on shows *Not supported* on the console. In RomM's container settings, raise `SEVEN_ZIP_TIMEOUT` (RomM calls it the 7-Zip timeout, and it covers zips too), then scan the TeknoParrot platform again with the **Hashes** scan. A Quick scan does not read the zip again.
 
