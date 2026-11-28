@@ -30,6 +30,11 @@
 # Sinden's software stops on SIGTERM (measured, 250 ms); the 5 s and the
 # SIGKILL after them are for a copy that hangs.
 #
+# NO CORE FILES (LimitCORE=0): a copy that crashes is started again, and
+# each crash wrote a 2.3 MB core of Sinden's software (measured 2026-11-28),
+# so a gun that kept failing would fill the console with them. systemd-
+# coredump still logs the crash, with no file.
+#
 # NOT ProtectKernelTunables= OR ProtectKernelLogs=: each covers a part of
 # /proc, and then bwrap cannot mount the /proc of the gun's world ("Can't
 # mount proc on /proc: Operation not permitted", tried 2026-11-27). The world
@@ -49,6 +54,7 @@ RestartSec=1
 # The launcher says why on exit 2: a port that is not a Sinden gun's.
 RestartPreventExitStatus=2
 TimeoutStopSec=5
+LimitCORE=0
 DynamicUser=yes
 SupplementaryGroups=dialout video
 RuntimeDirectory=cabinetos-sinden/%i
