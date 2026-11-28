@@ -173,7 +173,7 @@ bool prepareSupermodel(const Emulator& e, const std::string& romPath, const std:
         {"Throttle", "true"},
         {"RefreshRate", "60.000"},
         {"ShowFrameRate", "false"},
-        // Light-gun games are greyed until #575 (arcadematch.h).
+        // No crosshair (docs/decisions/2026-11-28-no-crosshair-in-light-gun-games.md).
         {"Crosshairs", "0"},
         // SOUND IN TWO CHANNELS: the board's four are mixed down by
         // Supermodel itself (Src/OSD/SDL/Audio.cpp), as it does for any

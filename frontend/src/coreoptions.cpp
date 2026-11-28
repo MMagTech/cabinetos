@@ -291,9 +291,11 @@ std::map<std::string, std::string> optionOverrides(const std::string& core, bool
     // with a Neo Geo game loaded; a set carries its own BIOS (measured on the
     // A9, 2026-10-28).
     //
-    // AND NO CROSSHAIR (#575): a light gun aims for real, on the player's
-    // own picture. The declared default, "hide with lightgun device", hides
-    // it only on a port holding a gun and draws one for every other player
+    // AND NO CROSSHAIR (#575,
+    // docs/decisions/2026-11-28-no-crosshair-in-light-gun-games.md): each game
+    // looks as its cabinet did. The declared default, "hide with lightgun
+    // device", hides it only on a port holding a gun and draws one for every
+    // other player
     // of a gun game, an absent player 2 among them (FinalBurn Neo's
     // RefreshLightgunCrosshair and BurnGunDrawTargets at our pin). "always
     // hide" draws none.
