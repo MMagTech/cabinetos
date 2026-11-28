@@ -1,0 +1,52 @@
+# Sinden's software for the one Sinden light gun whose serial port is %I (#575).
+#
+# Started by udev for each gun (73-cabinetos-sinden.rules), stopped when the
+# gun's port goes: BindsTo= the port, so an unplugged gun, or one that drops
+# off USB by itself, stops its copy, and the port coming back starts a fresh
+# one. NO [Install]: nothing starts it but a gun.
+#
+# The launcher puts Sinden's software in a world holding only this gun
+# (/usr/libexec/cabinetos-sinden; why: docs/decisions/2026-11-28-one-sinden-copy-per-gun.md).
+#
+# ITS OWN USER, made for each start: Sinden's software is a closed program and
+# reads nothing of the player's. dialout and video are the groups of the gun's
+# serial port and camera nodes; the devices it may open at all are only those
+# two kinds.
+#
+# NO START LIMIT: a gun has dropped off USB sixteen times in ten seconds on
+# the reference console as it settled (#575, the first day), each drop a new
+# start, and a limit hit then would leave the gun dead once it settled.
+#
+# Sinden's software stops on SIGTERM (measured, 250 ms); the 5 s and the
+# SIGKILL after them are for a copy that hangs.
+[Unit]
+Description=CabinetOS: Sinden's software for the light gun on %I
+Documentation=https://github.com/MMagTech/cabinetos/issues/575
+BindsTo=dev-%i.device
+After=dev-%i.device
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/libexec/cabinetos-sinden %I
+SyslogIdentifier=cabinetos-sinden
+Restart=always
+RestartSec=5
+# The launcher says why on exit 2: a port that is not a Sinden gun's.
+RestartPreventExitStatus=2
+TimeoutStopSec=5
+DynamicUser=yes
+SupplementaryGroups=dialout video
+RuntimeDirectory=cabinetos-sinden/%i
+DevicePolicy=closed
+DeviceAllow=char-ttyACM rw
+DeviceAllow=char-video4linux rw
+PrivateNetwork=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes

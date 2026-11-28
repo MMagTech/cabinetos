@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+#
+# One Sinden light gun's own copy of Sinden's software (#575).
+#
+#   cabinetos-sinden ttyACM<N>
+#
+# Run by cabinetos-sinden@ttyACM<N>.service, which udev starts for each Sinden
+# gun's serial port (73-cabinetos-sinden.rules) and stops when the port goes.
+# Sinden's software is in /usr/lib/cabinetos/sinden, unchanged; it needs Mono
+# (build_files/install-sinden.sh). WHY ONE COPY PER GUN:
+# docs/decisions/2026-11-28-one-sinden-copy-per-gun.md.
+#
+# Sinden's software numbers the guns it finds by serial port order and pairs
+# the Nth port with the Nth camera, so one copy for two guns can drive one gun
+# twice or give each gun the other's camera after a replug (#575, the first
+# day). So each copy runs in a world holding only its own gun:
+#
+#   - a /dev of its own with only the gun's serial port, its camera's nodes
+#     and the links udev lists for them (Sinden's software reads the by-id
+#     folders, and quits without them);
+#   - the system's /sys with every other Sinden gun and camera covered over,
+#     so it counts one gun and calls it gun 1; its own /dev is what keeps it
+#     off another gun's port even if it saw one;
+#   - no network, no /var and no /home: it reads only /usr, /etc, /sys and
+#     udev's database, and writes nothing but the runtime folder systemd
+#     gives this unit.
+#
+# Its settings are Sinden's own file with the keys set_key names below: the
+# gun and camera of this world, recoil off with its switch-on shortcut held
+# back (docs/decisions/2026-11-02-sinden-software-in-the-image.md promises it
+# is never on by default), and its log quiet. Every other line is as Sinden
+# ships it, so the gun's buttons and the hold-left calibration are Sinden's.
+
+set -euo pipefail
+
+readonly SINDEN=/usr/lib/cabinetos/sinden
+readonly CONFIG_NAME=LightgunMono.exe.config
+
+tty=${1:-}
+if [[ ! "${tty}" =~ ^ttyACM[0-9]+$ ]]; then
+    echo "not a serial port name: '${tty}'" >&2
+    exit 2
+fi
+# systemd makes it from RuntimeDirectory=, owned by this unit's user, and
+# removes it when the unit stops.
+runtime=${RUNTIME_DIRECTORY:?run me from cabinetos-sinden@.service}
+
+# THE GUN: the USB device the serial port belongs to. THE CAMERA: the
+# SindenCam beside it on the gun's own hub. Never by device numbers or order,
+# which a replug reshuffles; and both of Sinden's guns here report the same
+# serial number, so /dev/serial/by-id cannot tell them apart either.
+iface=$(readlink -f "/sys/class/tty/${tty}/device")
+gun=${iface%/*}
+hub=${gun%/*}
+if [[ "$(cat "${gun}/product" 2>/dev/null)" != SindenLightgun ]]; then
+    echo "${tty} is not a Sinden light gun's port" >&2
+    exit 2
+fi
+
+# The camera usually comes up before the gun's port, and after it when the
+# gun has just been plugged in; give it ten seconds.
+camera=""
+capture=""
+videos=()
+for _ in $(seq 40); do
+    camera=""
+    capture=""
+    videos=()
+    for v in /sys/class/video4linux/video*; do
+        [[ -e "${v}/device" ]] || continue
+        dev=$(readlink -f "${v}/device")
+        dev=${dev%/*}
+        [[ "${dev%/*}" == "${hub}" ]] || continue
+        [[ "$(cat "${dev}/product" 2>/dev/null)" == SindenCam* ]] || continue
+        if [[ -n "${camera}" && "${camera}" != "${dev}" ]]; then
+            echo "two cameras beside ${tty} (${camera##*/}, ${dev##*/}); not guessing which is the gun's" >&2
+            exit 1
+        fi
+        camera=${dev}
+        videos+=("/dev/${v##*/}")
+        [[ "$(cat "${v}/index" 2>/dev/null)" == 0 ]] && capture="/dev/${v##*/}"
+    done
+    [[ -n "${capture}" ]] && break
+    sleep 0.25
+done
+if [[ -z "${capture}" ]]; then
+    echo "no camera beside the gun on ${tty} (USB ${gun##*/})" >&2
+    exit 1
+fi
+# A hub holding two guns is not one gun's own: its camera could be either's.
+for u in /sys/bus/usb/devices/*; do
+    [[ "$(cat "${u}/product" 2>/dev/null)" == SindenLightgun ]] || continue
+    r=$(readlink -f "${u}")
+    if [[ "${r}" != "${gun}" && "${r%/*}" == "${hub}" ]]; then
+        echo "two guns on one hub beside ${tty} (${gun##*/}, ${r##*/}); not guessing which camera is whose" >&2
+        exit 1
+    fi
+done
+echo "gun on ${tty} (USB ${gun##*/}), camera ${capture} (USB ${camera##*/})"
+
+# THE SETTINGS. Each key is Sinden's own, read from its file's comments;
+# each change is checked, so a Sinden file that names a key otherwise stops
+# here instead of starting with that line unchanged.
+config="${runtime}/${CONFIG_NAME}"
+cp "${SINDEN}/${CONFIG_NAME}" "${config}"
+set_key() {
+    local key=$1 value=$2
+    if [[ "$(grep -c "key=\"${key}\" value=\"" "${config}")" != 1 ]]; then
+        echo "Sinden's ${CONFIG_NAME} has no single ${key}; not starting" >&2
+        exit 1
+    fi
+    sed -i -E "s|(key=\"${key}\" value=\")[^\"]*\"|\1${value}\"|" "${config}"
+    if [[ "$(grep -c "key=\"${key}\" value=\"${value}\"" "${config}")" != 1 ]]; then
+        echo "could not set ${key} to '${value}' in ${CONFIG_NAME}; not starting" >&2
+        exit 1
+    fi
+}
+# Its gun: "the first (lowest) ttyACM device that is a Sinden Lightgun", the
+# only one in its world. As shipped; checked, because the world depends on it.
+set_key SerialPortWrite 0
+# Its camera, by name: Sinden's own search takes the first it finds.
+set_key VideoDevice "${capture}"
+# Recoil off, and its D-pad up shortcut with it: "Enable recoil system so
+# dpad up toggle works and recoil can be enabled", the file says. Gun 2's
+# too, though no world here has a second gun.
+set_key EnableRecoil 0
+set_key EnableRecoilP2 0
+set_key IAgreeRecoilTermsInLicense 0
+set_key IAgreeRecoilTermsInLicenseP2 0
+# Quiet: 2, as shipped, logs every camera frame, about a hundred lines a
+# second; 0 logs its start and nothing after.
+set_key ConsoleOutputVerbose0to2 0
+
+# THE WORLD. Read-only but for the runtime folder; the gun's serial port and
+# camera are the only devices; nothing of the network.
+args=(
+    --ro-bind /usr /usr
+    --symlink usr/bin /bin
+    --symlink usr/sbin /sbin
+    --symlink usr/lib /lib
+    --symlink usr/lib64 /lib64
+    --ro-bind /etc /etc
+    --proc /proc
+    --dev /dev
+    --ro-bind /sys /sys
+    --tmpfs /run
+    --ro-bind /run/udev /run/udev
+    --bind "${runtime}" "${runtime}"
+    --ro-bind "${config}" "${SINDEN}/${CONFIG_NAME}"
+    --tmpfs /tmp
+    --setenv HOME "${runtime}"
+    --chdir "${SINDEN}"
+    --unshare-all
+    --die-with-parent
+    --new-session
+)
+for node in "/dev/${tty}" "${videos[@]}"; do
+    args+=(--dev-bind "${node}" "${node}")
+done
+# The links udev keeps for this gun's nodes and its camera's, made again in
+# its /dev, pointing where they point outside. udev's list holds each one the
+# node wants even where another gun won the name, as with by-id here.
+for e in "${gun}"/*:*/tty/* "${gun}"/*:*/*/input/input*/event* "${gun}"/*:*/*/input/input*/mouse* \
+         "${gun}"/*:*/*/hidraw/hidraw* "${camera}"/*:*/video4linux/*; do
+    [[ -e "${e}" ]] || continue
+    case "${e}" in
+        */input/*) node=/dev/input/${e##*/} ;;
+        *) node=/dev/${e##*/} ;;
+    esac
+    for link in $(udevadm info -q symlink -n "${node}" 2>/dev/null); do
+        args+=(--symlink "$(realpath -m --relative-to="$(dirname "/dev/${link}")" "${node}")" "/dev/${link}")
+    done
+done
+# Every other Sinden gun and camera, out of sight.
+for u in /sys/bus/usb/devices/*; do
+    product=$(cat "${u}/product" 2>/dev/null) || continue
+    case "${product}" in
+        SindenLightgun | SindenCam*) ;;
+        *) continue ;;
+    esac
+    r=$(readlink -f "${u}")
+    [[ "${r}" == "${gun}" || "${r}" == "${camera}" ]] && continue
+    args+=(--tmpfs "${r}")
+done
+
+exec bwrap "${args[@]}" /usr/bin/mono "${SINDEN}/LightgunMono.exe"

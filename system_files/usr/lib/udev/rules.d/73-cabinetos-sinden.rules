@@ -1,0 +1,12 @@
+# Each Sinden light gun gets its own copy of Sinden's software (#575): the
+# gun's serial port starts cabinetos-sinden@<port>.service, and the unit stops
+# when the port goes (BindsTo= its device). Why one copy per gun:
+# docs/decisions/2026-11-28-one-sinden-copy-per-gun.md.
+#
+# By the gun's USB product name, not its id: the two guns measured on
+# 2026-11-27 have different ids (16c0:0f01, 16c0:0f02) and the same name.
+# Only the serial port: the gun's mouse and keyboard are the console's to
+# read, and the launcher finds the camera itself. Before 99-systemd.rules,
+# which reads SYSTEMD_WANTS.
+SUBSYSTEM=="tty", KERNEL=="ttyACM[0-9]*", ATTRS{product}=="SindenLightgun", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}+="cabinetos-sinden@%k.service"
