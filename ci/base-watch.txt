@@ -348,6 +348,12 @@ log: The Wii Remote's rule still comes after every rule that opens controller no
 tv: A Bluetooth pad: turn on a paired pad; it connects and moves around Home
 tv: Rumble: a game that rumbles still rumbles on that pad
 tv: A Wii Remote: it connects, and a Wii game takes it
+# A Sinden light gun is the console's alone (#575): its mouse and keyboard
+# carry LIBINPUT_IGNORE_DEVICE by 72-cabinetos-light-gun.rules, found by the
+# USB product string up the device's tree, or gamescope makes its aim a
+# pointer and its D-pad player 1's in every game. Passes with no gun in.
+log: A plugged-in light gun is kept from gamescope :: out=$(for e in /sys/class/input/event*; do d=$(readlink -f "$e"); p=""; while [ "$d" != / ]; do d=$(dirname "$d"); [ -f "$d/idVendor" ] && { p=$(cat "$d/product" 2>/dev/null); break; }; done; [ "$p" = SindenLightgun ] || continue; udevadm info -q property -n "/dev/input/${e##*/}" | grep -qx 'LIBINPUT_IGNORE_DEVICE=1' || echo "${e##*/} is not kept from libinput"; done); [ -z "$out" ] || { echo "$out"; exit 1; }
+tv: A Sinden light gun: plugged in, its D-pad walks Home and its trigger selects; in a game its D-pad moves no player
 # Xbox's wireless dongle, and the GameCube adapter.
 kmod-xone
 kmod-gcadapter_oc

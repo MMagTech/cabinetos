@@ -25,6 +25,7 @@ void App::openHowTo() {
     cats.push_back({"In a game",
                     {line("Pause menu", "Both sticks in (L3 + R3)"),
                      line("Pause menu, Wii Remote", "Hold HOME"),
+                     line("Pause menu, light gun", "Hold the rear right button"),
                      line("Pause menu, Remote Play", "Hold Select"),
                      line("Leave a game", "Pause menu, Exit to Home"),
                      line("Power menu", "The PC's power button")}});

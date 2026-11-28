@@ -13,6 +13,8 @@ The same menu in every game, on every system.
 - A tap of the **shortcut button** (Home, unless you chose another), when
   [In-game shortcuts](navigation.md#in-game-shortcuts) are on.
 - **Hold HOME** for a second on a Wii Remote, in any game.
+- **Hold the rear right button** for a second on a Sinden light gun, in any
+  game. Hold it again to close the menu.
 - **Hold Select** on a phone or controller streaming over
   [Remote Play](remote-play.md).
 
