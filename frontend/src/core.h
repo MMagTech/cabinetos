@@ -129,6 +129,18 @@ struct PadState {
     float leftTrigger = 0, rightTrigger = 0;
 };
 
+// A LIGHT GUN IN A PLAYER'S PORT (lightgun.h, #575), as a core that asks
+// that port for RETRO_DEVICE_LIGHTGUN is answered (core_input.cpp): whether a
+// gun is in that player's hand, where it aims on the game's picture in
+// libretro's screen numbers, -32767 to 32767 across the picture, or that it is
+// off the picture, and its buttons (lightgun::Button).
+struct GunState {
+    bool present = false;
+    bool onPicture = false;
+    int16_t x = 0, y = 0;
+    uint16_t buttons = 0;
+};
+
 // One of a game's joypad buttons as the core declared it
 // (RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS): the RetroPad id, and the core's
 // own word for what it does in this game.
@@ -371,6 +383,8 @@ public:
     const std::vector<int16_t>& drainAudio();
 
     void setPad(int port, const PadState& pad);
+    // The light gun of the player at `port`, once a frame beside the pads.
+    void setGun(int port, const GunState& gun);
     // A key of the core's keyboard, as libretro numbers it (RETROK_*), held
     // or let go, for port 0: asked by the core, and told to a core that
     // gave its keyboard callback, as it changes. No real keyboard is passed
@@ -400,6 +414,19 @@ public:
     // Remote is plugged in, and Dolphin seats each Remote the OS has connected
     // in the first free one, now or mid-game. Cleared when the game unloads.
     void setRealRemotesFrom(int firstPort);
+
+    // LIGHT GUNS IN THE PORTS OF THE PLAYERS HOLDING THEM (#575). Set before
+    // loadGame for a light-gun game on a core that takes a gun: the device
+    // (lightgun::deviceFor) and the ports that have a gun now, one bit each;
+    // each of those ports is told the gun is plugged in, in place of a pad,
+    // when the core offers that device there (RETRO_ENVIRONMENT_SET_CONTROLLER_INFO).
+    // Cleared when the game unloads; 0, the default, for every other game.
+    void setGunDevice(unsigned device, unsigned portsWithGun);
+    // A gun that came mid-game: its port is told the gun is plugged in now,
+    // as a pad's is (setPlayers). Never unplugged: a gun that went keeps its
+    // port, answered as off the picture with nothing pressed, so a gun that
+    // drops off USB and comes back carries on (#575 rule 6).
+    void plugGun(int port);
 
     // WHAT EACH PORT'S BUTTONS DO IN THIS GAME, as the core last declared
     // them and in its order: the joypad's ids, index 0, for the four ports

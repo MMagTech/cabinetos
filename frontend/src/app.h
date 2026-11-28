@@ -953,6 +953,10 @@ struct App {
     // opened, and the worker puts what comes out where the core can open it.
     LaunchJob launchJob;
     GameSession session;
+    // WHERE THE GAME'S PICTURE WAS LAST DRAWN, as a share of the canvas
+    // (x, y, width, height), for laying a light gun's aim onto it
+    // (App::readGameInput, lightgun::onPicture). Set by drawGamePicture.
+    float gunPicture[4] = {0, 0, 0, 0};
     // PCSX2'S OWN WINDOW (#226). PS2 runs inside this process, as before, but
     // presents its picture to a window of its own, which gamescope shows; this
     // window becomes gamescope's overlay over it, as for the separate
@@ -2483,6 +2487,7 @@ struct App {
     void drawOverGame();
     // play.cpp
     void followRemotesInGame();
+    void followGunsInGame();
     bool readGameInput(cab::Core& core);
     void drawGamePicture(cab::Core& core, int dh);
     void leaveGameAtExit();

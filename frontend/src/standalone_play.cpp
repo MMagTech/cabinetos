@@ -484,10 +484,14 @@ bool App::watchStandalone(float dt) {
     // THE SAVE, looked at once a second for its picture (savepicture.h).
     if (standaloneRun.active() && !standaloneRun.stopping())
         savePicture.tick(session, SDL_GetTicks());
-    // HOME HELD ON A WII REMOTE opens the menu here as in every game
-    // (followRemotesInGame). While the emulator has the screen the frame
-    // loop stops before its own call, so it is asked here.
-    if (standaloneRun.active() && !standalonePaused) followRemotesInGame();
+    // HOME HELD ON A WII REMOTE, and a light gun's rear right button held,
+    // open the menu here as in every game (followRemotesInGame,
+    // followGunsInGame). While the emulator has the screen the frame loop
+    // stops before its own calls, so they are asked here.
+    if (standaloneRun.active() && !standalonePaused) {
+        followRemotesInGame();
+        followGunsInGame();
+    }
 
     // PAUSED OVER AN EMULATOR OF ITS OWN, the ordinary loop below runs and
     // draws the menu; here it only keeps watch. The emulator can still end

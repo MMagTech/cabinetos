@@ -18,6 +18,7 @@
 #include "fightstick.h"
 #include "filesave.h"
 #include "library.h"
+#include "lightgun.h"
 #include "mamehome.h"
 #include "ps2.h"
 #include "quality.h"
@@ -506,6 +507,8 @@ struct LaunchContext {
     // What the restores did with the save the start continues from, for the
     // notes the start leaves (saves.h, noteStart).
     StartNotes startNotes{};
+    // The device a light gun is given in this game (GameSession::gunDevice).
+    unsigned gunDevice = 0;
 };
 
 // Picks up a finished job. Loading the game happens HERE, on the frame
@@ -872,6 +875,12 @@ void App::restoreBeforeLoad(LaunchContext& c) {
     // DualShock to the player; DuckStation plugs in a DualShock.
     sessionNeedsRemote = false;
     if (launchJob.coreName == "pcsx_rearmed") c.core.setPadDevice(cab::Core::kPs1DualShock);
+    // A LIGHT-GUN GAME ON A CORE THAT TAKES A GUN (#575): each gun plugged
+    // in now goes into its player's port, gun 1 into port 1 and gun 2 into
+    // port 2, in place of a pad; one plugged in later goes in then
+    // (App::followGunsInGame).
+    c.gunDevice = launchJob.lightGunGame ? lightgun::deviceFor(launchJob.coreName) : 0;
+    c.core.setGunDevice(c.gunDevice, lightgun::plugged());
     if (launchJob.platformSlug == "wii") {
         const unsigned device = wii::padDevice(wii::codeFromTitleId(launchJob.titleId));
         sessionNeedsRemote = device == 0;
@@ -944,6 +953,7 @@ void App::setUpLoadedGame(LaunchContext& c) {
     session.core = launchJob.coreName;
     session.platformSlug = launchJob.platformSlug;
     session.arcade = launchJob.arcade;
+    session.gunDevice = c.gunDevice;
     // MAME 0.289 NAMES NONE OF A GAME'S BUTTONS, so the console declares
     // them, from its catalogue's count: what a fight stick's layout and
     // Controls are made from (fightstick::mameButtons).

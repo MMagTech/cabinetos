@@ -87,6 +87,7 @@ void App::runFrameLoop() {
 
         evictTestHook();
         followRemotesInGame();
+        followGunsInGame();
         if (playing) {
             cab::Core& core = cab::Core::shared();
             const bool rewinding = readGameInput(core);

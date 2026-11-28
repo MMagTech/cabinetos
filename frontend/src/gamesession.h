@@ -42,6 +42,14 @@ struct GameSession {
     // The core, for what only an arcade game gets (the fight stick's layout,
     // Controls, holding Start), or empty for any other game.
     std::string arcadeCore() const { return arcade ? core : std::string(); }
+    // THE DEVICE ITS CORE IS GIVEN FOR A LIGHT GUN (#575, lightgun::deviceFor):
+    // a light-gun game on a core that takes a gun. 0 for every other game:
+    // its guns play nothing but the pause menu's hold, and no border shows.
+    unsigned gunDevice = 0;
+    // THE BORDER (#575 rule 9) has shown in this game: once a gun was plugged
+    // in, it stays until the game ends, so a gun dropping off USB never moves
+    // the picture under the other player (App::followGunsInGame).
+    bool gunBorder = false;
     std::string title;
     // The server's own file name for the game, without its extension. This
     // console's copy of a save, and the save a snapshot carries, are named

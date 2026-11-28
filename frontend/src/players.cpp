@@ -205,6 +205,14 @@ bool isConsoleStandIn(const std::string& deviceName) {
     return deviceName.rfind("CabinetOS player", 0) == 0;
 }
 
+// A SINDEN LIGHT GUN IS NEVER A PLAYER'S PAD (#575 rule 3): the console reads
+// the guns itself (lightgun.h). Its own joystick mode makes it a joystick to
+// SDL, which 72-cabinetos-light-gun.rules keeps from SDL by udev; told here by
+// the name its devices carry ("Unknown SindenLightgun ..."), whatever its id.
+bool isLightGun(const std::string& deviceName) {
+    return deviceName.find("SindenLightgun") != std::string::npos;
+}
+
 // A PAD THAT CAME THROUGH A STREAM: Sunshine's virtual controller, whose
 // device is named "Sunshine (libvirtualhid) X-Box Series Controller" (read on
 // the A9, 2026-10-07). SDL names it "Xbox Series X Controller", like a real
@@ -269,6 +277,11 @@ void added(SDL_JoystickID id) {
     if (gOpen.count(id) || id == gFriend.load()) return;
     if (const char* path = SDL_GetGamepadPathForID(id); path && isConsoleStandIn(deviceNameAt(path))) {
         std::fprintf(stderr, "[players] pad %u is the console's own stand-in, \"%s\" at %s: not seated\n",
+                     static_cast<unsigned>(id), deviceNameAt(path).c_str(), path);
+        return;
+    }
+    if (const char* path = SDL_GetGamepadPathForID(id); path && isLightGun(deviceNameAt(path))) {
+        std::fprintf(stderr, "[players] pad %u is a light gun, \"%s\" at %s: not seated\n",
                      static_cast<unsigned>(id), deviceNameAt(path).c_str(), path);
         return;
     }
