@@ -17,6 +17,16 @@
 # the reference console as it settled (#575, the first day), each drop a new
 # start, and a limit hit then would leave the gun dead once it settled.
 #
+# RESTARTED A SECOND AFTER IT STOPS: the launcher stops a copy that is not
+# streaming from its camera, or whose camera has dropped off USB and come
+# back, and the gun should aim again as soon as its camera is back. How
+# often is the launcher's: it counts failed starts in the runtime folder,
+# kept across these restarts (RuntimeDirectoryPreserve=restart), and waits
+# before a start after two in a row, up to a minute. Not systemd's
+# RestartSteps=: its count goes on through good runs until the unit is
+# stopped (measured 2026-11-28), so a gun that dropped off USB a few times
+# in an evening would wait a minute at every drop after.
+#
 # Sinden's software stops on SIGTERM (measured, 250 ms); the 5 s and the
 # SIGKILL after them are for a copy that hangs.
 #
@@ -35,13 +45,14 @@ StartLimitIntervalSec=0
 ExecStart=/usr/libexec/cabinetos-sinden %I
 SyslogIdentifier=cabinetos-sinden
 Restart=always
-RestartSec=5
+RestartSec=1
 # The launcher says why on exit 2: a port that is not a Sinden gun's.
 RestartPreventExitStatus=2
 TimeoutStopSec=5
 DynamicUser=yes
 SupplementaryGroups=dialout video
 RuntimeDirectory=cabinetos-sinden/%i
+RuntimeDirectoryPreserve=restart
 DevicePolicy=closed
 DeviceAllow=char-ttyACM rw
 DeviceAllow=char-video4linux rw

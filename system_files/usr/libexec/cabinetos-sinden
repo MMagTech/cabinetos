@@ -33,6 +33,8 @@
 #     those records, and writes nothing but the runtime folder systemd gives
 #     this unit.
 #
+# And the launcher stays to watch it use its camera (THE WATCH, at the end).
+#
 # Its settings are Sinden's own file with the keys set_key names below: the
 # gun and camera of this world, recoil off with its switch-on shortcut held
 # back (docs/decisions/2026-11-02-sinden-software-in-the-image.md promises it
@@ -49,9 +51,28 @@ if [[ ! "${tty}" =~ ^ttyACM[0-9]+$ ]]; then
     echo "not a serial port name: '${tty}'" >&2
     exit 2
 fi
-# systemd makes it from RuntimeDirectory=, owned by this unit's user, and
-# removes it when the unit stops.
+# systemd makes it from RuntimeDirectory=, owned by this unit's user, keeps
+# it when the unit restarts itself and removes it when the unit stops.
 runtime=${RUNTIME_DIRECTORY:?run me from cabinetos-sinden@.service}
+
+# THE WAIT BEFORE A START. Each start counts as failed, in a file in the
+# runtime folder, until its copy has streamed from its camera for 30 s (THE
+# WATCH, at the end); the unit's stopping, as at a replug, starts the count
+# again. After two failed starts in a row each start waits first: 5 s, then
+# 10, 20 and 40, then a minute each time. So a gun that can never work is
+# tried once a minute, and one that drops off USB now and then, or whose
+# copy stops, is back at once each time.
+readonly FAILED_STARTS=${runtime}/failed-starts
+failed=0
+read -r failed 2>/dev/null < "${FAILED_STARTS}" || true
+[[ "${failed}" =~ ^[0-9]+$ ]] || failed=0
+if ((failed >= 2)); then
+    pause=$((5 << (failed > 6 ? 4 : failed - 2)))
+    ((pause <= 60)) || pause=60
+    echo "the last ${failed} starts on ${tty} failed; waiting ${pause} s" >&2
+    sleep "${pause}"
+fi
+echo $((failed + 1)) > "${FAILED_STARTS}"
 
 # THE GUN: the USB device the serial port belongs to. THE CAMERA: the
 # SindenCam beside it on the gun's own hub. Never by device numbers or order,
@@ -258,4 +279,103 @@ awk -v RS= -v ORS='\n\n' -v hidden="${hidden[*]}" '
 ' /proc/bus/input/devices > "${runtime}/input-devices"
 args+=(--ro-bind "${runtime}/input-devices" /proc/bus/input/devices)
 
-exec bwrap "${args[@]}" /usr/bin/mono "${SINDEN}/LightgunMono.exe"
+# THE WATCH. A copy has stopped before starting its camera, using no CPU,
+# its gun shooting but not aiming, until it was started again; and a gun's
+# hub can drop off USB and come back in under a second, while Sinden's
+# software gives a gun up at its first failed camera read and never opens
+# the camera again (#575, both on the reference console, 2026-11-28). So
+# every 2 seconds the launcher looks:
+#   - at the camera: when its USB device or its capture node is no longer
+#     the one this world was built with, the copy is stopped at once;
+#   - for the camera's capture buffers mapped into a process of this copy,
+#     which Sinden's software has only while it streams from the camera
+#     (measured: a copy that could not have the camera opened it but never
+#     mapped it), and for that process having used CPU since the look
+#     before (from 6% to 25% of a core while it streams, measured; none
+#     while stuck). The copy is stopped when that has not been so at 10
+#     looks in a row (20 s) from its start, which streams within 3 s
+#     (measured), or at 3 in a row (6 s) once it has streamed.
+# Stopping a copy, the launcher exits 1 and the unit starts it again a
+# second later; THE WAIT BEFORE A START, above, keeps that from being
+# often. A copy that streams for 15 looks (30 s) sets the count of failed
+# starts back to 0.
+readonly LOOK_EVERY=2 LOOKS_TO_STREAM=10 LOOKS_LOST=3 LOOKS_GOOD=15 MIN_TICKS=2
+read -r cgroup < /proc/self/cgroup
+procs=/sys/fs/cgroup${cgroup#0::}/cgroup.procs
+capture_inode=$(stat -c %i "${capture}")
+read -r camera_number < "${camera}/devnum"
+
+# Whether the camera is gone, or is not the one this world was built with.
+camera_changed() {
+    local number="" inode=""
+    read -r number 2>/dev/null < "${camera}/devnum" || true
+    inode=$(stat -c %i "${capture}" 2>/dev/null) || true
+    [[ "${number}" != "${camera_number}" || "${inode}" != "${capture_inode}" ]]
+}
+
+# The process of this copy that has the camera's buffers mapped, if any.
+# grep's status is not used: a process that ends while it reads is an error
+# to grep even when another file matched.
+camera_user() {
+    local maps=() pid hit
+    while read -r pid; do
+        maps+=("/proc/${pid}/maps")
+    done < "${procs}"
+    hit=$(grep -lsE " ${capture_inode} +${capture}\$" "${maps[@]}") || true
+    [[ -n "${hit}" ]] || return 1
+    hit=${hit%%$'\n'*}
+    hit=${hit#/proc/}
+    echo "${hit%/maps}"
+}
+# The CPU the process $1 has used, in clock ticks: its user and system time,
+# fields 14 and 15 of its stat, counted from the end of its name.
+cpu_ticks() {
+    local stat fields
+    read -r stat < "/proc/$1/stat" || return 1
+    read -ra fields <<< "${stat##*") "}"
+    echo $((fields[11] + fields[12]))
+}
+stop_copy() {
+    echo "$1; stopping Sinden's software on ${tty} to start it again" >&2
+    kill -TERM "${copy}" 2>/dev/null || true
+    wait "${copy}" || true
+    exit 1
+}
+
+bwrap "${args[@]}" /usr/bin/mono "${SINDEN}/LightgunMono.exe" &
+copy=$!
+stopping=""
+trap 'stopping=1; kill -TERM "${copy}" 2>/dev/null' TERM INT HUP
+user=""
+ticks=0
+bad=0
+good=0
+while [[ -z "${stopping}" ]] && kill -0 "${copy}" 2>/dev/null; do
+    sleep "${LOOK_EVERY}" &
+    wait "$!" || true
+    [[ -z "${stopping}" ]] || break
+    if camera_changed; then
+        stop_copy "its camera ${capture} is gone or is a new device"
+    fi
+    was=${user}
+    was_ticks=${ticks}
+    user=$(camera_user) || user=""
+    ticks=0
+    [[ -z "${user}" ]] || ticks=$(cpu_ticks "${user}") || ticks=0
+    if [[ -n "${user}" && "${user}" == "${was}" ]] && ((ticks - was_ticks >= MIN_TICKS)); then
+        bad=0
+        good=$((good + 1))
+        ((good != LOOKS_GOOD)) || echo 0 > "${FAILED_STARTS}"
+        continue
+    fi
+    bad=$((bad + 1))
+    if ((good > 0 && bad >= LOOKS_LOST)); then
+        stop_copy "it has stopped streaming from its camera ${capture}"
+    elif ((bad >= LOOKS_TO_STREAM)); then
+        stop_copy "it has not streamed from its camera ${capture} in $((LOOKS_TO_STREAM * LOOK_EVERY)) s"
+    fi
+done
+status=0
+wait "${copy}" || status=$?
+[[ -z "${stopping}" ]] || exit 0
+exit "${status}"
