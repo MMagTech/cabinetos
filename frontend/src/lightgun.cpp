@@ -1,7 +1,9 @@
 #include "lightgun.h"
 
+#include "fileio.h"
 #include "libretro.h"
 #include "prefs.h"
+#include "storage.h"
 
 #include <SDL3/SDL.h>
 
@@ -10,6 +12,7 @@
 #include <linux/input.h>
 #include <poll.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -21,8 +24,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
+#include <map>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -40,6 +46,18 @@ constexpr int64_t kPauseHoldMs = 1000;
 // How long a tap of the rear right button is held for the game, from the
 // moment it is let go: six frames, which every board's coin input takes.
 constexpr int64_t kCoinPulseMs = 100;
+
+// HOW OFTEN THE GUNS ARE LOOKED FOR: every half second, and every 50 ms for
+// three seconds after one of a gun's nodes could not be opened. A node udev
+// has just made is refused for a moment, until udev's rule grants the console
+// access (72-cabinetos-light-gun.rules): on the reference console on
+// 2026-11-28 a gun's mouse node was refused at the first look after it came
+// back, six times in one morning, and the one left in long enough opened at a
+// later look. A node refused for longer is still tried at every look, for as
+// long as it is there.
+constexpr int64_t kScanMs = 500;
+constexpr int64_t kRetryMs = 50;
+constexpr int64_t kRetryForMs = 3000;
 
 int64_t nowMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch())
@@ -80,6 +98,15 @@ bool rearRightHeld(RearRight& r, int64_t t, bool inGame) {
 }
 
 bool coinOn(const RearRight& r, int64_t t) { return t < r.pulseUntil; }
+
+// THE NEXT LOOK FOR GUNS, in ms from the last: soon while a node refused in
+// the last kRetryForMs is still waiting, else at the usual pace. `refused`
+// holds each waiting node and when it was first refused.
+int64_t scanEvery(const std::map<std::string, int64_t>& refused, int64_t t) {
+    for (const auto& [node, since] : refused)
+        if (t - since < kRetryForMs) return kRetryMs;
+    return kScanMs;
+}
 
 // A GUN'S PORT, the key that tells guns apart and remembers their order: its
 // controller's PCI address and the chain of hub ports it hangs from, from its
@@ -205,6 +232,12 @@ std::atomic<bool> gInGame{false};
 std::atomic<bool> gPauseHold{false};
 std::atomic<bool> gPressInGame{false};
 std::once_flag gStarted;
+// Each gun's node that could not be opened yet, and when it was first
+// refused, while it is there (scanEvery). Under gLock.
+std::map<std::string, int64_t> gRefused;
+// Where the guns are looked for; the self-test points them at a tree of its own.
+std::string gSysInput = "/sys/class/input";
+std::string gDevInput = "/dev/input";
 
 std::string readFile(const std::string& path) {
     std::ifstream in(path);
@@ -219,7 +252,7 @@ std::string readFile(const std::string& path) {
 // sysfs with an idVendor of its own. Empty when there is none.
 std::string usbDeviceOf(const std::string& eventNode) {
     char real[PATH_MAX];
-    if (!::realpath(("/sys/class/input/" + eventNode).c_str(), real)) return {};
+    if (!::realpath((gSysInput + "/" + eventNode).c_str(), real)) return {};
     std::string p = real;
     while (p.size() > 1) {
         const size_t slash = p.find_last_of('/');
@@ -315,9 +348,14 @@ void rescan() {
             ++it;
         }
     }
-    // NEW: every event node whose USB device says it is a Sinden gun.
+    // NEW: every event node whose USB device says it is a Sinden gun. One
+    // that cannot be opened yet (udev has not granted it, or anything else)
+    // is said once and tried again at every look until it opens or goes, so
+    // a gun that is in without its aim keeps looking for it; once it opens
+    // it is grabbed, read and handed on as if it had opened at once.
     std::vector<std::string> arrived;
-    DIR* dir = ::opendir("/sys/class/input");
+    std::set<std::string> waiting;
+    DIR* dir = ::opendir(gSysInput.c_str());
     if (!dir) return;
     while (dirent* e = ::readdir(dir)) {
         const std::string node = e->d_name;
@@ -329,7 +367,7 @@ void rescan() {
         if (usb.empty() || readFile(usb + "/product") != kProduct) continue;
         // Its mouse has the aim and the trigger, its keyboard the rest. Any
         // other device it makes (Sinden's joystick mode) is none of ours.
-        const std::string name = readFile("/sys/class/input/" + node + "/device/name");
+        const std::string name = readFile(gSysInput + "/" + node + "/device/name");
         const bool aim = name.size() > 6 && name.compare(name.size() - 6, 6, " Mouse") == 0;
         const bool keys = name.size() > 9 && name.compare(name.size() - 9, 9, " Keyboard") == 0;
         if (!aim && !keys) continue;
@@ -337,18 +375,27 @@ void rescan() {
                               [&](const Device& x) { return x.usb == usb; });
         // A second of the same kind under one gun: the first stays.
         if (d != gDevices.end() && (aim ? d->aimFd : d->keysFd) >= 0) continue;
-        const int fd = ::open(("/dev/input/" + node).c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        const std::string path = gDevInput + "/" + node;
+        const int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) {
-            static std::string said;
-            if (said != node)
-                std::fprintf(stderr, "[lightgun] cannot open /dev/input/%s: %s\n", node.c_str(),
-                             std::strerror(errno));
-            said = node;
+            const int err = errno;
+            waiting.insert(node);
+            if (gRefused.emplace(node, nowMs()).second)
+                std::fprintf(stderr, "[lightgun] cannot open %s yet: %s; trying again\n",
+                             path.c_str(), std::strerror(err));
             continue;
         }
         if (::ioctl(fd, EVIOCGRAB, 1) != 0)
-            std::fprintf(stderr, "[lightgun] could not keep /dev/input/%s to itself: %s\n",
-                         node.c_str(), std::strerror(errno));
+            std::fprintf(stderr, "[lightgun] could not keep %s to itself: %s\n", path.c_str(),
+                         std::strerror(errno));
+        if (const auto r = gRefused.find(node); r != gRefused.end()) {
+            if (d != gDevices.end() && d->slot >= 0)
+                std::fprintf(stderr,
+                             "[lightgun] gun %d's %s is in (%s), %lld ms after it was refused\n",
+                             d->slot + 1, aim ? "aim" : "keys", node.c_str(),
+                             static_cast<long long>(nowMs() - r->second));
+            gRefused.erase(r);
+        }
         if (d == gDevices.end()) {
             Device n;
             n.usb = usb;
@@ -363,6 +410,10 @@ void rescan() {
         changed = true;
     }
     ::closedir(dir);
+    // A refused node that has gone is forgotten: if its name comes again, it
+    // is a new node, said again.
+    for (auto it = gRefused.begin(); it != gRefused.end();)
+        it = waiting.count(it->first) ? std::next(it) : gRefused.erase(it);
     // Numbers for the guns that came, in the remembered order when more than
     // one came at once.
     if (!arrived.empty()) orderArrivals(arrived, prefs::get("lightgun_order", ""));
@@ -458,19 +509,21 @@ void run() {
     int64_t lastScan = 0;
     for (;;) {
         std::vector<pollfd> fds;
+        int64_t every = kScanMs;
         {
             std::lock_guard<std::mutex> lk(gLock);
-            if (nowMs() - lastScan > 500) {
+            if (nowMs() - lastScan >= scanEvery(gRefused, nowMs())) {
                 rescan();
                 lastScan = nowMs();
             }
+            every = scanEvery(gRefused, nowMs());
             for (const Device& d : gDevices) {
                 if (d.aimFd >= 0) fds.push_back({d.aimFd, POLLIN, 0});
                 if (d.keysFd >= 0) fds.push_back({d.keysFd, POLLIN, 0});
             }
         }
         if (fds.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            std::this_thread::sleep_for(std::chrono::milliseconds(std::min<int64_t>(every, 250)));
             continue;
         }
         ::poll(fds.data(), fds.size(), 50);
@@ -672,6 +725,117 @@ int test() {
               buttonOf(KEY_LEFT) == kLeft && buttonOf(KEY_3) == 0,
           "the trigger, the pump, the front right button and the D-pad as Sinden sets them, and "
           "no other key");
+
+    // ---- A node that cannot be opened yet (2026-11-28), on a gun laid out
+    // in a scratch folder as sysfs has one: its USB device, its keyboard's
+    // and its mouse's input devices, and a stand-in node for each, a pipe the
+    // test writes events into (a pipe cannot be grabbed: the console says so
+    // and reads it all the same). The mouse's node is missing at first, which
+    // refuses it for root too, as udev's grant not yet given refuses the
+    // console.
+    {
+        char tmpl[] = "/tmp/cabinetos-gun-XXXXXX";
+        const char* made = ::mkdtemp(tmpl);
+        check(made != nullptr, "a scratch folder");
+        if (made) {
+            const std::string root = made;
+            storage::setRoot(root);   // where the gun's order is written
+            const std::string usb =
+                root + "/devices/pci0000:00/0000:c8:00.0/usb3/3-1/3-1.2/3-1.2.2";
+            const std::string input = usb + "/3-1.2.2:1.2/0003:16C0:0F01.0012/input";
+            cab::writeBytes(usb + "/idVendor", std::string("16c0\n"));
+            cab::writeBytes(usb + "/product", std::string(kProduct) + "\n");
+            cab::writeBytes(input + "/input47/name",
+                            std::string("Unknown SindenLightgun Keyboard\n"));
+            cab::writeBytes(input + "/input48/name",
+                            std::string("Unknown SindenLightgun Mouse\n"));
+            std::error_code ec;
+            std::filesystem::create_directories(root + "/class/input", ec);
+            std::filesystem::create_directories(root + "/dev", ec);
+            auto sysNode = [&](const std::string& node, const std::string& dev) {
+                const std::string at = input + "/" + dev + "/" + node;
+                std::filesystem::create_directories(at, ec);
+                std::filesystem::create_directory_symlink("..", at + "/device", ec);
+                std::filesystem::create_directory_symlink(at, root + "/class/input/" + node, ec);
+            };
+            // The write end, held so that the console's read finds nothing
+            // waiting rather than the end.
+            auto devNode = [&](const std::string& node) {
+                const std::string p = root + "/dev/" + node;
+                if (::mkfifo(p.c_str(), 0600) != 0) return -1;
+                return ::open(p.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+            };
+            auto look = [] {
+                std::lock_guard<std::mutex> lk(gLock);
+                rescan();
+            };
+            gSysInput = root + "/class/input";
+            gDevInput = root + "/dev";
+            sysNode("event13", "input47");
+            sysNode("event14", "input48");
+            const int keys = devNode("event13");
+
+            look();
+            const auto first = gRefused.find("event14");
+            const int64_t since = first == gRefused.end() ? -1 : first->second;
+            check(keys >= 0 && first != gRefused.end() && count() == 0 && plugged() == 0 &&
+                      gDevices.size() == 1 && gDevices[0].slot == 0 && gDevices[0].keysFd >= 0,
+                  "a gun whose mouse cannot be opened yet is gun 1 with its keys, and not yet "
+                  "a gun a game is given");
+            check(scanEvery(gRefused, since) == kRetryMs &&
+                      scanEvery(gRefused, since + kRetryForMs - 1) == kRetryMs,
+                  "and the guns are looked for every 50 ms for three seconds after");
+            look();
+            check(gRefused.size() == 1 && gRefused.begin()->second == since && count() == 0,
+                  "still refused at the next look: tried again, and said only the first time");
+            check(scanEvery(gRefused, since + kRetryForMs) == kScanMs &&
+                      scanEvery({}, since) == kScanMs,
+                  "after three seconds, or with nothing refused, every half second, the "
+                  "refused node still tried at each look");
+
+            const int aim = devNode("event14");
+            look();
+            input_event press[2] = {};
+            press[0].type = EV_KEY;
+            press[0].code = BTN_LEFT;
+            press[0].value = 1;
+            press[1].type = EV_SYN;
+            press[1].code = SYN_REPORT;
+            const bool pressed = aim >= 0 && ::write(aim, press, sizeof press) == sizeof press;
+            {
+                std::lock_guard<std::mutex> lk(gLock);
+                for (Device& d : gDevices)
+                    if (d.aimFd >= 0) drain(d, d.aimFd, nowMs());
+            }
+            const Gun g = gun(0);
+            check(pressed && count() == 1 && plugged() == 1u && g.present &&
+                      (g.buttons & kTrigger) && gRefused.empty() &&
+                      scanEvery(gRefused, nowMs()) == kScanMs,
+                  "once it opens, gun 1 has its aim and its trigger, as if it had opened at once");
+
+            // Unplugged: both go, and a mouse node left refused when it goes
+            // is forgotten, not looked for every 50 ms.
+            std::filesystem::remove(root + "/class/input/event13", ec);
+            std::filesystem::remove(root + "/class/input/event14", ec);
+            look();
+            const bool left = gDevices.empty() && count() == 0;
+            std::filesystem::remove(root + "/dev/event14", ec);
+            sysNode("event14", "input48");
+            look();
+            const bool refusedAlone = gRefused.count("event14") == 1 && gDevices.empty();
+            std::filesystem::remove(root + "/class/input/event14", ec);
+            look();
+            check(left && refusedAlone && gRefused.empty() &&
+                      scanEvery(gRefused, nowMs()) == kScanMs,
+                  "a gun unplugged is gone, and a node refused that goes is no longer tried");
+
+            if (keys >= 0) ::close(keys);
+            if (aim >= 0) ::close(aim);
+            gSysInput = "/sys/class/input";
+            gDevInput = "/dev/input";
+            std::filesystem::remove_all(root, ec);
+        }
+    }
 
     // ---- Which emulators get a gun
     check(deviceFor("fbneo_libretro") == RETRO_DEVICE_LIGHTGUN,

@@ -83,7 +83,8 @@ struct Gun {
 };
 
 // Starts the thread that finds guns, keeps up with them coming and going, and
-// reads them. Idempotent.
+// reads them. A gun's node that cannot be opened yet, as one udev has just
+// made, is tried again until it opens or goes. Idempotent.
 void start();
 
 // How many guns are plugged in now, and which: bit n for gun n + 1. Cheap.
