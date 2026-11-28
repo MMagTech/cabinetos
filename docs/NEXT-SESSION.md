@@ -14,10 +14,22 @@ source of truth for anything on RomM's data.
 
 ## Where things stand
 
-**2026-11-26.** The newest release is 2026.11.13.2. The last image with a
-change a player can see is 2026.11.26.4: #759, "Arcade: Sega Lindbergh
-games play in Linux Loader (#620)", which closed #620. Read the newest image
-from the registry, not from here. Before it, the same day, #756, "Arcade:
+**2026-11-27.** The newest release is 2026.11.13.2. The last image with a
+change a player can see is 2026.11.28: #764, "Arcade: Windows arcade board
+games play in windowsarcadeloader (#762)", which closed #762. Read the newest
+image from the registry, not from here. Its room checks came from a read of
+every route's ask before a download; what that read found and this change
+did not close is #766, "A full drive leaves no room for saves, save states
+or a system update", #767, "A game kept as a zip inside a folder unpacks
+without asking for room", #768, "Xbox: a full disc dump is cut down without
+asking for room" and #769, "Download chooses a drive by a zipped game's zip
+size, not by what it unpacks to". When windowsarcadeloader's pin or its
+runner (GE-Proton) next moves: nothing rebuilds a console's Windows setup
+for a new Wine, so that update has to decide how it is rebuilt, and run the
+image's install script as root in a container before the testing push
+(the first testing image for #764 stopped there twice). The day before,
+2026.11.26.4: #759, "Arcade: Sega Lindbergh games play in Linux Loader
+(#620)", which closed #620. Before it, the same day, #756, "Arcade:
 Sega Chihiro games play in xemu-chihiro (#619)" (2026.11.26.3), which closed
 #619; #755, "Naomi, Naomi 2 and Atomiswave games earn RetroAchievements
 (#740)" (2026.11.26.2), which closed #740; #754,
