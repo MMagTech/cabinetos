@@ -389,7 +389,10 @@ thread, once a frame (`App::followLibrary`, `libraryrefresh.cpp`):
    folder save is written from the fetch and the starting disc chosen
    (`prepareSaveDirAndDiscs`); then the file saves (most saves) are written
    and Dolphin's settings and the Miis, all before the load
-   (`restoreBeforeLoad`). Each restore writes the save the worker picked;
+   (`restoreBeforeLoad`), which also says what each player's port holds: a
+   pad's device, real Wii Remotes after the pads, and in a light-gun game
+   the gun's device in each port with a gun (#575, `lightgun::deviceFor`,
+   `Core::setGunDevice`). Each restore writes the save the worker picked;
    a save of this console's that it replaces with another is copied to
    `saves/<platform>/<romId>/replaced/` first, one copy a game
    (`keepAside` in `saves.cpp`).
