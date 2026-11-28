@@ -12,9 +12,10 @@
 // 32767 across the screen Sinden's border goes around, with BTN_LEFT, BTN_RIGHT
 // and BTN_MIDDLE; and "SindenLightgun Keyboard", with KEY_1, KEY_5 and the
 // arrow keys (KEY_2 and KEY_6 in place of KEY_1 and KEY_5 on a gun Sinden's
-// software numbered 2). The two are paired by the USB device they hang from, and guns
-// are told apart by the USB port they are in, never by device numbers or the
-// order they came in.
+// software numbered 2; in the image each gun's own copy numbers it 1,
+// system_files/usr/libexec/cabinetos-sinden). The two are paired by the USB
+// device they hang from, and guns are told apart by the USB port they are in,
+// never by device numbers or the order they came in.
 //
 // THE AIM IS SINDEN'S SOFTWARE'S, written to the gun over its serial port;
 // this file only reads what the gun then reports, and it reports only on a
@@ -55,7 +56,7 @@
 
 namespace lightgun {
 
-// At most two guns, as Sinden's software drives at most two.
+// At most two guns (#575 rule 11).
 constexpr int kMaxGuns = 2;
 
 // A gun's buttons, one bit each.

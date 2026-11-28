@@ -181,9 +181,10 @@ constexpr MenuPress kMenu[] = {
 // THE REAR BUTTONS IN EITHER OF SINDEN'S TWO SETS: its software gives the gun
 // it numbers 1 the keys 1 and 5 (MAME's player 1 Start and coin) and the gun
 // it numbers 2 the keys 2 and 6 (its config file's ButtonRearLeftP2 and
-// ButtonRearRightP2), and the gun keeps what it was given. Which number a gun
-// had is Sinden's order, not ours, so both sets are read from every gun: each
-// gun's own nodes already say which gun pressed.
+// ButtonRearRightP2), and the gun keeps what it was given. In the image every
+// gun's own copy numbers it 1 (system_files/usr/libexec/cabinetos-sinden), but
+// a gun may still hold 2's keys from a copy that drove two guns, so both sets
+// are read from every gun: each gun's own nodes already say which gun pressed.
 uint16_t buttonOf(unsigned code) {
     switch (code) {
         case BTN_LEFT: return kTrigger;

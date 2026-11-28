@@ -121,6 +121,7 @@ for expected in \
     /usr/lib/udev/rules.d/71-cabinetos-motion-devices.rules \
     /usr/lib/udev/rules.d/72-cabinetos-wii-remote.rules \
     /usr/lib/udev/rules.d/99-cabinetos-wii-remote.rules \
+    /usr/lib/udev/rules.d/72-cabinetos-light-gun.rules \
     /usr/lib/udev/rules.d/73-cabinetos-sinden.rules \
     /usr/lib/systemd/system/cabinetos-sinden@.service \
     /usr/libexec/cabinetos-sinden \
