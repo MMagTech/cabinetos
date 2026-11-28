@@ -134,7 +134,7 @@ struct PerGun {
     int64_t nextOpen = 0;     // when its camera is looked for again
     bool saidNoCamera = false;
     std::string saidNode;     // the camera last said in the log
-    int want = -1;            // the exposure kept, -1 for Sinden's own
+    int want = -1;            // the exposure kept
     int64_t nextCheck = 0;
     Sweep sweep;
     bool sweeping = false, forCalibration = false;
@@ -229,14 +229,16 @@ void tickGun(int n, int64_t t, bool follow) {
         g.key = gunKey(w);
         const std::string tv = tvNow();
         g.want = remembered(tv, g.key);
-        if (g.want >= 0)
+        if (g.want >= 0) {
             std::fprintf(stderr, "[guncamera] gun %d (%s) keeps exposure %d on TV %s\n", n + 1,
                          g.key.c_str(), g.want, tv.c_str());
-        else
+        } else {
+            g.want = kStart;
             std::fprintf(stderr,
-                         "[guncamera] gun %d (%s): nothing remembered on TV %s; Sinden's own "
-                         "until a sweep\n",
-                         n + 1, g.key.c_str(), tv.c_str());
+                         "[guncamera] gun %d (%s): nothing remembered on TV %s; %d until a "
+                         "sweep\n",
+                         n + 1, g.key.c_str(), tv.c_str(), kStart);
+        }
     }
     if (g.cam.fd < 0 && t >= g.nextOpen) {
         const std::string node = cameraOf(w.usb);
@@ -581,6 +583,22 @@ int test() {
         check(middleOf(bright) == 39,
               "in the brighter room it is 39, the rung of the 40 measured to see the border 510 "
               "readings of 510, never Sinden's 78");
+        // 2026-11-28, 11:00, bright, the windows open, both guns: 10 to 50
+        // seen, 78 lost about half the readings for one gun, 120 and 160 for
+        // both. 62 is between 50 and 78, 100 between 78 and 120.
+        const float open[kRungs] = {1, 1, 1, 1, 1, 1, 0.5f, 0.5f, 0, 0, 0};
+        check(middleOf(open) == 24,
+              "with the windows open it is 24, inside the 10 to 50 seen, never 78");
+        float all[kRungs];
+        for (int i = 0; i < kRungs; ++i)
+            all[i] = std::min({night[i], morning[i], bright[i], open[i]});
+        int startRung = 0;
+        while (startRung < kRungs && kLadder[startRung] != kStart) ++startRung;
+        check(middleOf(all) == kStart && startRung < kRungs && night[startRung] >= kSees &&
+                  morning[startRung] >= kSees && bright[startRung] >= kSees &&
+                  open[startRung] >= kSees,
+              "a camera with nothing remembered starts at 39, seen at all four sittings and the "
+              "middle of what all four saw");
         const float none[kRungs] = {};
         const float split[kRungs] = {1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0};
         const float even[kRungs] = {0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0};

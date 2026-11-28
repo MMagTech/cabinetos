@@ -59,6 +59,16 @@ constexpr float kSees = 0.9f;
 // sees it.
 int middleOf(const float (&seen)[kRungs]);
 
+// WHERE A CAMERA STARTS on a TV nothing is remembered for: 39 (3.9 ms), the
+// one rung inside the range the border was seen in at all four sittings on
+// the reference console (2026-11-27 night, 15 to 160; 2026-11-28 08:35, 10
+// to 160; 09:50, 40 seen 510 readings of 510, 20 only mostly, 78 lost; 11:00,
+// bright with the windows open, 10 to 50 for both guns, 78 lost about half
+// the readings for one, 120 and 160 for both). Not Sinden's own 78, which the
+// bright room was outside of. --gun-camera-test takes it as the middle of
+// the four.
+constexpr int kStart = 39;
+
 // ONE SWEEP UP THE LADDER for one gun: at each rung the camera is given the
 // exposure, left kSettleMs for the camera and Sinden's software to take it,
 // then looked at for kLookMs. Eleven rungs, about four seconds.
@@ -114,7 +124,7 @@ constexpr int64_t kFollowAfterMs = 2000;
 // A gun with nothing remembered on this TV starts at what another gun was
 // last given on it, since the TV and the room set the exposure more than the
 // gun does (both guns saw the border at the same exposures, 2026-11-28); with
-// nothing for the TV at all, at Sinden's own, until a sweep.
+// nothing for the TV at all, at kStart, until a sweep.
 std::string tvKey(const std::string& edid);   // "GSM-c0a4-01010101"; empty if no EDID
 std::string tvNow();                          // the TV plugged in now, or "unknown"
 std::string gunKey(const lightgun::Where& w); // "16c0:0f01@0000:c8:00.0-1.2.2"
