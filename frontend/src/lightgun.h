@@ -11,7 +11,8 @@
 // one HID interface: "SindenLightgun Mouse", absolute, ABS_X and ABS_Y 0 to
 // 32767 across the screen Sinden's border goes around, with BTN_LEFT, BTN_RIGHT
 // and BTN_MIDDLE; and "SindenLightgun Keyboard", with KEY_1, KEY_5 and the
-// arrow keys. The two are paired by the USB device they hang from, and guns
+// arrow keys (KEY_2 and KEY_6 in place of KEY_1 and KEY_5 on a gun Sinden's
+// software numbered 2). The two are paired by the USB device they hang from, and guns
 // are told apart by the USB port they are in, never by device numbers or the
 // order they came in.
 //
@@ -32,8 +33,8 @@
 //   Trigger                 BTN_LEFT    menus: Select   game: shoot
 //   Pump, or front left     BTN_RIGHT   menus: Back     game: second button
 //   Front right             BTN_MIDDLE  menus: nothing  game: third button
-//   Rear left               KEY_1       menus: Start    game: Start
-//   Rear right              KEY_5       menus: nothing  game: coin or Select;
+//   Rear left               KEY_1 or 2  menus: Start    game: Start
+//   Rear right              KEY_5 or 6  menus: nothing  game: coin or Select;
 //                                       held a second, the pause menu
 //   D-pad                   arrows      menus: moves    game: the D-pad
 //

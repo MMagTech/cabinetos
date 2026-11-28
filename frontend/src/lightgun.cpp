@@ -151,13 +151,21 @@ constexpr MenuPress kMenu[] = {
 
 // A key code of the gun's to its button; 0 for one that is none of them.
 // kCoin stands for the rear right button as pressed, before the rule above.
+// THE REAR BUTTONS IN EITHER OF SINDEN'S TWO SETS: its software gives the gun
+// it numbers 1 the keys 1 and 5 (MAME's player 1 Start and coin) and the gun
+// it numbers 2 the keys 2 and 6 (its config file's ButtonRearLeftP2 and
+// ButtonRearRightP2), and the gun keeps what it was given. Which number a gun
+// had is Sinden's order, not ours, so both sets are read from every gun: each
+// gun's own nodes already say which gun pressed.
 uint16_t buttonOf(unsigned code) {
     switch (code) {
         case BTN_LEFT: return kTrigger;
         case BTN_RIGHT: return kSecond;
         case BTN_MIDDLE: return kThird;
-        case KEY_1: return kStart;
-        case KEY_5: return kCoin;
+        case KEY_1:
+        case KEY_2: return kStart;
+        case KEY_5:
+        case KEY_6: return kCoin;
         case KEY_UP: return kUp;
         case KEY_DOWN: return kDown;
         case KEY_LEFT: return kLeft;
@@ -404,15 +412,17 @@ void handle(Device& d, const input_event& ev, int64_t t) {
 void resync(Device& d, int fd) {
     unsigned char keys[KEY_MAX / 8 + 1] = {};
     if (::ioctl(fd, EVIOCGKEY(sizeof keys), keys) >= 0) {
-        for (unsigned code : {BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, KEY_1, KEY_5, KEY_UP, KEY_DOWN,
-                              KEY_LEFT, KEY_RIGHT}) {
-            const uint16_t b = buttonOf(code);
-            const bool down = (keys[code / 8] >> (code % 8)) & 1;
+        // Both of a pair (KEY_1 and KEY_2 are one button) down if either is.
+        uint16_t now = 0;
+        for (unsigned code : {BTN_LEFT, BTN_RIGHT, BTN_MIDDLE, KEY_1, KEY_2, KEY_5, KEY_6, KEY_UP,
+                              KEY_DOWN, KEY_LEFT, KEY_RIGHT}) {
             const bool onThisNode = fd == d.aimFd ? code >= BTN_LEFT : code < BTN_LEFT;
-            if (!onThisNode) continue;
-            if (down) d.held |= b;
-            else d.held &= static_cast<uint16_t>(~b);
+            if (onThisNode && ((keys[code / 8] >> (code % 8)) & 1)) now |= buttonOf(code);
         }
+        const uint16_t mine = fd == d.aimFd ? static_cast<uint16_t>(kTrigger | kSecond | kThird)
+                                            : static_cast<uint16_t>(~(kTrigger | kSecond | kThird));
+        d.held = static_cast<uint16_t>((d.held & ~mine) | (now & mine));
+        rearRightPress(d.rear, (d.held & kCoin) != 0, nowMs(), gInGame && !gInMenus);
         // A button let go while events were dropped is no longer kept.
         d.keptFromMenus &= d.held;
         d.keptFromGame &= d.held;
@@ -651,6 +661,17 @@ int test() {
               "and so is aiming at the border");
         check(!onPicture(0.5f, 0.5f, 0, 0, 0, 0, &x, &y), "no picture drawn is off the picture");
     }
+
+    // ---- The keys Sinden gives each of its two guns
+    check(buttonOf(KEY_1) == kStart && buttonOf(KEY_2) == kStart && buttonOf(KEY_5) == kCoin &&
+              buttonOf(KEY_6) == kCoin,
+          "the rear buttons are read in Sinden's player 1 and player 2 keys alike, so a gun "
+          "Sinden numbered 2 still has its Start and coin");
+    check(buttonOf(BTN_LEFT) == kTrigger && buttonOf(BTN_RIGHT) == kSecond &&
+              buttonOf(BTN_MIDDLE) == kThird && buttonOf(KEY_UP) == kUp &&
+              buttonOf(KEY_LEFT) == kLeft && buttonOf(KEY_3) == 0,
+          "the trigger, the pump, the front right button and the D-pad as Sinden sets them, and "
+          "no other key");
 
     // ---- Which emulators get a gun
     check(deviceFor("fbneo_libretro") == RETRO_DEVICE_LIGHTGUN,
