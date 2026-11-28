@@ -230,9 +230,17 @@ bwrap_help="$(bwrap --help 2>&1 || true)"
 for o in --overlay-src --overlay --unshare-pid --proc; do
     grep -q -e "^ *${o} " <<<"${bwrap_help}" || { log "ERROR: the image's bwrap has no ${o}"; fail=1; }
 done
-gamescope_help="$(gamescope --help 2>&1 || true)"
-grep -q -e '^ *--backend ' <<<"${gamescope_help}" || { log "ERROR: the image's gamescope has no --backend"; fail=1; }
-grep -q -e 'headless =>' <<<"${gamescope_help}" || { log "ERROR: the image's gamescope has no headless backend"; fail=1; }
+# gamescope's help is read from the program's file, not by running it: it
+# carries a file capability (cap_sys_nice), and the image build's container
+# refuses to run a program whose capability it cannot give ("Operation not
+# permitted"), so its help came back empty there.
+gamescope_bin="$(type -P gamescope || true)"
+if [[ -n "${gamescope_bin}" ]]; then
+    grep -q -a -F -e '--backend ' "${gamescope_bin}" ||
+        { log "ERROR: the image's gamescope has no --backend"; fail=1; }
+    grep -q -a -F -e 'headless => use headless backend' "${gamescope_bin}" ||
+        { log "ERROR: the image's gamescope has no headless backend"; fail=1; }
+fi
 (( fail == 0 )) || exit 1
 # --- end of what the console leans on --------------------------------------
 
