@@ -4,7 +4,7 @@ Every update that reached consoles, newest first. To update: Settings,
 **System**, **System update**. An update you skipped is included in the next
 one you install, so you only ever install the newest.
 
-## Next
+## 2026.11.28 {#v2026-11-28}
 
 - **New:** Windows Arcade, games from arcade boards that run Windows, played
   in windowsarcadeloader. It is very experimental: some games will not
